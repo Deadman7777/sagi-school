@@ -115,22 +115,11 @@ jobs:
           files: artifacts/*
           body: |
             ## SAGI SCHOOL ${{ github.ref_name }}
-
-            ### Telechargements
-
-            | Plateforme | Fichier | Description |
-            |-----------|---------|-------------|
-            | Windows | SAGI SCHOOL Setup.exe | Installateur Windows |
-            | Linux | sagi-school.deb | Package Debian/Ubuntu |
-            | Linux | SAGI SCHOOL.AppImage | Portable Linux |
-
-            ### Installation Windows
-            1. Telecharger SAGI SCHOOL Setup.exe
-            2. Double-cliquer et suivre l'assistant
-            3. Installer PostgreSQL depuis postgresql.org
-            4. Lancer SAGI SCHOOL depuis le bureau
-
-            ### Installation Linux
-sudo dpkg -i sagi-school_*.deb
-env:
+            Telechargements disponibles ci-dessous.
+            Windows  - SAGI SCHOOL Setup.exe
+            Linux    - sagi-school.deb
+            Linux    - SAGI SCHOOL.AppImage
+            Installation Windows - telecharger Setup.exe et suivre l'assistant.
+            Installation Linux - sudo dpkg -i sagi-school_*.deb
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
