@@ -17,11 +17,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
@@ -37,7 +32,7 @@ jobs:
         working-directory: electron
         run: npm install
 
-      - name: Build Linux (.deb + AppImage)
+      - name: Build Linux
         working-directory: electron
         run: npm run build:linux
         env:
@@ -47,7 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sagi-school-linux
-          path: dist-app/*.{deb,AppImage}
+          path: |
+            dist-app/*.deb
+            dist-app/*.AppImage
 
   build-windows:
     runs-on: windows-latest
@@ -59,11 +56,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
       - name: Install Angular CLI
         run: npm install -g @angular/cli
 
@@ -79,7 +71,7 @@ jobs:
         working-directory: electron
         run: npm install
 
-      - name: Build Windows (.exe)
+      - name: Build Windows
         working-directory: electron
         run: npm run build:win
         env:
@@ -100,39 +92,35 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sagi-school-linux
+          path: artifacts
 
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
           name: sagi-school-windows
+          path: artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            *.deb
-            *.AppImage
-            *.exe
+          files: artifacts/*
           body: |
             ## SAGI SCHOOL ${{ github.ref_name }}
-            
-            ### Téléchargements
-            
+
+            ### Telechargements
+
             | Plateforme | Fichier | Description |
             |-----------|---------|-------------|
-            | Windows | `SAGI SCHOOL Setup.exe` | Installateur Windows |
-            | Linux | `sagi-school.deb` | Package Debian/Ubuntu |
-            | Linux | `SAGI SCHOOL.AppImage` | Portable Linux |
-            
+            | Windows | SAGI SCHOOL Setup.exe | Installateur Windows |
+            | Linux | sagi-school.deb | Package Debian/Ubuntu |
+            | Linux | SAGI SCHOOL.AppImage | Portable Linux |
+
             ### Installation Windows
-            1. Télécharger `SAGI SCHOOL Setup.exe`
+            1. Telecharger SAGI SCHOOL Setup.exe
             2. Double-cliquer et suivre l'assistant
             3. Installer PostgreSQL depuis postgresql.org
             4. Lancer SAGI SCHOOL depuis le bureau
-            
-            ### Installation Linux
-```bash
-            sudo dpkg -i sagi-school_*.deb
-```
-        env:
+
+            ### Installation Linuxsudo dpkg -i sagi-school_*.deb
+env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
