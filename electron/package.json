@@ -80,9 +80,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SAGI SCHOOL",
-      "installerHeader": "assets/installer-header.bmp",
-      "include": "assets/installer.nsh"
+      "shortcutName": "SAGI SCHOOL"
     },
     "publish": {
       "provider": "github",
