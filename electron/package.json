@@ -1,0 +1,68 @@
+{
+  "name": "sagi-school",
+  "version": "1.0.0",
+  "description": "SAGI SCHOOL — Système de Gestion Scolaire by HADY GESMAN",
+  "main": "main.js",
+  "author": {
+    "name": "HADY GESMAN",
+    "email": "contact@hadygesman.com"
+  },
+  "homepage": "https://hadygesman.com",
+  "scripts": {
+    "start": "NODE_ENV=development electron .",
+    "build:linux": "electron-builder --linux",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.hadygesman.sagischool",
+    "productName": "SAGI SCHOOL",
+    "copyright": "© 2025 HADY GESMAN",
+    "directories": {
+      "output": "../dist-app"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "licence-check.js",
+      "splash.html",
+      "assets/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!venv/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!.env"
+        ]
+      },
+      {
+        "from": "../frontend/dist/frontend/browser",
+        "to": "frontend/dist"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "icon": "assets/icon.png",
+      "maintainer": "HADY GESMAN <contact@hadygesman.com>",
+      "description": "Système de Gestion Scolaire"
+    },
+    "deb": {
+      "depends": [
+        "postgresql",
+        "python3"
+      ]
+    }
+  }
+}

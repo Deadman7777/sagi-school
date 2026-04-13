@@ -1,0 +1,43 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Balance Générale{% endblock %}
+{% block content %}
+
+<div class="section-title">⚖️ BALANCE GÉNÉRALE À 6 COLONNES — SYSCOHADA RÉVISÉ</div>
+<table>
+  <thead>
+    <tr>
+      <th>N° Compte</th><th>Libellé</th>
+      <th class="text-right">Mvt Débit</th>
+      <th class="text-right">Mvt Crédit</th>
+      <th class="text-right">Solde Débiteur</th>
+      <th class="text-right">Solde Créditeur</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for b in balance %}
+    <tr>
+      <td class="bold">{{ b.compte }}</td>
+      <td>{{ b.libelle }}</td>
+      <td class="text-right">{{ b.debit|floatformat:0 }}</td>
+      <td class="text-right">{{ b.credit|floatformat:0 }}</td>
+      <td class="text-right {% if b.solde_d > 0 %}teal{% endif %}">
+        {% if b.solde_d > 0 %}{{ b.solde_d|floatformat:0 }}{% else %}—{% endif %}
+      </td>
+      <td class="text-right {% if b.solde_c > 0 %}green{% endif %}">
+        {% if b.solde_c > 0 %}{{ b.solde_c|floatformat:0 }}{% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="2" class="bold">TOTAUX</td>
+      <td class="text-right bold">{{ balance_totaux.debit|floatformat:0 }}</td>
+      <td class="text-right bold">{{ balance_totaux.credit|floatformat:0 }}</td>
+      <td class="text-right bold teal">{{ balance_totaux.solde_d|floatformat:0 }}</td>
+      <td class="text-right bold green">{{ balance_totaux.solde_c|floatformat:0 }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+{% endblock %}

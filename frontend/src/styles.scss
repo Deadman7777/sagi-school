@@ -1,0 +1,22 @@
+@import "primeicons/primeicons.css";
+@import "primeflex/primeflex.css";
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; background: #0b0f1a; color: #e8f0fe; font-size: 14px; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 3px; }
+.w-full { width: 100% !important; }
+
+/* ── RTL Support (Arabe) ── */
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid #1e2d45;
+  order: 2;
+}
+[dir="rtl"] .main { order: 1; }
+[dir="rtl"] .nav-item { border-left: none; border-right: 3px solid transparent; }
+[dir="rtl"] .nav-item.active { border-right-color: #00d4aa; }
+[dir="rtl"] .text-right { text-align: left; }
+[dir="rtl"] .text-left  { text-align: right; }
+[dir="rtl"] * { font-family: 'Amiri', 'Scheherazade New', 'Segoe UI', sans-serif; }
+[dir="ltr"] * { font-family: 'Outfit', 'Segoe UI', sans-serif; }

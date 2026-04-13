@@ -1,0 +1,93 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Tableau des Flux de Trésorerie{% endblock %}
+{% block content %}
+
+<div class="kpi-row">
+  <div class="kpi-box teal">
+    <div class="kb-label">Trésorerie Ouverture</div>
+    <div class="kb-val teal">{{ tresorerie.solde_initial|floatformat:0 }} FCFA</div>
+  </div>
+  <div class="kpi-box {% if tresorerie.variation >= 0 %}green{% else %}orange{% endif %}">
+    <div class="kb-label">Variation Nette</div>
+    <div class="kb-val">
+      {% if tresorerie.variation >= 0 %}+{% endif %}{{ tresorerie.variation|floatformat:0 }} FCFA
+    </div>
+  </div>
+  <div class="kpi-box blue">
+    <div class="kb-label">Trésorerie Clôture</div>
+    <div class="kb-val blue">{{ tresorerie.solde_final|floatformat:0 }} FCFA</div>
+  </div>
+</div>
+
+<div class="section-title">⚙️ FLUX D'EXPLOITATION (Méthode {{ methode }})</div>
+<table>
+  <thead><tr><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Encaissements reçus des clients</td>
+      <td class="text-right green bold">+{{ flux_exploitation.encaissements_clients|floatformat:0 }}</td>
+    </tr>
+    <tr>
+      <td>Décaissements aux fournisseurs et charges</td>
+      <td class="text-right red bold">-{{ flux_exploitation.decaissements_charges|floatformat:0 }}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="bold">Flux net d'exploitation</td>
+      <td class="text-right bold {% if flux_exploitation.flux_net >= 0 %}green{% else %}red{% endif %}">
+        {% if flux_exploitation.flux_net >= 0 %}+{% endif %}{{ flux_exploitation.flux_net|floatformat:0 }}
+      </td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="section-title">🏗️ FLUX D'INVESTISSEMENT</div>
+<table>
+  <thead><tr><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    <tr><td>Acquisitions d'immobilisations</td><td class="text-right">0</td></tr>
+    <tr><td>Cessions d'immobilisations</td><td class="text-right">0</td></tr>
+  </tbody>
+  <tfoot>
+    <tr><td class="bold">Flux net d'investissement</td><td class="text-right bold">0</td></tr>
+  </tfoot>
+</table>
+
+<div class="section-title">💼 FLUX DE FINANCEMENT</div>
+<table>
+  <thead><tr><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Apports en capital (trésorerie initiale)</td>
+      <td class="text-right green">+{{ flux_financement.apports_capital|floatformat:0 }}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="bold">Flux net de financement</td>
+      <td class="text-right bold green">+{{ flux_financement.flux_net|floatformat:0 }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="section-title">📅 RÉCAPITULATIF PAR MODE DE PAIEMENT</div>
+<table>
+  <thead><tr><th>Mode</th><th class="text-right">Nb Opérations</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    {% for m in par_mode %}
+    <tr>
+      <td class="bold">{{ m.mode }}</td>
+      <td class="text-right">{{ m.nb }}</td>
+      <td class="text-right teal bold">{{ m.total|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="resultat-box bene" style="margin-top:16px">
+  <span class="rb-label">TRÉSORERIE NETTE DE CLÔTURE — Exercice {{ exercice }}</span>
+  <span class="rb-val teal">{{ tresorerie.solde_final|floatformat:0 }} FCFA</span>
+</div>
+
+{% endblock %}

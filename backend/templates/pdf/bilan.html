@@ -1,0 +1,105 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Bilan Comptable{% endblock %}
+{% block content %}
+
+<div class="kpi-row">
+  <div class="kpi-box blue">
+    <div class="kb-label">Total Actif</div>
+    <div class="kb-val blue">{{ actif.total_actif|floatformat:0 }} FCFA</div>
+  </div>
+  <div class="kpi-box teal">
+    <div class="kb-label">Total Passif</div>
+    <div class="kb-val teal">{{ passif.total_passif|floatformat:0 }} FCFA</div>
+  </div>
+  <div class="kpi-box {% if equilibre %}green{% else %}orange{% endif %}">
+    <div class="kb-label">Équilibre</div>
+    <div class="kb-val">{% if equilibre %}✓ Équilibré{% else %}⚠ Écart{% endif %}</div>
+  </div>
+</div>
+
+<div style="display:flex;gap:20px">
+
+  <!-- ACTIF -->
+  <div style="flex:1">
+    <div class="section-title" style="color:#185FA5">ACTIF</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Libellé</th>
+          <th class="text-right">Montant (FCFA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="2" style="background:#f0f4ff;font-weight:bold;font-size:10px;padding:6px 10px;text-transform:uppercase;color:#185FA5">Actif Circulant</td></tr>
+        <tr>
+          <td>Créances clients (élèves)</td>
+          <td class="text-right">{{ actif.creances_clients|floatformat:0 }}</td>
+        </tr>
+        <tr><td colspan="2" style="background:#f0f4ff;font-weight:bold;font-size:10px;padding:6px 10px;text-transform:uppercase;color:#185FA5">Trésorerie & Équivalents</td></tr>
+        {% for t in actif.tresorerie %}
+        <tr>
+          <td>{{ t.libelle }}</td>
+          <td class="text-right">{{ t.montant|floatformat:0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="bold">TOTAL ACTIF</td>
+          <td class="text-right bold blue">{{ actif.total_actif|floatformat:0 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- PASSIF -->
+  <div style="flex:1">
+    <div class="section-title" style="color:#0F6E56">PASSIF</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Libellé</th>
+          <th class="text-right">Montant (FCFA)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="2" style="background:#f0fdf4;font-weight:bold;font-size:10px;padding:6px 10px;text-transform:uppercase;color:#0F6E56">Capitaux Propres</td></tr>
+        <tr>
+          <td>Capital (Trésorerie initiale)</td>
+          <td class="text-right">{{ passif.capital|floatformat:0 }}</td>
+        </tr>
+        <tr>
+          <td>Résultat de l'exercice</td>
+          <td class="text-right {% if passif.resultat_net >= 0 %}green{% else %}red{% endif %}">
+            {% if passif.resultat_net >= 0 %}+{% endif %}{{ passif.resultat_net|floatformat:0 }}
+          </td>
+        </tr>
+        <tr style="background:#f0fdf4">
+          <td class="bold">Total Capitaux Propres</td>
+          <td class="text-right bold green">{{ passif.total_capitaux|floatformat:0 }}</td>
+        </tr>
+        <tr><td colspan="2" style="background:#f0fdf4;font-weight:bold;font-size:10px;padding:6px 10px;text-transform:uppercase;color:#0F6E56">Dettes</td></tr>
+        <tr>
+          <td>Dettes fournisseurs (estimées)</td>
+          <td class="text-right red">{{ passif.dettes|floatformat:0 }}</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td class="bold">TOTAL PASSIF</td>
+          <td class="text-right bold teal">{{ passif.total_passif|floatformat:0 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<div class="resultat-box {% if equilibre %}bene{% else %}def{% endif %}" style="margin-top:16px">
+  <span class="rb-label">BILAN — Exercice {{ exercice }}</span>
+  <span class="rb-val {% if equilibre %}green{% else %}red{% endif %}">
+    {% if equilibre %}✅ Bilan Équilibré{% else %}⚠️ Vérifier les écritures{% endif %}
+  </span>
+</div>
+
+{% endblock %}

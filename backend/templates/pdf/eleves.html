@@ -1,0 +1,39 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Liste des Élèves{% endblock %}
+{% block content %}
+
+<div class="section-title">👥 BASE DES ÉLÈVES — {{ exercice.annee_scolaire }}</div>
+<table>
+  <thead>
+    <tr>
+      <th>N°</th><th>Nom Complet</th><th>Section</th><th>Genre</th>
+      <th class="text-right">Total Attendu</th>
+      <th class="text-right">Payé</th>
+      <th class="text-right">Reste</th>
+      <th>Alerte</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in eleves %}
+    {% with paye=e.total_paye_sql|default:0 attendu=e.total_attendu %}
+    <tr>
+      <td>{{ e.numero }}</td>
+      <td class="bold">{{ e.nom_complet }}</td>
+      <td>{{ e.section.nom }}</td>
+      <td class="text-center">{{ e.genre }}</td>
+      <td class="text-right">{{ attendu|floatformat:0 }}</td>
+      <td class="text-right green">{{ paye|floatformat:0 }}</td>
+      <td class="text-right {% if attendu > paye %}red{% else %}green{% endif %}">
+        {{ attendu|add:"-"|add:paye|floatformat:0 }}
+      </td>
+      <td>
+        {% if attendu <= paye %}✅
+        {% else %}⚠️{% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

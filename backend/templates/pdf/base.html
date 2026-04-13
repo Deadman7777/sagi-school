@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size:11px; color:#1a1a2e; }
+
+  .header { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 30px; border-bottom:3px solid #00d4aa; margin-bottom:20px; }
+  .logo-zone .logo { font-size:22px; font-weight:bold; color:#00d4aa; }
+  .logo-zone .sub  { font-size:10px; color:#666; text-transform:uppercase; letter-spacing:1px; }
+  .doc-info { text-align:right; }
+  .doc-info .doc-title { font-size:16px; font-weight:bold; color:#1a1a2e; }
+  .doc-info .doc-meta  { font-size:9px; color:#666; margin-top:4px; }
+
+  .school-band { background:#f8f9fa; border:1px solid #e0e0e0; border-radius:6px; padding:10px 20px; margin:0 30px 20px; display:flex; justify-content:space-between; }
+  .sb-label { font-size:9px; color:#999; text-transform:uppercase; }
+  .sb-value { font-size:12px; font-weight:bold; color:#1a1a2e; margin-top:2px; }
+
+  .content { padding:0 30px; }
+
+  table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+  thead th { background:#1a1a2e; color:white; padding:8px 10px; font-size:10px; text-align:left; }
+  tbody tr:nth-child(even) { background:#f8f9fa; }
+  tbody td { padding:7px 10px; border-bottom:1px solid #eee; font-size:10px; }
+  tfoot td { background:#e8f0fe; font-weight:bold; padding:8px 10px; border-top:2px solid #1a1a2e; }
+
+  .section-title { font-size:13px; font-weight:bold; color:#1a1a2e; border-left:4px solid #00d4aa; padding-left:10px; margin:20px 0 10px; }
+
+  .kpi-row { display:flex; gap:12px; margin-bottom:16px; }
+  .kpi-box { flex:1; border:1px solid #e0e0e0; border-radius:6px; padding:12px; text-align:center; }
+  .kpi-box .kb-label { font-size:9px; color:#999; text-transform:uppercase; }
+  .kpi-box .kb-val   { font-size:16px; font-weight:bold; margin-top:4px; }
+  .kpi-box.green .kb-val { color:#10b981; }
+  .kpi-box.blue  .kb-val { color:#0099ff; }
+  .kpi-box.teal  .kb-val { color:#00d4aa; }
+  .kpi-box.orange .kb-val { color:#f59e0b; }
+
+  .resultat-box { border:2px solid; border-radius:8px; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .resultat-box.bene { border-color:#10b981; background:#f0fdf4; }
+  .resultat-box.def  { border-color:#ef4444; background:#fef2f2; }
+  .rb-label { font-size:12px; font-weight:bold; }
+  .rb-val   { font-size:20px; font-weight:bold; }
+
+  .footer { position:fixed; bottom:0; left:0; right:0; padding:8px 30px; border-top:1px solid #e0e0e0; display:flex; justify-content:space-between; font-size:9px; color:#999; }
+
+  .text-right { text-align:right; }
+  .text-center { text-align:center; }
+  .bold { font-weight:bold; }
+  .green { color:#10b981; }
+  .red   { color:#ef4444; }
+  .teal  { color:#00d4aa; }
+
+  @page { size: A4; margin: 15mm; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-zone">
+    <div class="logo">SAGI SCHOOL</div>
+    <div class="sub">Système de Gestion Scolaire · by HADY GESMAN</div>
+  </div>
+  <div class="doc-info">
+    <div class="doc-title">{% block doc_title %}Document{% endblock %}</div>
+    <div class="doc-meta">
+      Édité le {{ date_edition|date:"d/m/Y à H:i" }}<br>
+      Exercice : {{ exercice.annee_scolaire }}
+    </div>
+  </div>
+</div>
+
+<div class="school-band">
+  <div>
+    <div class="sb-label">Établissement</div>
+    <div class="sb-value">{{ tenant.nom }}</div>
+  </div>
+  <div>
+    <div class="sb-label">Ville</div>
+    <div class="sb-value">{{ tenant.ville }}</div>
+  </div>
+  <div>
+    <div class="sb-label">Exercice</div>
+    <div class="sb-value">{{ exercice.date_debut|date:"d/m/Y" }} → {{ exercice.date_fin|date:"d/m/Y" }}</div>
+  </div>
+  <div>
+    <div class="sb-label">RCCM</div>
+    <div class="sb-value">{{ tenant.rccm|default:"—" }}</div>
+  </div>
+</div>
+
+<div class="content">
+  {% block content %}{% endblock %}
+</div>
+
+<div class="footer">
+  <span>SAGI SCHOOL · by HADY GESMAN · Conforme SYSCOHADA Révisé</span>
+  <span>{{ date_edition|date:"d/m/Y" }}</span>
+</div>
+
+</body>
+</html>

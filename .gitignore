@@ -1,0 +1,19 @@
+# Python
+backend/venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/staticfiles/
+
+# Node
+electron/node_modules/
+frontend/node_modules/
+frontend/.angular/
+
+# Build
+dist-app/
+frontend/dist/
+
+# Secrets
+*.env
+.env.*

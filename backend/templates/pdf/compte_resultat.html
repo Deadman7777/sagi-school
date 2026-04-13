@@ -1,0 +1,67 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Compte de Résultat{% endblock %}
+{% block content %}
+
+<div class="kpi-row">
+  <div class="kpi-box teal">
+    <div class="kb-label">Total Produits</div>
+    <div class="kb-val teal">{{ total_recettes|floatformat:0 }} FCFA</div>
+  </div>
+  <div class="kpi-box blue">
+    <div class="kb-label">Total Charges</div>
+    <div class="kb-val blue">{{ total_charges|floatformat:0 }} FCFA</div>
+  </div>
+  <div class="kpi-box {% if resultat_net >= 0 %}green{% else %}orange{% endif %}">
+    <div class="kb-label">Résultat Net</div>
+    <div class="kb-val">{{ resultat_net|floatformat:0 }} FCFA</div>
+  </div>
+</div>
+
+<div class="section-title">💰 PRODUITS D'EXPLOITATION</div>
+<table>
+  <thead><tr><th>Réf.</th><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    {% for p in detail_produits %}
+    <tr>
+      <td class="bold">{{ p.compte }}</td>
+      <td>{{ p.libelle }}</td>
+      <td class="text-right teal bold">{{ p.montant|floatformat:0 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-center">Aucun produit enregistré</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="2" class="bold">TOTAL PRODUITS</td>
+        <td class="text-right bold teal">{{ total_recettes|floatformat:0 }}</td></tr>
+  </tfoot>
+</table>
+
+<div class="section-title">💸 CHARGES D'EXPLOITATION</div>
+<table>
+  <thead><tr><th>Réf.</th><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+  <tbody>
+    {% for c in detail_charges %}
+    <tr>
+      <td class="bold">{{ c.compte }}</td>
+      <td>{{ c.libelle }}</td>
+      <td class="text-right red bold">{{ c.montant|floatformat:0 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-center">Aucune charge enregistrée</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="2" class="bold">TOTAL CHARGES</td>
+        <td class="text-right bold red">{{ total_charges|floatformat:0 }}</td></tr>
+  </tfoot>
+</table>
+
+<div class="resultat-box {% if resultat_net >= 0 %}bene{% else %}def{% endif %}">
+  <span class="rb-label">RÉSULTAT NET — Exercice {{ exercice.annee_scolaire }}</span>
+  <span class="rb-val {% if resultat_net >= 0 %}green{% else %}red{% endif %}">
+    {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} FCFA
+  </span>
+</div>
+
+{% endblock %}
