@@ -63,6 +63,24 @@
         "postgresql",
         "python3"
       ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SAGI SCHOOL",
+      "installerHeader": "assets/installer-header.bmp",
+      "include": "assets/installer.nsh"
     }
   }
 }

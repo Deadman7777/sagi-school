@@ -1,0 +1,138 @@
+name: Build SAGI SCHOOL
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Angular CLI
+        run: npm install -g @angular/cli
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install
+
+      - name: Build Angular
+        working-directory: frontend
+        run: ng build --configuration production
+
+      - name: Install Electron deps
+        working-directory: electron
+        run: npm install
+
+      - name: Build Linux (.deb + AppImage)
+        working-directory: electron
+        run: npm run build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sagi-school-linux
+          path: dist-app/*.{deb,AppImage}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Angular CLI
+        run: npm install -g @angular/cli
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install
+
+      - name: Build Angular
+        working-directory: frontend
+        run: ng build --configuration production
+
+      - name: Install Electron deps
+        working-directory: electron
+        run: npm install
+
+      - name: Build Windows (.exe)
+        working-directory: electron
+        run: npm run build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sagi-school-windows
+          path: dist-app/*.exe
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sagi-school-linux
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sagi-school-windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *.deb
+            *.AppImage
+            *.exe
+          body: |
+            ## SAGI SCHOOL ${{ github.ref_name }}
+            
+            ### Téléchargements
+            
+            | Plateforme | Fichier | Description |
+            |-----------|---------|-------------|
+            | Windows | `SAGI SCHOOL Setup.exe` | Installateur Windows |
+            | Linux | `sagi-school.deb` | Package Debian/Ubuntu |
+            | Linux | `SAGI SCHOOL.AppImage` | Portable Linux |
+            
+            ### Installation Windows
+            1. Télécharger `SAGI SCHOOL Setup.exe`
+            2. Double-cliquer et suivre l'assistant
+            3. Installer PostgreSQL depuis postgresql.org
+            4. Lancer SAGI SCHOOL depuis le bureau
+            
+            ### Installation Linux
+```bash
+            sudo dpkg -i sagi-school_*.deb
+```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
