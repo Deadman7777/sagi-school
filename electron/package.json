@@ -68,7 +68,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico"
@@ -81,6 +83,15 @@
       "shortcutName": "SAGI SCHOOL",
       "installerHeader": "assets/installer-header.bmp",
       "include": "assets/installer.nsh"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Deadman7777",
+      "repo": "sagi-school"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deadman7777/sagi-school.git"
   }
 }
