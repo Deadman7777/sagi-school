@@ -17,3 +17,4 @@ frontend/dist/
 # Secrets
 *.env
 .env.*
+backend/config/settings/production.py
