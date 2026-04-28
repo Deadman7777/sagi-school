@@ -95,20 +95,20 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
       <div class="form-group" style="margin-bottom:20px">
         <label>Élève *</label>
         <p-autoComplete
-          [(ngModel)]="eleveSelectionne"
-          [suggestions]="elevesSuggestions()"
-          (completeMethod)="rechercherEleve($event)"
-          field="nom_complet"
-          placeholder="Tapez le nom de l'élève..."
-          styleClass="w-full"
-          [forceSelection]="true"
-          (onSelect)="onEleveSelect($event)">
-          <ng-template let-e pTemplate="item">
-            <div style="padding:6px 0">
-              <div style="font-weight:600">{{ e.nom_complet }}</div>
-              <div style="font-size:11px;color:#64748b">{{ e.section_nom }} — Reste: {{ e.reste_a_payer | number:'1.0-0' }} FCFA</div>
-            </div>
-          </ng-template>
+            [(ngModel)]="eleveTexte"
+            [suggestions]="elevesSuggestions()"
+            (completeMethod)="rechercherEleve($event)"
+            field="nom_complet"
+            dataKey="id"
+            placeholder="Tapez le nom de l'élève..."
+            styleClass="w-full"
+            (onSelect)="onEleveSelect($event)">
+            <ng-template let-e pTemplate="item">
+                <div style="padding:6px 0">
+                    <div style="font-weight:600">{{ e.nom_complet }}</div>
+                    <div style="font-size:11px;color:#64748b">{{ e.section_nom }} — Reste: {{ e.reste_a_payer | number:'1.0-0' }} FCFA</div>
+                </div>
+            </ng-template>
         </p-autoComplete>
       </div>
 
@@ -258,6 +258,7 @@ export class PaiementsComponent implements OnInit {
   recuVisible      = false;
   recuData         = signal<any>(null);
   eleveSelectionne: any = null;
+  eleveTexte: string = '';
   exerciceId       = '';
 
   form = {
@@ -295,7 +296,11 @@ export class PaiementsComponent implements OnInit {
   chargerPaiements() {
     this.loading.set(true);
     this.paiementsService.getPaiements().subscribe({
-      next: res => { this.paiements.set(res.results || res); this.loading.set(false); },
+      next: res => { 
+          const data = Array.isArray(res) ? res : (res.results || []);
+          this.paiements.set(data); 
+          this.loading.set(false); 
+      },
       error: () => this.loading.set(false)
     });
   }
@@ -322,7 +327,8 @@ export class PaiementsComponent implements OnInit {
   }
 
   onEleveSelect(event: any) {
-    this.eleveSelectionne = event;
+    this.eleveSelectionne = event?.value !== undefined ? event.value : event;
+    this.eleveTexte = this.eleveSelectionne?.nom_complet || '';
     // Pré-remplir avec les frais de la section
     if (event.section_nom) {
       this.elevesService.getSections().subscribe({
@@ -346,6 +352,7 @@ export class PaiementsComponent implements OnInit {
 
   ouvrirDialog() {
     this.eleveSelectionne = null;
+    this.eleveTexte = '';
     this.form = { montant_inscription:0, montant_mensualite:0, montant_uniforme:0,
                   montant_fournitures:0, montant_cantine:0, montant_divers:0,
                   mode_paiement:'', observations:'' };
