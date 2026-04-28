@@ -1,15 +1,19 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, NgModule, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ComptabiliteService } from '../../core/services/comptabilite.service';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
 import { TranslateModule } from '@ngx-translate/core';
+import { InputNumberModule} from 'primeng/inputnumber';
+import { DialogModule } from 'primeng/dialog';
+import { SelectModule } from 'primeng/select';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, TableModule, TagModule, ButtonModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule],
   template: `
     <div class="page-header">
       <div>
@@ -35,6 +39,8 @@ import { TranslateModule } from '@ngx-translate/core';
               (click)="onglet.set('flux')">💧 Flux Trésorerie</button>
       <button class="tab-btn" [class.active]="onglet() === 'historique'"
               (click)="onglet.set('historique')">📚 Historique</button>
+      <button class="tab-btn" [class.active]="onglet() === 'charges'"
+        (click)="onglet.set('charges')">💸 Charges</button>
     </div>
 
     <!-- JOURNAL -->
@@ -377,7 +383,81 @@ import { TranslateModule } from '@ngx-translate/core';
           </ng-template>
         </p-table>
       </div>
+      
     </div>
+          <!-- Charges -->
+      <div class="table-card" *ngIf="onglet() === 'charges'">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div>
+            <h3 style="margin:0;color:#e8f0fe">💸 Charges de l'exercice</h3>
+            <span style="color:#64748b;font-size:12px">
+              Total : {{ totalCharges() | number:'1.0-0' }} FCFA
+            </span>
+          </div>
+          <p-button label="Nouvelle Charge" severity="danger" (onClick)="ouvrirDialogCharge()" />
+        </div>
+
+        <p-table [value]="charges()" [loading]="loadingCharges()"
+                [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>Date</th>
+              <th>N° Pièce</th>
+              <th>Compte</th>
+              <th>Libellé</th>
+              <th align="right">Montant</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-c>
+            <tr>
+              <td>{{ c.date | date:'dd/MM/yyyy' }}</td>
+              <td class="mono">{{ c.no_piece }}</td>
+              <td class="mono">{{ c.no_compte }}</td>
+              <td>{{ c.libelle }}</td>
+              <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="5" class="empty-msg">Aucune charge enregistrée</td></tr>
+          </ng-template>
+        </p-table>
+      </div>
+
+  <!-- Dialog Nouvelle Charge -->
+  <p-dialog header="💸 Nouvelle Charge" [(visible)]="dialogChargeVisible"
+            [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Compte de charge *</label>
+        <p-select [options]="planCharges" [(ngModel)]="nouvelleCharge.no_compte"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+      <div class="form-group full">
+        <label>Libellé *</label>
+        <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
+              placeholder="Ex: Loyer avril 2026" />
+      </div>
+      <div class="form-group">
+        <label>Montant (FCFA) *</label>
+        <p-inputNumber [(ngModel)]="nouvelleCharge.montant" [min]="0"
+                      mode="decimal" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input pInputText type="date" [(ngModel)]="nouvelleCharge.date" class="w-full" />
+      </div>
+      <div class="form-group full">
+        <label>Réglé via</label>
+        <p-select [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+    </div>
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogChargeVisible=false" />
+      <p-button label="Enregistrer" severity="danger"
+                [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
+    </ng-template>
+  </p-dialog>
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
@@ -457,6 +537,35 @@ export class ComptabiliteComponent implements OnInit {
   loadingJournal = signal(true);
   loadingGL      = signal(true);
   loadingBalance = signal(true);
+  charges        = signal<any[]>([]);
+loadingCharges = signal(false);
+savingCharge   = signal(false);
+dialogChargeVisible = false;
+nouvelleCharge = {
+    no_compte: '661',
+    libelle: '',
+    montant: 0,
+    date: new Date().toISOString().split('T')[0],
+    compte_credit: '571',
+};
+planCharges = [
+    { label: '601 - Achats marchandises',         value: '601' },
+    { label: '604 - Achats fournitures',           value: '604' },
+    { label: '606 - Eau, électricité',             value: '606' },
+    { label: '611 - Transport',                    value: '611' },
+    { label: '612 - Loyer',                        value: '612' },
+    { label: '621 - Personnel extérieur',          value: '621' },
+    { label: '625 - Déplacements et missions',     value: '625' },
+    { label: '631 - Frais bancaires',              value: '631' },
+    { label: '641 - Impôts et taxes',              value: '641' },
+    { label: '661 - Salaires & charges',           value: '661' },
+    { label: '662 - Charges sociales',             value: '662' },
+];
+comptesCredit = [
+    { label: '571 - Caisse',        value: '571' },
+    { label: '521 - Banque',        value: '521' },
+    { label: '552 - Wave/Mobile',   value: '552' },
+];
 
   constructor(private compta: ComptabiliteService) {}
 
@@ -482,6 +591,7 @@ export class ComptabiliteComponent implements OnInit {
     this.compta.getHistorique().subscribe({
       next: res => this.historique.set(res)
     });
+    this.chargerCharges();
   }
 
   maxFlux(): number {
@@ -522,5 +632,40 @@ export class ComptabiliteComponent implements OnInit {
       a.download = `${type}_sagi_school.pdf`;
       a.click();
     });
+  }
+
+  chargerCharges() {
+    this.loadingCharges.set(true);
+    this.compta.getCharges().subscribe({
+        next: res => { this.charges.set(Array.isArray(res) ? res : []); this.loadingCharges.set(false); },
+        error: () => this.loadingCharges.set(false)
+    });
+}
+
+  ouvrirDialogCharge() {
+      this.nouvelleCharge = {
+          no_compte: '661', libelle: '', montant: 0,
+          date: new Date().toISOString().split('T')[0],
+          compte_credit: '571',
+      };
+      this.dialogChargeVisible = true;
+  }
+
+  sauvegarderCharge() {
+      if (!this.nouvelleCharge.libelle || this.nouvelleCharge.montant <= 0) return;
+      this.savingCharge.set(true);
+      this.compta.creerCharge(this.nouvelleCharge).subscribe({
+          next: () => {
+              this.dialogChargeVisible = false;
+              this.savingCharge.set(false);
+              this.chargerCharges();
+              this.compta.getCompteResultat().subscribe({ next: res => this.resultat.set(res) });
+          },
+          error: () => this.savingCharge.set(false)
+      });
+  }
+
+  totalCharges(): number {
+      return this.charges().reduce((s, c) => s + (c.montant || 0), 0);
   }
 }

@@ -6,6 +6,7 @@ from django.db.models import Sum, Q
 from apps.paiements.models import Exercice, Paiement
 from apps.eleves.models import Eleve
 from .models import JournalEntry
+from django.utils import timezone
 
 
 def get_tenant(request):
@@ -481,3 +482,110 @@ class HistoriqueExercicesView(APIView):
             'historique': historique,
             'nb_exercices_clotures': len(historique),
         })
+
+class ChargeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    PLAN_CHARGES = {
+        '601': 'Achats marchandises',
+        '602': 'Achats matières premières',
+        '604': 'Achats fournitures',
+        '606': 'Eau, électricité, fournitures',
+        '611': 'Transport',
+        '612': 'Loyer',
+        '613': 'Locations diverses',
+        '621': 'Personnel extérieur',
+        '622': 'Rémunérations intermédiaires',
+        '623': 'Publicité',
+        '624': 'Transport du personnel',
+        '625': 'Déplacements et missions',
+        '631': 'Frais bancaires',
+        '641': 'Impôts et taxes',
+        '651': 'Pertes sur créances',
+        '661': 'Salaires & charges',
+        '662': 'Charges sociales',
+        '681': 'Dotations amortissements',
+    }
+
+    def get(self, request):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response([])
+
+        charges = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice, source='CHARGE',
+            debit__gt=0, no_compte__startswith='6'
+        ).order_by('-date_ecriture')
+
+        return Response([{
+            'id':           str(c.id),
+            'date':         str(c.date_ecriture),
+            'no_piece':     c.no_piece,
+            'no_compte':    c.no_compte,
+            'libelle':      c.libelle,
+            'montant':      float(c.debit),
+            'libelle_compte': self.PLAN_CHARGES.get(c.no_compte, c.no_compte),
+        } for c in charges])
+
+    def post(self, request):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        data = request.data
+        no_compte = data.get('no_compte', '606')
+        montant   = float(data.get('montant', 0))
+        libelle   = data.get('libelle', '')
+        date      = data.get('date', str(timezone.now().date()))
+
+        if montant <= 0:
+            return Response({'error': 'Montant invalide'}, status=400)
+
+        # Générer no_piece
+        from django.db.models import Max
+        import re
+        last = JournalEntry.objects.filter(
+            tenant=tenant, source='CHARGE'
+        ).aggregate(Max('no_piece'))['no_piece__max']
+        nums = re.findall(r'\d+', last or 'CHG-0000')
+        no_piece = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
+
+        libelle_compte = self.PLAN_CHARGES.get(no_compte, no_compte)
+
+        # Double écriture SYSCOHADA charges
+        # Débit compte de charge (6xx) / Crédit compte de trésorerie (5xx/571)
+        compte_credit = data.get('compte_credit', '571')  # Caisse par défaut
+
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date,
+            no_compte=no_compte,
+            libelle=f"{libelle_compte} - {libelle}",
+            debit=montant, credit=0,
+            source='CHARGE', source_id=None,
+        )
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date,
+            no_compte=compte_credit,
+            libelle=f"Règlement {libelle_compte} - {libelle}",
+            debit=0, credit=montant,
+            source='CHARGE', source_id=None,
+        )
+
+        return Response({
+            'success': True,
+            'no_piece': no_piece,
+            'montant': montant,
+            'libelle': libelle,
+        }, status=201)
+
+    def delete(self, request, pk):
+        tenant = get_tenant(request)
+        JournalEntry.objects.filter(
+            tenant=tenant, source='CHARGE',
+            no_piece=JournalEntry.objects.get(id=pk).no_piece
+        ).delete()
+        return Response({'success': True})

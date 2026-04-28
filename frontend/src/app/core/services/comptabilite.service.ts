@@ -11,4 +11,10 @@ export class ComptabiliteService {
   getBilan()          { return this.api.get<any>('/comptabilite/bilan/'); }
   getTableauFlux()    { return this.api.get<any>('/comptabilite/tableau-flux/'); }
   getHistorique()     { return this.api.get<any>('/comptabilite/historique/'); }
+  getCharges()        { return this.api.get<any[]>('/comptabilite/charges/'); }
+  creerCharge(data: any) { return this.api.post<any>('/comptabilite/charges/', data); }
+  supprimerCharge(id: string) { return this.api.delete(`/comptabilite/charges/${id}/`); }
+  exportPDF(type: string) {
+    return this.api.get<Blob>(`/comptabilite/export-pdf/${type}/`);
+  }
 }
