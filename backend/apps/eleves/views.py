@@ -6,6 +6,7 @@ from django.db.models import Sum, Count, Value, DecimalField
 from django.db.models.functions import Coalesce, TruncMonth
 from core.permissions import IsTenantMember
 from .models import Eleve, Section
+from apps.paiements.models import Exercice
 from .serializers import EleveSerializer, SectionSerializer
 
 
@@ -65,7 +66,16 @@ class EleveViewSet(viewsets.ModelViewSet):
         return qs.order_by('numero')
 
     def perform_create(self, serializer):
-        serializer.save(tenant=get_tenant(self.request))
+        tenant = get_tenant(self.request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False
+        ).order_by('-date_debut').first()
+        
+        if not exercice:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Aucun exercice actif trouvé. Créez d'abord un exercice.")
+        
+        serializer.save(tenant=tenant, exercice=exercice)
 
 
 class SuiviMensuelView(APIView):

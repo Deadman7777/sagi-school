@@ -14,18 +14,19 @@ class SectionSerializer(serializers.ModelSerializer):
 class EleveSerializer(serializers.ModelSerializer):
     section_nom   = serializers.CharField(source='section.nom', read_only=True)
     total_attendu = serializers.ReadOnlyField()
-
-    # Utilise l'annotation SQL si disponible
-    total_paye = serializers.SerializerMethodField()
+    total_paye    = serializers.SerializerMethodField()
     reste_a_payer = serializers.SerializerMethodField()
     niveau_alerte = serializers.SerializerMethodField()
 
     class Meta:
         model  = Eleve
         fields = '__all__'
+        extra_kwargs = {
+            'tenant':   {'required': False, 'read_only': True},
+            'exercice': {'required': False, 'read_only': True},
+        }
 
     def get_total_paye(self, obj):
-        # Annotation SQL disponible → instantané
         if hasattr(obj, 'total_paye_sql') and obj.total_paye_sql is not None:
             return float(obj.total_paye_sql)
         return float(obj.total_paye)
@@ -38,9 +39,10 @@ class EleveSerializer(serializers.ModelSerializer):
         reste = self.get_reste_a_payer(obj)
         if reste <= 0:
             return 'OK'
+        from django.utils import timezone
         jours = (timezone.now().date() - obj.date_inscription).days
-        if jours > 60:  return 'URGENT'
-        if jours > 30:  return 'ATTENTION'
+        if jours > 60: return 'URGENT'
+        if jours > 30: return 'ATTENTION'
         return 'OK'
 
 class SectionSerializer(serializers.ModelSerializer):
