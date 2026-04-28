@@ -54,7 +54,67 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant = self.get_tenant()
-        serializer.save(tenant=tenant, saisi_par=self.request.user)
+        
+        # Exercice actif
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False
+        ).order_by('-date_debut').first()
+        if not exercice:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Aucun exercice actif trouvé.")
+        
+        # Générer no_piece automatique
+        from django.db.models import Max
+        import re
+        last = Paiement.objects.filter(tenant=tenant).aggregate(Max('no_piece'))['no_piece__max']
+        if last:
+            nums = re.findall(r'\d+', last)
+            next_num = int(nums[-1]) + 1 if nums else 1
+        else:
+            next_num = 1
+        no_piece = f"REC-{next_num:04d}"
+
+        paiement = serializer.save(
+            tenant=tenant,
+            exercice=exercice,
+            no_piece=no_piece,
+            saisi_par=self.request.user
+        )
+
+        # Double écriture SYSCOHADA
+        from apps.comptabilite.models import JournalEntry
+        montant = float(paiement.total)
+        eleve_nom = paiement.eleve.nom_complet
+
+        compte_reglement, libelle_compte = {
+            'ESPECE':       ('571', 'Caisse'),
+            'WAVE':         ('552', 'Wave'),
+            'ORANGE_MONEY': ('552', 'Orange Money'),
+            'FREE_MONEY':   ('552', 'Free Money'),
+            'VIREMENT':     ('521', 'Banque'),
+            'CHEQUE':       ('521', 'Banque'),
+        }.get(paiement.mode_paiement, ('571', 'Caisse'))
+
+        libelle = f"{eleve_nom} - {no_piece}"
+        date = paiement.date_paiement
+
+        ecritures = [
+            dict(no_compte='411', libelle=f"Créance scolarité - {libelle}", debit=montant, credit=0),
+            dict(no_compte='706', libelle=f"Créance scolarité - {libelle}", debit=0, credit=montant),
+            dict(no_compte=compte_reglement, libelle=f"Règlement {libelle_compte} - {libelle}", debit=montant, credit=0),
+            dict(no_compte='411', libelle=f"Règlement {libelle_compte} - {libelle}", debit=0, credit=montant),
+        ]
+
+        for e in ecritures:
+            JournalEntry.objects.create(
+                tenant=tenant,
+                exercice=exercice,
+                no_piece=no_piece,
+                date_ecriture=date,
+                source='PAIEMENT',
+                source_id=paiement.id,
+                **e
+            )
 
     @action(detail=False, methods=['get'])
     def stats(self, request):

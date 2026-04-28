@@ -13,9 +13,14 @@ class ExerciceSerializer(serializers.ModelSerializer):
 
 
 class PaiementSerializer(serializers.ModelSerializer):
-    total       = serializers.ReadOnlyField()
-    eleve_nom   = serializers.CharField(source='eleve.nom_complet', read_only=True)
+    total     = serializers.ReadOnlyField()
+    eleve_nom = serializers.CharField(source='eleve.nom_complet', read_only=True)
 
     class Meta:
         model  = Paiement
         fields = '__all__'
+        extra_kwargs = {
+            'tenant':   {'required': False, 'read_only': True},
+            'exercice': {'required': False, 'read_only': True},
+            'no_piece': {'required': False, 'read_only': True},
+        }
