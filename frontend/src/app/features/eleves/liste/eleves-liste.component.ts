@@ -186,9 +186,10 @@ export class ElevesListeComponent implements OnInit {
     this.loading.set(true);
     this.elevesService.getEleves().subscribe({
       next: res => {
-        this.eleves.set(res.results);
-        this.elevesFiltres.set(res.results);
-        this.loading.set(false);
+          const data = Array.isArray(res) ? res : (res.results || []);
+          this.eleves.set(data);
+          this.elevesFiltres.set(data);
+          this.loading.set(false);
       },
       error: () => this.loading.set(false)
     });

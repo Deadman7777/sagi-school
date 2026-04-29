@@ -24,11 +24,11 @@ export class PaiementsService {
   constructor(private api: ApiService) {}
 
   getPaiements(params?: Record<string, string>) {
-    return this.api.get<any>('/paiements/paiements', params);
+    return this.api.get<any>('/paiements/', params);
   }
 
   creerPaiement(data: Partial<Paiement>) {
-    return this.api.post<Paiement>('/paiements/', data);
+      return this.api.post<Paiement>('/paiements/paiements/', data);
   }
 
   getStats() {

@@ -133,6 +133,13 @@ class ExportPDFView(APIView):
                     Sum('montant_cantine')     + Sum('montant_divers')
             ).order_by('-total')
 
+            # Journal
+            journal_entries = JournalEntry.objects.filter(
+                tenant=tenant, exercice=exercice
+            ).order_by('date_ecriture', 'no_piece')
+            total_debit_journal  = float(journal_entries.aggregate(t=Sum('debit'))['t'] or 0)
+            total_credit_journal = float(journal_entries.aggregate(t=Sum('credit'))['t'] or 0)
+            
             return {
                 'tenant':          tenant,
                 'exercice':        exercice,
@@ -184,4 +191,7 @@ class ExportPDFView(APIView):
                             'total': float(m['total'] or 0)} for m in par_mode],
                 'eleves':    eleves,
                 'paiements': paiements.select_related('eleve').order_by('date_paiement'),
+                'journal':       journal_entries,
+                'total_debit':   total_debit_journal,
+                'total_credit':  total_credit_journal,
             }
