@@ -89,36 +89,49 @@ import { SelectModule } from 'primeng/select';
       </p-table>
     </div>
 
-    <!-- BALANCE -->
-    <div class="table-card" *ngIf="onglet() === 'balance'">
-      <p-table [value]="balance()?.lignes || []" [loading]="loadingBalance()"
-               styleClass="p-datatable-sm" [showGridlines]="true">
-        <ng-template pTemplate="header">
-          <tr><th>N° Compte</th><th>Libellé</th>
-              <th>Mvt Débit</th><th>Mvt Crédit</th>
-              <th>Solde Débiteur</th><th>Solde Créditeur</th></tr>
-        </ng-template>
-        <ng-template pTemplate="body" let-l>
-          <tr>
-            <td class="mono bold">{{ l.no_compte }}</td>
-            <td>{{ l.libelle }}</td>
-            <td class="mono">{{ l.total_debit    | number:'1.0-0' }}</td>
-            <td class="mono">{{ l.total_credit   | number:'1.0-0' }}</td>
-            <td class="mono success">{{ l.solde_debiteur  > 0 ? (l.solde_debiteur  | number:'1.0-0') : '' }}</td>
-            <td class="mono info">   {{ l.solde_crediteur > 0 ? (l.solde_crediteur | number:'1.0-0') : '' }}</td>
-          </tr>
-        </ng-template>
-        <ng-template pTemplate="footer" *ngIf="balance()?.totaux">
-          <tr class="totaux-row">
-            <td colspan="2"><strong>TOTAUX</strong></td>
-            <td class="mono"><strong>{{ balance().totaux.total_debit    | number:'1.0-0' }}</strong></td>
-            <td class="mono"><strong>{{ balance().totaux.total_credit   | number:'1.0-0' }}</strong></td>
-            <td class="mono"><strong>{{ balance().totaux.solde_debiteur  | number:'1.0-0' }}</strong></td>
-            <td class="mono"><strong>{{ balance().totaux.solde_crediteur | number:'1.0-0' }}</strong></td>
-          </tr>
-        </ng-template>
-      </p-table>
-    </div>
+<!-- BALANCE -->
+<div class="table-card" *ngIf="onglet() === 'balance'">
+  <p-table [value]="balance()?.lignes || []" [loading]="loadingBalance()"
+           styleClass="p-datatable-sm" [showGridlines]="true">
+    <ng-template pTemplate="header">
+      <tr>
+        <th rowspan="2">N° Compte</th>
+        <th rowspan="2">Libellé</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">Solde Ouverture</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">Mouvements</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">Solde Clôture</th>
+      </tr>
+      <tr>
+        <th>Débit</th><th>Crédit</th>
+        <th>Débit</th><th>Crédit</th>
+        <th>Débiteur</th><th>Créditeur</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-l>
+      <tr>
+        <td class="mono bold">{{ l.no_compte }}</td>
+        <td>{{ l.libelle }}</td>
+        <td class="mono">{{ l.so_debiteur  > 0 ? (l.so_debiteur  | number:'1.0-0') : '' }}</td>
+        <td class="mono">{{ l.so_crediteur > 0 ? (l.so_crediteur | number:'1.0-0') : '' }}</td>
+        <td class="mono success">{{ l.mvt_debit   > 0 ? (l.mvt_debit   | number:'1.0-0') : '' }}</td>
+        <td class="mono info">   {{ l.mvt_credit  > 0 ? (l.mvt_credit  | number:'1.0-0') : '' }}</td>
+        <td class="mono success">{{ l.sf_debiteur  > 0 ? (l.sf_debiteur  | number:'1.0-0') : '' }}</td>
+        <td class="mono info">   {{ l.sf_crediteur > 0 ? (l.sf_crediteur | number:'1.0-0') : '' }}</td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="footer" *ngIf="balance()?.totaux">
+      <tr class="totaux-row">
+        <td colspan="2"><strong>TOTAUX</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.so_debiteur  | number:'1.0-0' }}</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.so_crediteur | number:'1.0-0' }}</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.mvt_debit    | number:'1.0-0' }}</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.mvt_credit   | number:'1.0-0' }}</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.sf_debiteur  | number:'1.0-0' }}</strong></td>
+        <td class="mono"><strong>{{ balance().totaux.sf_crediteur | number:'1.0-0' }}</strong></td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
 
     <!-- COMPTE DE RÉSULTAT -->
     <div *ngIf="onglet() === 'resultat' && resultat()">

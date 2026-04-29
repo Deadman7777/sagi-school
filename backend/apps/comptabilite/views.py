@@ -94,54 +94,100 @@ class GrandLivreView(APIView):
 class BalanceView(APIView):
     permission_classes = [IsAuthenticated]
 
+    PLAN = {
+        '101': 'Capital',
+        '411': 'Clients (Parents)',
+        '521': 'Banque compte courant',
+        '552': 'Mobile Money',
+        '5521': 'Wave',
+        '5522': 'Orange Money',
+        '5523': 'Free Money',
+        '571': 'Caisse',
+        '601': 'Achats marchandises',
+        '604': 'Achats fournitures',
+        '606': 'Eau, électricité, fournitures',
+        '611': 'Transport',
+        '612': 'Loyer',
+        '621': 'Personnel extérieur',
+        '625': 'Déplacements et missions',
+        '631': 'Frais bancaires',
+        '641': 'Impôts et taxes',
+        '661': 'Salaires & charges',
+        '662': 'Charges sociales',
+        '706': 'Produits scolarité',
+        '706.1': 'Produits cantine',
+    }
+
     def get(self, request):
         tenant   = get_tenant(request)
         exercice = get_exercice(tenant)
         if not exercice:
             return Response({'lignes': [], 'totaux': {}})
 
+        # Soldes initiaux par compte
+        soldes_initiaux = {
+            '521':  float(exercice.solde_initial_banque),
+            '571':  float(exercice.solde_initial_caisse),
+            '552':  float(exercice.solde_initial_mobile),
+            '5521': float(exercice.solde_initial_mobile),
+            '5522': float(exercice.solde_initial_mobile),
+            '5523': float(exercice.solde_initial_mobile),
+        }
+
+        # Mouvements de l'exercice par compte
         comptes = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice
         ).values('no_compte').annotate(
-            total_debit=Sum('debit'),
-            total_credit=Sum('credit')
+            mvt_debit=Sum('debit'),
+            mvt_credit=Sum('credit')
         ).order_by('no_compte')
 
-        PLAN = {
-            '521': 'Banque', '571': 'Caisse',
-            '5521': 'WAVE', '5522': 'Orange Money', '5523': 'Free Money',
-            '706': 'Produits scolarité', '706.1': 'Produits cantine',
-            '612': 'Loyer', '661': 'Salaires', '606': 'Eau & fournitures',
-        }
-
         lignes = []
-        tot_debit = tot_credit = tot_sd = tot_sc = 0
+        tot_so_d = tot_so_c = 0
+        tot_mvt_d = tot_mvt_c = 0
+        tot_sf_d = tot_sf_c = 0
 
         for c in comptes:
-            d  = float(c['total_debit']  or 0)
-            cr = float(c['total_credit'] or 0)
-            sd = max(d - cr, 0)
-            sc = max(cr - d, 0)
-            tot_debit  += d
-            tot_credit += cr
-            tot_sd     += sd
-            tot_sc     += sc
+            no_compte = c['no_compte']
+            mvt_d  = float(c['mvt_debit']  or 0)
+            mvt_c  = float(c['mvt_credit'] or 0)
+
+            # Solde ouverture — simplifié : 0 sauf comptes trésorerie
+            so_d = so_c = 0
+            if no_compte in ('521', '571', '552', '5521', '5522', '5523'):
+                so_d = soldes_initiaux.get(no_compte, 0)
+                so_c = 0
+
+            # Solde clôture
+            total_d = so_d + mvt_d
+            total_c = so_c + mvt_c
+            sf_d = max(total_d - total_c, 0)
+            sf_c = max(total_c - total_d, 0)
+
+            tot_so_d  += so_d;  tot_so_c  += so_c
+            tot_mvt_d += mvt_d; tot_mvt_c += mvt_c
+            tot_sf_d  += sf_d;  tot_sf_c  += sf_c
+
             lignes.append({
-                'no_compte':       c['no_compte'],
-                'libelle':         PLAN.get(c['no_compte'], c['no_compte']),
-                'total_debit':     d,
-                'total_credit':    cr,
-                'solde_debiteur':  sd,
-                'solde_crediteur': sc,
+                'no_compte':      no_compte,
+                'libelle':        self.PLAN.get(no_compte, no_compte),
+                'so_debiteur':    round(so_d, 2),
+                'so_crediteur':   round(so_c, 2),
+                'mvt_debit':      round(mvt_d, 2),
+                'mvt_credit':     round(mvt_c, 2),
+                'sf_debiteur':    round(sf_d, 2),
+                'sf_crediteur':   round(sf_c, 2),
             })
 
         return Response({
             'lignes': lignes,
             'totaux': {
-                'total_debit':     tot_debit,
-                'total_credit':    tot_credit,
-                'solde_debiteur':  tot_sd,
-                'solde_crediteur': tot_sc,
+                'so_debiteur':  round(tot_so_d, 2),
+                'so_crediteur': round(tot_so_c, 2),
+                'mvt_debit':    round(tot_mvt_d, 2),
+                'mvt_credit':   round(tot_mvt_c, 2),
+                'sf_debiteur':  round(tot_sf_d, 2),
+                'sf_crediteur': round(tot_sf_c, 2),
             }
         })
 
