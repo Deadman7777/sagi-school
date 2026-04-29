@@ -13,7 +13,7 @@ import { ButtonModule } from 'primeng/button';
     <div class="page-header">
       <div>
         <h2 class="page-title">📋 Déclarations Fiscales</h2>
-        <span class="page-sub">Retenues à la Source (BRS) — Conformité fiscale sénégalaise</span>
+         <span class="page-sub">BRS · IPRES · CSS · IR · CFCE — Conformité fiscale sénégalaise</span>
       </div>
       <p-button label="📤 Exporter" severity="secondary" (onClick)="window.print()" />
     </div>
@@ -60,37 +60,38 @@ import { ButtonModule } from 'primeng/button';
       <div class="table-wrap">
         <p-table [value]="declarations()" [loading]="loading()"
                  styleClass="p-datatable-sm">
-          <ng-template pTemplate="header">
-            <tr>
-              <th>Mois</th>
-              <th>Masse Salariale</th>
-              <th>Taux BRS</th>
-              <th>Montant BRS</th>
-              <th>Date Limite</th>
-              <th>Statut</th>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="body" let-d>
-            <tr>
-              <td class="bold">{{ d.mois }}</td>
-              <td class="mono">{{ d.masse_salariale | number:'1.0-0' }} FCFA</td>
-              <td class="mono">5%</td>
-              <td class="mono">{{ d.montant_brs | number:'1.0-0' }} FCFA</td>
-              <td class="mono">{{ d.date_limite | date:'dd/MM/yyyy' }}</td>
-              <td>
-                <p-tag [value]="d.statut"
-                       [severity]="d.statut === 'EN_REGLE' ? 'success' :
-                                   d.statut === 'EN_RETARD' ? 'danger' : 'warn'" />
-              </td>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="emptymessage">
-            <tr>
-              <td colspan="6" class="empty-msg">
-                Aucune déclaration — ajoutez des charges salariales
-              </td>
-            </tr>
-          </ng-template>
+            <ng-template pTemplate="header">
+              <tr>
+                <th>Mois</th>
+                <th>Masse Salariale</th>
+                <th>BRS (5%)</th>
+                <th>IPRES (5.6%)</th>
+                <th>CSS (0.7%)</th>
+                <th>IR</th>
+                <th>CFCE (1%)</th>
+                <th>Total Impôts</th>
+                <th>Date Limite</th>
+                <th>Statut</th>
+              </tr>
+            </ng-template>
+            <ng-template pTemplate="body" let-d>
+              <tr>
+                <td class="bold">{{ d.mois }}</td>
+                <td class="mono">{{ d.masse_salariale | number:'1.0-0' }}</td>
+                <td class="mono">{{ d.brs   | number:'1.0-0' }}</td>
+                <td class="mono">{{ d.ipres | number:'1.0-0' }}</td>
+                <td class="mono">{{ d.css   | number:'1.0-0' }}</td>
+                <td class="mono">{{ d.ir    | number:'1.0-0' }}</td>
+                <td class="mono">{{ d.cfce  | number:'1.0-0' }}</td>
+                <td class="mono bold" style="color:#f59e0b">{{ d.total_impots | number:'1.0-0' }} FCFA</td>
+                <td class="mono">{{ d.date_limite | date:'dd/MM/yyyy' }}</td>
+                <td>
+                  <p-tag [value]="d.statut"
+                        [severity]="d.statut === 'EN_REGLE' ? 'success' :
+                                    d.statut === 'EN_RETARD' ? 'danger' : 'warn'" />
+                </td>
+              </tr>
+            </ng-template>
         </p-table>
       </div>
     </div>
