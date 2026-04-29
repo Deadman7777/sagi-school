@@ -163,6 +163,7 @@ export class ShellComponent {
     { labelKey: 'nav.comptabilite_section', items: [
       { labelKey: 'nav.comptabilite', icon: '📒', route: '/comptabilite' },
       { labelKey: 'nav.fiscal',       icon: '📋', route: '/fiscal' },
+      { labelKey: 'nav.rh', icon: '👥', route: '/rh' },
       { labelKey: 'nav.suivi',        icon: '📅', route: '/suivi-mensuel' },
     ]},
     { labelKey: 'nav.systeme', items: [
@@ -192,6 +193,7 @@ export class ShellComponent {
       '/eleves':       'nav.eleves',
       '/paiements':    'nav.paiements',
       '/comptabilite': 'nav.comptabilite',
+      '/rh': 'nav.rh',
       '/fiscal':       'nav.fiscal',
       '/suivi-mensuel': 'nav.suivi',
       '/licences':     'nav.licences',
