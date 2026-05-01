@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/fiscal/',       include('apps.fiscal.urls')),
     path('api/dashboard/',    include('apps.dashboard.urls')),
     path('api/rh/', include('apps.rh.urls')),
+    path('api/academique/', include('apps.academique.urls')),
 ]
 
 if not settings.DEBUG:
