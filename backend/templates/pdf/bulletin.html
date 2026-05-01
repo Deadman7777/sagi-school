@@ -1,0 +1,141 @@
+{% extends "pdf/base.html" %}
+{% block title %}Bulletin de Notes{% endblock %}
+{% block content %}
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
+  .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1a3c5e; padding-bottom: 12px; }
+  .header h1 { font-size: 16px; color: #1a3c5e; margin: 0 0 4px; }
+  .header p  { margin: 2px 0; color: #555; font-size: 10px; }
+  .republique { font-size: 10px; color: #555; margin-bottom: 8px; }
+  .titre-bulletin { font-size: 18px; font-weight: bold; color: #1a3c5e; margin: 8px 0; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #dee2e6; }
+  .info-item { font-size: 11px; }
+  .info-item span { color: #666; }
+  .info-item strong { color: #1a1a1a; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th { background: #1a3c5e; color: white; padding: 7px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+  td { padding: 6px 8px; border-bottom: 1px solid #dee2e6; font-size: 11px; }
+  tr:nth-child(even) { background: #f8f9fa; }
+  .moy { font-weight: bold; color: #1a3c5e; }
+  .appr-excellent  { color: #10b981; font-weight: bold; }
+  .appr-tresb      { color: #0099ff; font-weight: bold; }
+  .appr-bien       { color: #3b82f6; }
+  .appr-assezb     { color: #f59e0b; }
+  .appr-passable   { color: #f97316; }
+  .appr-insuffisant{ color: #ef4444; }
+  .stats-box { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .stat-card { background: #f0f4ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: 8px; text-align: center; }
+  .stat-val  { font-size: 18px; font-weight: bold; color: #1a3c5e; }
+  .stat-lbl  { font-size: 9px; color: #666; text-transform: uppercase; }
+  .decision-box { background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  .decision-title { font-weight: bold; color: #065f46; margin-bottom: 4px; }
+  .signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 30px; }
+  .sig-box { text-align: center; border-top: 1px solid #999; padding-top: 8px; font-size: 10px; color: #666; }
+  .rang-badge { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: 4px; padding: 2px 6px; font-weight: bold; }
+</style>
+
+<!-- En-tête République -->
+<div class="header">
+  <div class="republique">RÉPUBLIQUE DU SÉNÉGAL<br>Un Peuple — Un But — Une Foi</div>
+  <h1>{{ tenant.nom|upper }}</h1>
+  <p>{{ tenant.ville }} | Année Scolaire : {{ annee }}</p>
+  <div class="titre-bulletin">📋 BULLETIN DE NOTES — {{ trimestre }}</div>
+</div>
+
+<!-- Infos élève -->
+<div class="info-grid">
+  <div class="info-item"><span>Nom & Prénom : </span><strong>{{ eleve.nom_complet|upper }}</strong></div>
+  <div class="info-item"><span>Classe : </span><strong>{{ eleve.classe }}</strong></div>
+  <div class="info-item"><span>Matricule : </span><strong>{{ eleve.matricule }}</strong></div>
+  <div class="info-item"><span>Date de naissance : </span><strong>{{ eleve.date_naissance }}</strong></div>
+  <div class="info-item"><span>Effectif : </span><strong>{{ stats.nb_eleves }} élèves</strong></div>
+  <div class="info-item"><span>Rang : </span><strong><span class="rang-badge">{{ eleve.rang }}e / {{ stats.nb_eleves }}</span></strong></div>
+</div>
+
+<!-- Stats classe -->
+<div class="stats-box">
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.moy_generale }}</div>
+    <div class="stat-lbl">Moy. Générale</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val">{{ stats.moy_classe }}</div>
+    <div class="stat-lbl">Moy. Classe</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:#10b981">{{ stats.moy_max }}</div>
+    <div class="stat-lbl">Plus Haute</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:#ef4444">{{ stats.moy_min }}</div>
+    <div class="stat-lbl">Plus Basse</div>
+  </div>
+</div>
+
+<!-- Tableau des notes -->
+<table>
+  <thead>
+    <tr>
+      <th>Matière</th>
+      <th>Coef</th>
+      <th>Note /{{ note_max }}</th>
+      <th>Moyenne</th>
+      <th>Points</th>
+      <th>Rang</th>
+      <th>Appréciation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in matieres %}
+    <tr>
+      <td><strong>{{ m.nom }}</strong></td>
+      <td style="text-align:center">{{ m.coefficient }}</td>
+      <td style="text-align:center">{{ m.note_max }}</td>
+      <td style="text-align:center" class="moy">
+        {% if m.moyenne %}{{ m.moyenne }}{% else %}—{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if m.points %}{{ m.points }}{% else %}—{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}
+      </td>
+      <td class="
+        {% if m.moyenne %}
+          {% if m.moyenne >= 18 %}appr-excellent
+          {% elif m.moyenne >= 16 %}appr-tresb
+          {% elif m.moyenne >= 14 %}appr-bien
+          {% elif m.moyenne >= 12 %}appr-assezb
+          {% elif m.moyenne >= 10 %}appr-passable
+          {% else %}appr-insuffisant{% endif %}
+        {% endif %}">
+        {{ m.appreciation|default:"—" }}
+      </td>
+    </tr>
+    {% endfor %}
+    <!-- Ligne totaux -->
+    <tr style="background:#e8f0fe;font-weight:bold">
+      <td>TOTAL</td>
+      <td style="text-align:center">{{ total_coef }}</td>
+      <td></td>
+      <td style="text-align:center;color:#1a3c5e;font-size:14px">{{ stats.moy_generale }}/{{ note_max }}</td>
+      <td style="text-align:center">{{ total_points }}</td>
+      <td></td>
+      <td>{{ appreciation_generale }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Décision -->
+<div class="decision-box">
+  <div class="decision-title">📋 Décision du Conseil de Classe</div>
+  <div>{{ decision }}</div>
+</div>
+
+<!-- Signatures -->
+<div class="signatures">
+  <div class="sig-box">Le Professeur Principal<br><br><br>_________________</div>
+  <div class="sig-box">Le Directeur<br><br><br>_________________</div>
+  <div class="sig-box">Cachet de l'établissement<br><br><br>_________________</div>
+</div>
+{% endblock %}

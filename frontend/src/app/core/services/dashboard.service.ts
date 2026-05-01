@@ -3,7 +3,15 @@ import { ApiService } from './api.service';
 
 export interface DashboardKPI {
   exercice: { annee_scolaire: string; date_debut: string; date_fin: string; } | null;
-  kpis: { total_recettes: number; total_charges: number; resultat_net: number; tresorerie: number; };
+  kpis: { 
+  total_recettes: number; 
+  total_charges: number; 
+  resultat_net: number; 
+  tresorerie: number;
+  total_attendu: number;
+  total_impayes: number;
+  taux_recouvrement: number;
+};
   eleves: { total: number; urgent: number; attention: number; ok: number; };
   modes_paiement: { mode_paiement: string; nb: number; total: number; }[];
   recettes_mensuelles: { mois: string; total: number; }[];

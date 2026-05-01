@@ -132,6 +132,26 @@ import { TranslateModule } from '@ngx-translate/core';
           <div class="kpi-sub">FCFA</div>
         </div>
       </div>
+      <div class="kpi-card" style="--acc:#10b981">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">Taux Recouvrement</div>
+        <div class="kpi-value" style="color:#10b981">{{ data()!.kpis.taux_recouvrement }}%</div>
+        <div class="kpi-sub">des frais encaissés</div>
+      </div>
+
+      <div class="kpi-card" style="--acc:#ef4444">
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-label">Total Impayés</div>
+        <div class="kpi-value" style="color:#ef4444">{{ data()!.kpis.total_impayes | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA à recouvrer</div>
+      </div>
+
+      <div class="kpi-card" style="--acc:#a855f7">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-label">Total Attendu</div>
+        <div class="kpi-value" style="color:#a855f7">{{ data()!.kpis.total_attendu | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA frais annuels</div>
+      </div>
 
       <ng-template #skelEcole>
         <div class="kpi-grid">

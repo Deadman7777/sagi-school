@@ -171,6 +171,12 @@ class DashboardKPIView(APIView):
                   Sum('montant_uniforme')    + Sum('montant_fournitures') +
                   Sum('montant_cantine')     + Sum('montant_divers')
         ).order_by('mois')
+        
+        # Calcul taux recouvrement et impayés
+        total_attendu = sum(float(e.total_attendu) for e in eleves)
+        total_paye    = sum(float(e.total_paye_sql or 0) for e in eleves)
+        total_impayes = max(total_attendu - total_paye, 0)
+        taux_recouvrement = round((total_paye / total_attendu * 100), 1) if total_attendu > 0 else 0
 
         result = {
             'exercice': {
@@ -179,10 +185,13 @@ class DashboardKPIView(APIView):
                 'date_fin':       str(exercice.date_fin),
             },
             'kpis': {
-                'total_recettes': total_recettes,
-                'total_charges':  total_charges,
-                'resultat_net':   total_recettes - total_charges,
-                'tresorerie':     solde_initial + total_recettes - total_charges,
+                'total_recettes':      total_recettes,
+                'total_charges':       total_charges,
+                'resultat_net':        total_recettes - total_charges,
+                'tresorerie':          solde_initial + total_recettes - total_charges,
+                'total_attendu':       round(total_attendu, 2),
+                'total_impayes':       round(total_impayes, 2),
+                'taux_recouvrement':   taux_recouvrement,
             },
             'eleves': {
                 'total': eleves.count(), 'urgent': urgent,

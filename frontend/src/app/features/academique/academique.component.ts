@@ -194,6 +194,7 @@ import { ToastModule } from 'primeng/toast';
               <th *ngFor="let m of colonnesMatieres()">{{ m }}</th>
               <th>Moy. Générale</th>
               <th>Appréciation</th>
+              <th>Bulletin</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-r>
@@ -205,6 +206,11 @@ import { ToastModule } from 'primeng/toast';
               </td>
               <td class="mono bold" style="color:#00d4aa">{{ r.moy_generale }}</td>
               <td>{{ getAppreciation(r.moy_generale, 20) }}</td>
+              <td>
+                <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
+                          severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
+                          title="Télécharger bulletin PDF" />
+              </td>
             </tr>
           </ng-template>
         </p-table>
@@ -563,5 +569,22 @@ export class AcademiqueComponent implements OnInit {
         this.msg.add({ severity:'success', summary:'Évaluation créée ✅' });
       }
     });
+  }
+
+    telechargerBulletin(eleveId: string) {
+      const token    = localStorage.getItem('access_token');
+      const tenantId = localStorage.getItem('tenant_id') || '';
+      const annee    = '2025-2026';
+      const trimestre = this.trimestreResultats;
+      fetch(`http://127.0.0.1:8765/api/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
+      })
+      .then(r => r.blob())
+      .then(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `bulletin_${trimestre}.pdf`;
+          a.click();
+      });
   }
 }

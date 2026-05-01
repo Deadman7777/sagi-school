@@ -122,29 +122,55 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
 
       <!-- Montants -->
       <div class="montants-grid">
-        <div class="form-group">
-          <label>Inscription</label>
-          <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+        <!-- Type de paiement -->
+        <div class="form-group full" style="margin-bottom:16px">
+          <label>Type de paiement *</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button [class]="typePaiement === 'INSCRIPTION' ? 'type-btn active-inscr' : 'type-btn'"
+                    (click)="setTypePaiement('INSCRIPTION')">
+              🎓 Inscription / Début d'année
+            </button>
+            <button [class]="typePaiement === 'MENSUALITE' ? 'type-btn active-mens' : 'type-btn'"
+                    (click)="setTypePaiement('MENSUALITE')">
+              📅 Mensualité
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Mensualité</label>
-          <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+
+        <!-- Champs Inscription -->
+        <div class="montants-grid" *ngIf="typePaiement === 'INSCRIPTION'">
+          <div class="form-group">
+            <label>Inscription</label>
+            <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Uniforme</label>
+            <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Fournitures</label>
+            <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Divers</label>
+            <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
         </div>
-        <div class="form-group">
-          <label>Uniforme</label>
-          <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
-        </div>
-        <div class="form-group">
-          <label>Fournitures</label>
-          <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
-        </div>
-        <div class="form-group">
-          <label>Cantine</label>
-          <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
-        </div>
-        <div class="form-group">
-          <label>Divers</label>
-          <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+
+        <!-- Champs Mensualité -->
+        <div class="montants-grid" *ngIf="typePaiement === 'MENSUALITE'">
+          <div class="form-group">
+            <label>Mensualité</label>
+            <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Cantine</label>
+            <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Divers</label>
+            <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
         </div>
       </div>
 
@@ -246,6 +272,10 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     .recu-row   { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .recu-row span:first-child { color:#64748b; }
     .recu-total { display:flex; justify-content:space-between; font-size:16px; font-weight:700; padding:8px 0; color:#00d4aa; }
+    .type-btn { flex:1; padding:10px; border:1px solid #2a3f5f; border-radius:8px; background:#111827; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.2s; }
+    .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
+    .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
+    .active-mens  { background:rgba(0,212,170,0.15);  border-color:#00d4aa; color:#00d4aa; font-weight:600; }
   `]
 })
 export class PaiementsComponent implements OnInit {
@@ -260,6 +290,7 @@ export class PaiementsComponent implements OnInit {
   eleveSelectionne: any = null;
   eleveTexte: string = '';
   exerciceId       = '';
+  typePaiement: 'INSCRIPTION' | 'MENSUALITE' = 'MENSUALITE';
 
   form = {
     montant_inscription: 0,
@@ -357,6 +388,7 @@ export class PaiementsComponent implements OnInit {
                   montant_fournitures:0, montant_cantine:0, montant_divers:0,
                   mode_paiement:'', observations:'' };
     this.dialogVisible = true;
+    this.typePaiement = 'MENSUALITE';
   }
 
   sauvegarder(avecRecu: boolean) {
@@ -399,6 +431,45 @@ export class PaiementsComponent implements OnInit {
       next: res => { this.recuData.set(res); this.recuVisible = true; }
     });
   }
+
+  setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {
+    this.typePaiement = type;
+    // Remettre à zéro les champs de l'autre type
+    if (type === 'INSCRIPTION') {
+        this.form.montant_mensualite = 0;
+        this.form.montant_cantine = 0;
+        // Pré-remplir depuis la section si élève sélectionné
+        if (this.eleveSelectionne?.section) {
+            this.elevesService.getSections().subscribe({
+                next: res => {
+                    const sections = res.results || [];
+                    const section = sections.find((s: any) => s.id === this.eleveSelectionne.section);
+                    if (section) {
+                        this.form.montant_inscription = Number(section.frais_inscription);
+                        this.form.montant_uniforme    = Number(section.frais_uniforme);
+                        this.form.montant_fournitures = Number(section.frais_fournitures);
+                    }
+                }
+            });
+        }
+    } else {
+        this.form.montant_inscription = 0;
+        this.form.montant_uniforme = 0;
+        this.form.montant_fournitures = 0;
+        // Pré-remplir mensualité
+        if (this.eleveSelectionne?.section) {
+            this.elevesService.getSections().subscribe({
+                next: res => {
+                    const sections = res.results || [];
+                    const section = sections.find((s: any) => s.id === this.eleveSelectionne.section);
+                    if (section) {
+                        this.form.montant_mensualite = Number(section.frais_mensualite);
+                    }
+                }
+            });
+        }
+    }
+}
 
   imprimer() { window.print(); }
 }

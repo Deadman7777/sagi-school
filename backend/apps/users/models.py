@@ -20,11 +20,12 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = [
-        ('SUPER_ADMIN',  'Super Administrateur'),
-        ('ADMIN_ECOLE',  'Admin École'),
-        ('COMPTABLE',    'Comptable'),
-        ('CAISSIER',     'Caissier'),
-        ('LECTURE',      'Lecture seule'),
+        ('SUPER_ADMIN',      'Super Administrateur'),
+        ('ADMIN_ECOLE',      'Administrateur École'),
+        ('ADMIN_RH',         'Responsable RH'),
+        ('ADMIN_COMPTABLE',  'Responsable Comptable'),
+        ('ADMIN_SCOLARITE',  'Responsable Scolarité'),
+        ('LECTEUR',          'Lecteur'),
     ]
 
     id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

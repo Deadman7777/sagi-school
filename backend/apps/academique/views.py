@@ -8,6 +8,9 @@ from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation,
 from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
                            TypeEvaluationSerializer, MatiereSerializer,
                            EvaluationSerializer, NoteSerializer)
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from apps.eleves.models import Eleve
 
 
 def get_tenant(request):
@@ -260,7 +263,6 @@ class BulletinView(APIView):
         tenant = get_tenant(request)
         annee  = request.query_params.get('annee', '2025-2026')
 
-        from apps.eleves.models import Eleve
         try:
             eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
@@ -310,3 +312,119 @@ class BulletinView(APIView):
             }
         }
         return Response(data)
+
+class BulletinPDFView(APIView):
+    """Générer le bulletin PDF d'un élève."""
+    permission_classes = [IsAuthenticated]
+
+    def get_appreciation(self, moy, note_max):
+        ratio = float(moy) / float(note_max) * 20
+        if ratio >= 18: return 'Excellent'
+        if ratio >= 16: return 'Très Bien'
+        if ratio >= 14: return 'Bien'
+        if ratio >= 12: return 'Assez Bien'
+        if ratio >= 10: return 'Passable'
+        if ratio >= 8:  return 'Insuffisant'
+        return 'Très Insuffisant'
+
+    def get_decision(self, moy, note_max):
+        ratio = float(moy) / float(note_max) * 20
+        if ratio >= 16: return 'Admis(e) avec félicitations du Conseil de Classe'
+        if ratio >= 14: return 'Admis(e) avec encouragements du Conseil de Classe'
+        if ratio >= 10: return 'Admis(e)'
+        if ratio >= 8:  return 'Ajourné(e) — Des efforts supplémentaires sont nécessaires'
+        return 'Ajourné(e) — Un soutien scolaire est fortement recommandé'
+
+    def get(self, request, eleve_id, trimestre):
+        try:
+            from weasyprint import HTML
+        except ImportError:
+            return HttpResponse('WeasyPrint non installé', status=500)
+
+
+        tenant = get_tenant(request)
+        annee  = request.query_params.get('annee', '2025-2026')
+
+        try:
+            eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
+        except Eleve.DoesNotExist:
+            return HttpResponse('Élève introuvable', status=404)
+
+        bulletins = BulletinCache.objects.filter(
+            tenant=tenant, eleve=eleve,
+            trimestre=trimestre, annee_scolaire=annee
+        ).select_related('matiere')
+
+        if not bulletins.exists():
+            return HttpResponse('Aucune note calculée', status=404)
+
+        # Calcul moyenne générale
+        total_points = sum(float(b.points or 0) for b in bulletins)
+        total_coef   = sum(float(b.matiere.coefficient) for b in bulletins)
+        moy_generale = round(total_points / total_coef, 2) if total_coef > 0 else 0
+        note_max     = float(bulletins.first().matiere.note_max) if bulletins else 20
+
+        # Stats classe
+        from apps.eleves.models import Eleve as EleveModel
+        classe = bulletins.first().matiere.classe if bulletins else None
+        tous   = BulletinCache.objects.filter(
+            tenant=tenant, trimestre=trimestre,
+            annee_scolaire=annee, matiere__classe=classe
+        ).values('eleve').distinct()
+
+        moyennes_classe = []
+        rang_eleve = 1
+        for e_data in tous:
+            e_bulletins = BulletinCache.objects.filter(
+                tenant=tenant, eleve_id=e_data['eleve'],
+                trimestre=trimestre, annee_scolaire=annee
+            )
+            e_pts  = sum(float(b.points or 0) for b in e_bulletins)
+            e_coef = sum(float(b.matiere.coefficient) for b in e_bulletins)
+            e_moy  = round(e_pts / e_coef, 2) if e_coef > 0 else 0
+            moyennes_classe.append(e_moy)
+            if e_moy > moy_generale:
+                rang_eleve += 1
+
+        moy_classe = round(sum(moyennes_classe)/len(moyennes_classe), 2) if moyennes_classe else 0
+
+        context = {
+            'tenant':    tenant,
+            'annee':     annee,
+            'trimestre': trimestre,
+            'note_max':  note_max,
+            'eleve': {
+                'nom_complet':    eleve.nom_complet,
+                'matricule':      eleve.numero or '—',
+                'date_naissance': str(eleve.date_naissance) if eleve.date_naissance else '—',
+                'classe':         eleve.section.nom if eleve.section else '—',
+                'rang':           rang_eleve,
+            },
+            'matieres': [{
+                'nom':         b.matiere.nom,
+                'coefficient': float(b.matiere.coefficient),
+                'note_max':    float(b.matiere.note_max),
+                'moyenne':     float(b.moyenne) if b.moyenne else None,
+                'points':      float(b.points) if b.points else None,
+                'rang':        b.rang_matiere,
+                'appreciation':b.appreciation,
+            } for b in bulletins.order_by('matiere__ordre')],
+            'total_coef':          round(total_coef, 1),
+            'total_points':        round(total_points, 2),
+            'stats': {
+                'moy_generale': moy_generale,
+                'moy_classe':   moy_classe,
+                'moy_max':      max(moyennes_classe) if moyennes_classe else 0,
+                'moy_min':      min(moyennes_classe) if moyennes_classe else 0,
+                'nb_eleves':    len(moyennes_classe),
+            },
+            'appreciation_generale': self.get_appreciation(moy_generale, note_max),
+            'decision':              self.get_decision(moy_generale, note_max),
+        }
+
+        html_str = render_to_string('pdf/bulletin.html', context)
+        pdf = HTML(string=html_str, base_url=request.build_absolute_uri()).write_pdf()
+
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="bulletin_{eleve.nom_complet}_{trimestre}.pdf"'
+        return response
