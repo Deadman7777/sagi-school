@@ -163,6 +163,7 @@ export class ShellComponent {
     { labelKey: 'nav.comptabilite_section', items: [
       { labelKey: 'nav.comptabilite', icon: '📒', route: '/comptabilite' },
       { labelKey: 'nav.fiscal',       icon: '📋', route: '/fiscal' },
+      { labelKey: 'nav.academique', icon: '📚', route: '/academique' },
       { labelKey: 'nav.rh', icon: '👥', route: '/rh' },
       { labelKey: 'nav.suivi',        icon: '📅', route: '/suivi-mensuel' },
     ]},
@@ -175,14 +176,38 @@ export class ShellComponent {
   constructor(public auth: AuthService, public langue: LangueService) {}
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
-  navSectionsFiltrees() { return this.isSuperAdmin() ? this.navSuperAdmin : this.navEcole; }
+  navSectionsFiltrees() {
+      if (this.isSuperAdmin()) return this.navSuperAdmin;
+      const role = this.auth.currentUser()?.role;
+      return this.navEcole.map(section => ({
+          ...section,
+          items: section.items.filter(item => this.itemVisible(item.route, role))
+      })).filter(section => section.items.length > 0);
+  }
+
+  itemVisible(route: string, role?: string): boolean {
+      if (!role) return false;
+      const acces: Record<string, string[]> = {
+          'ADMIN_ECOLE':     ['*'],
+          'ADMIN_RH':        ['/dashboard', '/rh'],
+          'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal'],
+          'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel'],
+          'LECTEUR':         ['/dashboard'],
+      };
+      const allowed = acces[role] || [];
+      return allowed.includes('*') || allowed.includes(route);
+  } 
 
   roleLabel(): string {
-    const labels: Record<string, string> = {
-      'SUPER_ADMIN': 'Super Admin', 'ADMIN_ECOLE': 'Admin École',
-      'COMPTABLE': 'Comptable', 'CAISSIER': 'Caissier', 'LECTURE': 'Lecture seule',
-    };
-    return labels[this.auth.currentUser()?.role || ''] || '';
+      const labels: Record<string, string> = {
+          'SUPER_ADMIN':     'Super Admin',
+          'ADMIN_ECOLE':     'Admin École',
+          'ADMIN_RH':        'Responsable RH',
+          'ADMIN_COMPTABLE': 'Responsable Comptable',
+          'ADMIN_SCOLARITE': 'Responsable Scolarité',
+          'LECTEUR':         'Lecture seule',
+      };
+      return labels[this.auth.currentUser()?.role || ''] || '';
   }
 
   initials(): string { return (this.auth.currentUser()?.nom || 'U').substring(0, 2).toUpperCase(); }
