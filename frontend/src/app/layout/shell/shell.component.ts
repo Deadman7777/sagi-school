@@ -191,7 +191,7 @@ export class ShellComponent {
           'ADMIN_ECOLE':     ['*'],
           'ADMIN_RH':        ['/dashboard', '/rh'],
           'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal'],
-          'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel'],
+          'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
           'LECTEUR':         ['/dashboard'],
       };
       const allowed = acces[role] || [];
