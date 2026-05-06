@@ -37,6 +37,7 @@ class Eleve(TenantModel):
     exercice          = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
     section           = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
     numero            = models.IntegerField(null=True, blank=True)
+    matricule = models.CharField(max_length=20, blank=True, unique=True, null=True)
     nom_complet       = models.CharField(max_length=200)
     genre             = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance    = models.DateField(null=True, blank=True)

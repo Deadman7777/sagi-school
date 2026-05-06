@@ -7,7 +7,7 @@ export class ElevesService {
   constructor(private api: ApiService) {}
 
   getEleves(params?: Record<string, string>) {
-    return this.api.get<PaginatedResponse<Eleve>>('/eleves/liste', params);
+    return this.api.get<PaginatedResponse<Eleve>>('/eleves/liste', { limit: '500', ...params });
   }
 
   getEleve(id: string) {

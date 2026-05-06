@@ -10,6 +10,7 @@ class Tenant(TimeStampedModel):
     ninea     = models.CharField(max_length=20, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
     email     = models.EmailField(blank=True)
+    code_etablissement = models.CharField(max_length=10, default='ETB')
     actif     = models.BooleanField(default=True)
 
     class Meta:

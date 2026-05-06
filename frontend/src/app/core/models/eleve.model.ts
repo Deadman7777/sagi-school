@@ -12,11 +12,14 @@ export interface Section {
 export interface Eleve {
   id: string;
   numero: number;
+  matricule: string;
   nom_complet: string;
   genre: 'G' | 'F';
   section: string;
   section_nom: string;
+  date_naissance: string;
   telephone_parent: string;
+  nom_parent: string;
   date_inscription: string;
   statut: string;
   total_attendu: number;

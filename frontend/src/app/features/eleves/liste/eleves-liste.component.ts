@@ -49,6 +49,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
         <ng-template pTemplate="header">
           <tr>
             <th>N°</th>
+            <th>Matricule</th>
             <th>Nom Complet</th>
             <th>Section</th>
             <th>Genre</th>
@@ -62,6 +63,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
         <ng-template pTemplate="body" let-eleve>
           <tr>
             <td class="mono">{{ eleve.numero }}</td>
+            <td class="mono" style="color:#00d4aa;font-size:11px">{{ eleve.matricule }}</td>
             <td class="bold">{{ eleve.nom_complet }}</td>
             <td>{{ eleve.section_nom }}</td>
             <td>
@@ -108,6 +110,15 @@ import { ProgressBarModule } from 'primeng/progressbar';
           <p-select [options]="[{label:'Garçon', value:'G'},{label:'Fille', value:'F'}]"
                       [(ngModel)]="nouvelEleve.genre"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>Date de naissance</label>
+          <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>Nom du parent</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nom_parent" class="w-full" 
+                placeholder="Nom et prénom du parent/tuteur" />
         </div>
         <div class="form-group full">
           <label>Téléphone Parent</label>

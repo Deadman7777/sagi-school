@@ -8,6 +8,8 @@ from core.permissions import IsTenantMember
 from .models import Eleve, Section
 from apps.paiements.models import Exercice
 from .serializers import EleveSerializer, SectionSerializer
+from django.db.models import Max
+from django.utils import timezone
 
 
 def get_tenant(request):
@@ -66,16 +68,28 @@ class EleveViewSet(viewsets.ModelViewSet):
         return qs.order_by('numero')
 
     def perform_create(self, serializer):
+
         tenant = get_tenant(self.request)
         exercice = Exercice.objects.filter(
             tenant=tenant, cloture=False
         ).order_by('-date_debut').first()
-        
+
         if not exercice:
             from rest_framework.exceptions import ValidationError
-            raise ValidationError("Aucun exercice actif trouvé. Créez d'abord un exercice.")
-        
-        serializer.save(tenant=tenant, exercice=exercice)
+            raise ValidationError("Aucun exercice actif trouvé.")
+
+        # ID interne séquentiel
+        max_num = Eleve.objects.filter(tenant=tenant).aggregate(
+            m=Max('numero')
+        )['m'] or 0
+        numero = max_num + 1
+
+        # Matricule visible : AAAA-ETB-NNNNNN
+        annee    = str(timezone.now().year)
+        code_etb = (tenant.code_etablissement or 'ETB').upper()
+        matricule = f"{annee}-{code_etb}-{str(numero).zfill(6)}"
+
+        serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
 
 
 class SuiviMensuelView(APIView):
