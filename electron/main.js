@@ -29,6 +29,8 @@ function getPython() {
       'C:\\Python310\\python.exe',
       'C:\\Python311\\python.exe',
       'C:\\Python312\\python.exe',
+      'C:\\Python313\\python.exe',
+      'python',
     ];
     for (const p of candidates) {
       if (p === 'python') return p; // dans le PATH
@@ -70,16 +72,23 @@ function startDjango() {
     }
 
     try {
-      djangoProcess = spawn(python, [
-        managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'
-      ], { cwd: backendDir, env });
+      let spawnArgs;
+      
+      if (process.platform === 'win32' && !isDev) {
+          // Windows production — waitress (performant)
+          spawnArgs = ['-m', 'waitress', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
+      } else {
+          // Linux/Dev — runserver
+          spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+      }
 
+      djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env });
       djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
       djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
       djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
       djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
     } catch (err) {
-      console.error('[Django] Impossible de démarrer:', err.message);
+        console.error('[Django] Impossible de démarrer:', err.message);
     }
   });
 }
