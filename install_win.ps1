@@ -65,7 +65,7 @@ if ($sagiDir) {
     Write-OK "SAGI SCHOOL deja installe: $sagiDir"
 } else {
     Write-Host "  Telechargement SAGI SCHOOL..." -ForegroundColor Gray
-    $url = "https://github.com/Deadman7777/sagi-school/releases/download/v1.0.0/SAGI.SCHOOL.Setup.1.0.0.exe"
+    $url = "https://github.com/Deadman7777/sagi-school/releases/download/v1.1.5/SAGI.SCHOOL.Setup.1.0.0.exe"
     $setup = "$env:TEMP\SAGI_Setup.exe"
     try {
         (New-Object System.Net.WebClient).DownloadFile($url, $setup)
@@ -92,16 +92,15 @@ if ($sagiDir) {
     }
 
     if (Test-Path $configPath) {
-        $config = Get-Content $configPath -Raw -Encoding UTF8
-        # Remplacement direct sans regex special chars
-        $config = $config -replace "'PASSWORD': '[^']*'", ("'PASSWORD': '" + $DB_PASSWORD + "'")
-        $config = $config -replace "'NAME': '[^']*'", ("'NAME': '" + $DB_NAME + "'")
-        $config = $config -replace "'USER': '[^']*'", ("'USER': '" + $DB_USER + "'")
-        $config = $config -replace "'HOST': '[^']*'", "'HOST': 'localhost'"
-        $config = $config -replace "'PORT': '[^']*'", "'PORT': '5432'"
-        [System.IO.File]::WriteAllText($configPath, $config, [System.Text.Encoding]::UTF8)
-        Write-OK "Configuration base de donnees mise a jour"
-    }
+    $config = Get-Content $configPath -Raw -Encoding UTF8
+    $config = $config -replace "'PASSWORD': '[^']*'", ("'PASSWORD': '" + $DB_PASSWORD + "'")
+    $config = $config -replace "VOTRE_MOT_DE_PASSE_ICI", $DB_PASSWORD
+    $config = $config -replace "'NAME': 'hady_gesman'", ("'NAME': '" + $DB_NAME + "'")
+    $config = $config -replace "'USER': 'postgres'", ("'USER': '" + $DB_USER + "'")
+    $config = $config -replace "changez-moi-absolument", "sagi-school-prod-2025-hady-gesman-secret"
+    [System.IO.File]::WriteAllText($configPath, $config, [System.Text.Encoding]::UTF8)
+    Write-OK "Configuration base de donnees mise a jour"
+}
 
     # Migrations Django
     Write-Host "  Initialisation base de donnees..." -ForegroundColor Gray
