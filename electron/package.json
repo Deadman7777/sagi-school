@@ -29,6 +29,7 @@
       "preload.js",
       "licence-check.js",
       "splash.html",
+      "serve.py",
       "assets/**"
     ],
     "extraResources": [
