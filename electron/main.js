@@ -19,16 +19,20 @@ function getPython() {
   if (isDev) {
     return path.join(getBackendDir(), 'venv', 'bin', 'python');
   }
-  // Windows — chercher python dans plusieurs endroits
-  if (process.platform === 'win32' && !isDev) {
-    const batFile = path.join(__dirname, 'start_django.bat');
-    djangoProcess = spawn('cmd.exe', ['/c', batFile], { 
-        cwd: backendDir, 
-        env: process.env,
-        windowsHide: true
-    });
-}
-  // Linux/Mac
+  if (process.platform === 'win32') {
+    const candidates = [
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python313', 'python.exe'),
+      'python',
+    ];
+    for (const p of candidates) {
+      if (p === 'python') return p;
+      if (fs.existsSync(p)) return p;
+    }
+    return 'python';
+  }
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
   return '/usr/bin/python3.10';
@@ -40,17 +44,17 @@ function startDjango() {
   const python     = getPython();
 
   console.log('[Electron] Python:', python);
-  console.log('[Electron] manage.py:', managePy);
+  console.log('[Electron] BackendDir:', backendDir);
 
   http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
     console.log('[Electron] Django déjà actif');
   }).on('error', () => {
+
     const env = {
       ...process.env,
-      DJANGO_SETTINGS_MODULE: isDev
-        ? 'config.settings.local'
-        : 'config.settings.production',
+      DJANGO_SETTINGS_MODULE: isDev ? 'config.settings.local' : 'config.settings.production',
       PYTHONUNBUFFERED: '1',
+      PYTHONPATH: backendDir,
     };
 
     if (!isDev && process.platform !== 'win32') {
@@ -61,39 +65,21 @@ function startDjango() {
       }
     }
 
-    try {
-      let spawnArgs;
-      
-      if (process.platform === 'win32' && !isDev) {
-          const winEnv = {
-              ...process.env,
-              DJANGO_SETTINGS_MODULE: 'config.settings.production',
-              PYTHONUNBUFFERED: '1',
-              PYTHONPATH: backendDir,
-          };
-          djangoProcess = spawn(python, [
-              '-m', 'waitress',
-              '--host=127.0.0.1',
-              '--port=' + DJANGO_PORT,
-              'config.wsgi:application'
-          ], { 
-              cwd: backendDir,
-              env: winEnv,
-              shell: false,
-              windowsHide: true,
-          });
-      }else {
-          // Linux/Dev — runserver
-          spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
-      }
+    let spawnArgs;
+    if (process.platform === 'win32' && !isDev) {
+      spawnArgs = ['-m', 'waitress', '--host=127.0.0.1', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
+    } else {
+      spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+    }
 
-      djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env });
+    try {
+      djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env, windowsHide: true });
       djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
       djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
       djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
       djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
     } catch (err) {
-        console.error('[Django] Impossible de démarrer:', err.message);
+      console.error('[Django] Impossible de démarrer:', err.message);
     }
   });
 }
@@ -106,7 +92,6 @@ function waitForAngular(retries = 30) {
         resolve();
       }).on('error', () => {
         if (n <= 0) { resolve(); return; }
-        console.log(`[Electron] Attente Angular... (${n})`);
         setTimeout(() => attempt(n - 1), 1000);
       });
     };
@@ -116,19 +101,17 @@ function waitForAngular(retries = 30) {
 
 async function waitForDjango(retries = 60) {
   return new Promise(resolve => {
-    setTimeout(() => {
-      const attempt = n => {
-        http.get(`http://127.0.0.1:${DJANGO_PORT}/api/auth/login/`, () => {
-          console.log('[Electron] Django prêt !');
-          resolve();
-        }).on('error', () => {
-          if (n <= 0) { resolve(); return; }
-          console.log(`[Electron] Attente Django... (${n})`);
-          setTimeout(() => attempt(n - 1), 1500);
-        });
-      };
-      attempt(retries);
-    }, 2000);
+    const attempt = n => {
+      http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
+        console.log('[Electron] Django prêt !');
+        resolve();
+      }).on('error', () => {
+        if (n <= 0) { resolve(); return; }
+        console.log(`[Electron] Attente Django... (${n})`);
+        setTimeout(() => attempt(n - 1), 1000);
+      });
+    };
+    attempt(retries);
   });
 }
 
@@ -143,11 +126,11 @@ async function createWindow() {
   startDjango();
 
   if (isDev) {
-      await waitForAngular();
+    await waitForAngular();
   } else {
-      // Attendre 10 secondes fixes sur Windows
-      await new Promise(resolve => setTimeout(resolve, 10000));
+    await waitForDjango();
   }
+
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
     minWidth: 1024, minHeight: 700,
@@ -161,10 +144,7 @@ async function createWindow() {
     }
   });
 
-  const url = isDev
-    ? 'http://localhost:4200'
-    : `http://127.0.0.1:${DJANGO_PORT}`;
-
+  const url = isDev ? 'http://localhost:4200' : `http://127.0.0.1:${DJANGO_PORT}`;
   console.log('[Electron] Chargement:', url);
   mainWindow.loadURL(url);
 
@@ -179,7 +159,6 @@ async function createWindow() {
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  console.log('[Electron] Instance déjà active');
   app.quit();
 } else {
   app.whenReady().then(async () => {
@@ -191,9 +170,6 @@ if (!gotTheLock) {
           dialog.showErrorBox('Licence SAGI SCHOOL', result.message);
           app.quit();
           return;
-        }
-        if (result.mode === 'offline') {
-          console.warn('[Electron] Mode offline:', result.message);
         }
       } catch (e) {
         console.warn('[Electron] Vérification licence échouée:', e.message);
