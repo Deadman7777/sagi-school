@@ -29,17 +29,17 @@ function getPython() {
     // Prefer a venv bundled with the app (Scripts\ on Windows)
     const venvPython = path.join(getBackendDir(), 'venv', 'Scripts', 'python.exe');
     if (fs.existsSync(venvPython)) return venvPython;
-    // Fixed LOCALAPPDATA install paths
+    // Python310 first — waitress + Django are installed there on this machine
+    const localApp = process.env.LOCALAPPDATA || '';
     const candidates = [
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python313', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
+      path.join(localApp, 'Programs', 'Python', 'Python310', 'python.exe'),
+      path.join(localApp, 'Programs', 'Python', 'Python311', 'python.exe'),
+      path.join(localApp, 'Programs', 'Python', 'Python312', 'python.exe'),
+      path.join(localApp, 'Programs', 'Python', 'Python313', 'python.exe'),
     ];
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;
     }
-    // py launcher is the most reliable Windows fallback
     return 'py';
   }
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
@@ -54,6 +54,7 @@ function startDjango() {
 
     console.log('[Electron] Python:', python);
     console.log('[Electron] BackendDir:', backendDir);
+    console.log('[Electron] Python exists:', fs.existsSync(python));
 
     http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
       console.log('[Electron] Django déjà actif');
