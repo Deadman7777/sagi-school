@@ -138,11 +138,11 @@ async function createWindow() {
   startDjango();
 
   if (isDev) {
-    await waitForAngular();
+      await waitForAngular();
   } else {
-    await waitForDjango();
+      // Attendre 10 secondes fixes sur Windows
+      await new Promise(resolve => setTimeout(resolve, 10000));
   }
-
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
     minWidth: 1024, minHeight: 700,
