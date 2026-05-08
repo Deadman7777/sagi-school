@@ -29,10 +29,13 @@
       "preload.js",
       "licence-check.js",
       "splash.html",
-      "serve.py",
       "assets/**"
     ],
     "extraResources": [
+      {
+        "from": "serve.py",
+        "to": "serve.py"
+      },
       {
         "from": "../backend",
         "to": "backend",

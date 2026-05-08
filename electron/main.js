@@ -15,23 +15,32 @@ function getBackendDir() {
     : path.join(process.resourcesPath, 'backend');
 }
 
+function getServePy() {
+  return isDev
+    ? path.join(__dirname, 'serve.py')
+    : path.join(process.resourcesPath, 'serve.py');
+}
+
 function getPython() {
   if (isDev) {
     return path.join(getBackendDir(), 'venv', 'bin', 'python');
   }
   if (process.platform === 'win32') {
+    // Prefer a venv bundled with the app (Scripts\ on Windows)
+    const venvPython = path.join(getBackendDir(), 'venv', 'Scripts', 'python.exe');
+    if (fs.existsSync(venvPython)) return venvPython;
+    // Fixed LOCALAPPDATA install paths
     const candidates = [
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
       path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python313', 'python.exe'),
-      'python',
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
     ];
     for (const p of candidates) {
-      if (p === 'python') return p;
       if (fs.existsSync(p)) return p;
     }
-    return 'python';
+    // py launcher is the most reliable Windows fallback
+    return 'py';
   }
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
@@ -39,48 +48,50 @@ function getPython() {
 }
 
 function startDjango() {
-  const backendDir = getBackendDir();
-  const managePy   = path.join(backendDir, 'manage.py');
-  const python     = getPython();
+  return new Promise((resolve) => {
+    const backendDir = getBackendDir();
+    const python     = getPython();
 
-  console.log('[Electron] Python:', python);
-  console.log('[Electron] BackendDir:', backendDir);
+    console.log('[Electron] Python:', python);
+    console.log('[Electron] BackendDir:', backendDir);
 
-  http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
-    console.log('[Electron] Django déjà actif');
-  }).on('error', () => {
+    http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
+      console.log('[Electron] Django déjà actif');
+      resolve();
+    }).on('error', () => {
 
-    const env = {
-      ...process.env,
-      DJANGO_SETTINGS_MODULE: isDev ? 'config.settings.local' : 'config.settings.production',
-      PYTHONUNBUFFERED: '1',
-      PYTHONPATH: backendDir,
-    };
+      const env = {
+        ...process.env,
+        DJANGO_SETTINGS_MODULE: isDev ? 'config.settings.local' : 'config.settings.production',
+        PYTHONUNBUFFERED: '1',
+        PYTHONPATH: backendDir,
+      };
 
-    if (!isDev && process.platform !== 'win32') {
-      const venvBin = path.join(backendDir, 'venv', 'bin');
-      if (fs.existsSync(venvBin)) {
-        env.PATH        = venvBin + ':' + process.env.PATH;
-        env.VIRTUAL_ENV = path.join(backendDir, 'venv');
+      if (!isDev && process.platform !== 'win32') {
+        const venvBin = path.join(backendDir, 'venv', 'bin');
+        if (fs.existsSync(venvBin)) {
+          env.PATH        = venvBin + ':' + process.env.PATH;
+          env.VIRTUAL_ENV = path.join(backendDir, 'venv');
+        }
       }
-    }
 
-    let spawnArgs;
-    if (process.platform === 'win32' && !isDev) {
-      spawnArgs = ['-m', 'waitress', '--host=127.0.0.1', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
-    } else {
-      spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
-    }
+      // On Windows production use serve.py (a real file on disk, not inside asar)
+      // so Python can import it. python -m waitress requires a global waitress install.
+      const spawnArgs = (process.platform === 'win32' && !isDev)
+        ? [getServePy(), String(DJANGO_PORT)]
+        : [path.join(backendDir, 'manage.py'), 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
 
-    try {
-      djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env, windowsHide: true });
-      djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
-      djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
-      djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
-      djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
-    } catch (err) {
-      console.error('[Django] Impossible de démarrer:', err.message);
-    }
+      try {
+        djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env, windowsHide: true });
+        djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
+        djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
+        djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
+        djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
+      } catch (err) {
+        console.error('[Django] Impossible de démarrer:', err.message);
+      }
+      resolve();
+    });
   });
 }
 
@@ -100,13 +111,16 @@ function waitForAngular(retries = 30) {
 }
 
 async function waitForDjango(retries = 60) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const attempt = n => {
       http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
         console.log('[Electron] Django prêt !');
         resolve();
       }).on('error', () => {
-        if (n <= 0) { resolve(); return; }
+        if (n <= 0) {
+          reject(new Error(`Django n'a pas répondu après ${retries} secondes.`));
+          return;
+        }
         console.log(`[Electron] Attente Django... (${n})`);
         setTimeout(() => attempt(n - 1), 1000);
       });
@@ -123,12 +137,22 @@ async function createWindow() {
   });
   splash.loadFile(path.join(__dirname, 'splash.html'));
 
-  startDjango();
+  await startDjango();
 
   if (isDev) {
     await waitForAngular();
   } else {
-    await waitForDjango();
+    try {
+      await waitForDjango();
+    } catch (err) {
+      splash.destroy();
+      dialog.showErrorBox(
+        'Erreur de démarrage',
+        `Le serveur Django n'a pas démarré.\n\nVérifiez que Python et waitress sont installés.\n\n${err.message}`
+      );
+      app.quit();
+      return;
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
