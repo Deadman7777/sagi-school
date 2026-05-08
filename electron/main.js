@@ -76,18 +76,21 @@ function startDjango() {
         }
       }
 
-      // On Windows production use serve.py (a real file on disk, not inside asar)
-      // so Python can import it. python -m waitress requires a global waitress install.
+      const servePy = getServePy();
       const spawnArgs = (process.platform === 'win32' && !isDev)
-        ? [getServePy(), String(DJANGO_PORT)]
+        ? [servePy, String(DJANGO_PORT)]
         : [path.join(backendDir, 'manage.py'), 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+
+      console.log('[Electron] spawnArgs:', JSON.stringify(spawnArgs));
+      console.log('[Electron] serve.py exists:', fs.existsSync(servePy));
+      console.log('[Electron] CMD:', python, spawnArgs.join(' '));
 
       try {
         djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env, windowsHide: true });
-        djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
-        djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
+        djangoProcess.stdout.on('data', d => console.log('[Django stdout]', d.toString().trimEnd()));
+        djangoProcess.stderr.on('data', d => console.error('[Django stderr]', d.toString().trimEnd()));
         djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
-        djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
+        djangoProcess.on('error',  err  => console.error('[Django] spawn error:', err.message));
       } catch (err) {
         console.error('[Django] Impossible de démarrer:', err.message);
       }
@@ -147,11 +150,16 @@ async function createWindow() {
       await waitForDjango();
     } catch (err) {
       splash.destroy();
-      dialog.showErrorBox(
-        'Erreur de démarrage',
-        `Le serveur Django n'a pas démarré.\n\nVérifiez que Python et waitress sont installés.\n\n${err.message}`
-      );
-      app.quit();
+      console.error('[Electron] Timeout Django:', err.message);
+      // DEBUG: keep window open + show DevTools so console logs are visible
+      mainWindow = new BrowserWindow({
+        width: 1200, height: 800,
+        title: 'DEBUG — Django timeout',
+        webPreferences: { nodeIntegration: false },
+      });
+      mainWindow.loadURL('about:blank');
+      mainWindow.webContents.openDevTools();
+      mainWindow.on('closed', () => { mainWindow = null; });
       return;
     }
     await new Promise(resolve => setTimeout(resolve, 2000));
