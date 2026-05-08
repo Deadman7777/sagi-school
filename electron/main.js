@@ -93,7 +93,7 @@ function startDjango() {
   });
 }
 
-function waitForAngular(retries = 60) {
+function waitForAngular(retries = 30) {
   return new Promise(resolve => {
     const attempt = n => {
       http.get('http://localhost:4200', () => {
@@ -109,19 +109,21 @@ function waitForAngular(retries = 60) {
   });
 }
 
-async function waitForDjango(retries = 40) {
+async function waitForDjango(retries = 60) {
   return new Promise(resolve => {
-    const attempt = n => {
-      http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
-        console.log('[Electron] Django prêt !');
-        resolve();
-      }).on('error', () => {
-        if (n <= 0) { resolve(); return; }
-        console.log(`[Electron] Attente Django... (${n})`);
-        setTimeout(() => attempt(n - 1), 1000);
-      });
-    };
-    attempt(retries);
+    setTimeout(() => {
+      const attempt = n => {
+        http.get(`http://127.0.0.1:${DJANGO_PORT}/api/auth/login/`, () => {
+          console.log('[Electron] Django prêt !');
+          resolve();
+        }).on('error', () => {
+          if (n <= 0) { resolve(); return; }
+          console.log(`[Electron] Attente Django... (${n})`);
+          setTimeout(() => attempt(n - 1), 1500);
+        });
+      };
+      attempt(retries);
+    }, 2000);
   });
 }
 
