@@ -76,7 +76,7 @@ function startDjango() {
       
       if (process.platform === 'win32' && !isDev) {
           // Windows production — waitress (performant)
-          spawnArgs = ['-m', 'waitress', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
+          spawnArgs = ['-m', 'waitress', '--host=127.0.0.1', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
       } else {
           // Linux/Dev — runserver
           spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
@@ -93,7 +93,7 @@ function startDjango() {
   });
 }
 
-function waitForAngular(retries = 30) {
+function waitForAngular(retries = 60) {
   return new Promise(resolve => {
     const attempt = n => {
       http.get('http://localhost:4200', () => {
