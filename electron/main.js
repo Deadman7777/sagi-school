@@ -20,24 +20,14 @@ function getPython() {
     return path.join(getBackendDir(), 'venv', 'bin', 'python');
   }
   // Windows — chercher python dans plusieurs endroits
-  if (process.platform === 'win32') {
-    const candidates = [
-      'python',
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
-      'C:\\Python310\\python.exe',
-      'C:\\Python311\\python.exe',
-      'C:\\Python312\\python.exe',
-      'C:\\Python313\\python.exe',
-      'python',
-    ];
-    for (const p of candidates) {
-      if (p === 'python') return p; // dans le PATH
-      if (fs.existsSync(p)) return p;
-    }
-    return 'python';
-  }
+  if (process.platform === 'win32' && !isDev) {
+    const batFile = path.join(__dirname, 'start_django.bat');
+    djangoProcess = spawn('cmd.exe', ['/c', batFile], { 
+        cwd: backendDir, 
+        env: process.env,
+        windowsHide: true
+    });
+}
   // Linux/Mac
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
