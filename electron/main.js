@@ -65,8 +65,23 @@ function startDjango() {
       let spawnArgs;
       
       if (process.platform === 'win32' && !isDev) {
-          const serveScript = path.join(__dirname, 'serve.py');
-          spawnArgs = [serveScript, String(DJANGO_PORT)];
+          const winEnv = {
+              ...process.env,
+              DJANGO_SETTINGS_MODULE: 'config.settings.production',
+              PYTHONUNBUFFERED: '1',
+              PYTHONPATH: backendDir,
+          };
+          djangoProcess = spawn(python, [
+              '-m', 'waitress',
+              '--host=127.0.0.1',
+              '--port=' + DJANGO_PORT,
+              'config.wsgi:application'
+          ], { 
+              cwd: backendDir,
+              env: winEnv,
+              shell: false,
+              windowsHide: true,
+          });
       }else {
           // Linux/Dev — runserver
           spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
