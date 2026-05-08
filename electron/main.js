@@ -76,7 +76,7 @@ function startDjango() {
       
       if (process.platform === 'win32' && !isDev) {
           // Windows production — waitress (performant)
-          spawnArgs = ['-m', 'waitress', '--host=127.0.0.1', '--port=' + DJANGO_PORT, 'config.wsgi:application'];
+          spawnArgs = ['-c', `import os; os.environ['DJANGO_SETTINGS_MODULE']='config.settings.production'; from waitress import serve; from config.wsgi import application; serve(application, host='127.0.0.1', port=${DJANGO_PORT})`];
       } else {
           // Linux/Dev — runserver
           spawnArgs = [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
