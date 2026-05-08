@@ -129,6 +129,7 @@ async function createWindow() {
     await waitForAngular();
   } else {
     await waitForDjango();
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   mainWindow = new BrowserWindow({
