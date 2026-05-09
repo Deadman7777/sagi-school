@@ -49,8 +49,9 @@ def main():
             print(f'[SAGI] Waitress démarré sur {addr}')
             serve(application, host=host, port=int(port))
             return
-        except ImportError:
-            pass  # waitress non installé, continuer avec runserver
+        except Exception as e:
+            print(f'[SAGI] Erreur waitress: {e}')
+            # continuer avec runserver
 
     from django.core.management import execute_from_command_line
     execute_from_command_line(sys.argv)
