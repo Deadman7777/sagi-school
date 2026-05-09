@@ -9,77 +9,6 @@ let djangoProcess;
 const isDev       = process.env.NODE_ENV === 'development';
 const DJANGO_PORT = 8765;
 
-/**
- * Génère production.py avec les chemins corrects avant de démarrer Django.
- * Lit les credentials DB depuis le fichier existant pour les préserver.
- */
-function ensureProductionConfig() {
-  if (isDev) return;
-
-  const backendDir  = getBackendDir();
-  const configPath  = path.join(backendDir, 'config', 'settings', 'production.py');
-  const frontendDir = path.join(process.resourcesPath, 'frontend', 'dist').replace(/\\/g, '/');
-  const staticRoot  = path.join(backendDir, 'staticfiles').replace(/\\/g, '/');
-
-  // Lire les credentials depuis le fichier existant, ou utiliser les defaults
-  let dbName     = 'hady_gesman';
-  let dbUser     = 'postgres';
-  let dbPassword = 'postgres';
-  let dbHost     = 'localhost';
-  let dbPort     = '5432';
-  let secretKey  = 'sagi-school-prod-2025-hady-gesman-secret';
-
-  if (fs.existsSync(configPath)) {
-    const existing = fs.readFileSync(configPath, 'utf8');
-    const m = (re) => { const r = existing.match(re); return r ? r[1] : null; };
-    dbName     = m(/'NAME':\s*'([^']+)'/)     || dbName;
-    dbUser     = m(/'USER':\s*'([^']+)'/)     || dbUser;
-    dbPassword = m(/'PASSWORD':\s*'([^']+)'/) || dbPassword;
-    dbHost     = m(/'HOST':\s*'([^']+)'/)     || dbHost;
-    dbPort     = m(/'PORT':\s*'([^']+)'/)     || dbPort;
-    secretKey  = m(/SECRET_KEY\s*=\s*['"]([^'"]+)['"]/) || secretKey;
-  }
-
-  const content = `from .base import *
-
-DEBUG = False
-SECRET_KEY = '${secretKey}'
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
-
-INSTALLED_APPS = [a for a in INSTALLED_APPS if 'debug_toolbar' not in a]
-MIDDLEWARE     = [m for m in MIDDLEWARE if 'debug_toolbar' not in m]
-
-DATABASES = {
-    'default': {
-        'ENGINE':   'django.db.backends.postgresql',
-        'NAME':     '${dbName}',
-        'USER':     '${dbUser}',
-        'PASSWORD': '${dbPassword}',
-        'HOST':     '${dbHost}',
-        'PORT':     '${dbPort}',
-        'OPTIONS':  {'connect_timeout': 5},
-        'CONN_MAX_AGE': 0,
-    }
-}
-
-MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-STATIC_ROOT      = '${staticRoot}'
-STATICFILES_DIRS = []
-FRONTEND_DIR     = '${frontendDir}'
-WHITENOISE_ROOT  = FRONTEND_DIR
-
-CORS_ALLOW_ALL_ORIGINS = True
-`;
-
-  try {
-    fs.writeFileSync(configPath, content, 'utf8');
-    console.log('[Config] production.py OK :', configPath);
-    console.log('[Config] FRONTEND_DIR     :', frontendDir);
-  } catch (err) {
-    console.error('[Config] Erreur écriture production.py :', err.message);
-  }
-}
-
 function getBackendDir() {
   return isDev
     ? path.join(__dirname, '..', 'backend')
@@ -113,18 +42,6 @@ function getPython() {
   return '/usr/bin/python3.10';
 }
 
-function spawnDjango(python, args, opts) {
-  try {
-    djangoProcess = spawn(python, args, opts);
-    djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
-    djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
-    djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
-    djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
-  } catch (err) {
-    console.error('[Django] Impossible de démarrer:', err.message);
-  }
-}
-
 function startDjango() {
   const backendDir = getBackendDir();
   const managePy   = path.join(backendDir, 'manage.py');
@@ -152,27 +69,17 @@ function startDjango() {
       }
     }
 
-    const spawnOpts = { cwd: backendDir, env };
+    try {
+      djangoProcess = spawn(python, [
+        managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'
+      ], { cwd: backendDir, env });
 
-    // Sur Windows, waitress est plus fiable que runserver pour les requêtes concurrentes
-    if (!isDev && process.platform === 'win32') {
-      const checkWaitress = spawn(python, ['-c', 'import waitress'], spawnOpts);
-      checkWaitress.on('close', code => {
-        if (code === 0) {
-          console.log('[Django] Démarrage avec waitress');
-          spawnDjango(python, [
-            '-m', 'waitress',
-            `--host=127.0.0.1`,
-            `--port=${DJANGO_PORT}`,
-            'config.wsgi:application'
-          ], spawnOpts);
-        } else {
-          console.log('[Django] Démarrage avec runserver (waitress absent)');
-          spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
-        }
-      });
-    } else {
-      spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
+      djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
+      djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
+      djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
+      djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
+    } catch (err) {
+      console.error('[Django] Impossible de démarrer:', err.message);
     }
   });
 }
@@ -217,7 +124,6 @@ async function createWindow() {
   });
   splash.loadFile(path.join(__dirname, 'splash.html'));
 
-  ensureProductionConfig();
   startDjango();
 
   if (isDev) {
