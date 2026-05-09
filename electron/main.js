@@ -41,17 +41,6 @@ function ensureProductionConfig() {
   }
 
   const content = `from .base import *
-import mimetypes
-
-# Corriger les MIME types Windows (registre parfois incorrect)
-mimetypes.add_type('application/javascript', '.js')
-mimetypes.add_type('application/javascript', '.mjs')
-mimetypes.add_type('text/css', '.css')
-mimetypes.add_type('text/html', '.html')
-mimetypes.add_type('application/json', '.json')
-mimetypes.add_type('image/svg+xml', '.svg')
-mimetypes.add_type('font/woff2', '.woff2')
-mimetypes.add_type('font/woff', '.woff')
 
 DEBUG = False
 SECRET_KEY = '${secretKey}'
@@ -73,9 +62,11 @@ DATABASES = {
     }
 }
 
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 STATIC_ROOT      = '${staticRoot}'
 STATICFILES_DIRS = []
 FRONTEND_DIR     = '${frontendDir}'
+WHITENOISE_ROOT  = FRONTEND_DIR
 
 CORS_ALLOW_ALL_ORIGINS = True
 `;
@@ -163,7 +154,26 @@ function startDjango() {
 
     const spawnOpts = { cwd: backendDir, env };
 
-    spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
+    // Sur Windows, waitress est plus fiable que runserver pour les requêtes concurrentes
+    if (!isDev && process.platform === 'win32') {
+      const checkWaitress = spawn(python, ['-c', 'import waitress'], spawnOpts);
+      checkWaitress.on('close', code => {
+        if (code === 0) {
+          console.log('[Django] Démarrage avec waitress');
+          spawnDjango(python, [
+            '-m', 'waitress',
+            `--host=127.0.0.1`,
+            `--port=${DJANGO_PORT}`,
+            'config.wsgi:application'
+          ], spawnOpts);
+        } else {
+          console.log('[Django] Démarrage avec runserver (waitress absent)');
+          spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
+        }
+      });
+    } else {
+      spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
+    }
   });
 }
 
@@ -183,25 +193,17 @@ function waitForAngular(retries = 30) {
   });
 }
 
-async function waitForDjango(retries = 120) {
+async function waitForDjango(retries = 40) {
   return new Promise(resolve => {
     const attempt = n => {
-      const req = http.get(`http://127.0.0.1:${DJANGO_PORT}/api/auth/login/`, res => {
-        console.log('[Electron] Django prêt ! (statut:', res.statusCode, ')');
-        resolve(true);
-      });
-      req.on('error', () => {
-        if (n <= 0) {
-          console.error('[Electron] Django n\'a pas démarré après 2 minutes.');
-          resolve(false);
-          return;
-        }
-        if ((retries - n) % 10 === 0) {
-          console.log(`[Electron] Attente Django... (${retries - n}s)`);
-        }
+      http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
+        console.log('[Electron] Django prêt !');
+        resolve();
+      }).on('error', () => {
+        if (n <= 0) { resolve(); return; }
+        console.log(`[Electron] Attente Django... (${n})`);
         setTimeout(() => attempt(n - 1), 1000);
       });
-      req.setTimeout(2000, () => { req.destroy(); });
     };
     attempt(retries);
   });
@@ -218,29 +220,12 @@ async function createWindow() {
   ensureProductionConfig();
   startDjango();
 
-  let djangoReady = true;
   if (isDev) {
     await waitForAngular();
   } else {
-    djangoReady = await waitForDjango();
+    await waitForDjango();
   }
 
-  if (!djangoReady) {
-    dialog.showErrorBox(
-      'SAGI SCHOOL — Erreur de démarrage',
-      'Le serveur n\'a pas pu démarrer après 2 minutes.\n\n' +
-      'Vérifiez que :\n' +
-      '• PostgreSQL est démarré (services Windows)\n' +
-      '• install_win.ps1 a bien été exécuté\n\n' +
-      'Relancez l\'application.'
-    );
-    splash.destroy();
-    app.quit();
-    return;
-  }
-
-  // Créer mainWindow AVANT de détruire splash
-  // (évite window-all-closed → app.quit() prématuré)
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
     minWidth: 1024, minHeight: 700,
@@ -262,7 +247,7 @@ async function createWindow() {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => {
-    if (!splash.isDestroyed()) splash.destroy();
+    splash.destroy();
     mainWindow.show();
     mainWindow.maximize();
   });
@@ -278,21 +263,6 @@ if (!gotTheLock) {
   app.whenReady().then(async () => {
     if (!isDev) {
       try {
-        const os   = require('os');
-        const licenceFile = path.join(os.homedir(), '.sagischool_licence');
-        // Créer un fichier licence essai si absent (évite le blocage sur fresh install)
-        if (!fs.existsSync(licenceFile)) {
-          const essai = JSON.stringify({
-            valide: true,
-            cle_licence: 'ESSAI-WIN-30J',
-            statut: 'ESSAI',
-            date_fin: '2026-12-31',
-            derniere_verification: new Date().toISOString()
-          });
-          fs.writeFileSync(licenceFile, essai, 'utf8');
-          console.log('[Licence] Fichier essai créé automatiquement');
-        }
-
         const { verifierLicence } = require('./licence-check');
         const result = await verifierLicence();
         if (!result.valide) {
