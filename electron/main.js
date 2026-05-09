@@ -214,8 +214,6 @@ async function createWindow() {
     djangoReady = await waitForDjango();
   }
 
-  splash.destroy();
-
   if (!djangoReady) {
     dialog.showErrorBox(
       'SAGI SCHOOL — Erreur de démarrage',
@@ -225,10 +223,13 @@ async function createWindow() {
       '• install_win.ps1 a bien été exécuté\n\n' +
       'Relancez l\'application.'
     );
+    splash.destroy();
     app.quit();
     return;
   }
 
+  // Créer mainWindow AVANT de détruire splash
+  // (évite window-all-closed → app.quit() prématuré)
   mainWindow = new BrowserWindow({
     width: 1400, height: 900,
     minWidth: 1024, minHeight: 700,
@@ -250,6 +251,7 @@ async function createWindow() {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => {
+    if (!splash.isDestroyed()) splash.destroy();
     mainWindow.show();
     mainWindow.maximize();
   });
@@ -265,6 +267,21 @@ if (!gotTheLock) {
   app.whenReady().then(async () => {
     if (!isDev) {
       try {
+        const os   = require('os');
+        const licenceFile = path.join(os.homedir(), '.sagischool_licence');
+        // Créer un fichier licence essai si absent (évite le blocage sur fresh install)
+        if (!fs.existsSync(licenceFile)) {
+          const essai = JSON.stringify({
+            valide: true,
+            cle_licence: 'ESSAI-WIN-30J',
+            statut: 'ESSAI',
+            date_fin: '2026-12-31',
+            derniere_verification: new Date().toISOString()
+          });
+          fs.writeFileSync(licenceFile, essai, 'utf8');
+          console.log('[Licence] Fichier essai créé automatiquement');
+        }
+
         const { verifierLicence } = require('./licence-check');
         const result = await verifierLicence();
         if (!result.valide) {
