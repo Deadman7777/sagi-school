@@ -15,87 +15,72 @@ function getBackendDir() {
     : path.join(process.resourcesPath, 'backend');
 }
 
-function getServePy() {
-  return isDev
-    ? path.join(__dirname, 'serve.py')
-    : path.join(process.resourcesPath, 'serve.py');
-}
-
 function getPython() {
   if (isDev) {
     return path.join(getBackendDir(), 'venv', 'bin', 'python');
   }
+  // Windows — chercher python dans plusieurs endroits
   if (process.platform === 'win32') {
-    // Prefer a venv bundled with the app (Scripts\ on Windows)
-    const venvPython = path.join(getBackendDir(), 'venv', 'Scripts', 'python.exe');
-    if (fs.existsSync(venvPython)) return venvPython;
-    // Python310 first — waitress + Django are installed there on this machine
-    const localApp = process.env.LOCALAPPDATA || '';
     const candidates = [
-      path.join(localApp, 'Programs', 'Python', 'Python310', 'python.exe'),
-      path.join(localApp, 'Programs', 'Python', 'Python311', 'python.exe'),
-      path.join(localApp, 'Programs', 'Python', 'Python312', 'python.exe'),
-      path.join(localApp, 'Programs', 'Python', 'Python313', 'python.exe'),
+      'python',
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+      'C:\\Python310\\python.exe',
+      'C:\\Python311\\python.exe',
+      'C:\\Python312\\python.exe',
     ];
     for (const p of candidates) {
+      if (p === 'python') return p; // dans le PATH
       if (fs.existsSync(p)) return p;
     }
-    return 'py';
+    return 'python';
   }
+  // Linux/Mac
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
   return '/usr/bin/python3.10';
 }
 
 function startDjango() {
-  return new Promise((resolve) => {
-    const backendDir = getBackendDir();
-    const python     = getPython();
+  const backendDir = getBackendDir();
+  const managePy   = path.join(backendDir, 'manage.py');
+  const python     = getPython();
 
-    console.log('[Electron] Python:', python);
-    console.log('[Electron] BackendDir:', backendDir);
-    console.log('[Electron] Python exists:', fs.existsSync(python));
+  console.log('[Electron] Python:', python);
+  console.log('[Electron] manage.py:', managePy);
 
-    http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
-      console.log('[Electron] Django déjà actif');
-      resolve();
-    }).on('error', () => {
+  http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
+    console.log('[Electron] Django déjà actif');
+  }).on('error', () => {
+    const env = {
+      ...process.env,
+      DJANGO_SETTINGS_MODULE: isDev
+        ? 'config.settings.local'
+        : 'config.settings.production',
+      PYTHONUNBUFFERED: '1',
+    };
 
-      const env = {
-        ...process.env,
-        DJANGO_SETTINGS_MODULE: isDev ? 'config.settings.local' : 'config.settings.production',
-        PYTHONUNBUFFERED: '1',
-        PYTHONPATH: backendDir,
-      };
-
-      if (!isDev && process.platform !== 'win32') {
-        const venvBin = path.join(backendDir, 'venv', 'bin');
-        if (fs.existsSync(venvBin)) {
-          env.PATH        = venvBin + ':' + process.env.PATH;
-          env.VIRTUAL_ENV = path.join(backendDir, 'venv');
-        }
+    if (!isDev && process.platform !== 'win32') {
+      const venvBin = path.join(backendDir, 'venv', 'bin');
+      if (fs.existsSync(venvBin)) {
+        env.PATH        = venvBin + ':' + process.env.PATH;
+        env.VIRTUAL_ENV = path.join(backendDir, 'venv');
       }
+    }
 
-      const servePy = getServePy();
-      const spawnArgs = (process.platform === 'win32' && !isDev)
-        ? [servePy, String(DJANGO_PORT)]
-        : [path.join(backendDir, 'manage.py'), 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+    try {
+      djangoProcess = spawn(python, [
+        managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'
+      ], { cwd: backendDir, env });
 
-      console.log('[Electron] spawnArgs:', JSON.stringify(spawnArgs));
-      console.log('[Electron] serve.py exists:', fs.existsSync(servePy));
-      console.log('[Electron] CMD:', python, spawnArgs.join(' '));
-
-      try {
-        djangoProcess = spawn(python, spawnArgs, { cwd: backendDir, env, windowsHide: true });
-        djangoProcess.stdout.on('data', d => console.log('[Django stdout]', d.toString().trimEnd()));
-        djangoProcess.stderr.on('data', d => console.error('[Django stderr]', d.toString().trimEnd()));
-        djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
-        djangoProcess.on('error',  err  => console.error('[Django] spawn error:', err.message));
-      } catch (err) {
-        console.error('[Django] Impossible de démarrer:', err.message);
-      }
-      resolve();
-    });
+      djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
+      djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
+      djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
+      djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
+    } catch (err) {
+      console.error('[Django] Impossible de démarrer:', err.message);
+    }
   });
 }
 
@@ -107,6 +92,7 @@ function waitForAngular(retries = 30) {
         resolve();
       }).on('error', () => {
         if (n <= 0) { resolve(); return; }
+        console.log(`[Electron] Attente Angular... (${n})`);
         setTimeout(() => attempt(n - 1), 1000);
       });
     };
@@ -114,17 +100,14 @@ function waitForAngular(retries = 30) {
   });
 }
 
-async function waitForDjango(retries = 60) {
-  return new Promise((resolve, reject) => {
+async function waitForDjango(retries = 40) {
+  return new Promise(resolve => {
     const attempt = n => {
       http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
         console.log('[Electron] Django prêt !');
         resolve();
       }).on('error', () => {
-        if (n <= 0) {
-          reject(new Error(`Django n'a pas répondu après ${retries} secondes.`));
-          return;
-        }
+        if (n <= 0) { resolve(); return; }
         console.log(`[Electron] Attente Django... (${n})`);
         setTimeout(() => attempt(n - 1), 1000);
       });
@@ -141,28 +124,12 @@ async function createWindow() {
   });
   splash.loadFile(path.join(__dirname, 'splash.html'));
 
-  await startDjango();
+  startDjango();
 
   if (isDev) {
     await waitForAngular();
   } else {
-    try {
-      await waitForDjango();
-    } catch (err) {
-      splash.destroy();
-      console.error('[Electron] Timeout Django:', err.message);
-      // DEBUG: keep window open + show DevTools so console logs are visible
-      mainWindow = new BrowserWindow({
-        width: 1200, height: 800,
-        title: 'DEBUG — Django timeout',
-        webPreferences: { nodeIntegration: false },
-      });
-      mainWindow.loadURL('about:blank');
-      mainWindow.webContents.openDevTools();
-      mainWindow.on('closed', () => { mainWindow = null; });
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await waitForDjango();
   }
 
   mainWindow = new BrowserWindow({
@@ -178,7 +145,10 @@ async function createWindow() {
     }
   });
 
-  const url = isDev ? 'http://localhost:4200' : `http://127.0.0.1:${DJANGO_PORT}`;
+  const url = isDev
+    ? 'http://localhost:4200'
+    : `http://127.0.0.1:${DJANGO_PORT}`;
+
   console.log('[Electron] Chargement:', url);
   mainWindow.loadURL(url);
 
@@ -193,6 +163,7 @@ async function createWindow() {
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
+  console.log('[Electron] Instance déjà active');
   app.quit();
 } else {
   app.whenReady().then(async () => {
@@ -204,6 +175,9 @@ if (!gotTheLock) {
           dialog.showErrorBox('Licence SAGI SCHOOL', result.message);
           app.quit();
           return;
+        }
+        if (result.mode === 'offline') {
+          console.warn('[Electron] Mode offline:', result.message);
         }
       } catch (e) {
         console.warn('[Electron] Vérification licence échouée:', e.message);

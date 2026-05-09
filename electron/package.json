@@ -33,10 +33,6 @@
     ],
     "extraResources": [
       {
-        "from": "serve.py",
-        "to": "serve.py"
-      },
-      {
         "from": "../backend",
         "to": "backend",
         "filter": [
