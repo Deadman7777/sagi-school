@@ -58,33 +58,39 @@ async function verifierLicence(cleLicence) {
 
   console.log(`[Licence] Dernière vérif: ${jours} jour(s)`);
 
-  // Essayer en ligne
-  const enligne = await verifierEnLigne(cleLicence || locale?.cle_licence);
-
-  if (enligne?.valide) {
-    console.log('[Licence] ✅ Licence valide (en ligne)');
-    sauvegarderLicenceLocale({ ...enligne, cle_licence: cleLicence });
-    return { valide: true, mode: 'online', message: 'Licence active' };
-  }
-
-  // Fallback offline
+  // Licence locale valide et dans la tolérance → on accepte sans vérifier en ligne
+  // (Django n'est pas encore démarré au moment du check de licence)
   if (locale?.valide && jours <= TOLERANCE_JOURS) {
     console.log(`[Licence] ✅ Licence valide (offline — ${jours}j / ${TOLERANCE_JOURS}j)`);
+    // Vérification en ligne en arrière-plan (non bloquante)
+    verifierEnLigne(cleLicence || locale?.cle_licence).then(enligne => {
+      if (enligne?.valide) {
+        sauvegarderLicenceLocale({ ...enligne, cle_licence: cleLicence || locale?.cle_licence });
+        console.log('[Licence] ✅ Vérification en ligne OK (arrière-plan)');
+      }
+    }).catch(() => {});
     return {
-      valide:   true,
-      mode:     'offline',
-      jours:    jours,
-      message:  `Mode hors-ligne — ${TOLERANCE_JOURS - jours} jour(s) restant(s) avant reconnexion obligatoire`
+      valide:  true,
+      mode:    'offline',
+      jours:   jours,
+      message: `Mode hors-ligne — ${TOLERANCE_JOURS - jours} jour(s) restant(s)`
     };
   }
 
-  // Expirée ou dépassé tolérance
+  // Tolérance dépassée → tenter en ligne
+  const enligne = await verifierEnLigne(cleLicence || locale?.cle_licence);
+  if (enligne?.valide) {
+    console.log('[Licence] ✅ Licence valide (en ligne)');
+    sauvegarderLicenceLocale({ ...enligne, cle_licence: cleLicence || locale?.cle_licence });
+    return { valide: true, mode: 'online', message: 'Licence active' };
+  }
+
   if (locale && jours > TOLERANCE_JOURS) {
     console.warn(`[Licence] ❌ Tolérance offline dépassée (${jours} jours)`);
     return {
-      valide:   false,
-      mode:     'expired_offline',
-      message:  `Connexion requise — ${jours} jours sans vérification (max ${TOLERANCE_JOURS})`
+      valide:  false,
+      mode:    'expired_offline',
+      message: `Connexion requise — ${jours} jours sans vérification (max ${TOLERANCE_JOURS})`
     };
   }
 

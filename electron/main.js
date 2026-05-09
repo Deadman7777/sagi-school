@@ -152,26 +152,7 @@ function startDjango() {
 
     const spawnOpts = { cwd: backendDir, env };
 
-    // Sur Windows, waitress est plus fiable que runserver pour les requêtes concurrentes
-    if (!isDev && process.platform === 'win32') {
-      const checkWaitress = spawn(python, ['-c', 'import waitress'], spawnOpts);
-      checkWaitress.on('close', code => {
-        if (code === 0) {
-          console.log('[Django] Démarrage avec waitress');
-          spawnDjango(python, [
-            '-m', 'waitress',
-            `--host=127.0.0.1`,
-            `--port=${DJANGO_PORT}`,
-            'config.wsgi:application'
-          ], spawnOpts);
-        } else {
-          console.log('[Django] Démarrage avec runserver (waitress absent)');
-          spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
-        }
-      });
-    } else {
-      spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
-    }
+    spawnDjango(python, [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'], spawnOpts);
   });
 }
 
