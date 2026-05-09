@@ -41,6 +41,17 @@ function ensureProductionConfig() {
   }
 
   const content = `from .base import *
+import mimetypes
+
+# Corriger les MIME types Windows (registre parfois incorrect)
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('application/javascript', '.mjs')
+mimetypes.add_type('text/css', '.css')
+mimetypes.add_type('text/html', '.html')
+mimetypes.add_type('application/json', '.json')
+mimetypes.add_type('image/svg+xml', '.svg')
+mimetypes.add_type('font/woff2', '.woff2')
+mimetypes.add_type('font/woff', '.woff')
 
 DEBUG = False
 SECRET_KEY = '${secretKey}'
