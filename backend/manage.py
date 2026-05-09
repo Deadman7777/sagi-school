@@ -4,11 +4,10 @@ import os, sys
 def ensure_production_settings():
     if sys.platform != 'win32':
         return
-    base = os.path.dirname(os.path.abspath(__file__))  # resources/backend
+    base = os.path.dirname(os.path.abspath(__file__))
     prod = os.path.join(base, 'config', 'settings', 'production.py')
     if os.path.exists(prod):
         return
-    # resources/backend -> resources -> resources/frontend/dist
     resources_dir = os.path.dirname(base)
     frontend_dir  = os.path.join(resources_dir, 'frontend', 'dist')
     static_root   = os.path.join(base, 'staticfiles')
@@ -36,6 +35,23 @@ def main():
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.production')
     else:
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
+
+    # Sur Windows production — utiliser waitress au lieu de runserver
+    if sys.platform == 'win32' and len(sys.argv) >= 2 and sys.argv[1] == 'runserver':
+        try:
+            from waitress import serve
+            from django.core.wsgi import get_wsgi_application
+            import django
+            django.setup()
+            application = get_wsgi_application()
+            addr = sys.argv[2] if len(sys.argv) > 2 else '127.0.0.1:8765'
+            host, port = addr.split(':')
+            print(f'[SAGI] Waitress démarré sur {addr}')
+            serve(application, host=host, port=int(port))
+            return
+        except ImportError:
+            pass  # waitress non installé, continuer avec runserver
+
     from django.core.management import execute_from_command_line
     execute_from_command_line(sys.argv)
 
