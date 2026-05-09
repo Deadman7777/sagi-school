@@ -2,17 +2,16 @@
 import os, sys
 
 def ensure_production_settings():
-    """Crée production.py automatiquement si absent sur Windows."""
     if sys.platform != 'win32':
         return
-    base = os.path.dirname(os.path.abspath(__file__))
+    base = os.path.dirname(os.path.abspath(__file__))  # resources/backend
     prod = os.path.join(base, 'config', 'settings', 'production.py')
     if os.path.exists(prod):
         return
-    frontend_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(base)))),
-        'frontend', 'dist'
-    )
+    # resources/backend -> resources -> resources/frontend/dist
+    resources_dir = os.path.dirname(base)
+    frontend_dir  = os.path.join(resources_dir, 'frontend', 'dist')
+    static_root   = os.path.join(base, 'staticfiles')
     content = f"""from .base import *
 import os
 DEBUG = False
@@ -23,7 +22,7 @@ MIDDLEWARE = [m for m in MIDDLEWARE if 'debug_toolbar' not in m]
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 DATABASES = {{'default': {{'ENGINE': 'django.db.backends.postgresql','NAME': 'hady_gesman','USER': 'postgres','PASSWORD': 'SangueBiDiop@7','HOST': 'localhost','PORT': '5432'}}}}
 FRONTEND_DIR = r'{frontend_dir}'
-STATIC_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'staticfiles')
+STATIC_ROOT  = r'{static_root}'
 STATICFILES_DIRS = []
 if os.path.exists(os.path.join(FRONTEND_DIR, 'index.html')):
     WHITENOISE_ROOT = FRONTEND_DIR
