@@ -62,11 +62,9 @@ DATABASES = {
     }
 }
 
-MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 STATIC_ROOT      = '${staticRoot}'
 STATICFILES_DIRS = []
 FRONTEND_DIR     = '${frontendDir}'
-WHITENOISE_ROOT  = FRONTEND_DIR
 
 CORS_ALLOW_ALL_ORIGINS = True
 `;
@@ -193,17 +191,25 @@ function waitForAngular(retries = 30) {
   });
 }
 
-async function waitForDjango(retries = 40) {
+async function waitForDjango(retries = 120) {
   return new Promise(resolve => {
     const attempt = n => {
-      http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
-        console.log('[Electron] Django prêt !');
-        resolve();
-      }).on('error', () => {
-        if (n <= 0) { resolve(); return; }
-        console.log(`[Electron] Attente Django... (${n})`);
+      const req = http.get(`http://127.0.0.1:${DJANGO_PORT}/api/auth/login/`, res => {
+        console.log('[Electron] Django prêt ! (statut:', res.statusCode, ')');
+        resolve(true);
+      });
+      req.on('error', () => {
+        if (n <= 0) {
+          console.error('[Electron] Django n\'a pas démarré après 2 minutes.');
+          resolve(false);
+          return;
+        }
+        if ((retries - n) % 10 === 0) {
+          console.log(`[Electron] Attente Django... (${retries - n}s)`);
+        }
         setTimeout(() => attempt(n - 1), 1000);
       });
+      req.setTimeout(2000, () => { req.destroy(); });
     };
     attempt(retries);
   });
@@ -220,10 +226,26 @@ async function createWindow() {
   ensureProductionConfig();
   startDjango();
 
+  let djangoReady = true;
   if (isDev) {
     await waitForAngular();
   } else {
-    await waitForDjango();
+    djangoReady = await waitForDjango();
+  }
+
+  splash.destroy();
+
+  if (!djangoReady) {
+    dialog.showErrorBox(
+      'SAGI SCHOOL — Erreur de démarrage',
+      'Le serveur n\'a pas pu démarrer après 2 minutes.\n\n' +
+      'Vérifiez que :\n' +
+      '• PostgreSQL est démarré (services Windows)\n' +
+      '• install_win.ps1 a bien été exécuté\n\n' +
+      'Relancez l\'application.'
+    );
+    app.quit();
+    return;
   }
 
   mainWindow = new BrowserWindow({
@@ -247,7 +269,6 @@ async function createWindow() {
   mainWindow.loadURL(url);
 
   mainWindow.once('ready-to-show', () => {
-    splash.destroy();
     mainWindow.show();
     mainWindow.maximize();
   });
