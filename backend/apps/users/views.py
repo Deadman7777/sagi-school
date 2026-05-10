@@ -24,7 +24,8 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_permissions(self):
-        if self.request.user.role == 'SUPER_ADMIN':
+        role = getattr(self.request.user, 'role', None)
+        if role == 'SUPER_ADMIN':
             return [IsSuperAdmin()]
         return [IsAdminEcole()]
 

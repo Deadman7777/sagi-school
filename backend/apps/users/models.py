@@ -34,8 +34,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     nom       = models.CharField(max_length=150)
     prenom    = models.CharField(max_length=150, blank=True)
     email     = models.EmailField(unique=True)
-    role      = models.CharField(max_length=20, choices=ROLE_CHOICES, default='LECTURE')
+    role      = models.CharField(max_length=20, choices=ROLE_CHOICES, default='LECTEUR')
     actif     = models.BooleanField(default=True)
+
+    @property
+    def is_active(self):
+        return self.actif
     is_staff  = models.BooleanField(default=False)
     derniere_connexion = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -11,6 +11,14 @@ class UserSerializer(serializers.ModelSerializer):
 
 class CustomTokenSerializer(TokenObtainPairSerializer):
     """JWT enrichi avec les infos du user et du tenant."""
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if not self.user.actif:
+            from rest_framework_simplejwt.exceptions import AuthenticationFailed
+            raise AuthenticationFailed('Compte désactivé.')
+        return data
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
