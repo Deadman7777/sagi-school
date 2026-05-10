@@ -109,10 +109,15 @@ CORS_ALLOW_HEADERS = [
 ]
 # JWT
 from datetime import timedelta
+
+def _check_user_actif(user):
+    return user is not None and getattr(user, 'actif', True)
+
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME':  timedelta(hours=8),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'AUTH_HEADER_TYPES':      ('Bearer',),
+    'ACCESS_TOKEN_LIFETIME':       timedelta(hours=8),
+    'REFRESH_TOKEN_LIFETIME':      timedelta(days=7),
+    'AUTH_HEADER_TYPES':           ('Bearer',),
+    'USER_AUTHENTICATION_RULE':    _check_user_actif,
 }
 
 # Cache en mémoire — accélère le dashboard
