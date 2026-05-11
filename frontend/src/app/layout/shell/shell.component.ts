@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
@@ -176,14 +176,18 @@ export class ShellComponent {
   constructor(public auth: AuthService, public langue: LangueService) {}
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
-  navSectionsFiltrees() {
-      if (this.isSuperAdmin()) return this.navSuperAdmin;
-      const role = this.auth.currentUser()?.role;
-      return this.navEcole.map(section => ({
-          ...section,
-          items: section.items.filter(item => this.itemVisible(item.route, role))
-      })).filter(section => section.items.length > 0);
-  }
+
+  navSectionsFiltrees = computed(() => {
+    const user = this.auth.currentUser();
+    if (user?.role === 'SUPER_ADMIN') return this.navSuperAdmin;
+    const role = user?.role;
+    return this.navEcole
+      .map(section => ({
+        ...section,
+        items: section.items.filter(item => this.itemVisible(item.route, role))
+      }))
+      .filter(section => section.items.length > 0);
+  });
 
   itemVisible(route: string, role?: string): boolean {
       if (!role) return false;
