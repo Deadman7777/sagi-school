@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path      = require('path');
 const http      = require('http');
@@ -40,6 +40,87 @@ function getPython() {
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
   return '/usr/bin/python3.10';
+}
+
+function showSetupWindow() {
+  return new Promise((resolve, reject) => {
+    const win = new BrowserWindow({
+      width: 480, height: 510,
+      resizable: false,
+      title: 'Configuration — SAGI SCHOOL',
+      webPreferences: {
+        preload: path.join(__dirname, 'setup-preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      }
+    });
+    win.setMenu(null);
+    win.loadFile(path.join(__dirname, 'setup.html'));
+
+    let settled = false;
+    ipcMain.once('setup-submit', (event, creds) => {
+      settled = true;
+      resolve({ win, creds });
+    });
+    win.once('closed', () => {
+      if (!settled) reject(new Error('Configuration annulée par l\'utilisateur'));
+    });
+  });
+}
+
+function runCollectstatic(backendDir) {
+  return new Promise((resolve, reject) => {
+    const python  = getPython();
+    const managePy = path.join(backendDir, 'manage.py');
+    const env = {
+      ...process.env,
+      DJANGO_SETTINGS_MODULE: 'config.settings.production',
+      PYTHONUNBUFFERED: '1',
+    };
+
+    const proc = spawn(python, [managePy, 'collectstatic', '--noinput'], {
+      cwd: backendDir, env,
+    });
+
+    let stderr = '';
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.on('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `collectstatic a échoué (code ${code})`));
+    });
+    proc.on('error', reject);
+  });
+}
+
+async function ensureProductionConfig() {
+  const backendDir  = getBackendDir();
+  const prodFile    = path.join(backendDir, 'config', 'settings', 'production.py');
+  const exampleFile = path.join(backendDir, 'config', 'settings', 'production.example.py');
+
+  if (fs.existsSync(prodFile)) return;
+
+  const { win, creds } = await showSetupWindow();
+
+  // Échapper les apostrophes pour les chaînes Python single-quoted
+  const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  let content = fs.readFileSync(exampleFile, 'utf8');
+  content = content.replace(/'PASSWORD': '[^']*'/, `'PASSWORD': '${esc(creds.password)}'`);
+  content = content.replace(/'NAME': '[^']*'/,     `'NAME': '${esc(creds.name)}'`);
+  content = content.replace(/'USER': '[^']*'/,     `'USER': '${esc(creds.user)}'`);
+  content = content.replace(/'HOST': '[^']*'/,     `'HOST': '${esc(creds.host)}'`);
+  content = content.replace(/'PORT': '[^']*'/,     `'PORT': '${esc(creds.port)}'`);
+  fs.writeFileSync(prodFile, content, 'utf8');
+
+  try {
+    await runCollectstatic(backendDir);
+  } catch (err) {
+    if (fs.existsSync(prodFile)) fs.unlinkSync(prodFile);
+    if (!win.isDestroyed()) win.close();
+    throw new Error(`Erreur collectstatic : ${err.message}`);
+  }
+
+  if (!win.isDestroyed()) win.close();
 }
 
 function startDjango() {
@@ -181,6 +262,14 @@ if (!gotTheLock) {
         }
       } catch (e) {
         console.warn('[Electron] Vérification licence échouée:', e.message);
+      }
+
+      try {
+        await ensureProductionConfig();
+      } catch (e) {
+        dialog.showErrorBox('Erreur de configuration SAGI SCHOOL', e.message);
+        app.quit();
+        return;
       }
     }
     createWindow();

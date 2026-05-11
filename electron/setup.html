@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <title>Configuration — SAGI SCHOOL</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: #1e2a3a;
+      color: #e0e6ed;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: #253447;
+      border-radius: 10px;
+      padding: 30px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    h1 { font-size: 1.25rem; color: #4fc3f7; margin-bottom: 4px; }
+    .subtitle { font-size: 0.8rem; color: #7a8fa8; margin-bottom: 22px; }
+    label { display: block; font-size: 0.8rem; color: #8a9bb5; margin: 12px 0 4px; }
+    input {
+      width: 100%; padding: 9px 12px;
+      background: #1a2535; border: 1px solid #3a4f6a;
+      border-radius: 6px; color: #e0e6ed;
+      font-size: 0.9rem; outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #4fc3f7; }
+    input.error { border-color: #e57373; }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    button {
+      width: 100%; margin-top: 22px; padding: 11px;
+      background: #1565c0; border: none; border-radius: 6px;
+      color: #fff; font-size: 0.95rem; cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #1976d2; }
+    #loading { display: none; text-align: center; padding: 16px 0; }
+    .spinner {
+      border: 3px solid #3a4f6a;
+      border-top-color: #4fc3f7;
+      border-radius: 50%;
+      width: 42px; height: 42px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: #8a9bb5; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Configuration initiale</h1>
+    <p class="subtitle">Première installation — Connexion à PostgreSQL</p>
+
+    <div id="form-panel">
+      <div>
+        <label>Nom de la base de données</label>
+        <input id="db-name" type="text" value="hady_gesman">
+      </div>
+      <div>
+        <label>Utilisateur PostgreSQL</label>
+        <input id="db-user" type="text" value="postgres">
+      </div>
+      <div>
+        <label>Mot de passe</label>
+        <input id="db-pass" type="password" placeholder="Mot de passe PostgreSQL">
+      </div>
+      <div class="row">
+        <div>
+          <label>Hôte</label>
+          <input id="db-host" type="text" value="localhost">
+        </div>
+        <div>
+          <label>Port</label>
+          <input id="db-port" type="text" value="5432">
+        </div>
+      </div>
+      <button id="btn-submit">Configurer et démarrer</button>
+    </div>
+
+    <div id="loading">
+      <div class="spinner"></div>
+      <p class="loading-text">Configuration en cours, veuillez patienter…</p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('btn-submit').addEventListener('click', () => {
+      const passInput = document.getElementById('db-pass');
+      if (!passInput.value) {
+        passInput.classList.add('error');
+        passInput.focus();
+        passInput.addEventListener('input', () => passInput.classList.remove('error'), { once: true });
+        return;
+      }
+      const creds = {
+        name:     document.getElementById('db-name').value.trim() || 'hady_gesman',
+        user:     document.getElementById('db-user').value.trim() || 'postgres',
+        password: passInput.value,
+        host:     document.getElementById('db-host').value.trim() || 'localhost',
+        port:     document.getElementById('db-port').value.trim() || '5432',
+      };
+      document.getElementById('form-panel').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+      window.setupAPI.submit(creds);
+    });
+  </script>
+</body>
+</html>
