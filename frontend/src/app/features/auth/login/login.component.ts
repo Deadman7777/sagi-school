@@ -89,7 +89,7 @@ export class LoginComponent {
     this.loading.set(true);
     this.erreur.set(null);
     this.auth.login(this.email, this.password).subscribe({
-      next: () => this.router.navigate(['/']),
+      next: () => { window.location.href = '/'; },
       error: () => { this.erreur.set('error'); this.loading.set(false); }
     });
   }

@@ -3,7 +3,7 @@ export interface User {
   nom: string;
   prenom?: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN_ECOLE' | 'COMPTABLE' | 'CAISSIER' | 'LECTURE';
+  role: 'SUPER_ADMIN' | 'ADMIN_ECOLE' | 'ADMIN_RH' | 'ADMIN_COMPTABLE' | 'ADMIN_SCOLARITE' | 'LECTEUR';
   tenant?: string;
 }
 
