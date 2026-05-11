@@ -29,6 +29,8 @@
       "preload.js",
       "licence-check.js",
       "splash.html",
+      "setup.html",
+      "setup-preload.js",
       "assets/**"
     ],
     "extraResources": [
