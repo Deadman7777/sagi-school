@@ -4,107 +4,114 @@ import { ApiService } from '../../core/services/api.service';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-fiscal',
   standalone: true,
-  imports: [CommonModule, TableModule, TagModule, ButtonModule],
+  imports: [CommonModule, TableModule, TagModule, ButtonModule, TranslateModule],
   template: `
     <div class="page-header">
       <div>
-        <h2 class="page-title">📋 Déclarations Fiscales</h2>
-         <span class="page-sub">BRS · IPRES · CSS · IR · CFCE — Conformité fiscale sénégalaise</span>
+        <h2 class="page-title">📋 {{ 'fiscal.title' | translate }}</h2>
+        <span class="page-sub">{{ 'fiscal.subtitle' | translate }}</span>
       </div>
-      <p-button label="📤 Exporter" severity="secondary" (onClick)="window.print()" />
+      <p-button [label]="'📤 ' + ('fiscal.exporter' | translate)" severity="secondary" (onClick)="window.print()" />
     </div>
 
     <!-- Stats BRS -->
     <div class="kpi-grid" *ngIf="stats()">
       <div class="kpi-card" style="--acc:#0099ff">
         <div class="kpi-icon">💼</div>
-        <div class="kpi-label">Masse Salariale</div>
-        <div class="kpi-value" style="color:#0099ff">
-          {{ stats().masse_salariale | number:'1.0-0' }}
-        </div>
-        <div class="kpi-sub">FCFA</div>
+        <div class="kpi-label">{{ 'fiscal.masse_salariale' | translate }}</div>
+        <div class="kpi-value" style="color:#0099ff">{{ stats().masse_salariale | number:'1.0-0' }}</div>
+        <div class="kpi-sub">{{ 'common.fcfa' | translate }}</div>
       </div>
       <div class="kpi-card" style="--acc:#f59e0b">
         <div class="kpi-icon">📊</div>
-        <div class="kpi-label">BRS Total Dû</div>
-        <div class="kpi-value" style="color:#f59e0b">
-          {{ stats().brs_total | number:'1.0-0' }}
-        </div>
-        <div class="kpi-sub">FCFA (5% masse)</div>
+        <div class="kpi-label">{{ 'fiscal.brs_total_du' | translate }}</div>
+        <div class="kpi-value" style="color:#f59e0b">{{ stats().brs_total | number:'1.0-0' }}</div>
+        <div class="kpi-sub">{{ 'fiscal.fcfa_5pct' | translate }}</div>
       </div>
       <div class="kpi-card" style="--acc:#ef4444">
         <div class="kpi-icon">⚠️</div>
-        <div class="kpi-label">En Retard</div>
-        <div class="kpi-value" style="color:#ef4444">
-          {{ stats().brs_retard | number:'1.0-0' }}
-        </div>
-        <div class="kpi-sub">FCFA à régulariser</div>
+        <div class="kpi-label">{{ 'fiscal.en_retard' | translate }}</div>
+        <div class="kpi-value" style="color:#ef4444">{{ stats().brs_retard | number:'1.0-0' }}</div>
+        <div class="kpi-sub">{{ 'fiscal.fcfa_regulariser' | translate }}</div>
       </div>
       <div class="kpi-card" style="--acc:#10b981">
         <div class="kpi-icon">✅</div>
-        <div class="kpi-label">En Règle</div>
-        <div class="kpi-value" style="color:#10b981">
-          {{ stats().brs_regle | number:'1.0-0' }}
-        </div>
-        <div class="kpi-sub">FCFA déclarés</div>
+        <div class="kpi-label">{{ 'fiscal.en_regle' | translate }}</div>
+        <div class="kpi-value" style="color:#10b981">{{ stats().brs_regle | number:'1.0-0' }}</div>
+        <div class="kpi-sub">{{ 'fiscal.fcfa_declares' | translate }}</div>
       </div>
     </div>
 
     <!-- Tableau BRS -->
     <div class="card">
-      <div class="card-header">📋 Retenues à la Source (BRS) — Taux 5%</div>
+      <div class="card-header">📋 {{ 'fiscal.brs_titre' | translate }}</div>
       <div class="table-wrap">
-        <p-table [value]="declarations()" [loading]="loading()"
-                 styleClass="p-datatable-sm">
-            <ng-template pTemplate="header">
-              <tr>
-                <th>Mois</th>
-                <th>Masse Salariale</th>
-                <th>BRS (5%)</th>
-                <th>IPRES (5.6%)</th>
-                <th>CSS (0.7%)</th>
-                <th>IR</th>
-                <th>CFCE (1%)</th>
-                <th>Total Impôts</th>
-                <th>Date Limite</th>
-                <th>Statut</th>
-              </tr>
-            </ng-template>
-            <ng-template pTemplate="body" let-d>
-              <tr>
-                <td class="bold">{{ d.mois }}</td>
-                <td class="mono">{{ d.masse_salariale | number:'1.0-0' }}</td>
-                <td class="mono">{{ d.brs   | number:'1.0-0' }}</td>
-                <td class="mono">{{ d.ipres | number:'1.0-0' }}</td>
-                <td class="mono">{{ d.css   | number:'1.0-0' }}</td>
-                <td class="mono">{{ d.ir    | number:'1.0-0' }}</td>
-                <td class="mono">{{ d.cfce  | number:'1.0-0' }}</td>
-                <td class="mono bold" style="color:#f59e0b">{{ d.total_impots | number:'1.0-0' }} FCFA</td>
-                <td class="mono">{{ d.date_limite | date:'dd/MM/yyyy' }}</td>
-                <td>
-                  <p-tag [value]="d.statut"
-                        [severity]="d.statut === 'EN_REGLE' ? 'success' :
-                                    d.statut === 'EN_RETARD' ? 'danger' : 'warn'" />
-                </td>
-              </tr>
-            </ng-template>
+        <p-table [value]="declarations()" [loading]="loading()" styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>{{ 'fiscal.mois'        | translate }}</th>
+              <th>{{ 'fiscal.masse_sal'   | translate }}</th>
+              <th>{{ 'fiscal.brs_5'       | translate }}</th>
+              <th>{{ 'fiscal.ipres_56'    | translate }}</th>
+              <th>{{ 'fiscal.css_07'      | translate }}</th>
+              <th>{{ 'fiscal.ir'          | translate }}</th>
+              <th>{{ 'fiscal.cfce_1'      | translate }}</th>
+              <th>{{ 'fiscal.total_impots'| translate }}</th>
+              <th>{{ 'fiscal.date_limite' | translate }}</th>
+              <th>{{ 'fiscal.statut'      | translate }}</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-d>
+            <tr>
+              <td class="bold">{{ d.mois }}</td>
+              <td class="mono">{{ d.masse_salariale | number:'1.0-0' }}</td>
+              <td class="mono">{{ d.brs   | number:'1.0-0' }}</td>
+              <td class="mono">{{ d.ipres | number:'1.0-0' }}</td>
+              <td class="mono">{{ d.css   | number:'1.0-0' }}</td>
+              <td class="mono">{{ d.ir    | number:'1.0-0' }}</td>
+              <td class="mono">{{ d.cfce  | number:'1.0-0' }}</td>
+              <td class="mono bold" style="color:#f59e0b">{{ d.total_impots | number:'1.0-0' }} FCFA</td>
+              <td class="mono">{{ d.date_limite | date:'dd/MM/yyyy' }}</td>
+              <td>
+                <p-tag [value]="d.statut"
+                      [severity]="d.statut === 'EN_REGLE' ? 'success' :
+                                  d.statut === 'EN_RETARD' ? 'danger' : 'warn'" />
+              </td>
+            </tr>
+          </ng-template>
         </p-table>
       </div>
     </div>
 
     <!-- Info conformité -->
     <div class="info-card">
-      <div class="ic-title">ℹ️ Conformité Fiscale Sénégalaise</div>
+      <div class="ic-title">ℹ️ {{ 'fiscal.conformite_titre' | translate }}</div>
       <div class="ic-body">
-        <div class="ic-row"><span>Régime</span><span>Retenue à la Source (BRS)</span></div>
-        <div class="ic-row"><span>Taux applicable</span><span class="mono">5% de la masse salariale</span></div>
-        <div class="ic-row"><span>Date de dépôt</span><span>15 du mois suivant</span></div>
-        <div class="ic-row"><span>Organisme</span><span>Direction Générale des Impôts (DGI)</span></div>
-        <div class="ic-row"><span>Référence</span><span>Code Général des Impôts — Sénégal</span></div>
+        <div class="ic-row">
+          <span>{{ 'fiscal.regime'    | translate }}</span>
+          <span>{{ 'fiscal.regime_val' | translate }}</span>
+        </div>
+        <div class="ic-row">
+          <span>{{ 'fiscal.taux'      | translate }}</span>
+          <span class="mono">{{ 'fiscal.taux_val' | translate }}</span>
+        </div>
+        <div class="ic-row">
+          <span>{{ 'fiscal.date_depot'| translate }}</span>
+          <span>{{ 'fiscal.date_depot_val' | translate }}</span>
+        </div>
+        <div class="ic-row">
+          <span>{{ 'fiscal.organisme' | translate }}</span>
+          <span>{{ 'fiscal.organisme_val' | translate }}</span>
+        </div>
+        <div class="ic-row">
+          <span>{{ 'fiscal.reference' | translate }}</span>
+          <span>{{ 'fiscal.reference_val' | translate }}</span>
+        </div>
       </div>
     </div>
   `,
@@ -153,19 +160,11 @@ export class FiscalComponent implements OnInit {
       next: res => {
         const data = Array.isArray(res) ? res : (res as any).results || [];
         this.declarations.set(data);
-
-        // Calcul stats
-        const masse = data.reduce((s: number, d: any) => s + (d.masse_salariale || 0), 0);
-        const brs   = data.reduce((s: number, d: any) => s + (d.montant_brs    || 0), 0);
-        const retard = data
-          .filter((d: any) => d.statut === 'EN_RETARD')
-          .reduce((s: number, d: any) => s + (d.montant_brs || 0), 0);
-        this.stats.set({
-          masse_salariale: masse,
-          brs_total:       brs,
-          brs_retard:      retard,
-          brs_regle:       brs - retard,
-        });
+        const masse  = data.reduce((s: number, d: any) => s + (d.masse_salariale || 0), 0);
+        const brs    = data.reduce((s: number, d: any) => s + (d.montant_brs    || 0), 0);
+        const retard = data.filter((d: any) => d.statut === 'EN_RETARD')
+                           .reduce((s: number, d: any) => s + (d.montant_brs || 0), 0);
+        this.stats.set({ masse_salariale: masse, brs_total: brs, brs_retard: retard, brs_regle: brs - retard });
         this.loading.set(false);
       },
       error: () => this.loading.set(false)

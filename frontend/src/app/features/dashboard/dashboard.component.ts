@@ -16,8 +16,8 @@ import { DecimalPipe, DatePipe } from '@angular/common';
     @if (isSuperAdmin()) {
       <div class="page-header">
         <div>
-          <h2 class="page-title">👑 Vue Globale — HADY GESMAN</h2>
-          <span class="page-sub">Tableau de bord administrateur</span>
+          <h2 class="page-title">👑 {{ 'dashboard.vue_globale' | translate }}</h2>
+          <span class="page-sub">{{ 'dashboard.admin_dashboard' | translate }}</span>
         </div>
       </div>
 
@@ -25,45 +25,50 @@ import { DecimalPipe, DatePipe } from '@angular/common';
         <div class="kpi-grid">
           <div class="kpi-card" style="--acc:#00d4aa">
             <div class="kpi-icon">🏫</div>
-            <div class="kpi-label">Écoles Actives</div>
+            <div class="kpi-label">{{ 'dashboard.ecoles_actives' | translate }}</div>
             <div class="kpi-value" style="color:#00d4aa">{{ sa.ecoles.actives }}</div>
-            <div class="kpi-sub">sur {{ sa.ecoles.total }} total</div>
+            <div class="kpi-sub">{{ 'dashboard.sur_total' | translate:{ val: sa.ecoles.total } }}</div>
           </div>
           <div class="kpi-card" style="--acc:#f59e0b">
             <div class="kpi-icon">⏳</div>
-            <div class="kpi-label">En Essai</div>
+            <div class="kpi-label">{{ 'dashboard.en_essai' | translate }}</div>
             <div class="kpi-value" style="color:#f59e0b">{{ sa.ecoles.essai }}</div>
-            <div class="kpi-sub">à convertir</div>
+            <div class="kpi-sub">{{ 'dashboard.a_convertir' | translate }}</div>
           </div>
           <div class="kpi-card" style="--acc:#ef4444">
             <div class="kpi-icon">❌</div>
-            <div class="kpi-label">Expirées</div>
+            <div class="kpi-label">{{ 'dashboard.expirees' | translate }}</div>
             <div class="kpi-value" style="color:#ef4444">{{ sa.ecoles.expirees }}</div>
-            <div class="kpi-sub">à relancer</div>
+            <div class="kpi-sub">{{ 'dashboard.a_relancer' | translate }}</div>
           </div>
           <div class="kpi-card" style="--acc:#a855f7">
             <div class="kpi-icon">💵</div>
-            <div class="kpi-label">Revenus / An</div>
+            <div class="kpi-label">{{ 'dashboard.revenus_an' | translate }}</div>
             <div class="kpi-value" style="color:#a855f7">
               {{ sa.finances.revenus_annuels | number:'1.0-0' }}
             </div>
-            <div class="kpi-sub">FCFA estimés</div>
+            <div class="kpi-sub">{{ 'dashboard.fcfa_estimes' | translate }}</div>
           </div>
         </div>
 
         <div class="info-banner">
           🆕 <strong>{{ sa.ecoles.nouvelles_ce_mois }}</strong>
-          nouvelle(s) école(s) ce mois ·
-          Revenu mensuel estimé :
+          {{ 'dashboard.nouvelles_ecoles' | translate }} ·
+          {{ 'dashboard.revenu_mensuel' | translate }} :
           <strong>{{ sa.finances.revenus_mensuels | number:'1.0-0' }} FCFA</strong>
         </div>
 
         @if (sa.alertes_expiration.length > 0) {
           <div class="card">
-            <div class="card-header">⚠️ Licences expirant dans 30 jours</div>
+            <div class="card-header">⚠️ {{ 'dashboard.licences_expirant' | translate }}</div>
             <p-table [value]="sa.alertes_expiration" styleClass="p-datatable-sm">
               <ng-template pTemplate="header">
-                <tr><th>École</th><th>Type</th><th>Jours Restants</th><th>Date Fin</th></tr>
+                <tr>
+                  <th>{{ 'dashboard.ecole_col'         | translate }}</th>
+                  <th>{{ 'dashboard.type_col'           | translate }}</th>
+                  <th>{{ 'dashboard.jours_restants_col' | translate }}</th>
+                  <th>{{ 'dashboard.date_fin_col'       | translate }}</th>
+                </tr>
               </ng-template>
               <ng-template pTemplate="body" let-a>
                 <tr>
@@ -80,8 +85,8 @@ import { DecimalPipe, DatePipe } from '@angular/common';
         } @else {
           <div class="empty-sa">
             <div style="font-size:32px">✅</div>
-            <div style="color:#10b981;margin-top:8px;font-weight:600">Aucune licence en danger</div>
-            <div style="color:#64748b;font-size:12px">Toutes les licences actives sont en règle</div>
+            <div style="color:#10b981;margin-top:8px;font-weight:600">{{ 'dashboard.aucune_danger' | translate }}</div>
+            <div style="color:#64748b;font-size:12px">{{ 'dashboard.toutes_regle' | translate }}</div>
           </div>
         }
       } @else {
@@ -132,21 +137,21 @@ import { DecimalPipe, DatePipe } from '@angular/common';
           </div>
           <div class="kpi-card" style="--acc:#10b981">
             <div class="kpi-icon">📊</div>
-            <div class="kpi-label">Taux Recouvrement</div>
+            <div class="kpi-label">{{ 'dashboard.taux_recouvrement' | translate }}</div>
             <div class="kpi-value" style="color:#10b981">{{ d.kpis.taux_recouvrement || 0 }}%</div>
-            <div class="kpi-sub">des frais encaissés</div>
+            <div class="kpi-sub">{{ 'dashboard.des_frais' | translate }}</div>
           </div>
           <div class="kpi-card" style="--acc:#ef4444">
             <div class="kpi-icon">⚠️</div>
-            <div class="kpi-label">Total Impayés</div>
+            <div class="kpi-label">{{ 'dashboard.total_impayes' | translate }}</div>
             <div class="kpi-value" style="color:#ef4444">{{ d.kpis.total_impayes | number:'1.0-0' }} FCFA</div>
-            <div class="kpi-sub">FCFA à recouvrer</div>
+            <div class="kpi-sub">{{ 'dashboard.fcfa_recouvrer' | translate }}</div>
           </div>
           <div class="kpi-card" style="--acc:#a855f7">
             <div class="kpi-icon">🎯</div>
-            <div class="kpi-label">Total Attendu</div>
+            <div class="kpi-label">{{ 'dashboard.total_attendu_dash' | translate }}</div>
             <div class="kpi-value" style="color:#a855f7">{{ d.kpis.total_attendu | number:'1.0-0' }} FCFA</div>
-            <div class="kpi-sub">FCFA frais annuels</div>
+            <div class="kpi-sub">{{ 'dashboard.frais_annuels' | translate }}</div>
           </div>
         </div>
 
@@ -164,9 +169,9 @@ import { DecimalPipe, DatePipe } from '@angular/common';
               </div>
               <div class="alert-row ok">
                 <div class="alert-num">{{ d.eleves.ok }}</div>
-                <div><div class="alert-title">{{ 'dashboard.a_jour' | translate }}</div><div class="alert-sub">Paiements OK</div></div>
+                <div><div class="alert-title">{{ 'dashboard.a_jour' | translate }}</div><div class="alert-sub">{{ 'dashboard.paiements_ok' | translate }}</div></div>
               </div>
-              <div class="total-eleves">Total : <strong>{{ d.eleves.total }}</strong> élèves</div>
+              <div class="total-eleves">Total : <strong>{{ d.eleves.total }}</strong> {{ 'dashboard.total_eleves' | translate }}</div>
             </div>
           </div>
           <div class="card">
@@ -187,10 +192,17 @@ import { DecimalPipe, DatePipe } from '@angular/common';
 
         @if (alertes().length > 0) {
           <div class="card">
-            <div class="card-header">📋 Élèves à Relancer</div>
+            <div class="card-header">📋 {{ 'dashboard.relancer' | translate }}</div>
             <p-table [value]="alertes()" styleClass="p-datatable-sm" [rows]="10" [paginator]="true">
               <ng-template pTemplate="header">
-                <tr><th>Nom</th><th>Section</th><th>Reste</th><th>Retard</th><th>Alerte</th><th>Tél</th></tr>
+                <tr>
+                  <th>{{ 'dashboard.nom_col'     | translate }}</th>
+                  <th>{{ 'dashboard.section_col' | translate }}</th>
+                  <th>{{ 'dashboard.reste_col'   | translate }}</th>
+                  <th>{{ 'dashboard.retard_60'   | translate }}</th>
+                  <th>{{ 'dashboard.alerte_col'  | translate }}</th>
+                  <th>{{ 'dashboard.tel_col'     | translate }}</th>
+                </tr>
               </ng-template>
               <ng-template pTemplate="body" let-e>
                 <tr>

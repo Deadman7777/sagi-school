@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PaiementsService } from '../../core/services/paiements.service';
@@ -13,7 +13,7 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AutoCompleteModule } from 'primeng/autocomplete';
 
 @Component({
@@ -50,17 +50,17 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
                styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
         <ng-template pTemplate="header">
           <tr>
-            <th>N° Pièce</th>
-            <th>Date</th>
-            <th>Élève</th>
-            <th>Inscription</th>
-            <th>Mensualité</th>
-            <th>Uniforme</th>
-            <th>Fournitures</th>
-            <th>Cantine</th>
-            <th>Total</th>
-            <th>Mode</th>
-            <th>Reçu</th>
+            <th>{{ 'paiements.no_piece'    | translate }}</th>
+            <th>{{ 'paiements.date'        | translate }}</th>
+            <th>{{ 'paiements.eleve_col'   | translate }}</th>
+            <th>{{ 'paiements.inscription' | translate }}</th>
+            <th>{{ 'paiements.mensualite'  | translate }}</th>
+            <th>{{ 'paiements.uniforme'    | translate }}</th>
+            <th>{{ 'paiements.fournitures' | translate }}</th>
+            <th>{{ 'paiements.cantine'     | translate }}</th>
+            <th>{{ 'paiements.total'       | translate }}</th>
+            <th>{{ 'paiements.mode'        | translate }}</th>
+            <th>{{ 'paiements.recu_col'    | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-p>
@@ -82,25 +82,25 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="11" class="empty-msg">Aucun paiement enregistré</td></tr>
+          <tr><td colspan="11" class="empty-msg">{{ 'paiements.aucun' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
 
     <!-- Dialog saisie paiement -->
-    <p-dialog header="💰 Nouveau Paiement" [(visible)]="dialogVisible"
+    <p-dialog [header]="'💰 ' + ('paiements.nouveau' | translate)" [(visible)]="dialogVisible"
               [modal]="true" [style]="{width:'560px'}" [draggable]="false">
 
       <!-- Recherche élève -->
       <div class="form-group" style="margin-bottom:20px">
-        <label>Élève *</label>
+        <label>{{ 'paiements.eleve' | translate }} *</label>
         <p-autoComplete
             [(ngModel)]="eleveTexte"
             [suggestions]="elevesSuggestions()"
             (completeMethod)="rechercherEleve($event)"
             field="nom_complet"
             dataKey="id"
-            placeholder="Tapez le nom de l'élève..."
+            [placeholder]="'paiements.tapez_nom' | translate"
             styleClass="w-full"
             (onSelect)="onEleveSelect($event)">
             <ng-template let-e pTemplate="item">
@@ -114,25 +114,25 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
 
       <!-- Infos élève sélectionné -->
       <div class="eleve-info" *ngIf="eleveSelectionne?.id">
-        <div class="ei-row"><span>Section</span><span>{{ eleveSelectionne.section_nom }}</span></div>
-        <div class="ei-row"><span>Total attendu</span><span>{{ eleveSelectionne.total_attendu | number:'1.0-0' }} FCFA</span></div>
-        <div class="ei-row"><span>Déjà payé</span><span style="color:#10b981">{{ eleveSelectionne.total_paye | number:'1.0-0' }} FCFA</span></div>
-        <div class="ei-row"><span>Reste à payer</span><span style="color:#ef4444;font-weight:700">{{ eleveSelectionne.reste_a_payer | number:'1.0-0' }} FCFA</span></div>
+        <div class="ei-row"><span>{{ 'paiements.section_info'       | translate }}</span><span>{{ eleveSelectionne.section_nom }}</span></div>
+        <div class="ei-row"><span>{{ 'paiements.total_attendu_info' | translate }}</span><span>{{ eleveSelectionne.total_attendu | number:'1.0-0' }} FCFA</span></div>
+        <div class="ei-row"><span>{{ 'paiements.deja_paye'          | translate }}</span><span style="color:#10b981">{{ eleveSelectionne.total_paye | number:'1.0-0' }} FCFA</span></div>
+        <div class="ei-row"><span>{{ 'paiements.reste_a_payer'      | translate }}</span><span style="color:#ef4444;font-weight:700">{{ eleveSelectionne.reste_a_payer | number:'1.0-0' }} FCFA</span></div>
       </div>
 
       <!-- Montants -->
       <div class="montants-grid">
         <!-- Type de paiement -->
         <div class="form-group full" style="margin-bottom:16px">
-          <label>Type de paiement *</label>
+          <label>{{ 'paiements.type_paiement' | translate }} *</label>
           <div style="display:flex;gap:8px;margin-top:6px">
             <button [class]="typePaiement === 'INSCRIPTION' ? 'type-btn active-inscr' : 'type-btn'"
                     (click)="setTypePaiement('INSCRIPTION')">
-              🎓 Inscription / Début d'année
+              🎓 {{ 'paiements.inscription_debut' | translate }}
             </button>
             <button [class]="typePaiement === 'MENSUALITE' ? 'type-btn active-mens' : 'type-btn'"
                     (click)="setTypePaiement('MENSUALITE')">
-              📅 Mensualité
+              📅 {{ 'paiements.mensualite_type' | translate }}
             </button>
           </div>
         </div>
@@ -140,19 +140,19 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
         <!-- Champs Inscription -->
         <div class="montants-grid" *ngIf="typePaiement === 'INSCRIPTION'">
           <div class="form-group">
-            <label>Inscription</label>
+            <label>{{ 'paiements.inscription' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Uniforme</label>
+            <label>{{ 'paiements.uniforme' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Fournitures</label>
+            <label>{{ 'paiements.fournitures' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Divers</label>
+            <label>{{ 'paiements.divers' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
         </div>
@@ -160,15 +160,15 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
         <!-- Champs Mensualité -->
         <div class="montants-grid" *ngIf="typePaiement === 'MENSUALITE'">
           <div class="form-group">
-            <label>Mensualité</label>
+            <label>{{ 'paiements.mensualite' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Cantine</label>
+            <label>{{ 'paiements.cantine' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Divers</label>
+            <label>{{ 'paiements.divers' | translate }}</label>
             <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
         </div>
@@ -176,57 +176,57 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
 
       <!-- Total calculé -->
       <div class="total-bar">
-        <span>Total à encaisser</span>
+        <span>{{ 'paiements.total_encaisser' | translate }}</span>
         <span class="total-val">{{ totalForm() | number:'1.0-0' }} FCFA</span>
       </div>
 
       <!-- Mode paiement -->
       <div class="form-group" style="margin-top:14px">
-        <label>Mode de Paiement *</label>
+        <label>{{ 'paiements.mode' | translate }} *</label>
         <p-select [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
                   optionLabel="label" optionValue="value"
-                  placeholder="Choisir..." styleClass="w-full" />
+                  [placeholder]="'paiements.choisir_mode_ph' | translate" styleClass="w-full" />
       </div>
 
       <div class="form-group" style="margin-top:10px">
-        <label>Observations</label>
-        <input pInputText [(ngModel)]="form.observations" class="w-full" placeholder="Optionnel..." />
+        <label>{{ 'paiements.observations' | translate }}</label>
+        <input pInputText [(ngModel)]="form.observations" class="w-full" [placeholder]="'paiements.obs_placeholder' | translate" />
       </div>
 
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogVisible=false" />
-        <p-button label="Enregistrer & Imprimer Reçu" severity="success"
+        <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
+        <p-button [label]="'paiements.avec_recu'| translate" severity="success"
                   [loading]="saving()" (onClick)="sauvegarder(true)" />
-        <p-button label="Enregistrer" severity="success" [outlined]="true"
+        <p-button [label]="'paiements.enregistrer'| translate" severity="success" [outlined]="true"
                   [loading]="saving()" (onClick)="sauvegarder(false)" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog reçu impression -->
-    <p-dialog header="🧾 Reçu de Paiement" [(visible)]="recuVisible"
+    <p-dialog [header]="'🧾 ' + ('paiements.recu' | translate)" [(visible)]="recuVisible"
               [modal]="true" [style]="{width:'420px'}" [draggable]="false">
       <div class="recu" *ngIf="recuData()">
         <div class="recu-header">
-          <div class="recu-titre">REÇU DE PAIEMENT</div>
+          <div class="recu-titre">{{ 'paiements.recu_titre' | translate }}</div>
           <div class="recu-no">{{ recuData().no_piece }}</div>
         </div>
-        <div class="recu-row"><span>Élève</span><strong>{{ recuData().eleve }}</strong></div>
-        <div class="recu-row"><span>Section</span><span>{{ recuData().section }}</span></div>
-        <div class="recu-row"><span>Date</span><span>{{ recuData().date | date:'dd/MM/yyyy' }}</span></div>
+        <div class="recu-row"><span>{{ 'paiements.eleve'        | translate }}</span><strong>{{ recuData().eleve }}</strong></div>
+        <div class="recu-row"><span>{{ 'paiements.section_info' | translate }}</span><span>{{ recuData().section }}</span></div>
+        <div class="recu-row"><span>{{ 'paiements.date'         | translate }}</span><span>{{ recuData().date | date:'dd/MM/yyyy' }}</span></div>
         <hr style="border-color:#2a3f5f;margin:10px 0">
-        <div class="recu-row" *ngIf="recuData().inscription">  <span>Inscription</span>  <span>{{ recuData().inscription  | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().mensualite">   <span>Mensualité</span>   <span>{{ recuData().mensualite   | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().uniforme">     <span>Uniforme</span>     <span>{{ recuData().uniforme     | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().fournitures">  <span>Fournitures</span>  <span>{{ recuData().fournitures  | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().cantine">      <span>Cantine</span>      <span>{{ recuData().cantine      | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" *ngIf="recuData().inscription">  <span>{{ 'paiements.inscription' | translate }}</span><span>{{ recuData().inscription  | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" *ngIf="recuData().mensualite">   <span>{{ 'paiements.mensualite'  | translate }}</span><span>{{ recuData().mensualite   | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" *ngIf="recuData().uniforme">     <span>{{ 'paiements.uniforme'    | translate }}</span><span>{{ recuData().uniforme     | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" *ngIf="recuData().fournitures">  <span>{{ 'paiements.fournitures' | translate }}</span><span>{{ recuData().fournitures  | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" *ngIf="recuData().cantine">      <span>{{ 'paiements.cantine'     | translate }}</span><span>{{ recuData().cantine      | number:'1.0-0' }} FCFA</span></div>
         <hr style="border-color:#2a3f5f;margin:10px 0">
-        <div class="recu-total"><span>TOTAL</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" style="margin-top:8px"><span>Mode</span><span>{{ recuData().mode_paiement }}</span></div>
-        <div class="recu-row"><span>Saisi par</span><span>{{ recuData().saisi_par }}</span></div>
+        <div class="recu-total"><span>{{ 'paiements.total' | translate }}</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" style="margin-top:8px"><span>{{ 'paiements.mode'     | translate }}</span><span>{{ recuData().mode_paiement }}</span></div>
+        <div class="recu-row"><span>{{ 'paiements.saisi_par' | translate }}</span><span>{{ recuData().saisi_par }}</span></div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Imprimer" icon="pi pi-print" severity="success" (onClick)="imprimer()" />
-        <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
+        <p-button [label]="'paiements.imprimer' | translate" icon="pi pi-print" severity="success" (onClick)="imprimer()" />
+        <p-button [label]="'common.fermer'       | translate" severity="secondary" (onClick)="recuVisible=false" />
       </ng-template>
     </p-dialog>
   `,
@@ -303,14 +303,9 @@ export class PaiementsComponent implements OnInit {
     observations:        '',
   };
 
-  modesPaiement = [
-    { label: 'Espèce',       value: 'ESPECE' },
-    { label: 'Wave',         value: 'WAVE' },
-    { label: 'Orange Money', value: 'ORANGE_MONEY' },
-    { label: 'Free Money',   value: 'FREE_MONEY' },
-    { label: 'Virement',     value: 'VIREMENT' },
-    { label: 'Chèque',       value: 'CHEQUE' },
-  ];
+  private translate = inject(TranslateService);
+
+  modesPaiement: any[] = [];
 
   constructor(
     private paiementsService: PaiementsService,
@@ -319,6 +314,14 @@ export class PaiementsComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.modesPaiement = [
+      { label: this.translate.instant('paiements.espece'),       value: 'ESPECE' },
+      { label: this.translate.instant('paiements.wave'),         value: 'WAVE' },
+      { label: this.translate.instant('paiements.orange_money'), value: 'ORANGE_MONEY' },
+      { label: this.translate.instant('paiements.free_money'),   value: 'FREE_MONEY' },
+      { label: this.translate.instant('paiements.virement'),     value: 'VIREMENT' },
+      { label: this.translate.instant('paiements.cheque'),       value: 'CHEQUE' },
+    ];
     this.chargerPaiements();
     this.chargerStats();
     this.chargerExercice();
@@ -393,15 +396,15 @@ export class PaiementsComponent implements OnInit {
 
   sauvegarder(avecRecu: boolean) {
     if (!this.eleveSelectionne?.id) {
-      this.msg.add({ severity:'warn', summary:'Champ requis', detail:'Sélectionnez un élève' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.select_eleve') });
       return;
     }
     if (!this.form.mode_paiement) {
-      this.msg.add({ severity:'warn', summary:'Champ requis', detail:'Choisissez un mode de paiement' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.choisir_mode') });
       return;
     }
     if (this.totalForm() <= 0) {
-      this.msg.add({ severity:'warn', summary:'Montant invalide', detail:'Le total doit être supérieur à 0' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('paiements.montant_invalide') });
       return;
     }
     this.saving.set(true);
@@ -411,7 +414,7 @@ export class PaiementsComponent implements OnInit {
       exercice: this.exerciceId,
     }).subscribe({
       next: (res: any) => {
-        this.msg.add({ severity:'success', summary:'Paiement enregistré ✅', detail:`Reçu: ${res.no_piece}` });
+        this.msg.add({ severity:'success', summary: this.translate.instant('paiements.enregistre'), detail:`Reçu: ${res.no_piece}` });
         this.dialogVisible = false;
         this.saving.set(false);
         this.chargerPaiements();
@@ -419,7 +422,7 @@ export class PaiementsComponent implements OnInit {
         if (avecRecu) this.imprimerRecu(res);
       },
       error: (err) => {
-        this.msg.add({ severity:'error', summary:'Erreur', detail:'Impossible d\'enregistrer' });
+        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('paiements.erreur_save') });
         console.error(err);
         this.saving.set(false);
       }

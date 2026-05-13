@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RhService } from '../../core/services/rh.service';
@@ -11,19 +11,21 @@ import { TagModule } from 'primeng/tag';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { ToastModule } from 'primeng/toast';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-rh',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
-            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule],
+            InputTextModule, SelectModule, TagModule, InputNumberModule,
+            ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
     <div class="page-header">
       <div>
-        <h2 class="page-title">👥 Ressources Humaines</h2>
-        <span class="page-sub">Personnel · Paie · Bulletins</span>
+        <h2 class="page-title">👥 {{ 'rh.title' | translate }}</h2>
+        <span class="page-sub">{{ 'rh.subtitle' | translate }}</span>
       </div>
     </div>
 
@@ -31,53 +33,56 @@ import { ToastModule } from 'primeng/toast';
     <div class="kpi-grid" *ngIf="stats()">
       <div class="kpi-card" style="--acc:#00d4aa">
         <div class="kpi-icon">👥</div>
-        <div class="kpi-label">Total Employés</div>
+        <div class="kpi-label">{{ 'rh.total_employes' | translate }}</div>
         <div class="kpi-value" style="color:#00d4aa">{{ stats().total_employes }}</div>
-        <div class="kpi-sub">{{ stats().actifs }} actifs</div>
+        <div class="kpi-sub">{{ stats().actifs }} {{ 'rh.actifs' | translate }}</div>
       </div>
       <div class="kpi-card" style="--acc:#0099ff">
         <div class="kpi-icon">📚</div>
-        <div class="kpi-label">Enseignants</div>
+        <div class="kpi-label">{{ 'rh.enseignants' | translate }}</div>
         <div class="kpi-value" style="color:#0099ff">{{ stats().enseignants }}</div>
       </div>
       <div class="kpi-card" style="--acc:#a855f7">
         <div class="kpi-icon">🏢</div>
-        <div class="kpi-label">Administration</div>
+        <div class="kpi-label">{{ 'rh.administration' | translate }}</div>
         <div class="kpi-value" style="color:#a855f7">{{ stats().administration }}</div>
       </div>
       <div class="kpi-card" style="--acc:#f59e0b">
         <div class="kpi-icon">💰</div>
-        <div class="kpi-label">Masse Salariale</div>
+        <div class="kpi-label">{{ 'rh.masse_salariale' | translate }}</div>
         <div class="kpi-value" style="color:#f59e0b">{{ stats().masse_salariale | number:'1.0-0' }}</div>
-        <div class="kpi-sub">FCFA / mois</div>
+        <div class="kpi-sub">{{ 'rh.fcfa_mois' | translate }}</div>
       </div>
     </div>
 
     <!-- Onglets -->
     <div class="tabs-bar">
-      <button class="tab-btn" [class.active]="onglet() === 'employes'" (click)="onglet.set('employes')">👤 Employés</button>
-      <button class="tab-btn" [class.active]="onglet() === 'paie'" (click)="onglet.set('paie')">💰 Paie</button>
+      <button class="tab-btn" [class.active]="onglet() === 'employes'" (click)="onglet.set('employes')">
+        👤 {{ 'rh.onglet_employes' | translate }}
+      </button>
+      <button class="tab-btn" [class.active]="onglet() === 'paie'" (click)="onglet.set('paie')">
+        💰 {{ 'rh.onglet_paie' | translate }}
+      </button>
     </div>
 
     <!-- EMPLOYÉS -->
     <div class="table-card" *ngIf="onglet() === 'employes'">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px">
-        <span style="color:#e8f0fe;font-weight:600">{{ employes().length }} employés</span>
-        <p-button label="Nouvel Employé" severity="success" (onClick)="ouvrirDialogEmploye()" />
+        <span style="color:#e8f0fe;font-weight:600">{{ employes().length }} {{ 'rh.nb_employes' | translate }}</span>
+        <p-button [label]="'rh.nouvel_employe' | translate" severity="success" (onClick)="ouvrirDialogEmploye()" />
       </div>
-      <p-table [value]="employes()" [loading]="loading()" styleClass="p-datatable-sm"
-               [paginator]="true" [rows]="15">
+      <p-table [value]="employes()" [loading]="loading()" styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
         <ng-template pTemplate="header">
           <tr>
-            <th>Matricule</th>
-            <th>Nom Complet</th>
-            <th>Type</th>
-            <th>Poste</th>
-            <th>Contrat</th>
-            <th>Salaire Base</th>
-            <th>Salaire Net</th>
-            <th>Statut</th>
-            <th>Actions</th>
+            <th>{{ 'rh.matricule'    | translate }}</th>
+            <th>{{ 'rh.nom_complet'  | translate }}</th>
+            <th>{{ 'rh.type_col'     | translate }}</th>
+            <th>{{ 'rh.poste'        | translate }}</th>
+            <th>{{ 'rh.contrat'      | translate }}</th>
+            <th>{{ 'rh.salaire_base' | translate }}</th>
+            <th>{{ 'rh.salaire_net'  | translate }}</th>
+            <th>{{ 'rh.statut_col'   | translate }}</th>
+            <th>{{ 'rh.actions_col'  | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-e>
@@ -95,13 +100,12 @@ import { ToastModule } from 'primeng/toast';
             </td>
             <td>
               <p-button icon="pi pi-money-bill" [rounded]="true" [text]="true"
-                        severity="success" (onClick)="ouvrirDialogPaie(e)"
-                        title="Générer paie" />
+                        severity="success" (onClick)="ouvrirDialogPaie(e)" />
             </td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="9" class="empty-msg">Aucun employé — ajoutez du personnel</td></tr>
+          <tr><td colspan="9" class="empty-msg">{{ 'rh.aucun_employe' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -109,19 +113,19 @@ import { ToastModule } from 'primeng/toast';
     <!-- PAIE -->
     <div class="table-card" *ngIf="onglet() === 'paie'">
       <div style="padding:16px">
-        <span style="color:#e8f0fe;font-weight:600">Historique des paies</span>
+        <span style="color:#e8f0fe;font-weight:600">{{ 'rh.historique_paies' | translate }}</span>
       </div>
       <p-table [value]="paies()" styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
         <ng-template pTemplate="header">
           <tr>
-            <th>Mois</th>
-            <th>Employé</th>
-            <th>Salaire Brut</th>
-            <th>IPRES</th>
-            <th>CSS</th>
-            <th>IR</th>
-            <th>Salaire Net</th>
-            <th>Statut</th>
+            <th>{{ 'rh.mois_col'         | translate }}</th>
+            <th>{{ 'rh.employe_col'       | translate }}</th>
+            <th>{{ 'rh.salaire_brut_col'  | translate }}</th>
+            <th>{{ 'rh.ipres_col'         | translate }}</th>
+            <th>{{ 'rh.css_col'           | translate }}</th>
+            <th>{{ 'rh.ir_col'            | translate }}</th>
+            <th>{{ 'rh.net_col'           | translate }}</th>
+            <th>{{ 'rh.statut_paie_col'   | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-p>
@@ -137,90 +141,84 @@ import { ToastModule } from 'primeng/toast';
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="8" class="empty-msg">Aucune paie enregistrée</td></tr>
+          <tr><td colspan="8" class="empty-msg">{{ 'rh.aucune_paie' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
 
     <!-- Dialog Employé -->
-    <p-dialog header="👤 Nouvel Employé" [(visible)]="dialogEmployeVisible"
-              [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+    <p-dialog [header]="'👤 ' + ('rh.nouvel_employe_titre' | translate)"
+              [(visible)]="dialogEmployeVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
-          <label>Nom Complet *</label>
+          <label>{{ 'rh.nom_requis' | translate }} *</label>
           <input pInputText [(ngModel)]="formEmploye.nom_complet" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Type *</label>
+          <label>{{ 'rh.type_requis' | translate }} *</label>
           <p-select [options]="typesEmploye" [(ngModel)]="formEmploye.type_employe"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Poste *</label>
+          <label>{{ 'rh.poste_requis' | translate }} *</label>
           <input pInputText [(ngModel)]="formEmploye.poste" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Type Contrat</label>
+          <label>{{ 'rh.contrat_type' | translate }}</label>
           <p-select [options]="typesContrat" [(ngModel)]="formEmploye.type_contrat"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Date Embauche *</label>
+          <label>{{ 'rh.date_embauche' | translate }} *</label>
           <input pInputText type="date" [(ngModel)]="formEmploye.date_embauche" class="w-full" />
         </div>
         <div class="form-group full">
-          <label>Salaire de Base (FCFA) *</label>
-          <p-inputNumber [(ngModel)]="formEmploye.salaire_base" [min]="0"
-                         mode="decimal" styleClass="w-full" />
+          <label>{{ 'rh.salaire_base_fcfa' | translate }} *</label>
+          <p-inputNumber [(ngModel)]="formEmploye.salaire_base" [min]="0" mode="decimal" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Téléphone</label>
+          <label>{{ 'common.telephone' | translate }}</label>
           <input pInputText [(ngModel)]="formEmploye.telephone" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Email</label>
+          <label>{{ 'rh.email' | translate }}</label>
           <input pInputText [(ngModel)]="formEmploye.email" class="w-full" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogEmployeVisible=false" />
-        <p-button label="Enregistrer" severity="success"
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogEmployeVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
                   [loading]="saving()" (onClick)="sauvegarderEmploye()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Paie -->
-    <p-dialog header="💰 Générer Bulletin de Paie" [(visible)]="dialogPaieVisible"
-              [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+    <p-dialog [header]="'💰 ' + ('rh.generer_paie_titre' | translate)"
+              [(visible)]="dialogPaieVisible" [modal]="true" [style]="{width:'460px'}" [draggable]="false">
       <div *ngIf="employeSelectionne" class="employe-info" style="margin-bottom:16px">
-        <div style="font-weight:700;color:#e8f0fe;margin-bottom:8px">
-          {{ employeSelectionne.nom_complet }}
-        </div>
+        <div style="font-weight:700;color:#e8f0fe;margin-bottom:8px">{{ employeSelectionne.nom_complet }}</div>
         <div style="font-size:12px;color:#64748b">{{ employeSelectionne.poste }}</div>
       </div>
       <div class="form-grid">
         <div class="form-group full">
-          <label>Mois (YYYY-MM) *</label>
-          <input pInputText [(ngModel)]="formPaie.mois" class="w-full"
-                 placeholder="Ex: 2026-04" />
+          <label>{{ 'rh.mois_format' | translate }} *</label>
+          <input pInputText [(ngModel)]="formPaie.mois" class="w-full" [placeholder]="'rh.ex_mois' | translate" />
         </div>
         <div class="form-group full">
-          <label>Salaire Brut (FCFA)</label>
-          <p-inputNumber [(ngModel)]="formPaie.salaire_brut" [min]="0"
-                         mode="decimal" styleClass="w-full" />
+          <label>{{ 'rh.salaire_brut_label' | translate }}</label>
+          <p-inputNumber [(ngModel)]="formPaie.salaire_brut" [min]="0" mode="decimal" styleClass="w-full" />
         </div>
       </div>
-      <!-- Aperçu calcul -->
       <div class="calcul-paie" *ngIf="formPaie.salaire_brut > 0">
-        <div class="cp-row"><span>Salaire Brut</span><span>{{ formPaie.salaire_brut | number:'1.0-0' }}</span></div>
+        <div class="cp-row"><span>{{ 'rh.salaire_brut_label' | translate }}</span><span>{{ formPaie.salaire_brut | number:'1.0-0' }}</span></div>
         <div class="cp-row danger"><span>IPRES (5.6%)</span><span>-{{ formPaie.salaire_brut * 0.056 | number:'1.0-0' }}</span></div>
         <div class="cp-row danger"><span>CSS (0.7%)</span><span>-{{ formPaie.salaire_brut * 0.007 | number:'1.0-0' }}</span></div>
         <div class="cp-row danger"><span>IR</span><span>-{{ calculIR(formPaie.salaire_brut) | number:'1.0-0' }}</span></div>
-        <div class="cp-total"><span>NET À PAYER</span><span>{{ calculNet(formPaie.salaire_brut) | number:'1.0-0' }} FCFA</span></div>
+        <div class="cp-total"><span>{{ 'rh.net_a_payer' | translate }}</span><span>{{ calculNet(formPaie.salaire_brut) | number:'1.0-0' }} FCFA</span></div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogPaieVisible=false" />
-        <p-button label="Enregistrer" severity="success"
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogPaieVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
                   [loading]="saving()" (onClick)="sauvegarderPaie()" />
       </ng-template>
     </p-dialog>
@@ -269,6 +267,8 @@ export class RhComponent implements OnInit {
   dialogPaieVisible    = false;
   employeSelectionne: any = null;
 
+  private translate = inject(TranslateService);
+
   formEmploye = {
     nom_complet: '', type_employe: 'ENSEIGNANT', poste: '',
     type_contrat: 'CDI', date_embauche: '', salaire_base: 0,
@@ -277,22 +277,23 @@ export class RhComponent implements OnInit {
 
   formPaie = { mois: '', salaire_brut: 0, employe: '' };
 
-  typesEmploye = [
-    { label: 'Enseignant',    value: 'ENSEIGNANT' },
-    { label: 'Administration',value: 'ADMINISTRATION' },
-    { label: 'Personnel d\'appui', value: 'APPUI' },
-  ];
-
-  typesContrat = [
-    { label: 'CDI',       value: 'CDI' },
-    { label: 'CDD',       value: 'CDD' },
-    { label: 'Vacataire', value: 'VACATAIRE' },
-    { label: 'Stagiaire', value: 'STAGIAIRE' },
-  ];
+  typesEmploye: any[] = [];
+  typesContrat: any[] = [];
 
   constructor(private rh: RhService, private msg: MessageService) {}
 
   ngOnInit() {
+    this.typesEmploye = [
+      { label: this.translate.instant('rh.enseignant'), value: 'ENSEIGNANT' },
+      { label: this.translate.instant('rh.admin_type'), value: 'ADMINISTRATION' },
+      { label: this.translate.instant('rh.appui'),      value: 'APPUI' },
+    ];
+    this.typesContrat = [
+      { label: this.translate.instant('rh.cdi'),       value: 'CDI' },
+      { label: this.translate.instant('rh.cdd'),       value: 'CDD' },
+      { label: this.translate.instant('rh.vacataire'), value: 'VACATAIRE' },
+      { label: this.translate.instant('rh.stagiaire'), value: 'STAGIAIRE' },
+    ];
     this.chargerDonnees();
   }
 
@@ -300,10 +301,7 @@ export class RhComponent implements OnInit {
     this.loading.set(true);
     this.rh.getStats().subscribe({ next: res => this.stats.set(res) });
     this.rh.getEmployes().subscribe({
-      next: res => {
-        this.employes.set(Array.isArray(res) ? res : res.results || []);
-        this.loading.set(false);
-      },
+      next: res => { this.employes.set(Array.isArray(res) ? res : res.results || []); this.loading.set(false); },
       error: () => this.loading.set(false)
     });
     this.rh.getPaies().subscribe({
@@ -312,11 +310,7 @@ export class RhComponent implements OnInit {
   }
 
   ouvrirDialogEmploye() {
-    this.formEmploye = {
-      nom_complet: '', type_employe: 'ENSEIGNANT', poste: '',
-      type_contrat: 'CDI', date_embauche: '', salaire_base: 0,
-      telephone: '', email: ''
-    };
+    this.formEmploye = { nom_complet: '', type_employe: 'ENSEIGNANT', poste: '', type_contrat: 'CDI', date_embauche: '', salaire_base: 0, telephone: '', email: '' };
     this.dialogEmployeVisible = true;
   }
 
@@ -333,13 +327,13 @@ export class RhComponent implements OnInit {
 
   sauvegarderEmploye() {
     if (!this.formEmploye.nom_complet || !this.formEmploye.poste) {
-      this.msg.add({ severity: 'warn', summary: 'Champs requis', detail: 'Nom et poste obligatoires' });
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('rh.champs_requis') });
       return;
     }
     this.saving.set(true);
     this.rh.creerEmploye(this.formEmploye).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Succès', detail: 'Employé ajouté ✅' });
+        this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: this.translate.instant('rh.employe_ajoute') });
         this.dialogEmployeVisible = false;
         this.saving.set(false);
         this.chargerDonnees();
@@ -352,19 +346,16 @@ export class RhComponent implements OnInit {
     if (!this.formPaie.mois || this.formPaie.salaire_brut <= 0) return;
     this.saving.set(true);
     const brut = this.formPaie.salaire_brut;
-    const ipres = brut * 0.056;
-    const css   = brut * 0.007;
-    const ir    = this.calculIR(brut);
-    const net   = this.calculNet(brut);
+    const net  = this.calculNet(brut);
     this.rh.creerPaie({
       ...this.formPaie,
-      ipres: Math.round(ipres),
-      css:   Math.round(css),
-      ir:    Math.round(ir),
+      ipres: Math.round(brut * 0.056),
+      css:   Math.round(brut * 0.007),
+      ir:    Math.round(this.calculIR(brut)),
       salaire_net: Math.round(net),
     }).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Paie enregistrée ✅', detail: `Net: ${Math.round(net).toLocaleString()} FCFA` });
+        this.msg.add({ severity: 'success', summary: this.translate.instant('rh.paie_enregistree'), detail: `Net: ${Math.round(net).toLocaleString()} FCFA` });
         this.dialogPaieVisible = false;
         this.saving.set(false);
         this.chargerDonnees();
@@ -373,11 +364,6 @@ export class RhComponent implements OnInit {
     });
   }
 
-  calculIR(brut: number): number {
-    return Math.max(brut - 500000, 0) * 0.20;
-  }
-
-  calculNet(brut: number): number {
-    return brut - (brut * 0.056) - (brut * 0.007) - this.calculIR(brut);
-  }
+  calculIR(brut: number): number { return Math.max(brut - 500000, 0) * 0.20; }
+  calculNet(brut: number): number { return brut - (brut * 0.056) - (brut * 0.007) - this.calculIR(brut); }
 }

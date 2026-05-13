@@ -56,6 +56,30 @@ class LicenceViewSet(viewsets.ModelViewSet):
         licence.statut   = 'ACTIVE'
         licence.save()
         return Response(LicenceSerializer(licence).data)
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
+    def suspendre(self, request, pk=None):
+        licence = self.get_object()
+        licence.statut = 'SUSPENDUE'
+        licence.save()
+        return Response(LicenceSerializer(licence).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
+    def activer(self, request, pk=None):
+        licence = self.get_object()
+        licence.statut = 'ACTIVE'
+        licence.save()
+        return Response(LicenceSerializer(licence).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
+    def changer_type(self, request, pk=None):
+        licence = self.get_object()
+        nouveau_type = request.data.get('type')
+        if nouveau_type not in ['ESSAI', 'BASIC', 'PRO', 'ENTERPRISE']:
+            return Response({'error': 'Type invalide'}, status=400)
+        licence.type = nouveau_type
+        licence.save()
+        return Response(LicenceSerializer(licence).data)
 
     @action(detail=False, methods=['get'])
     def stats_globales(self, request):
@@ -97,6 +121,7 @@ class LicenceViewSet(viewsets.ModelViewSet):
             adresse=data.get('adresse', ''), telephone=data.get('telephone', ''),
             email=data.get('email', ''), rccm=data.get('rccm', ''),
             ninea=data.get('ninea', ''),
+            code_etablissement=data.get('code_etablissement', 'ETB'),
         )
         from datetime import date
         from dateutil.relativedelta import relativedelta

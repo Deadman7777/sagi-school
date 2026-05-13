@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LicencesService, NouvelleEcole } from '../../core/services/licences.service';
@@ -12,12 +12,13 @@ import { SelectModule } from 'primeng/select';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-licences',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
-            DialogModule, InputTextModule, SelectModule, InputNumberModule, ToastModule],
+            DialogModule, InputTextModule, SelectModule, InputNumberModule, ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -25,50 +26,50 @@ import { MessageService } from 'primeng/api';
     <!-- Header -->
     <div class="page-header">
       <div>
-        <h2 class="page-title">🔐 Licences & Clients</h2>
-        <span class="page-sub">Gestion multi-écoles — HADY GESMAN</span>
+        <h2 class="page-title">🔐 {{ 'licences.title' | translate }}</h2>
+        <span class="page-sub">{{ 'licences.subtitle' | translate }}</span>
       </div>
-      <p-button label="+ Nouvelle École" severity="success" (onClick)="ouvrirDialog()" />
+      <p-button [label]="'licences.nouvelle_ecole' | translate" severity="success" (onClick)="ouvrirDialog()" />
     </div>
 
     <!-- Stats globales -->
     <div class="kpi-grid" *ngIf="stats()">
       <div class="kpi-card" style="--acc:#00d4aa">
         <div class="kpi-icon">🏫</div>
-        <div class="kpi-label">Total Écoles</div>
+        <div class="kpi-label">{{ 'licences.total_ecoles'     | translate }}</div>
         <div class="kpi-value" style="color:#00d4aa">{{ stats().total_ecoles }}</div>
       </div>
       <div class="kpi-card" style="--acc:#10b981">
         <div class="kpi-icon">✅</div>
-        <div class="kpi-label">Licences Actives</div>
+        <div class="kpi-label">{{ 'licences.licences_actives' | translate }}</div>
         <div class="kpi-value" style="color:#10b981">{{ stats().actives }}</div>
       </div>
       <div class="kpi-card" style="--acc:#f59e0b">
         <div class="kpi-icon">⏳</div>
-        <div class="kpi-label">En Essai</div>
+        <div class="kpi-label">{{ 'licences.en_essai'         | translate }}</div>
         <div class="kpi-value" style="color:#f59e0b">{{ stats().essai }}</div>
       </div>
       <div class="kpi-card" style="--acc:#ef4444">
         <div class="kpi-icon">❌</div>
-        <div class="kpi-label">Expirées</div>
+        <div class="kpi-label">{{ 'licences.expirees'         | translate }}</div>
         <div class="kpi-value" style="color:#ef4444">{{ stats().expirees }}</div>
       </div>
       <div class="kpi-card" style="--acc:#0099ff">
         <div class="kpi-icon">👥</div>
-        <div class="kpi-label">Total Élèves</div>
+        <div class="kpi-label">{{ 'licences.total_eleves'     | translate }}</div>
         <div class="kpi-value" style="color:#0099ff">{{ stats().total_eleves }}</div>
       </div>
       <div class="kpi-card" style="--acc:#a855f7">
         <div class="kpi-icon">💵</div>
-        <div class="kpi-label">Revenus / An</div>
+        <div class="kpi-label">{{ 'licences.revenus_an'       | translate }}</div>
         <div class="kpi-value" style="color:#a855f7">{{ stats().revenus_annuels | number:'1.0-0' }}</div>
-        <div class="kpi-sub">FCFA</div>
+        <div class="kpi-sub">{{ 'common.fcfa' | translate }}</div>
       </div>
     </div>
 
     <!-- Alertes expiration -->
     <div class="alerte-expiration" *ngIf="stats()?.alertes_expiration?.length">
-      <div class="ae-title">⚠️ Licences expirant dans 30 jours</div>
+      <div class="ae-title">⚠️ {{ 'licences.alertes_expiration' | translate }}</div>
       <div class="ae-row" *ngFor="let a of stats().alertes_expiration">
         <span class="ae-ecole">{{ a.ecole }}</span>
         <span class="ae-type">{{ a.type }}</span>
@@ -85,14 +86,14 @@ import { MessageService } from 'primeng/api';
                styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
         <ng-template pTemplate="header">
           <tr>
-            <th>École</th>
-            <th>Clé Licence</th>
-            <th>Type</th>
-            <th>Statut</th>
-            <th>Date Début</th>
-            <th>Date Fin</th>
-            <th>Jours Restants</th>
-            <th>Actions</th>
+            <th>{{ 'licences.ecole_col'   | translate }}</th>
+            <th>{{ 'licences.cle_licence' | translate }}</th>
+            <th>{{ 'licences.type_col'    | translate }}</th>
+            <th>{{ 'licences.statut_col'  | translate }}</th>
+            <th>{{ 'licences.date_debut'  | translate }}</th>
+            <th>{{ 'licences.date_fin'    | translate }}</th>
+            <th>{{ 'licences.jours_col'   | translate }}</th>
+            <th>{{ 'licences.actions_col' | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-l>
@@ -122,103 +123,146 @@ import { MessageService } from 'primeng/api';
               <p-button icon="pi pi-copy" [rounded]="true" [text]="true"
                         severity="info" (onClick)="copierCle(l.cle_licence)"
                         pTooltip="Copier la clé" />
+              <p-button *ngIf="l.statut !== 'SUSPENDUE'" icon="pi pi-ban" [rounded]="true" [text]="true"
+                        severity="danger" (onClick)="suspendre(l)"
+                        pTooltip="Suspendre" />
+              <p-button *ngIf="l.statut === 'SUSPENDUE'" icon="pi pi-check" [rounded]="true" [text]="true"
+                        severity="success" (onClick)="activer(l)"
+                        pTooltip="Activer" />
+              <p-button icon="pi pi-arrow-up" [rounded]="true" [text]="true"
+                        severity="warn" (onClick)="ouvrirChangementType(l)"
+                        pTooltip="Changer le type" />
+              <p-button icon="pi pi-trash" [rounded]="true" [text]="true"
+                        severity="danger" (onClick)="supprimer(l)"
+                        pTooltip="Supprimer" />
             </td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="8" class="empty-msg">Aucune licence — créez votre première école</td></tr>
+          <tr><td colspan="8" class="empty-msg">{{ 'licences.aucune' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
 
     <!-- Dialog nouvelle école -->
-    <p-dialog header="🏫 Nouvelle École Cliente" [(visible)]="dialogVisible"
+    <p-dialog [header]="'🏫 ' + ('licences.nouvelle_ecole_titre' | translate)" [(visible)]="dialogVisible"
               [modal]="true" [style]="{width:'560px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
-          <label>Nom de l'École *</label>
-          <input pInputText [(ngModel)]="form.nom" class="w-full" placeholder="Ex: École Al Firdaws" />
+          <label>{{ 'licences.nom_ecole' | translate }} *</label>
+          <input pInputText [(ngModel)]="form.nom" class="w-full" [placeholder]="'licences.ex_nom_ecole' | translate" />
         </div>
         <div class="form-group">
-          <label>Ville</label>
-          <input pInputText [(ngModel)]="form.ville" class="w-full" placeholder="Dakar, Thiès..." />
+          <label>{{ 'licences.ville' | translate }}</label>
+          <input pInputText [(ngModel)]="form.ville" class="w-full" [placeholder]="'licences.ex_ville' | translate" />
         </div>
         <div class="form-group">
-          <label>Téléphone</label>
-          <input pInputText [(ngModel)]="form.telephone" class="w-full" placeholder="7X XXX XX XX" />
+          <label>{{ 'licences.telephone' | translate }}</label>
+          <input pInputText [(ngModel)]="form.telephone" class="w-full" [placeholder]="'licences.ex_tel' | translate" />
         </div>
         <div class="form-group">
-          <label>Email</label>
+          <label>{{ 'licences.email' | translate }}</label>
           <input pInputText [(ngModel)]="form.email" class="w-full" type="email" />
         </div>
         <div class="form-group">
-          <label>RCCM</label>
-          <input pInputText [(ngModel)]="form.rccm" class="w-full" placeholder="SN.DKR.2025.A.XXXXX" />
+          <label>{{ 'licences.rccm' | translate }}</label>
+          <input pInputText [(ngModel)]="form.rccm" class="w-full" [placeholder]="'licences.ex_rccm' | translate" />
         </div>
         <div class="form-group">
-          <label>NINEA</label>
+          <label>{{ 'licences.ninea' | translate }}</label>
           <input pInputText [(ngModel)]="form.ninea" class="w-full" />
         </div>
 
-        <div class="separator full">⚙️ Licence</div>
+        <div class="separator full">⚙️ {{ 'licences.licence_section' | translate }}</div>
 
         <div class="form-group">
-          <label>Type de Licence *</label>
+          <label>{{ 'licences.type_licence' | translate }} *</label>
           <p-select [options]="typesLicence" [(ngModel)]="form.type_licence"
-                    optionLabel="label" optionValue="value"
-                    styleClass="w-full" />
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Durée (mois)</label>
-          <p-inputNumber [(ngModel)]="form.mois_licence" [min]="1" [max]="36"
-                         styleClass="w-full" />
+          <label>{{ 'licences.duree_mois' | translate }}</label>
+          <p-inputNumber [(ngModel)]="form.mois_licence" [min]="1" [max]="36" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Année Scolaire</label>
-          <input pInputText [(ngModel)]="form.annee_scolaire" class="w-full" placeholder="2025-2026" />
+          <label>{{ 'licences.annee_scolaire' | translate }}</label>
+          <input pInputText [(ngModel)]="form.annee_scolaire" class="w-full" [placeholder]="'licences.ex_annee' | translate" />
         </div>
         <div class="form-group">
-          <label>Début Exercice</label>
+          <label>{{ 'licences.debut_exercice' | translate }}</label>
           <input pInputText [(ngModel)]="form.date_debut" class="w-full" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Code Établissement</label>
+          <input pInputText [(ngModel)]="form.code_etablissement" class="w-full" 
+                placeholder="Ex: IFA, DKR, ALF" maxlength="10" 
+                style="text-transform:uppercase" />
         </div>
       </div>
 
       <!-- Tarif -->
       <div class="tarif-bar">
-        <span>Tarif annuel estimé</span>
+        <span>{{ 'licences.tarif_estime' | translate }}</span>
         <span class="tarif-val">{{ tarifEstime() | number:'1.0-0' }} FCFA</span>
       </div>
 
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogVisible=false" />
-        <p-button label="Créer & Activer Licence" severity="success"
+        <p-button [label]="'common.annuler'          | translate" severity="secondary" (onClick)="dialogVisible=false" />
+        <p-button [label]="'licences.creer_activer'  | translate" severity="success"
                   [loading]="saving()" (onClick)="creerEcole()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog renouvellement -->
-    <p-dialog header="🔄 Renouveler la Licence" [(visible)]="renouvDialogVisible"
+    <p-dialog [header]="'🔄 ' + ('licences.renouveler_titre' | translate)" [(visible)]="renouvDialogVisible"
               [modal]="true" [style]="{width:'400px'}" [draggable]="false">
       <div *ngIf="licenceSelectionnee">
         <div class="renouv-info">
-          <div class="ri-row"><span>École</span><strong>{{ licenceSelectionnee.tenant_nom }}</strong></div>
-          <div class="ri-row"><span>Type actuel</span><span>{{ licenceSelectionnee.type }}</span></div>
-          <div class="ri-row"><span>Expire le</span><span style="color:#ef4444">{{ licenceSelectionnee.date_fin }}</span></div>
+          <div class="ri-row"><span>{{ 'licences.ecole_info'   | translate }}</span><strong>{{ licenceSelectionnee.tenant_nom }}</strong></div>
+          <div class="ri-row"><span>{{ 'licences.type_actuel' | translate }}</span><span>{{ licenceSelectionnee.type }}</span></div>
+          <div class="ri-row"><span>{{ 'licences.expire_le'   | translate }}</span><span style="color:#ef4444">{{ licenceSelectionnee.date_fin }}</span></div>
         </div>
         <div class="form-group" style="margin-top:16px">
-          <label>Durée du renouvellement</label>
+          <label>{{ 'licences.duree_renouvellement' | translate }}</label>
           <p-select [options]="durees" [(ngModel)]="moisRenouvellement"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="tarif-bar" style="margin-top:12px">
-          <span>Montant à facturer</span>
+          <span>{{ 'licences.montant_facturer' | translate }}</span>
           <span class="tarif-val">{{ montantRenouvellement() | number:'1.0-0' }} FCFA</span>
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="renouvDialogVisible=false" />
-        <p-button label="Confirmer Renouvellement" severity="success"
+        <p-button [label]="'common.annuler'           | translate" severity="secondary" (onClick)="renouvDialogVisible=false" />
+        <p-button [label]="'licences.confirmer_renouv'| translate" severity="success"
                   [loading]="saving()" (onClick)="renouveler()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog changement de type -->
+    <p-dialog header="🔄 Changer le Type de Licence" [(visible)]="changementTypeDialogVisible"
+              [modal]="true" [style]="{width:'380px'}" [draggable]="false">
+      <div *ngIf="licenceSelectionnee">
+        <div class="renouv-info" style="margin-bottom:16px">
+          <div class="ri-row">
+            <span>{{ 'licences.ecole_info' | translate }}</span>
+            <strong>{{ licenceSelectionnee.tenant_nom }}</strong>
+          </div>
+          <div class="ri-row">
+            <span>{{ 'licences.type_actuel' | translate }}</span>
+            <span>{{ licenceSelectionnee.type }}</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>{{ 'licences.type_licence' | translate }}</label>
+          <p-select [options]="typesLicence" [(ngModel)]="nouveauType"
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler'  | translate" severity="secondary" (onClick)="changementTypeDialogVisible=false" />
+        <p-button [label]="'common.confirmer'| translate" severity="success"
+                  [loading]="saving()" (onClick)="changerType()" />
       </ng-template>
     </p-dialog>
   `,
@@ -286,18 +330,18 @@ export class LicencesComponent implements OnInit {
 
   form: NouvelleEcole = {
     nom: '', ville: '', telephone: '', email: '',
-    rccm: '', ninea: '',
+    rccm: '', ninea: '', code_etablissement: 'ETB',
     type_licence: 'ESSAI', mois_licence: 1,
     annee_scolaire: '2025-2026',
     date_debut: '2025-10-01', date_fin: '2026-09-30',
   };
 
-  typesLicence = [
-    { label: 'Essai — 30 jours gratuits', value: 'ESSAI' },
-    { label: 'Basic — 75 000 FCFA/an',    value: 'BASIC' },
-    { label: 'Pro — 150 000 FCFA/an',     value: 'PRO' },
-    { label: 'Enterprise — 300 000 FCFA', value: 'ENTERPRISE' },
-  ];
+  // Dialog changement type
+  changementTypeDialogVisible = false;
+  nouveauType = 'PRO';
+  private translate = inject(TranslateService);
+
+  typesLicence: any[] = [];
 
   durees = [
     { label: '1 mois',  value: 1  },
@@ -318,6 +362,12 @@ export class LicencesComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.typesLicence = [
+      { label: this.translate.instant('licences.essai'),      value: 'ESSAI' },
+      { label: this.translate.instant('licences.basic'),      value: 'BASIC' },
+      { label: this.translate.instant('licences.pro'),        value: 'PRO' },
+      { label: this.translate.instant('licences.enterprise'), value: 'ENTERPRISE' },
+    ];
     this.charger();
   }
 
@@ -356,14 +406,15 @@ export class LicencesComponent implements OnInit {
     return (annuel / 12) * this.moisRenouvellement;
   }
 
-  ouvrirDialog() {
-    this.form = {
-      nom: '', ville: '', telephone: '', email: '',
-      rccm: '', ninea: '', type_licence: 'ESSAI', mois_licence: 1,
-      annee_scolaire: '2025-2026', date_debut: '2025-10-01', date_fin: '2026-09-30',
-    };
-    this.dialogVisible = true;
-  }
+ouvrirDialog() {
+  this.form = {
+    nom: '', ville: '', telephone: '', email: '',
+    rccm: '', ninea: '', code_etablissement: 'ETB',
+    type_licence: 'ESSAI', mois_licence: 1,
+    annee_scolaire: '2025-2026', date_debut: '2025-10-01', date_fin: '2026-09-30',
+  };
+  this.dialogVisible = true;
+}
 
   ouvrirRenouvellement(l: any) {
     this.licenceSelectionnee = l;
@@ -373,23 +424,19 @@ export class LicencesComponent implements OnInit {
 
   creerEcole() {
     if (!this.form.nom) {
-      this.msg.add({ severity:'warn', summary:'Requis', detail:'Le nom de l\'école est obligatoire' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('licences.requis'), detail: this.translate.instant('licences.nom_obligatoire') });
       return;
     }
     this.saving.set(true);
     this.licencesService.creerEcole(this.form).subscribe({
       next: res => {
-        this.msg.add({
-          severity: 'success',
-          summary:  'École créée ✅',
-          detail:   `Clé: ${res.cle_licence}`
-        });
+        this.msg.add({ severity: 'success', summary: this.translate.instant('licences.ecole_creee'), detail: `Clé: ${res.cle_licence}` });
         this.dialogVisible = false;
         this.saving.set(false);
         this.charger();
       },
       error: () => {
-        this.msg.add({ severity:'error', summary:'Erreur', detail:'Impossible de créer l\'école' });
+        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('licences.impossible_creer') });
         this.saving.set(false);
       }
     });
@@ -399,13 +446,13 @@ export class LicencesComponent implements OnInit {
     this.saving.set(true);
     this.licencesService.renouveler(this.licenceSelectionnee.id, this.moisRenouvellement).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Renouvelée ✅', detail:'Licence prolongée' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('licences.renouvelee'), detail: this.translate.instant('licences.prolongee') });
         this.renouvDialogVisible = false;
         this.saving.set(false);
         this.charger();
       },
       error: () => {
-        this.msg.add({ severity:'error', summary:'Erreur', detail:'Renouvellement échoué' });
+        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('licences.renouvellement_echoue') });
         this.saving.set(false);
       }
     });
@@ -413,6 +460,53 @@ export class LicencesComponent implements OnInit {
 
   copierCle(cle: string) {
     navigator.clipboard.writeText(cle);
-    this.msg.add({ severity:'info', summary:'Copié !', detail:cle });
+    this.msg.add({ severity:'info', summary: this.translate.instant('licences.copie'), detail:cle });
   }
+
+  ouvrirChangementType(l: any) {
+  this.licenceSelectionnee = l;
+  this.nouveauType = l.type;
+  this.changementTypeDialogVisible = true;
+}
+
+changerType() {
+  this.saving.set(true);
+  this.licencesService.changerType(this.licenceSelectionnee.id, this.nouveauType).subscribe({
+    next: () => {
+      this.msg.add({ severity:'success', summary:'Type modifié ✅', detail:`Passage en ${this.nouveauType}` });
+      this.changementTypeDialogVisible = false;
+      this.saving.set(false);
+      this.charger();
+    },
+    error: () => { this.saving.set(false); }
+  });
+}
+
+suspendre(l: any) {
+  this.licencesService.suspendre(l.id).subscribe({
+    next: () => {
+      this.msg.add({ severity:'warn', summary:'Suspendue', detail:l.tenant_nom });
+      this.charger();
+    }
+  });
+}
+
+activer(l: any) {
+  this.licencesService.activer(l.id).subscribe({
+    next: () => {
+      this.msg.add({ severity:'success', summary:'Activée ✅', detail:l.tenant_nom });
+      this.charger();
+    }
+  });
+}
+
+supprimer(l: any) {
+  if (!confirm(`Supprimer ${l.tenant_nom} ? Cette action est irréversible.`)) return;
+  this.licencesService.supprimer(l.id).subscribe({
+    next: () => {
+      this.msg.add({ severity:'info', summary:'Supprimée', detail:l.tenant_nom });
+      this.charger();
+    }
+  });
+}
 }

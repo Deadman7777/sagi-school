@@ -1,4 +1,4 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
@@ -6,7 +6,7 @@ import { LangueService } from '../../core/services/langue.service';
 import { AvatarModule } from 'primeng/avatar';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 interface NavSection {
   labelKey: string;
@@ -173,6 +173,8 @@ export class ShellComponent {
     ]}
   ];
 
+  private translate = inject(TranslateService);
+
   constructor(public auth: AuthService, public langue: LangueService) {}
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
@@ -203,15 +205,16 @@ export class ShellComponent {
   } 
 
   roleLabel(): string {
-      const labels: Record<string, string> = {
-          'SUPER_ADMIN':     'Super Admin',
-          'ADMIN_ECOLE':     'Admin École',
-          'ADMIN_RH':        'Responsable RH',
-          'ADMIN_COMPTABLE': 'Responsable Comptable',
-          'ADMIN_SCOLARITE': 'Responsable Scolarité',
-          'LECTEUR':         'Lecture seule',
-      };
-      return labels[this.auth.currentUser()?.role || ''] || '';
+    const keys: Record<string, string> = {
+      'SUPER_ADMIN':     'shell.super_admin',
+      'ADMIN_ECOLE':     'shell.admin_ecole',
+      'ADMIN_RH':        'shell.responsable_rh',
+      'ADMIN_COMPTABLE': 'shell.responsable_comptable',
+      'ADMIN_SCOLARITE': 'shell.responsable_scolarite',
+      'LECTEUR':         'shell.lecture_seule',
+    };
+    const key = keys[this.auth.currentUser()?.role || ''];
+    return key ? this.translate.instant(key) : '';
   }
 
   initials(): string { return (this.auth.currentUser()?.nom || 'U').substring(0, 2).toUpperCase(); }

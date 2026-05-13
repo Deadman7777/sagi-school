@@ -1,11 +1,11 @@
-import { Component, NgModule, OnInit, signal } from '@angular/core';
+import { Component, NgModule, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComptabiliteService } from '../../core/services/comptabilite.service';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InputNumberModule} from 'primeng/inputnumber';
 import { DialogModule } from 'primeng/dialog';
 import { SelectModule } from 'primeng/select';
@@ -17,30 +17,30 @@ import { SelectModule } from 'primeng/select';
   template: `
     <div class="page-header">
       <div>
-        <h2 class="page-title">📒 Comptabilité SYSCOHADA</h2>
-        <span class="page-sub">Journal · Grand Livre · Balance · Résultat · Bilan · Flux</span>
+        <h2 class="page-title">📒 {{ 'comptabilite.title' | translate }}</h2>
+        <span class="page-sub">{{ 'comptabilite.subtitle' | translate }}</span>
       </div>
-      <button class="btn-export" (click)="exporter()">📤 Exporter PDF</button>
+      <button class="btn-export" (click)="exporter()">📤 {{ 'comptabilite.exporter_pdf' | translate }}</button>
     </div>
 
     <!-- Onglets -->
     <div class="tabs-bar">
       <button class="tab-btn" [class.active]="onglet() === 'journal'"
-              (click)="onglet.set('journal')">📒 Journal</button>
+              (click)="onglet.set('journal')">📒 {{ 'comptabilite.journal'     | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'grand-livre'"
-              (click)="onglet.set('grand-livre')">📖 Grand Livre</button>
+              (click)="onglet.set('grand-livre')">📖 {{ 'comptabilite.grand_livre' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'balance'"
-              (click)="onglet.set('balance')">⚖️ Balance</button>
+              (click)="onglet.set('balance')">⚖️ {{ 'comptabilite.balance'     | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'resultat'"
-              (click)="onglet.set('resultat')">📈 Résultat</button>
+              (click)="onglet.set('resultat')">📈 {{ 'comptabilite.resultat'   | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'bilan'"
-              (click)="onglet.set('bilan')">🏦 Bilan</button>
+              (click)="onglet.set('bilan')">🏦 {{ 'comptabilite.bilan'         | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'flux'"
-              (click)="onglet.set('flux')">💧 Flux Trésorerie</button>
+              (click)="onglet.set('flux')">💧 {{ 'comptabilite.flux'           | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'historique'"
-              (click)="onglet.set('historique')">📚 Historique</button>
+              (click)="onglet.set('historique')">📚 {{ 'comptabilite.historique'| translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'charges'"
-        (click)="onglet.set('charges')">💸 Charges</button>
+        (click)="onglet.set('charges')">💸 {{ 'comptabilite.charges_tab'       | translate }}</button>
     </div>
 
     <!-- JOURNAL -->
@@ -48,8 +48,15 @@ import { SelectModule } from 'primeng/select';
       <p-table [value]="journal()" [loading]="loadingJournal()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="25">
         <ng-template pTemplate="header">
-          <tr><th>Date</th><th>N° Pièce</th><th>N° Compte</th>
-              <th>Libellé</th><th>Débit</th><th>Crédit</th><th>Source</th></tr>
+          <tr>
+            <th>{{ 'comptabilite.date'     | translate }}</th>
+            <th>{{ 'comptabilite.no_piece' | translate }}</th>
+            <th>{{ 'comptabilite.no_compte'| translate }}</th>
+            <th>{{ 'comptabilite.libelle'  | translate }}</th>
+            <th>{{ 'comptabilite.debit'    | translate }}</th>
+            <th>{{ 'comptabilite.credit'   | translate }}</th>
+            <th>{{ 'comptabilite.source'   | translate }}</th>
+          </tr>
         </ng-template>
         <ng-template pTemplate="body" let-e>
           <tr>
@@ -63,7 +70,7 @@ import { SelectModule } from 'primeng/select';
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="7" class="empty-msg">Aucune écriture</td></tr>
+          <tr><td colspan="7" class="empty-msg">{{ 'comptabilite.aucune_ecriture' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -72,9 +79,14 @@ import { SelectModule } from 'primeng/select';
     <div class="table-card" *ngIf="onglet() === 'grand-livre'">
       <p-table [value]="grandLivre()" [loading]="loadingGL()" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
-          <tr><th>N° Compte</th><th>Libellé</th>
-              <th>Total Débit</th><th>Total Crédit</th>
-              <th>Solde Débiteur</th><th>Solde Créditeur</th></tr>
+          <tr>
+            <th>{{ 'comptabilite.no_compte'     | translate }}</th>
+            <th>{{ 'comptabilite.libelle'        | translate }}</th>
+            <th>{{ 'comptabilite.total_debit'    | translate }}</th>
+            <th>{{ 'comptabilite.total_credit'   | translate }}</th>
+            <th>{{ 'comptabilite.solde_debiteur' | translate }}</th>
+            <th>{{ 'comptabilite.solde_crediteur'| translate }}</th>
+          </tr>
         </ng-template>
         <ng-template pTemplate="body" let-c>
           <tr>
@@ -97,9 +109,9 @@ import { SelectModule } from 'primeng/select';
       <tr>
         <th rowspan="2">N° Compte</th>
         <th rowspan="2">Libellé</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">Solde Ouverture</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">Mouvements</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">Solde Clôture</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.so_ouverture'    | translate }}</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.mouvements'      | translate }}</th>
+        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.solde_cloture_col'| translate }}</th>
       </tr>
       <tr>
         <th>Débit</th><th>Crédit</th>
@@ -121,7 +133,7 @@ import { SelectModule } from 'primeng/select';
     </ng-template>
     <ng-template pTemplate="footer" *ngIf="balance()?.totaux">
       <tr class="totaux-row">
-        <td colspan="2"><strong>TOTAUX</strong></td>
+        <td colspan="2"><strong>{{ 'comptabilite.totaux' | translate }}</strong></td>
         <td class="mono"><strong>{{ balance().totaux.so_debiteur  | number:'1.0-0' }}</strong></td>
         <td class="mono"><strong>{{ balance().totaux.so_crediteur | number:'1.0-0' }}</strong></td>
         <td class="mono"><strong>{{ balance().totaux.mvt_debit    | number:'1.0-0' }}</strong></td>
@@ -137,27 +149,27 @@ import { SelectModule } from 'primeng/select';
     <div *ngIf="onglet() === 'resultat' && resultat()">
       <div class="grid-2">
         <div class="card">
-          <div class="card-header" style="color:#10b981">💰 PRODUITS</div>
+          <div class="card-header" style="color:#10b981">💰 {{ 'comptabilite.produits' | translate }}</div>
           <div class="card-body">
             <div class="cr-row" *ngFor="let p of resultat().detail_produits">
               <span>{{ p.libelle }}</span>
               <span class="mono success">{{ p.montant | number:'1.0-0' }} FCFA</span>
             </div>
             <div class="cr-total">
-              <span>TOTAL PRODUITS</span>
+              <span>{{ 'comptabilite.total_produits' | translate }}</span>
               <span class="mono">{{ resultat().total_produits | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
         </div>
         <div class="card">
-          <div class="card-header" style="color:#ef4444">💸 CHARGES</div>
+          <div class="card-header" style="color:#ef4444">💸 {{ 'comptabilite.charges' | translate }}</div>
           <div class="card-body">
             <div class="cr-row" *ngFor="let c of resultat().detail_charges">
               <span>{{ c.libelle }}</span>
               <span class="mono danger">{{ c.montant | number:'1.0-0' }} FCFA</span>
             </div>
             <div class="cr-total">
-              <span>TOTAL CHARGES</span>
+              <span>{{ 'comptabilite.total_charges' | translate }}</span>
               <span class="mono">{{ resultat().total_charges | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
@@ -166,7 +178,7 @@ import { SelectModule } from 'primeng/select';
       <div class="resultat-net"
            [style.border-color]="resultat().resultat_net >= 0 ? '#10b981' : '#ef4444'"
            [style.background]="resultat().resultat_net >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'">
-        <span>RÉSULTAT NET — Exercice {{ resultat().exercice }}</span>
+        <span>{{ 'comptabilite.resultat_net_ex' | translate }} {{ resultat().exercice }}</span>
         <span class="mono" [style.color]="resultat().resultat_net >= 0 ? '#10b981' : '#ef4444'">
           {{ resultat().resultat_net >= 0 ? '+' : '' }}{{ resultat().resultat_net | number:'1.0-0' }} FCFA
         </span>
@@ -176,29 +188,29 @@ import { SelectModule } from 'primeng/select';
     <!-- BILAN -->
     <div *ngIf="onglet() === 'bilan' && bilan()">
       <div class="bilan-header">
-        <span>📊 BILAN COMPTABLE — Exercice {{ bilan().exercice }}</span>
+        <span>📊 {{ 'comptabilite.bilan_titre' | translate }} {{ bilan().exercice }}</span>
         <span class="equilibre-badge" [class.ok]="bilan().equilibre">
-          {{ bilan().equilibre ? '✅ Équilibré' : '⚠️ Déséquilibré' }}
+          {{ (bilan().equilibre ? 'comptabilite.equilibre' : 'comptabilite.desequilibre') | translate }}
         </span>
       </div>
 
       <div class="grid-2">
         <!-- ACTIF -->
         <div class="card">
-          <div class="card-header" style="color:#0099ff">🏦 ACTIF</div>
+          <div class="card-header" style="color:#0099ff">🏦 {{ 'comptabilite.actif' | translate }}</div>
           <div class="card-body">
-            <div class="bilan-section">Actif Circulant</div>
+            <div class="bilan-section">{{ 'comptabilite.actif_circulant' | translate }}</div>
             <div class="cr-row">
-              <span>Créances clients (élèves)</span>
+              <span>{{ 'comptabilite.creances_clients' | translate }}</span>
               <span class="mono info">{{ bilan().actif.creances_clients | number:'1.0-0' }}</span>
             </div>
-            <div class="bilan-section">Trésorerie & Équivalents</div>
+            <div class="bilan-section">{{ 'comptabilite.tresorerie_equiv' | translate }}</div>
             <div class="cr-row" *ngFor="let t of bilan().actif.tresorerie">
               <span>{{ t.libelle }}</span>
               <span class="mono info">{{ t.montant | number:'1.0-0' }}</span>
             </div>
             <div class="cr-total">
-              <span>TOTAL ACTIF</span>
+              <span>{{ 'comptabilite.total_actif' | translate }}</span>
               <span class="mono" style="color:#0099ff">{{ bilan().actif.total_actif | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
@@ -206,30 +218,30 @@ import { SelectModule } from 'primeng/select';
 
         <!-- PASSIF -->
         <div class="card">
-          <div class="card-header" style="color:#a855f7">📋 PASSIF</div>
+          <div class="card-header" style="color:#a855f7">📋 {{ 'comptabilite.passif' | translate }}</div>
           <div class="card-body">
-            <div class="bilan-section">Capitaux Propres</div>
+            <div class="bilan-section">{{ 'comptabilite.capitaux_propres' | translate }}</div>
             <div class="cr-row">
-              <span>Capital (Trésorerie initiale)</span>
+              <span>{{ 'comptabilite.capital' | translate }}</span>
               <span class="mono" style="color:#a855f7">{{ bilan().passif.capital | number:'1.0-0' }}</span>
             </div>
             <div class="cr-row">
-              <span>Résultat de l'exercice</span>
+              <span>{{ 'comptabilite.resultat_exercice' | translate }}</span>
               <span class="mono" [style.color]="bilan().passif.resultat_net >= 0 ? '#10b981' : '#ef4444'">
                 {{ bilan().passif.resultat_net >= 0 ? '+' : '' }}{{ bilan().passif.resultat_net | number:'1.0-0' }}
               </span>
             </div>
             <div class="cr-row bold-row">
-              <span>Total Capitaux Propres</span>
+              <span>{{ 'comptabilite.total_capitaux' | translate }}</span>
               <span class="mono" style="color:#a855f7">{{ bilan().passif.total_capitaux | number:'1.0-0' }}</span>
             </div>
-            <div class="bilan-section">Dettes</div>
+            <div class="bilan-section">{{ 'comptabilite.dettes' | translate }}</div>
             <div class="cr-row">
-              <span>Dettes fournisseurs (estimées)</span>
+              <span>{{ 'comptabilite.dettes_fournisseurs' | translate }}</span>
               <span class="mono danger">{{ bilan().passif.dettes | number:'1.0-0' }}</span>
             </div>
             <div class="cr-total">
-              <span>TOTAL PASSIF</span>
+              <span>{{ 'comptabilite.total_passif' | translate }}</span>
               <span class="mono" style="color:#a855f7">{{ bilan().passif.total_passif | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
@@ -245,18 +257,18 @@ import { SelectModule } from 'primeng/select';
 
       <!-- Flux exploitation -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header">⚙️ Flux liés à l'Activité (Exploitation)</div>
+        <div class="card-header">⚙️ {{ 'comptabilite.flux_exploitation' | translate }}</div>
         <div class="card-body">
           <div class="cr-row">
-            <span>Encaissements reçus des clients</span>
+            <span>{{ 'comptabilite.encaissements' | translate }}</span>
             <span class="mono success">+{{ flux().flux_exploitation.encaissements_clients | number:'1.0-0' }}</span>
           </div>
           <div class="cr-row">
-            <span>Décaissements aux fournisseurs & charges</span>
+            <span>{{ 'comptabilite.decaissements' | translate }}</span>
             <span class="mono danger">-{{ flux().flux_exploitation.decaissements_charges | number:'1.0-0' }}</span>
           </div>
           <div class="flux-total" [style.color]="flux().flux_exploitation.flux_net >= 0 ? '#10b981' : '#ef4444'">
-            <span>Flux net d'exploitation</span>
+            <span>{{ 'comptabilite.flux_net_exploit' | translate }}</span>
             <span class="mono">{{ flux().flux_exploitation.flux_net >= 0 ? '+' : '' }}{{ flux().flux_exploitation.flux_net | number:'1.0-0' }} FCFA</span>
           </div>
         </div>
@@ -264,26 +276,26 @@ import { SelectModule } from 'primeng/select';
 
       <!-- Flux investissement -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header">🏗️ Flux liés aux Investissements</div>
+        <div class="card-header">🏗️ {{ 'comptabilite.flux_investissement' | translate }}</div>
         <div class="card-body">
-          <div class="cr-row"><span>Acquisitions d'immobilisations</span><span class="mono">0</span></div>
-          <div class="cr-row"><span>Cessions d'immobilisations</span><span class="mono">0</span></div>
+          <div class="cr-row"><span>{{ 'comptabilite.acquisitions' | translate }}</span><span class="mono">0</span></div>
+          <div class="cr-row"><span>{{ 'comptabilite.cessions'     | translate }}</span><span class="mono">0</span></div>
           <div class="flux-total" style="color:#64748b">
-            <span>Flux net d'investissement</span><span class="mono">0 FCFA</span>
+            <span>{{ 'comptabilite.flux_net_invest' | translate }}</span><span class="mono">0 FCFA</span>
           </div>
         </div>
       </div>
 
       <!-- Flux financement -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header">💼 Flux liés au Financement</div>
+        <div class="card-header">💼 {{ 'comptabilite.flux_financement' | translate }}</div>
         <div class="card-body">
           <div class="cr-row">
-            <span>Apports en capital (trésorerie initiale)</span>
+            <span>{{ 'comptabilite.apports_capital' | translate }}</span>
             <span class="mono success">+{{ flux().flux_financement.apports_capital | number:'1.0-0' }}</span>
           </div>
           <div class="flux-total" style="color:#10b981">
-            <span>Flux net de financement</span>
+            <span>{{ 'comptabilite.flux_net_finance' | translate }}</span>
             <span class="mono">+{{ flux().flux_financement.flux_net | number:'1.0-0' }} FCFA</span>
           </div>
         </div>
@@ -292,24 +304,24 @@ import { SelectModule } from 'primeng/select';
       <!-- Trésorerie nette -->
       <div class="tresorerie-box">
         <div class="tb-row">
-          <span>Trésorerie d'ouverture</span>
+          <span>{{ 'comptabilite.treso_ouverture' | translate }}</span>
           <span class="mono">{{ flux().tresorerie.solde_initial | number:'1.0-0' }} FCFA</span>
         </div>
         <div class="tb-row">
-          <span>Variation nette de trésorerie</span>
+          <span>{{ 'comptabilite.variation_nette' | translate }}</span>
           <span class="mono" [style.color]="flux().tresorerie.variation >= 0 ? '#10b981' : '#ef4444'">
             {{ flux().tresorerie.variation >= 0 ? '+' : '' }}{{ flux().tresorerie.variation | number:'1.0-0' }} FCFA
           </span>
         </div>
         <div class="tb-final">
-          <span>TRÉSORERIE DE CLÔTURE</span>
+          <span>{{ 'comptabilite.treso_cloture' | translate }}</span>
           <span class="mono" style="color:#00d4aa">{{ flux().tresorerie.solde_final | number:'1.0-0' }} FCFA</span>
         </div>
       </div>
 
       <!-- Flux mensuels -->
       <div class="card" *ngIf="flux().flux_mensuels?.length > 0">
-        <div class="card-header">📅 Flux Mensuels</div>
+        <div class="card-header">📅 {{ 'comptabilite.flux_mensuels' | translate }}</div>
         <div class="card-body">
           <div class="bars-mensuel">
             <div class="bm-item" *ngFor="let m of flux().flux_mensuels">
@@ -332,7 +344,7 @@ import { SelectModule } from 'primeng/select';
 
       <!-- Exercice actif -->
       <div class="exercice-actif" *ngIf="historique()?.exercice_actif">
-        <div class="ea-badge">📅 Exercice en cours</div>
+        <div class="ea-badge">📅 {{ 'comptabilite.exercice_en_cours' | translate }}</div>
         <div class="ea-annee">{{ historique().exercice_actif.annee_scolaire }}</div>
         <div class="ea-dates">
           {{ historique().exercice_actif.date_debut | date:'dd/MM/yyyy' }}
@@ -342,24 +354,24 @@ import { SelectModule } from 'primeng/select';
 
       <!-- Historique clôturés -->
       <div class="section-title-hist">
-        📚 Exercices Clôturés ({{ historique()?.nb_exercices_clotures || 0 }})
+        📚 {{ 'comptabilite.exercices_clotures' | translate }} ({{ historique()?.nb_exercices_clotures || 0 }})
       </div>
 
       <div *ngIf="historique()?.historique?.length === 0" class="empty-msg" style="padding:40px;text-align:center">
-        Aucun exercice clôturé — utilisez Paramètres → Clôture Exercice
+        {{ 'comptabilite.aucun_cloture' | translate }}
       </div>
 
       <div class="table-card" *ngIf="historique()?.historique?.length > 0">
         <p-table [value]="historique().historique" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
-              <th>Année Scolaire</th>
-              <th>Période</th>
-              <th>Date Clôture</th>
-              <th>Élèves</th>
-              <th class="text-right">Total Recettes</th>
-              <th class="text-right">Total Charges</th>
-              <th class="text-right">Résultat Net</th>
+              <th>{{ 'comptabilite.annee_scolaire'   | translate }}</th>
+              <th>{{ 'comptabilite.periode'          | translate }}</th>
+              <th>{{ 'comptabilite.date_cloture'     | translate }}</th>
+              <th>{{ 'comptabilite.nb_eleves'        | translate }}</th>
+              <th class="text-right">{{ 'comptabilite.total_recettes'    | translate }}</th>
+              <th class="text-right">{{ 'comptabilite.total_charges_hist'| translate }}</th>
+              <th class="text-right">{{ 'comptabilite.resultat_net'      | translate }}</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-h>
@@ -381,7 +393,7 @@ import { SelectModule } from 'primeng/select';
           <!-- Total comparatif -->
           <ng-template pTemplate="footer">
             <tr class="totaux-row">
-              <td colspan="4" class="bold">TOTAL CUMULÉ</td>
+              <td colspan="4" class="bold">{{ 'comptabilite.total_cumule' | translate }}</td>
               <td class="mono text-right bold success">
                 {{ totalHistorique('total_recettes') | number:'1.0-0' }}
               </td>
@@ -402,23 +414,23 @@ import { SelectModule } from 'primeng/select';
       <div class="table-card" *ngIf="onglet() === 'charges'">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <div>
-            <h3 style="margin:0;color:#e8f0fe">💸 Charges de l'exercice</h3>
+            <h3 style="margin:0;color:#e8f0fe">💸 {{ 'comptabilite.charges_exercice' | translate }}</h3>
             <span style="color:#64748b;font-size:12px">
-              Total : {{ totalCharges() | number:'1.0-0' }} FCFA
+              {{ 'comptabilite.total_label' | translate }} {{ totalCharges() | number:'1.0-0' }} FCFA
             </span>
           </div>
-          <p-button label="Nouvelle Charge" severity="danger" (onClick)="ouvrirDialogCharge()" />
+          <p-button [label]="'comptabilite.nouvelle_charge' | translate" severity="danger" (onClick)="ouvrirDialogCharge()" />
         </div>
 
         <p-table [value]="charges()" [loading]="loadingCharges()"
                 [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
-              <th>Date</th>
-              <th>N° Pièce</th>
-              <th>Compte</th>
-              <th>Libellé</th>
-              <th align="right">Montant</th>
+              <th>{{ 'comptabilite.date'     | translate }}</th>
+              <th>{{ 'comptabilite.no_piece' | translate }}</th>
+              <th>{{ 'comptabilite.no_compte'| translate }}</th>
+              <th>{{ 'comptabilite.libelle'  | translate }}</th>
+              <th align="right">{{ 'common.total' | translate }}</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-c>
@@ -431,43 +443,43 @@ import { SelectModule } from 'primeng/select';
             </tr>
           </ng-template>
           <ng-template pTemplate="emptymessage">
-            <tr><td colspan="5" class="empty-msg">Aucune charge enregistrée</td></tr>
+            <tr><td colspan="5" class="empty-msg">{{ 'comptabilite.aucune_charge' | translate }}</td></tr>
           </ng-template>
         </p-table>
       </div>
 
   <!-- Dialog Nouvelle Charge -->
-  <p-dialog header="💸 Nouvelle Charge" [(visible)]="dialogChargeVisible"
+  <p-dialog [header]="'💸 ' + ('comptabilite.nouvelle_charge' | translate)" [(visible)]="dialogChargeVisible"
             [modal]="true" [style]="{width:'460px'}" [draggable]="false">
     <div class="form-grid">
       <div class="form-group full">
-        <label>Compte de charge *</label>
+        <label>{{ 'comptabilite.compte_charge' | translate }} *</label>
         <p-select [options]="planCharges" [(ngModel)]="nouvelleCharge.no_compte"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
       <div class="form-group full">
-        <label>Libellé *</label>
+        <label>{{ 'comptabilite.libelle' | translate }} *</label>
         <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
-              placeholder="Ex: Loyer avril 2026" />
+              [placeholder]="'comptabilite.ex_libelle' | translate" />
       </div>
       <div class="form-group">
-        <label>Montant (FCFA) *</label>
+        <label>{{ 'comptabilite.montant_fcfa' | translate }} *</label>
         <p-inputNumber [(ngModel)]="nouvelleCharge.montant" [min]="0"
                       mode="decimal" styleClass="w-full" />
       </div>
       <div class="form-group">
-        <label>Date</label>
+        <label>{{ 'comptabilite.date' | translate }}</label>
         <input pInputText type="date" [(ngModel)]="nouvelleCharge.date" class="w-full" />
       </div>
       <div class="form-group full">
-        <label>Réglé via</label>
+        <label>{{ 'comptabilite.regle_via' | translate }}</label>
         <p-select [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
     </div>
     <ng-template pTemplate="footer">
-      <p-button label="Annuler" severity="secondary" (onClick)="dialogChargeVisible=false" />
-      <p-button label="Enregistrer" severity="danger"
+      <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogChargeVisible=false" />
+      <p-button [label]="'common.enregistrer'| translate" severity="danger"
                 [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
     </ng-template>
   </p-dialog>
@@ -580,6 +592,8 @@ comptesCredit = [
     { label: '552 - Wave/Mobile',   value: '552' },
 ];
 
+  private translate = inject(TranslateService);
+
   constructor(private compta: ComptabiliteService) {}
 
   ngOnInit() {
@@ -625,7 +639,7 @@ comptesCredit = [
               : 'eleves';
 
     if (!['bilan','tableau_flux','compte_resultat','balance','eleves'].includes(type)) {
-      alert('Export PDF non disponible pour cet onglet');
+      alert(this.translate.instant('comptabilite.export_indispo'));
       return;
     }
 

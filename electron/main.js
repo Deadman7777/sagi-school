@@ -68,9 +68,9 @@ function showSetupWindow() {
   });
 }
 
-function runCollectstatic(backendDir) {
+function runManageCommand(backendDir, args, errorLabel) {
   return new Promise((resolve, reject) => {
-    const python  = getPython();
+    const python   = getPython();
     const managePy = path.join(backendDir, 'manage.py');
     const env = {
       ...process.env,
@@ -78,18 +78,24 @@ function runCollectstatic(backendDir) {
       PYTHONUNBUFFERED: '1',
     };
 
-    const proc = spawn(python, [managePy, 'collectstatic', '--noinput'], {
-      cwd: backendDir, env,
-    });
+    const proc = spawn(python, [managePy, ...args], { cwd: backendDir, env });
 
     let stderr = '';
     proc.stderr.on('data', d => { stderr += d.toString(); });
     proc.on('close', code => {
       if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `collectstatic a échoué (code ${code})`));
+      else reject(new Error(stderr.trim() || `${errorLabel} a échoué (code ${code})`));
     });
     proc.on('error', reject);
   });
+}
+
+function runCollectstatic(backendDir) {
+  return runManageCommand(backendDir, ['collectstatic', '--noinput'], 'collectstatic');
+}
+
+function runMigrate(backendDir) {
+  return runManageCommand(backendDir, ['migrate', '--noinput'], 'migrate');
 }
 
 async function ensureProductionConfig() {
@@ -111,6 +117,14 @@ async function ensureProductionConfig() {
   content = content.replace(/'HOST': '[^']*'/,     `'HOST': '${esc(creds.host)}'`);
   content = content.replace(/'PORT': '[^']*'/,     `'PORT': '${esc(creds.port)}'`);
   fs.writeFileSync(prodFile, content, 'utf8');
+
+  try {
+    await runMigrate(backendDir);
+  } catch (err) {
+    if (fs.existsSync(prodFile)) fs.unlinkSync(prodFile);
+    if (!win.isDestroyed()) win.close();
+    throw new Error(`Erreur migrate : ${err.message}`);
+  }
 
   try {
     await runCollectstatic(backendDir);

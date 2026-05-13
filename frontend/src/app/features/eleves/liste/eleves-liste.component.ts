@@ -1,8 +1,8 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Eleve } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
@@ -37,7 +37,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
       <input pInputText [(ngModel)]="recherche" (input)="filtrer()"
              [placeholder]="'eleves.rechercher' | translate" class="search-input" />
       <p-select [options]="filtresAlerte" [(ngModel)]="filtreAlerte"
-                  (onChange)="filtrer()" placeholder="Toutes alertes"
+                  (onChange)="filtrer()" [placeholder]="'eleves.toutes_alertes' | translate"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
     </div>
 
@@ -48,16 +48,16 @@ import { ProgressBarModule } from 'primeng/progressbar';
                [paginator]="true" [rows]="20">
         <ng-template pTemplate="header">
           <tr>
-            <th>N°</th>
-            <th>Matricule</th>
-            <th>Nom Complet</th>
-            <th>Section</th>
-            <th>Genre</th>
-            <th>Total Attendu</th>
-            <th>Payé</th>
-            <th>Reste</th>
-            <th>Alerte</th>
-            <th>Actions</th>
+            <th>{{ 'eleves.numero'        | translate }}</th>
+            <th>{{ 'eleves.matricule'     | translate }}</th>
+            <th>{{ 'eleves.nom_complet'   | translate }}</th>
+            <th>{{ 'eleves.section'       | translate }}</th>
+            <th>{{ 'eleves.genre'         | translate }}</th>
+            <th>{{ 'eleves.total_attendu' | translate }}</th>
+            <th>{{ 'eleves.paye'          | translate }}</th>
+            <th>{{ 'eleves.reste'         | translate }}</th>
+            <th>{{ 'eleves.alerte'        | translate }}</th>
+            <th>{{ 'eleves.actions'       | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-eleve>
@@ -67,7 +67,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
             <td class="bold">{{ eleve.nom_complet }}</td>
             <td>{{ eleve.section_nom }}</td>
             <td>
-              <p-tag [value]="eleve.genre === 'F' ? 'Fille' : 'Garçon'"
+              <p-tag [value]="eleve.genre === 'F' ? ('eleves.fille' | translate) : ('eleves.garcon' | translate)"
                      [severity]="eleve.genre === 'F' ? 'info' : 'success'" />
             </td>
             <td class="mono">{{ eleve.total_attendu | number }} FCFA</td>
@@ -86,48 +86,47 @@ import { ProgressBarModule } from 'primeng/progressbar';
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="9" class="empty-msg">Aucun élève trouvé</td></tr>
+          <tr><td colspan="9" class="empty-msg">{{ 'eleves.aucun' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
 
     <!-- Dialog Nouvel Élève -->
-    <p-dialog header="Nouvel Élève" [(visible)]="dialogVisible"
+    <p-dialog [header]="'eleves.nouveau' | translate" [(visible)]="dialogVisible"
               [modal]="true" [style]="{width: '480px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
-          <label>Nom Complet *</label>
+          <label>{{ 'eleves.nom_complet' | translate }} *</label>
           <input pInputText [(ngModel)]="nouvelEleve.nom_complet" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Section *</label>
+          <label>{{ 'eleves.section' | translate }} *</label>
           <p-select [options]="sections()" [(ngModel)]="nouvelEleve.section"
                       optionLabel="nom" optionValue="id"
-                      placeholder="Choisir..." styleClass="w-full" />
+                      [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Genre</label>
-          <p-select [options]="[{label:'Garçon', value:'G'},{label:'Fille', value:'F'}]"
-                      [(ngModel)]="nouvelEleve.genre"
+          <label>{{ 'eleves.genre' | translate }}</label>
+          <p-select [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group full">
-          <label>Date de naissance</label>
+          <label>{{ 'eleves.date_naissance' | translate }}</label>
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
         </div>
         <div class="form-group full">
-          <label>Nom du parent</label>
-          <input pInputText [(ngModel)]="nouvelEleve.nom_parent" class="w-full" 
-                placeholder="Nom et prénom du parent/tuteur" />
+          <label>{{ 'eleves.nom_parent' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nom_parent" class="w-full"
+                [placeholder]="'eleves.nom_parent_ph' | translate" />
         </div>
         <div class="form-group full">
-          <label>Téléphone Parent</label>
+          <label>{{ 'eleves.telephone_parent' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.telephone_parent" class="w-full" placeholder="7X XXX XX XX" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogVisible = false" />
-        <p-button label="Enregistrer" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
+        <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible = false" />
+        <p-button [label]="'common.enregistrer'| translate" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
       </ng-template>
     </p-dialog>
   `,
@@ -177,6 +176,8 @@ export class ElevesListeComponent implements OnInit {
   recherche     = '';
   filtreAlerte  = '';
 
+  private translate = inject(TranslateService);
+
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
     { label: '🔴 URGENT',      value: 'URGENT' },
@@ -184,14 +185,14 @@ export class ElevesListeComponent implements OnInit {
     { label: '✅ OK',          value: 'OK' },
   ];
 
+  genreOptions = [
+    { label: 'Garçon', value: 'G' },
+    { label: 'Fille',  value: 'F' },
+  ];
+
   nouvelEleve: Partial<Eleve> = {};
 
   constructor(private elevesService: ElevesService, private msg: MessageService) {}
-
-  ngOnInit() {
-    this.chargerEleves();
-    this.chargerSections();
-  }
 
   chargerEleves() {
     this.loading.set(true);
@@ -237,21 +238,30 @@ export class ElevesListeComponent implements OnInit {
                    detail: `Reste à payer: ${eleve.reste_a_payer.toLocaleString()} FCFA` });
   }
 
+  ngOnInit() {
+    this.genreOptions = [
+      { label: this.translate.instant('eleves.garcon'), value: 'G' },
+      { label: this.translate.instant('eleves.fille'),  value: 'F' },
+    ];
+    this.chargerEleves();
+    this.chargerSections();
+  }
+
   sauvegarder() {
     if (!this.nouvelEleve.nom_complet) {
-      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Le nom est obligatoire' });
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'), detail: this.translate.instant('eleves.nom_obligatoire') });
       return;
     }
     this.saving.set(true);
     this.elevesService.createEleve(this.nouvelEleve).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Succès', detail: 'Élève ajouté ✅' });
+        this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: this.translate.instant('eleves.ajoute') });
         this.dialogVisible = false;
         this.saving.set(false);
         this.chargerEleves();
       },
       error: () => {
-        this.msg.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible d\'ajouter l\'élève' });
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('eleves.impossible_ajouter') });
         this.saving.set(false);
       }
     });

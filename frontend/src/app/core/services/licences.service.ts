@@ -13,6 +13,7 @@ export interface NouvelleEcole {
   annee_scolaire: string;
   date_debut: string;
   date_fin: string;
+  code_etablissement: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -33,4 +34,9 @@ export class LicencesService {
   verifierCle(cle: string) {
     return this.api.post<any>('/licences/verifier/', { cle_licence: cle });
   }
+
+  suspendre(id: number)              { return this.api.post<any>(`/licences/${id}/suspendre/`, {}); }
+  activer(id: number)                { return this.api.post<any>(`/licences/${id}/activer/`, {}); }
+  changerType(id: number, type: string) { return this.api.post<any>(`/licences/${id}/changer_type/`, { type }); }
+  supprimer(id: number)              { return this.api.delete<any>(`/licences/${id}/`); }
 }

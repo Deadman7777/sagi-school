@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
@@ -10,7 +10,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { DialogModule } from 'primeng/dialog';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 
@@ -27,7 +27,7 @@ import { MessageService } from 'primeng/api';
     <div class="page-header">
       <div>
         <h2 class="page-title">{{ 'parametres.title' | translate }}</h2>
-        <span class="page-sub">Configuration de votre établissement</span>
+        <span class="page-sub">{{ 'parametres.configuration' | translate }}</span>
       </div>
     </div>
 
@@ -36,7 +36,7 @@ import { MessageService } from 'primeng/api';
       <button class="tab-btn" [class.active]="onglet() === 'ecole'"
               (click)="onglet.set('ecole')">🏫 {{ 'parametres.infos_ecole' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'exercice'"
-              (click)="onglet.set('exercice')">📅 Exercice</button>
+              (click)="onglet.set('exercice')">📅 {{ 'parametres.exercice' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'sections'"
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
@@ -50,39 +50,39 @@ import { MessageService } from 'primeng/api';
     <!-- ══ ONGLET INFOS ÉCOLE ══ -->
     <div *ngIf="onglet() === 'ecole'">
       <div class="form-card" *ngIf="ecole()">
-        <div class="fc-title">🏫 Informations de l'Établissement</div>
+        <div class="fc-title">🏫 {{ 'parametres.infos_titre' | translate }}</div>
         <div class="form-grid">
           <div class="form-group full">
-            <label>Nom de l'établissement *</label>
+            <label>{{ 'parametres.nom_requis' | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.nom" class="w-full" />
           </div>
           <div class="form-group">
-            <label>Ville</label>
+            <label>{{ 'parametres.ville'     | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.ville" class="w-full" />
           </div>
           <div class="form-group">
-            <label>Téléphone</label>
+            <label>{{ 'parametres.telephone' | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.telephone" class="w-full" />
           </div>
           <div class="form-group">
-            <label>Email</label>
+            <label>{{ 'parametres.email'     | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.email" class="w-full" type="email" />
           </div>
           <div class="form-group">
-            <label>RCCM</label>
+            <label>{{ 'parametres.rccm'      | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.rccm" class="w-full" />
           </div>
           <div class="form-group full">
-            <label>Adresse complète</label>
+            <label>{{ 'parametres.adresse'   | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.adresse" class="w-full" />
           </div>
           <div class="form-group">
-            <label>NINEA</label>
+            <label>{{ 'parametres.ninea'     | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.ninea" class="w-full" />
           </div>
         </div>
         <div class="form-actions">
-          <p-button label="💾 Sauvegarder" severity="success"
+          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
                     [loading]="saving()" (onClick)="sauvegarderEcole()" />
         </div>
       </div>
@@ -91,35 +91,35 @@ import { MessageService } from 'primeng/api';
     <!-- ══ ONGLET EXERCICE ══ -->
     <div *ngIf="onglet() === 'exercice'">
       <div class="form-card" *ngIf="exercice()">
-        <div class="fc-title">📅 Exercice Scolaire Actif</div>
+        <div class="fc-title">📅 {{ 'parametres.exercice_titre' | translate }}</div>
         <div class="form-grid">
           <div class="form-group full">
-            <label>Année scolaire</label>
+            <label>{{ 'parametres.annee_scolaire' | translate }}</label>
             <input pInputText [(ngModel)]="exercice()!.annee_scolaire"
-                   class="w-full" placeholder="2025-2026" />
+                   class="w-full" [placeholder]="'parametres.annee_placeholder' | translate" />
           </div>
           <div class="form-group">
-            <label>Date de début</label>
+            <label>{{ 'parametres.date_debut' | translate }}</label>
             <input type="date" [(ngModel)]="exercice()!.date_debut"
                    class="form-input w-full" />
           </div>
           <div class="form-group">
-            <label>Date de fin</label>
+            <label>{{ 'parametres.date_fin' | translate }}</label>
             <input type="date" [(ngModel)]="exercice()!.date_fin"
                    class="form-input w-full" />
           </div>
           <div class="form-group">
-            <label>Solde initial Caisse (FCFA)</label>
+            <label>{{ 'parametres.solde_caisse' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_caisse"
                            mode="decimal" [min]="0" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Solde initial Banque (FCFA)</label>
+            <label>{{ 'parametres.solde_banque' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_banque"
                            mode="decimal" [min]="0" styleClass="w-full" />
           </div>
           <div class="form-group">
-            <label>Solde initial Mobile Money (FCFA)</label>
+            <label>{{ 'parametres.solde_mobile' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_mobile"
                            mode="decimal" [min]="0" styleClass="w-full" />
           </div>
@@ -127,7 +127,7 @@ import { MessageService } from 'primeng/api';
 
         <!-- Total trésorerie initiale -->
         <div class="total-tresorerie">
-          <span>Trésorerie initiale totale</span>
+          <span>{{ 'parametres.tresorerie_initiale' | translate }}</span>
           <span class="tt-val">
             {{ (exercice()!.solde_initial_caisse +
                 exercice()!.solde_initial_banque +
@@ -136,7 +136,7 @@ import { MessageService } from 'primeng/api';
         </div>
 
         <div class="form-actions">
-          <p-button label="💾 Sauvegarder" severity="success"
+          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
                     [loading]="saving()" (onClick)="sauvegarderExercice()" />
         </div>
       </div>
@@ -145,8 +145,8 @@ import { MessageService } from 'primeng/api';
     <!-- ══ ONGLET SECTIONS ══ -->
     <div *ngIf="onglet() === 'sections'">
       <div class="section-header-row">
-        <div class="fc-title" style="margin:0">📚 Frais par Section</div>
-        <p-button label="+ Ajouter Section" severity="success" size="small"
+        <div class="fc-title" style="margin:0">📚 {{ 'parametres.frais_par_section' | translate }}</div>
+        <p-button [label]="'parametres.ajouter_section' | translate" severity="success" size="small"
                   (onClick)="ouvrirDialogSection()" />
       </div>
 
@@ -155,32 +155,32 @@ import { MessageService } from 'primeng/api';
           <div class="sc-name">{{ s.nom }}</div>
           <div class="sc-frais-grid">
             <div class="sc-frais">
-              <span>Inscription</span>
+              <span>{{ 'parametres.inscription_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_inscription" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <div class="sc-frais">
-              <span>Mensualité</span>
+              <span>{{ 'parametres.mensualite_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_mensualite" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <div class="sc-frais">
-              <span>Uniforme</span>
+              <span>{{ 'parametres.uniforme_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_uniforme" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <div class="sc-frais">
-              <span>Fournitures</span>
+              <span>{{ 'parametres.fournitures_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_fournitures" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <div class="sc-frais">
-              <span>Cantine/Yendu</span>
+              <span>{{ 'parametres.cantine_yendu' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_yendu" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <div class="sc-frais total">
-              <span>Total Annuel</span>
+              <span>{{ 'parametres.total_annuel' | translate }}</span>
               <div class="sc-total">
                 {{ (s.frais_inscription + s.frais_uniforme +
                     s.frais_fournitures + (s.frais_mensualite * 10) +
@@ -189,7 +189,7 @@ import { MessageService } from 'primeng/api';
             </div>
           </div>
           <div class="sc-actions">
-            <p-button label="💾 Sauvegarder" severity="success" size="small"
+            <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
                       (onClick)="sauvegarderSection(s)" />
           </div>
         </div>
@@ -200,7 +200,7 @@ import { MessageService } from 'primeng/api';
     <div *ngIf="onglet() === 'users'">
       <div class="section-header-row">
         <div class="fc-title" style="margin:0">👥 {{ 'parametres.utilisateurs' | translate }} de l'École</div>
-        <p-button label="+ Ajouter Utilisateur" severity="success" size="small"
+        <p-button [label]="'parametres.ajouter_user' | translate" severity="success" size="small"
                   (onClick)="ouvrirDialogUser()" />
       </div>
 
@@ -209,7 +209,11 @@ import { MessageService } from 'primeng/api';
                  styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
-              <th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Actions</th>
+              <th>{{ 'parametres.nom'         | translate }}</th>
+              <th>{{ 'parametres.email_col'   | translate }}</th>
+              <th>{{ 'parametres.role'        | translate }}</th>
+              <th>{{ 'parametres.statut_col'  | translate }}</th>
+              <th>{{ 'parametres.actions_col' | translate }}</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-u>
@@ -222,7 +226,7 @@ import { MessageService } from 'primeng/api';
                                    u.role === 'COMPTABLE' ? 'info' : 'warn'" />
               </td>
               <td>
-                <p-tag [value]="u.actif ? 'Actif' : 'Inactif'"
+                <p-tag [value]="u.actif ? ('parametres.actif' | translate) : ('parametres.inactif' | translate)"
                        [severity]="u.actif ? 'success' : 'danger'" />
               </td>
               <td>
@@ -236,7 +240,7 @@ import { MessageService } from 'primeng/api';
             </tr>
           </ng-template>
           <ng-template pTemplate="emptymessage">
-            <tr><td colspan="5" class="empty-msg">Aucun utilisateur</td></tr>
+            <tr><td colspan="5" class="empty-msg">{{ 'parametres.aucun_utilisateur' | translate }}</td></tr>
           </ng-template>
         </p-table>
       </div>
@@ -246,25 +250,25 @@ import { MessageService } from 'primeng/api';
 <div *ngIf="onglet() === 'cloture'">
   <div class="form-card" *ngIf="verification()">
 
-    <div class="fc-title">🔒 Clôture de l'Exercice {{ verification()!.exercice?.annee_scolaire }}</div>
+    <div class="fc-title">🔒 {{ 'cloture.title' | translate }} {{ verification()!.exercice?.annee_scolaire }}</div>
 
     <!-- Résumé financier -->
     <div class="kpi-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
       <div class="kpi-mini teal">
-        <div class="km-label">Total Recettes</div>
+        <div class="km-label">{{ 'cloture.total_recettes' | translate }}</div>
         <div class="km-val" style="color:#00d4aa;font-size:16px">
           {{ verification()!.stats.total_recettes | number:'1.0-0' }} FCFA
         </div>
       </div>
       <div class="kpi-mini blue">
-        <div class="km-label">Total Charges</div>
+        <div class="km-label">{{ 'cloture.total_charges' | translate }}</div>
         <div class="km-val" style="color:#0099ff;font-size:16px">
           {{ verification()!.stats.total_charges | number:'1.0-0' }} FCFA
         </div>
       </div>
       <div class="kpi-mini"
            [style.border-color]="verification()!.stats.resultat_net >= 0 ? '#10b981' : '#ef4444'">
-        <div class="km-label">Résultat Net</div>
+        <div class="km-label">{{ 'cloture.resultat_net' | translate }}</div>
         <div class="km-val" style="font-size:16px"
              [style.color]="verification()!.stats.resultat_net >= 0 ? '#10b981' : '#ef4444'">
           {{ verification()!.stats.resultat_net | number:'1.0-0' }} FCFA
@@ -275,14 +279,14 @@ import { MessageService } from 'primeng/api';
     <!-- Élèves -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:#0b0f1a;border:1px solid #2a3f5f;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#64748b;margin-bottom:4px">Total Élèves</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{{ 'cloture.total_eleves' | translate }}</div>
         <div style="font-size:20px;font-weight:700;color:#e8f0fe;font-family:monospace">
           {{ verification()!.stats.eleves_total }}
         </div>
       </div>
       <div style="background:#0b0f1a;border:1px solid #2a3f5f;border-radius:8px;padding:12px"
            [style.border-color]="verification()!.stats.eleves_impayes > 0 ? '#f59e0b' : '#2a3f5f'">
-        <div style="font-size:11px;color:#64748b;margin-bottom:4px">Élèves avec solde impayé</div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{{ 'cloture.eleves_impayes' | translate }}</div>
         <div style="font-size:20px;font-weight:700;font-family:monospace"
              [style.color]="verification()!.stats.eleves_impayes > 0 ? '#f59e0b' : '#10b981'">
           {{ verification()!.stats.eleves_impayes }}
@@ -308,10 +312,10 @@ import { MessageService } from 'primeng/api';
          [class.ok]="verification()!.peut_cloturer"
          [class.bloque]="!verification()!.peut_cloturer">
       <span *ngIf="verification()!.peut_cloturer">
-        ✅ L'exercice peut être clôturé
+        ✅ {{ 'cloture.peut_cloturer' | translate }}
       </span>
       <span *ngIf="!verification()!.peut_cloturer">
-        ❌ Des problèmes bloquants doivent être résolus avant la clôture
+        ❌ {{ 'cloture.bloque' | translate }}
       </span>
     </div>
 
@@ -319,17 +323,17 @@ import { MessageService } from 'primeng/api';
     <div class="option-row" *ngIf="verification()!.peut_cloturer">
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#94a3b8">
         <input type="checkbox" [(ngModel)]="creerSuivant" style="width:16px;height:16px">
-        Créer automatiquement le nouvel exercice après clôture
+        {{ 'parametres.creer_auto' | translate }}
       </label>
     </div>
 
     <!-- Bouton clôture -->
     <div class="form-actions" style="gap:12px" *ngIf="verification()!.peut_cloturer">
       <div style="font-size:12px;color:#ef4444;align-self:center">
-        ⚠️ Cette opération est irréversible
+        ⚠️ {{ 'cloture.irreversible' | translate }}
       </div>
       <p-button
-        label="🔒 Clôturer l'Exercice"
+        [label]="'🔒 ' + ('cloture.confirmer' | translate)"
         severity="danger"
         [loading]="saving()"
         (onClick)="confirmerCloture()" />
@@ -339,74 +343,74 @@ import { MessageService } from 'primeng/api';
 
   <!-- Loading -->
   <div class="empty-msg" *ngIf="!verification()">
-    Chargement de la vérification...
+    {{ 'parametres.chargement_verif' | translate }}
   </div>
 </div>
 
     <!-- Dialog nouvel utilisateur -->
-    <p-dialog header="👤 Nouvel Utilisateur" [(visible)]="userDialogVisible"
+    <p-dialog [header]="'👤 ' + ('parametres.nouveau_user_titre' | translate)" [(visible)]="userDialogVisible"
               [modal]="true" [style]="{width:'460px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group">
-          <label>Nom *</label>
+          <label>{{ 'parametres.nom' | translate }} *</label>
           <input pInputText [(ngModel)]="newUser.nom" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Prénom</label>
+          <label>{{ 'parametres.prenom' | translate }}</label>
           <input pInputText [(ngModel)]="newUser.prenom" class="w-full" />
         </div>
         <div class="form-group full">
-          <label>Email *</label>
+          <label>{{ 'parametres.email' | translate }} *</label>
           <input pInputText [(ngModel)]="newUser.email" class="w-full" type="email" />
         </div>
         <div class="form-group full">
-          <label>Mot de passe *</label>
+          <label>{{ 'parametres.mot_de_passe' | translate }} *</label>
           <input pInputText [(ngModel)]="newUser.password" class="w-full" type="password" />
         </div>
         <div class="form-group full">
-          <label>Rôle *</label>
+          <label>{{ 'parametres.role' | translate }} *</label>
           <p-select [options]="rolesDisponibles" [(ngModel)]="newUser.role"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="userDialogVisible=false" />
-        <p-button label="Créer" severity="success"
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="userDialogVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success"
                   [loading]="saving()" (onClick)="creerUser()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog nouvelle section -->
-    <p-dialog header="📚 Nouvelle Section" [(visible)]="sectionDialogVisible"
+    <p-dialog [header]="'📚 ' + ('parametres.nouvelle_section_titre' | translate)" [(visible)]="sectionDialogVisible"
               [modal]="true" [style]="{width:'400px'}" [draggable]="false">
       <div class="form-group" style="margin-bottom:14px">
-        <label>Nom de la section *</label>
+        <label>{{ 'parametres.nom_section_requis' | translate }}</label>
         <input pInputText [(ngModel)]="newSection.nom" class="w-full"
-               placeholder="Ex: CP1, CE1, Maternelle..." />
+               [placeholder]="'parametres.section_placeholder' | translate" />
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="sectionDialogVisible=false" />
-        <p-button label="Créer" severity="success"
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="sectionDialogVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success"
                   [loading]="saving()" (onClick)="creerSection()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog changer mot de passe -->
-    <p-dialog header="🔑 Changer le Mot de Passe" [(visible)]="mdpDialogVisible"
+    <p-dialog [header]="'🔑 ' + ('parametres.changer_mdp_titre' | translate)" [(visible)]="mdpDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
       <div *ngIf="userSelectionne">
         <div style="font-size:13px;color:#94a3b8;margin-bottom:16px">
-          Utilisateur : <strong style="color:#e8f0fe">{{ userSelectionne.nom }}</strong>
+          {{ 'parametres.utilisateur_label' | translate }} : <strong style="color:#e8f0fe">{{ userSelectionne.nom }}</strong>
         </div>
         <div class="form-group">
-          <label>Nouveau mot de passe *</label>
+          <label>{{ 'parametres.nouveau_mdp' | translate }}</label>
           <input pInputText [(ngModel)]="nouveauMdp" class="w-full"
-                 type="password" placeholder="Min. 6 caractères" />
+                 type="password" [placeholder]="'parametres.mdp_min' | translate" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="mdpDialogVisible=false" />
-        <p-button label="Confirmer" severity="success"
+        <p-button [label]="'common.annuler'  | translate" severity="secondary" (onClick)="mdpDialogVisible=false" />
+        <p-button [label]="'common.confirmer'| translate" severity="success"
                   [loading]="saving()" (onClick)="changerMdp()" />
       </ng-template>
     </p-dialog>
@@ -487,12 +491,9 @@ export class ParametresComponent implements OnInit {
   newUser    = { nom:'', prenom:'', email:'', password:'', role:'CAISSIER' };
   newSection = { nom:'' };
 
-  rolesDisponibles = [
-    { label: 'Admin École',   value: 'ADMIN_ECOLE' },
-    { label: 'Comptable',     value: 'COMPTABLE' },
-    { label: 'Caissier',      value: 'CAISSIER' },
-    { label: 'Lecture seule', value: 'LECTURE' },
-  ];
+  rolesDisponibles: any[] = [];
+
+  private translate = inject(TranslateService);
 
   constructor(
     private api: ApiService,
@@ -501,6 +502,12 @@ export class ParametresComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.rolesDisponibles = [
+      { label: this.translate.instant('parametres.admin_ecole'),   value: 'ADMIN_ECOLE' },
+      { label: this.translate.instant('parametres.comptable'),     value: 'COMPTABLE' },
+      { label: this.translate.instant('parametres.caissier'),      value: 'CAISSIER' },
+      { label: this.translate.instant('parametres.lecture_seule'), value: 'LECTURE' },
+    ];
     this.chargerEcole();
     this.chargerExercice();
     this.chargerSections();
@@ -600,10 +607,10 @@ chargerExercice() {
     this.api.patch<any>('/tenants/mon_ecole/', this.ecole()).subscribe({
       next: res => {
         this.ecole.set(res);
-        this.msg.add({ severity:'success', summary:'Sauvegardé ✅', detail:'Infos école mises à jour' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.nom_ecole') });
         this.saving.set(false);
       },
-      error: () => { this.msg.add({ severity:'error', summary:'Erreur', detail:'Sauvegarde échouée' }); this.saving.set(false); }
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
     });
   }
 
@@ -613,10 +620,10 @@ chargerExercice() {
     this.api.patch<any>(`/paiements/exercices/${this.exercice().id}/`, this.exercice()).subscribe({
       next: res => {
         this.exercice.set(res);
-        this.msg.add({ severity:'success', summary:'Sauvegardé ✅', detail:'Exercice mis à jour' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.exercice') });
         this.saving.set(false);
       },
-      error: () => { this.msg.add({ severity:'error', summary:'Erreur', detail:'Sauvegarde échouée' }); this.saving.set(false); }
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
     });
   }
 
@@ -624,10 +631,10 @@ chargerExercice() {
     this.saving.set(true);
     this.api.patch<any>(`/eleves/sections/${s.id}/`, s).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Sauvegardé ✅', detail:`Section ${s.nom} mise à jour` });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: s.nom });
         this.saving.set(false);
       },
-      error: () => { this.msg.add({ severity:'error', summary:'Erreur', detail:'Sauvegarde échouée' }); this.saving.set(false); }
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
     });
   }
 
@@ -638,13 +645,13 @@ chargerExercice() {
 
   creerSection() {
     if (!this.newSection.nom) {
-      this.msg.add({ severity:'warn', summary:'Requis', detail:'Le nom est obligatoire' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('parametres.nom_section_requis') });
       return;
     }
     this.saving.set(true);
     this.api.post<any>('/eleves/sections/', this.newSection).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Créée ✅', detail:`Section ${this.newSection.nom} ajoutée` });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.cree_ok'), detail: this.newSection.nom });
         this.sectionDialogVisible = false;
         this.saving.set(false);
         this.chargerSections();
@@ -660,13 +667,13 @@ chargerExercice() {
 
   creerUser() {
     if (!this.newUser.nom || !this.newUser.email || !this.newUser.password) {
-      this.msg.add({ severity:'warn', summary:'Requis', detail:'Remplissez tous les champs obligatoires' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('parametres.tous_champs') });
       return;
     }
     this.saving.set(true);
     this.api.post<any>('/auth/users/', this.newUser).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Créé ✅', detail:`Utilisateur ${this.newUser.nom} ajouté` });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.cree_ok'), detail: this.newUser.nom });
         this.userDialogVisible = false;
         this.saving.set(false);
         this.chargerUsers();
@@ -683,7 +690,7 @@ chargerExercice() {
     if (!confirm(`Supprimer ${u.nom} ?`)) return;
     this.api.delete(`/auth/users/${u.id}/`).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Supprimé', detail:u.nom });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.supprime'), detail: u.nom });
         this.chargerUsers();
       }
     });
@@ -697,7 +704,7 @@ chargerExercice() {
 
   changerMdp() {
     if (!this.nouveauMdp || this.nouveauMdp.length < 6) {
-      this.msg.add({ severity:'warn', summary:'Trop court', detail:'Min. 6 caractères' });
+      this.msg.add({ severity:'warn', summary: this.translate.instant('parametres.trop_court'), detail: this.translate.instant('parametres.mdp_min') });
       return;
     }
     this.saving.set(true);
@@ -705,7 +712,7 @@ chargerExercice() {
       { password: this.nouveauMdp }
     ).subscribe({
       next: () => {
-        this.msg.add({ severity:'success', summary:'Modifié ✅', detail:'Mot de passe changé' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.mdp_change') });
         this.mdpDialogVisible = false;
         this.saving.set(false);
       },

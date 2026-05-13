@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
@@ -12,27 +12,28 @@ import { TagModule } from 'primeng/tag';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { ToastModule } from 'primeng/toast';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-academique',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
-            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule],
+            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
     <div class="page-header">
       <div>
-        <h2 class="page-title">📚 Gestion Académique</h2>
-        <span class="page-sub">Classes · Matières · Notes · Bulletins</span>
+        <h2 class="page-title">📚 {{ 'academique.title' | translate }}</h2>
+        <span class="page-sub">{{ 'academique.subtitle' | translate }}</span>
       </div>
     </div>
 
     <!-- Onglets -->
     <div class="tabs-bar">
-      <button class="tab-btn" [class.active]="onglet()==='parametrage'" (click)="onglet.set('parametrage')">⚙️ Paramétrage</button>
-      <button class="tab-btn" [class.active]="onglet()==='notes'" (click)="onglet.set('notes')">📝 Saisie Notes</button>
-      <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 Résultats</button>
+      <button class="tab-btn" [class.active]="onglet()==='parametrage'" (click)="onglet.set('parametrage')">⚙️ {{ 'academique.onglet_parametrage' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet()==='notes'" (click)="onglet.set('notes')">📝 {{ 'academique.onglet_notes' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 {{ 'academique.onglet_resultats' | translate }}</button>
     </div>
 
     <!-- PARAMÉTRAGE -->
@@ -42,7 +43,7 @@ import { ToastModule } from 'primeng/toast';
         <!-- Classes -->
         <div class="param-card">
           <div class="pc-header">
-            <span>🏫 Classes</span>
+            <span>🏫 {{ 'academique.classes' | translate }}</span>
             <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
                       severity="success" (onClick)="ouvrirDialogClasse()" />
           </div>
@@ -51,43 +52,43 @@ import { ToastModule } from 'primeng/toast';
               <span>{{ c.nom }}</span>
               <span class="badge">{{ c.niveau_nom }}</span>
             </div>
-            <div class="empty-msg" *ngIf="classes().length===0">Aucune classe</div>
+            <div class="empty-msg" *ngIf="classes().length===0">{{ 'academique.aucune_classe' | translate }}</div>
           </div>
         </div>
 
         <!-- Matières -->
         <div class="param-card">
           <div class="pc-header">
-            <span>📖 Matières</span>
+            <span>📖 {{ 'academique.matieres' | translate }}</span>
             <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
                       severity="success" (onClick)="ouvrirDialogMatiere()" />
           </div>
           <div class="pc-filter">
             <p-select [options]="classes()" [(ngModel)]="classeFiltre"
                       optionLabel="nom" optionValue="id"
-                      placeholder="Filtrer par classe..."
+                      [placeholder]="'academique.filtrer_classe' | translate"
                       styleClass="w-full" (onChange)="chargerMatieres()" />
           </div>
           <div class="pc-body">
             <div class="pc-item" *ngFor="let m of matieres()">
               <span>{{ m.nom }}</span>
-              <span class="badge">Coef {{ m.coefficient }}</span>
+              <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
             </div>
-            <div class="empty-msg" *ngIf="matieres().length===0">Sélectionnez une classe</div>
+            <div class="empty-msg" *ngIf="matieres().length===0">{{ 'academique.selectionner_classe' | translate }}</div>
           </div>
         </div>
 
         <!-- Types d'évaluation -->
         <div class="param-card">
           <div class="pc-header">
-            <span>📋 Types d'Évaluation</span>
+            <span>📋 {{ 'academique.types_eval' | translate }}</span>
             <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
                       severity="success" (onClick)="ouvrirDialogTypeEval()" />
           </div>
           <div class="pc-body">
             <div class="pc-item" *ngFor="let t of typesEval()">
               <span>{{ t.nom }}</span>
-              <span class="badge">Poids {{ t.poids }}</span>
+              <span class="badge">{{ 'academique.poids' | translate }} {{ t.poids }}</span>
             </div>
           </div>
         </div>
@@ -100,16 +101,16 @@ import { ToastModule } from 'primeng/toast';
       <div class="filters-bar" style="margin-bottom:16px">
         <p-select [options]="classes()" [(ngModel)]="classeNotes"
                   optionLabel="nom" optionValue="id"
-                  placeholder="Classe..." styleClass="filter-drop"
+                  [placeholder]="'academique.classe_filter' | translate" styleClass="filter-drop"
                   (onChange)="onClasseNotesChange()" />
         <p-select [options]="matieresNotes()" [(ngModel)]="matiereNotes"
                   optionLabel="nom" optionValue="id"
-                  placeholder="Matière..." styleClass="filter-drop"
+                  [placeholder]="'academique.matiere_filter' | translate" styleClass="filter-drop"
                   (onChange)="chargerEvaluations()" />
         <p-select [options]="trimestres" [(ngModel)]="trimestreNotes"
                   optionLabel="label" optionValue="value"
-                  placeholder="Trimestre..." styleClass="filter-drop" />
-        <p-button label="+ Évaluation" severity="success"
+                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop" />
+        <p-button [label]="'academique.ajouter_eval' | translate" severity="success"
                   (onClick)="ouvrirDialogEvaluation()" [disabled]="!matiereNotes" />
       </div>
 
@@ -129,16 +130,16 @@ import { ToastModule } from 'primeng/toast';
           <span style="color:#e8f0fe;font-weight:600">
             Notes — {{ evalSelectionnee.matiere_nom }} / {{ evalSelectionnee.type_eval_nom }}
           </span>
-          <p-button label="Enregistrer tout" severity="success"
+          <p-button [label]="'academique.enregistrer_tout' | translate" severity="success"
                     [loading]="saving()" (onClick)="sauvegarderNotes()" />
         </div>
         <p-table [value]="elevesNotes()" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
-              <th>N°</th>
-              <th>Nom Élève</th>
-              <th>Note /{{ evalSelectionnee.note_max }}</th>
-              <th>Absent</th>
+              <th>{{ 'academique.num'      | translate }}</th>
+              <th>{{ 'academique.nom_eleve'| translate }}</th>
+              <th>{{ 'academique.absent'   | translate }}</th>
+              <th>{{ 'academique.absent'   | translate }}</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-e>
@@ -167,11 +168,11 @@ import { ToastModule } from 'primeng/toast';
       <div class="filters-bar" style="margin-bottom:16px">
         <p-select [options]="classes()" [(ngModel)]="classeResultats"
                   optionLabel="nom" optionValue="id"
-                  placeholder="Classe..." styleClass="filter-drop" />
+                  [placeholder]="'academique.classe_filter' | translate" styleClass="filter-drop" />
         <p-select [options]="trimestres" [(ngModel)]="trimestreResultats"
                   optionLabel="label" optionValue="value"
-                  placeholder="Trimestre..." styleClass="filter-drop" />
-        <p-button label="🔢 Calculer Moyennes" severity="success"
+                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop" />
+        <p-button [label]="'🔢 ' + ('academique.calculer_moyennes' | translate)" severity="success"
                   [loading]="calculant()" (onClick)="calculerMoyennes()" />
       </div>
 
@@ -179,22 +180,22 @@ import { ToastModule } from 'primeng/toast';
       <div class="table-card" *ngIf="resultats().length > 0">
         <!-- Stats classe -->
         <div class="stats-classe" *ngIf="statsClasse()">
-          <div class="sc-item"><span>Moy. classe</span><strong>{{ statsClasse().moy_classe }}</strong></div>
-          <div class="sc-item"><span>Plus haute</span><strong style="color:#10b981">{{ statsClasse().moy_max }}</strong></div>
-          <div class="sc-item"><span>Plus basse</span><strong style="color:#ef4444">{{ statsClasse().moy_min }}</strong></div>
-          <div class="sc-item"><span>Taux réussite</span><strong style="color:#0099ff">{{ statsClasse().taux_reussite }}%</strong></div>
+          <div class="sc-item"><span>{{ 'academique.moy_classe'    | translate }}</span><strong>{{ statsClasse().moy_classe }}</strong></div>
+          <div class="sc-item"><span>{{ 'academique.plus_haute'    | translate }}</span><strong style="color:#10b981">{{ statsClasse().moy_max }}</strong></div>
+          <div class="sc-item"><span>{{ 'academique.plus_basse'    | translate }}</span><strong style="color:#ef4444">{{ statsClasse().moy_min }}</strong></div>
+          <div class="sc-item"><span>{{ 'academique.taux_reussite' | translate }}</span><strong style="color:#0099ff">{{ statsClasse().taux_reussite }}%</strong></div>
         </div>
 
         <p-table [value]="resultats()" styleClass="p-datatable-sm"
                  [paginator]="true" [rows]="20">
           <ng-template pTemplate="header">
             <tr>
-              <th>Rang</th>
-              <th>Élève</th>
+              <th>{{ 'academique.rang'        | translate }}</th>
+              <th>{{ 'academique.eleve_col'   | translate }}</th>
               <th *ngFor="let m of colonnesMatieres()">{{ m }}</th>
-              <th>Moy. Générale</th>
-              <th>Appréciation</th>
-              <th>Bulletin</th>
+              <th>{{ 'academique.moy_generale'| translate }}</th>
+              <th>{{ 'academique.appreciation'| translate }}</th>
+              <th>{{ 'academique.bulletin'    | translate }}</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-r>
@@ -209,7 +210,7 @@ import { ToastModule } from 'primeng/toast';
               <td>
                 <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                           severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
-                          title="Télécharger bulletin PDF" />
+                          [title]="'academique.telecharger_bulletin' | translate" />
               </td>
             </tr>
           </ng-template>
@@ -218,112 +219,108 @@ import { ToastModule } from 'primeng/toast';
     </div>
 
     <!-- Dialog Classe -->
-    <p-dialog header="🏫 Nouvelle Classe" [(visible)]="dialogClasseVisible"
+    <p-dialog [header]="'🏫 ' + ('academique.nouvelle_classe' | translate)" [(visible)]="dialogClasseVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
-          <label>Niveau *</label>
+          <label>{{ 'academique.niveau' | translate }} *</label>
           <p-select [options]="niveaux()" [(ngModel)]="formClasse.niveau"
                     optionLabel="nom" optionValue="id" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Nom *</label>
-          <input pInputText [(ngModel)]="formClasse.nom" class="w-full" placeholder="Ex: CE1 A" />
+          <label>{{ 'academique.nom' | translate }} *</label>
+          <input pInputText [(ngModel)]="formClasse.nom" class="w-full" [placeholder]="'academique.ex_classe' | translate" />
         </div>
         <div class="form-group">
-          <label>Code</label>
-          <input pInputText [(ngModel)]="formClasse.code" class="w-full" placeholder="Ex: CE1A" />
+          <label>{{ 'academique.code' | translate }}</label>
+          <input pInputText [(ngModel)]="formClasse.code" class="w-full" [placeholder]="'academique.ex_code' | translate" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogClasseVisible=false" />
-        <p-button label="Créer" severity="success" (onClick)="creerClasse()" />
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogClasseVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerClasse()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Matière -->
-    <p-dialog header="📖 Nouvelle Matière" [(visible)]="dialogMatiereVisible"
+    <p-dialog [header]="'📖 ' + ('academique.nouvelle_matiere' | translate)" [(visible)]="dialogMatiereVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
-          <label>Classe *</label>
+          <label>{{ 'academique.classe' | translate }} *</label>
           <p-select [options]="classes()" [(ngModel)]="formMatiere.classe"
                     optionLabel="nom" optionValue="id" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Nom *</label>
-          <input pInputText [(ngModel)]="formMatiere.nom" class="w-full" placeholder="Ex: Mathématiques" />
+          <label>{{ 'academique.nom' | translate }} *</label>
+          <input pInputText [(ngModel)]="formMatiere.nom" class="w-full" [placeholder]="'academique.ex_matiere' | translate" />
         </div>
         <div class="form-group">
-          <label>Coefficient</label>
-          <p-inputNumber [(ngModel)]="formMatiere.coefficient" [min]="0.5" [max]="10"
-                         mode="decimal" styleClass="w-full" />
+          <label>{{ 'academique.coefficient' | translate }}</label>
+          <p-inputNumber [(ngModel)]="formMatiere.coefficient" [min]="0.5" [max]="10" mode="decimal" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Note maximale</label>
-          <p-select [options]="[{label:'Sur 10', value:10},{label:'Sur 20', value:20}]"
-                    [(ngModel)]="formMatiere.note_max"
+          <label>{{ 'academique.note_max' | translate }}</label>
+          <p-select [options]="noteMaxOptions" [(ngModel)]="formMatiere.note_max"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogMatiereVisible=false" />
-        <p-button label="Créer" severity="success" (onClick)="creerMatiere()" />
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogMatiereVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerMatiere()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Type Évaluation -->
-    <p-dialog header="📋 Type d'Évaluation" [(visible)]="dialogTypeEvalVisible"
+    <p-dialog [header]="'📋 ' + ('academique.nouveau_type_eval' | translate)" [(visible)]="dialogTypeEvalVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
-          <label>Nom *</label>
-          <input pInputText [(ngModel)]="formTypeEval.nom" class="w-full" placeholder="Ex: Devoir" />
+          <label>{{ 'academique.nom' | translate }} *</label>
+          <input pInputText [(ngModel)]="formTypeEval.nom" class="w-full" [placeholder]="'academique.ex_type_eval' | translate" />
         </div>
         <div class="form-group">
-          <label>Poids</label>
-          <p-inputNumber [(ngModel)]="formTypeEval.poids" [min]="0.5" [max]="5"
-                         mode="decimal" styleClass="w-full" />
+          <label>{{ 'academique.poids' | translate }}</label>
+          <p-inputNumber [(ngModel)]="formTypeEval.poids" [min]="0.5" [max]="5" mode="decimal" styleClass="w-full" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogTypeEvalVisible=false" />
-        <p-button label="Créer" severity="success" (onClick)="creerTypeEval()" />
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogTypeEvalVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerTypeEval()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Évaluation -->
-    <p-dialog header="📝 Nouvelle Évaluation" [(visible)]="dialogEvalVisible"
+    <p-dialog [header]="'📝 ' + ('academique.nouvelle_eval' | translate)" [(visible)]="dialogEvalVisible"
               [modal]="true" [style]="{width:'420px'}">
       <div class="form-grid" style="grid-template-columns:1fr 1fr">
         <div class="form-group full">
-          <label>Type d'évaluation *</label>
+          <label>{{ 'academique.type_eval' | translate }} *</label>
           <p-select [options]="typesEval()" [(ngModel)]="formEval.type_eval"
                     optionLabel="nom" optionValue="id" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Trimestre *</label>
+          <label>{{ 'academique.trimestre' | translate }} *</label>
           <p-select [options]="trimestres" [(ngModel)]="formEval.trimestre"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>Date *</label>
+          <label>{{ 'academique.date' | translate }} *</label>
           <input pInputText type="date" [(ngModel)]="formEval.date_eval" class="w-full" />
         </div>
         <div class="form-group">
-          <label>Note max</label>
-          <p-select [options]="[{label:'Sur 10', value:10},{label:'Sur 20', value:20}]"
-                    [(ngModel)]="formEval.note_max"
+          <label>{{ 'academique.note_max' | translate }}</label>
+          <p-select [options]="noteMaxOptions" [(ngModel)]="formEval.note_max"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group full">
-          <label>Titre (optionnel)</label>
-          <input pInputText [(ngModel)]="formEval.titre" class="w-full" placeholder="Ex: Devoir n°1" />
+          <label>{{ 'academique.titre_optionnel' | translate }}</label>
+          <input pInputText [(ngModel)]="formEval.titre" class="w-full" [placeholder]="'academique.ex_titre_eval' | translate" />
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="Annuler" severity="secondary" (onClick)="dialogEvalVisible=false" />
-        <p-button label="Créer" severity="success" (onClick)="creerEvaluation()" />
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogEvalVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerEvaluation()" />
       </ng-template>
     </p-dialog>
   `,
@@ -402,11 +399,10 @@ export class AcademiqueComponent implements OnInit {
   formTypeEval = { nom: '', poids: 1 };
   formEval     = { type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
 
-  trimestres = [
-    { label: 'Trimestre 1', value: 'T1' },
-    { label: 'Trimestre 2', value: 'T2' },
-    { label: 'Trimestre 3', value: 'T3' },
-  ];
+  trimestres: any[] = [];
+  noteMaxOptions: any[] = [];
+
+  private translate = inject(TranslateService);
 
   constructor(
     private acad: AcademiqueService,
@@ -415,6 +411,15 @@ export class AcademiqueComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.trimestres = [
+      { label: this.translate.instant('academique.trimestre_1'), value: 'T1' },
+      { label: this.translate.instant('academique.trimestre_2'), value: 'T2' },
+      { label: this.translate.instant('academique.trimestre_3'), value: 'T3' },
+    ];
+    this.noteMaxOptions = [
+      { label: this.translate.instant('academique.sur_10'), value: 10 },
+      { label: this.translate.instant('academique.sur_20'), value: 20 },
+    ];
     this.acad.getNiveaux().subscribe({ next: r => this.niveaux.set(r.results || []) });
     this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
     this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
@@ -485,7 +490,7 @@ export class AcademiqueComponent implements OnInit {
       }
     });
     Promise.all(promises).then(() => {
-      this.msg.add({ severity: 'success', summary: 'Notes enregistrées ✅', detail: `${promises.length} notes sauvegardées` });
+      this.msg.add({ severity: 'success', summary: this.translate.instant('academique.notes_enregistrees'), detail: `${promises.length}` });
       this.saving.set(false);
       this.selectionnerEvaluation(this.evalSelectionnee);
     }).catch(() => this.saving.set(false));
@@ -505,7 +510,7 @@ export class AcademiqueComponent implements OnInit {
           this.colonnesMatieres.set(res.resultats[0].matieres.map((m: any) => m.matiere));
         }
         this.calculant.set(false);
-        this.msg.add({ severity: 'success', summary: 'Calcul terminé ✅', detail: `${res.resultats?.length} élèves traités` });
+        this.msg.add({ severity: 'success', summary: this.translate.instant('academique.calcul_termine'), detail: `${res.resultats?.length}` });
       },
       error: () => this.calculant.set(false)
     });
@@ -513,19 +518,19 @@ export class AcademiqueComponent implements OnInit {
 
   getAppreciation(moy: number, noteMax: number): string {
     const ratio = moy / noteMax * 20;
-    if (ratio >= 18) return '🌟 Excellent';
-    if (ratio >= 16) return '👍 Très Bien';
-    if (ratio >= 14) return '✅ Bien';
-    if (ratio >= 12) return '🆗 Assez Bien';
-    if (ratio >= 10) return '⚠️ Passable';
-    return '❌ Insuffisant';
+    if (ratio >= 18) return this.translate.instant('academique.appr_excellent');
+    if (ratio >= 16) return this.translate.instant('academique.appr_tres_bien');
+    if (ratio >= 14) return this.translate.instant('academique.appr_bien');
+    if (ratio >= 12) return this.translate.instant('academique.appr_assez_bien');
+    if (ratio >= 10) return this.translate.instant('academique.appr_passable');
+    return this.translate.instant('academique.appr_insuffisant');
   }
 
   ouvrirDialogClasse()   { this.formClasse   = { nom:'', code:'', niveau:'' }; this.dialogClasseVisible   = true; }
   ouvrirDialogMatiere()  { this.formMatiere  = { nom:'', classe:'', coefficient:1, note_max:20 }; this.dialogMatiereVisible  = true; }
   ouvrirDialogTypeEval() { this.formTypeEval = { nom:'', poids:1 }; this.dialogTypeEvalVisible = true; }
   ouvrirDialogEvaluation() {
-    if (!this.matiereNotes) { this.msg.add({ severity:'warn', summary:'Sélectionnez une matière' }); return; }
+    if (!this.matiereNotes) { this.msg.add({ severity:'warn', summary: this.translate.instant('academique.select_matiere') }); return; }
     this.formEval = { type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max:20, titre:'' };
     this.dialogEvalVisible = true;
   }
@@ -535,7 +540,7 @@ export class AcademiqueComponent implements OnInit {
       next: () => {
         this.dialogClasseVisible = false;
         this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
-        this.msg.add({ severity:'success', summary:'Classe créée ✅' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('academique.classe_creee') });
       }
     });
   }
@@ -545,7 +550,7 @@ export class AcademiqueComponent implements OnInit {
       next: () => {
         this.dialogMatiereVisible = false;
         this.chargerMatieres();
-        this.msg.add({ severity:'success', summary:'Matière créée ✅' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('academique.matiere_creee') });
       }
     });
   }
@@ -555,7 +560,7 @@ export class AcademiqueComponent implements OnInit {
       next: () => {
         this.dialogTypeEvalVisible = false;
         this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
-        this.msg.add({ severity:'success', summary:'Type d\'évaluation créé ✅' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('academique.type_eval_cree') });
       }
     });
   }
@@ -566,7 +571,7 @@ export class AcademiqueComponent implements OnInit {
       next: () => {
         this.dialogEvalVisible = false;
         this.chargerEvaluations();
-        this.msg.add({ severity:'success', summary:'Évaluation créée ✅' });
+        this.msg.add({ severity:'success', summary: this.translate.instant('academique.evaluation_creee') });
       }
     });
   }
