@@ -10,8 +10,8 @@ class SectionAdmin(admin.ModelAdmin):
 
 @admin.register(Eleve)
 class EleveAdmin(admin.ModelAdmin):
-    list_display  = ['nom_complet', 'section', 'genre', 'statut', 'niveau_alerte', 'total_attendu', 'total_paye', 'reste_a_payer', 'telephone_parent']
+    list_display  = ['nom_complet', 'section', 'genre', 'statut', 'niveau_alerte', 'total_attendu', 'total_paye', 'reste_a_payer', 'telephone_pere']
     list_filter   = ['statut', 'genre', 'section', 'tenant']
-    search_fields = ['nom_complet', 'telephone_parent']
+    search_fields = ['nom_complet', 'telephone_pere', 'telephone_mere']
     readonly_fields = ['total_attendu', 'total_paye', 'reste_a_payer', 'niveau_alerte']
     ordering      = ['nom_complet']

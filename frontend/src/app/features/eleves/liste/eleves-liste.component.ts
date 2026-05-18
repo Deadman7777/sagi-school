@@ -110,18 +110,32 @@ import { ProgressBarModule } from 'primeng/progressbar';
           <p-select [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
-        <div class="form-group full">
+        <div class="form-group">
           <label>{{ 'eleves.date_naissance' | translate }}</label>
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
         </div>
-        <div class="form-group full">
-          <label>{{ 'eleves.nom_parent' | translate }}</label>
-          <input pInputText [(ngModel)]="nouvelEleve.nom_parent" class="w-full"
-                [placeholder]="'eleves.nom_parent_ph' | translate" />
+        <div class="form-group">
+          <label>{{ 'eleves.lieu_naissance' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.lieu_naissance" class="w-full"
+                 [placeholder]="'eleves.lieu_naissance_ph' | translate" />
         </div>
-        <div class="form-group full">
-          <label>{{ 'eleves.telephone_parent' | translate }}</label>
-          <input pInputText [(ngModel)]="nouvelEleve.telephone_parent" class="w-full" placeholder="7X XXX XX XX" />
+        <div class="form-group">
+          <label>{{ 'eleves.nom_pere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nom_pere" class="w-full"
+                 [placeholder]="'eleves.nom_pere_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.telephone_pere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.telephone_pere" class="w-full" placeholder="7X XXX XX XX" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.nom_mere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nom_mere" class="w-full"
+                 [placeholder]="'eleves.nom_mere_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.telephone_mere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.telephone_mere" class="w-full" placeholder="7X XXX XX XX" />
         </div>
       </div>
       <ng-template pTemplate="footer">

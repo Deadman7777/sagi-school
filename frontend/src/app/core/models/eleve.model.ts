@@ -18,8 +18,11 @@ export interface Eleve {
   section: string;
   section_nom: string;
   date_naissance: string;
-  telephone_parent: string;
-  nom_parent: string;
+  lieu_naissance: string;
+  nom_pere: string;
+  telephone_pere: string;
+  nom_mere: string;
+  telephone_mere: string;
   date_inscription: string;
   statut: string;
   total_attendu: number;

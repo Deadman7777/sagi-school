@@ -239,17 +239,18 @@ class DashboardAlerteView(APIView):
 
         data = []
         for e in eleves:
-            reste = float(e.total_attendu) - float(e.total_paye_sql or 0)
+            total = float(e.total_attendu)
+            paye  = float(e.total_paye_sql or 0)
+            reste = total - paye
             if reste <= 0: continue
-            jours  = (today - e.date_inscription).days
-            alerte = 'URGENT' if jours > 60 else 'ATTENTION' if jours > 30 else None
-            if not alerte: continue
+            ratio  = paye / total if total > 0 else 0
+            alerte = 'URGENT' if ratio < 0.5 else 'ATTENTION'
             data.append({
                 'id': str(e.id), 'nom_complet': e.nom_complet,
                 'section': e.section.nom if e.section else '',
-                'telephone': e.telephone_parent,
-                'reste_a_payer': reste, 'niveau_alerte': alerte, 'jours_retard': jours,
+                'telephone': e.telephone_pere,
+                'reste_a_payer': reste, 'niveau_alerte': alerte,
             })
 
-        data.sort(key=lambda x: x['jours_retard'], reverse=True)
+        data.sort(key=lambda x: x['reste_a_payer'], reverse=True)
         return Response(data[:20])

@@ -36,9 +36,12 @@ import { SelectModule } from 'primeng/select';
       <button class="tab-btn" [class.active]="onglet() === 'bilan'"
               (click)="onglet.set('bilan')">🏦 {{ 'comptabilite.bilan'         | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'flux'"
+              *ngIf="systeme() === 'SN'"
               (click)="onglet.set('flux')">💧 {{ 'comptabilite.flux'           | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'historique'"
               (click)="onglet.set('historique')">📚 {{ 'comptabilite.historique'| translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'notes'"
+              (click)="onglet.set('notes')">📎 {{ 'comptabilite.notes_annexes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'charges'"
         (click)="onglet.set('charges')">💸 {{ 'comptabilite.charges_tab'       | translate }}</button>
     </div>
@@ -89,9 +92,9 @@ import { SelectModule } from 'primeng/select';
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-c>
-          <tr>
+          <tr [class.synthetic-row]="c.is_synthetic">
             <td class="mono bold">{{ c.no_compte }}</td>
-            <td>{{ c.libelle }}</td>
+            <td [class.bold]="c.is_synthetic">{{ c.libelle }}</td>
             <td class="mono success">{{ c.total_debit    | number:'1.0-0' }}</td>
             <td class="mono info">   {{ c.total_credit   | number:'1.0-0' }}</td>
             <td class="mono">{{ c.solde_debiteur  > 0 ? (c.solde_debiteur  | number:'1.0-0') : '—' }}</td>
@@ -120,9 +123,9 @@ import { SelectModule } from 'primeng/select';
       </tr>
     </ng-template>
     <ng-template pTemplate="body" let-l>
-      <tr>
+      <tr [class.synthetic-row]="l.is_synthetic">
         <td class="mono bold">{{ l.no_compte }}</td>
-        <td>{{ l.libelle }}</td>
+        <td [class.bold]="l.is_synthetic">{{ l.libelle }}</td>
         <td class="mono">{{ l.so_debiteur  > 0 ? (l.so_debiteur  | number:'1.0-0') : '' }}</td>
         <td class="mono">{{ l.so_crediteur > 0 ? (l.so_crediteur | number:'1.0-0') : '' }}</td>
         <td class="mono success">{{ l.mvt_debit   > 0 ? (l.mvt_debit   | number:'1.0-0') : '' }}</td>
@@ -145,8 +148,14 @@ import { SelectModule } from 'primeng/select';
   </p-table>
 </div>
 
-    <!-- COMPTE DE RÉSULTAT -->
+    <!-- COMPTE DE RÉSULTAT — SIG SYSCOHADA Révisé -->
     <div *ngIf="onglet() === 'resultat' && resultat()">
+      <div class="systeme-badge" [class.sn]="resultat().systeme === 'SN'">
+        {{ resultat().systeme === 'SN' ? '📊 Système Normal' : '📋 Système Minimal de Trésorerie' }}
+        — CAHT : {{ resultat().caht | number:'1.0-0' }} FCFA
+      </div>
+
+      <!-- Détail produits / charges côte à côte -->
       <div class="grid-2">
         <div class="card">
           <div class="card-header" style="color:#10b981">💰 {{ 'comptabilite.produits' | translate }}</div>
@@ -175,6 +184,83 @@ import { SelectModule } from 'primeng/select';
           </div>
         </div>
       </div>
+
+      <!-- SIG en cascade -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header" style="color:#00d4aa">📊 {{ 'comptabilite.sig_titre' | translate }}</div>
+        <div class="card-body">
+          <div class="sig-row" *ngIf="resultat().sig.ventes_marchandises > 0">
+            <span class="sig-label">Ventes de marchandises</span>
+            <span class="mono success">{{ resultat().sig.ventes_marchandises | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.achats_marchandises > 0">
+            <span class="sig-label">— Achats de marchandises</span>
+            <span class="mono danger">{{ resultat().sig.achats_marchandises | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-subtotal">
+            <span>= Marge Commerciale (MC)</span>
+            <span class="mono" [style.color]="resultat().sig.mc >= 0 ? '#10b981' : '#ef4444'">
+              {{ resultat().sig.mc | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div class="sig-row">
+            <span class="sig-label">+ Production de l'exercice (services)</span>
+            <span class="mono success">{{ resultat().sig.production_exercice | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.consommations_interm > 0">
+            <span class="sig-label">— Consommations intermédiaires</span>
+            <span class="mono danger">{{ resultat().sig.consommations_interm | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-subtotal">
+            <span>= Valeur Ajoutée Brute (VAB)</span>
+            <span class="mono" [style.color]="resultat().sig.vab >= 0 ? '#10b981' : '#ef4444'">
+              {{ resultat().sig.vab | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.charges_personnel > 0">
+            <span class="sig-label">— Charges de personnel (661+662)</span>
+            <span class="mono danger">{{ resultat().sig.charges_personnel | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.impots_taxes > 0">
+            <span class="sig-label">— Impôts et taxes (64x)</span>
+            <span class="mono danger">{{ resultat().sig.impots_taxes | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-subtotal">
+            <span>= Excédent Brut d'Exploitation (EBE)</span>
+            <span class="mono" [style.color]="resultat().sig.ebe >= 0 ? '#10b981' : '#ef4444'">
+              {{ resultat().sig.ebe | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.dotations_amort > 0">
+            <span class="sig-label">— Dotations aux amortissements (681)</span>
+            <span class="mono danger">{{ resultat().sig.dotations_amort | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.autres_charges > 0">
+            <span class="sig-label">— Autres charges d'exploitation</span>
+            <span class="mono danger">{{ resultat().sig.autres_charges | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-subtotal">
+            <span>= Résultat d'Exploitation (RE)</span>
+            <span class="mono" [style.color]="resultat().sig.re >= 0 ? '#10b981' : '#ef4444'">
+              {{ resultat().sig.re | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.rf !== 0">
+            <span class="sig-label">± Résultat Financier (RF)</span>
+            <span class="mono">{{ resultat().sig.rf | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-subtotal" style="border-top:2px solid #00d4aa">
+            <span>= Résultat des Activités Ordinaires (RAO)</span>
+            <span class="mono" [style.color]="resultat().sig.rao >= 0 ? '#10b981' : '#ef4444'">
+              {{ resultat().sig.rao | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.resultat_hao !== 0">
+            <span class="sig-label">± Résultat HAO</span>
+            <span class="mono">{{ resultat().sig.resultat_hao | number:'1.0-0' }}</span>
+          </div>
+          <div class="sig-row" *ngIf="resultat().sig.impot > 0">
+            <span class="sig-label">— Impôt sur le résultat (89x)</span>
+            <span class="mono danger">{{ resultat().sig.impot | number:'1.0-0' }}</span>
+          </div>
+        </div>
+      </div>
+
       <div class="resultat-net"
            [style.border-color]="resultat().resultat_net >= 0 ? '#10b981' : '#ef4444'"
            [style.background]="resultat().resultat_net >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'">
@@ -185,64 +271,177 @@ import { SelectModule } from 'primeng/select';
       </div>
     </div>
 
-    <!-- BILAN -->
+    <!-- BILAN SYSCOHADA Révisé (AUDCIF Art. 7-11 & 23) -->
     <div *ngIf="onglet() === 'bilan' && bilan()">
       <div class="bilan-header">
         <span>📊 {{ 'comptabilite.bilan_titre' | translate }} {{ bilan().exercice }}</span>
-        <span class="equilibre-badge" [class.ok]="bilan().equilibre">
-          {{ (bilan().equilibre ? 'comptabilite.equilibre' : 'comptabilite.desequilibre') | translate }}
-        </span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="systeme-badge" [class.sn]="bilan().systeme === 'SN'">
+            {{ bilan().systeme }} — CAHT {{ bilan().caht | number:'1.0-0' }} FCFA
+          </span>
+          <span class="equilibre-badge" [class.ok]="bilan().equilibre">
+            {{ (bilan().equilibre ? 'comptabilite.equilibre' : 'comptabilite.desequilibre') | translate }}
+          </span>
+        </div>
       </div>
 
       <div class="grid-2">
-        <!-- ACTIF -->
+        <!-- ═══════════ ACTIF ═══════════ -->
         <div class="card">
           <div class="card-header" style="color:#0099ff">🏦 {{ 'comptabilite.actif' | translate }}</div>
           <div class="card-body">
-            <div class="bilan-section">{{ 'comptabilite.actif_circulant' | translate }}</div>
+
+            <!-- A — Actif Immobilisé -->
+            <div class="bilan-section">A — {{ 'comptabilite.actif_immobilise' | translate }}</div>
+            <div class="bilan-subsection">Immobilisations incorporelles</div>
+            <div *ngIf="bilan().actif.immobilise.incorporel.length === 0" class="cr-row italic-row">
+              <span>Aucune immobilisation incorporelle</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let i of bilan().actif.immobilise.incorporel">
+              <span>{{ i.libelle }}</span><span class="mono info">{{ i.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-subsection">Immobilisations corporelles</div>
+            <div *ngIf="bilan().actif.immobilise.corporel.length === 0" class="cr-row italic-row">
+              <span>Aucune immobilisation corporelle</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let i of bilan().actif.immobilise.corporel">
+              <span>{{ i.libelle }}</span><span class="mono info">{{ i.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-subsection">Immobilisations financières</div>
+            <div *ngIf="bilan().actif.immobilise.financier.length === 0" class="cr-row italic-row">
+              <span>Aucune immobilisation financière</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let i of bilan().actif.immobilise.financier">
+              <span>{{ i.libelle }}</span><span class="mono info">{{ i.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL A — Actif Immobilisé</span>
+              <span class="mono" style="color:#0099ff">{{ bilan().actif.immobilise.total | number:'1.0-0' }}</span>
+            </div>
+
+            <!-- B — Actif Circulant AO -->
+            <div class="bilan-section">B — {{ 'comptabilite.actif_circulant' | translate }}</div>
+            <div class="cr-row italic-row"><span>Stocks (marchandises, fournitures)</span><span class="mono">—</span></div>
             <div class="cr-row">
               <span>{{ 'comptabilite.creances_clients' | translate }}</span>
-              <span class="mono info">{{ bilan().actif.creances_clients | number:'1.0-0' }}</span>
+              <span class="mono info">{{ bilan().actif.circulant_ao.creances_clients | number:'1.0-0' }}</span>
             </div>
-            <div class="bilan-section">{{ 'comptabilite.tresorerie_equiv' | translate }}</div>
-            <div class="cr-row" *ngFor="let t of bilan().actif.tresorerie">
-              <span>{{ t.libelle }}</span>
-              <span class="mono info">{{ t.montant | number:'1.0-0' }}</span>
+            <div class="bilan-total-masse">
+              <span>TOTAL B — Actif Circulant AO</span>
+              <span class="mono" style="color:#0099ff">{{ bilan().actif.circulant_ao.total | number:'1.0-0' }}</span>
             </div>
-            <div class="cr-total">
-              <span>{{ 'comptabilite.total_actif' | translate }}</span>
-              <span class="mono" style="color:#0099ff">{{ bilan().actif.total_actif | number:'1.0-0' }} FCFA</span>
+
+            <!-- C — Actif Circulant HAO -->
+            <div class="bilan-section">C — {{ 'comptabilite.actif_circulant_hao' | translate }}</div>
+            <div class="cr-row italic-row"><span>Créances HAO</span><span class="mono">—</span></div>
+            <div class="bilan-total-masse"><span>TOTAL C</span><span class="mono">0</span></div>
+
+            <!-- D — Trésorerie-Actif -->
+            <div class="bilan-section">D — {{ 'comptabilite.tresorerie_actif' | translate }}</div>
+            <div *ngIf="bilan().actif.tresorerie_actif.detail.length === 0" class="cr-row italic-row">
+              <span>Aucun solde de trésorerie</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let t of bilan().actif.tresorerie_actif.detail">
+              <span>{{ t.libelle }}</span><span class="mono info">{{ t.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL D — Trésorerie-Actif</span>
+              <span class="mono" style="color:#00d4aa">{{ bilan().actif.tresorerie_actif.total | number:'1.0-0' }}</span>
+            </div>
+
+            <!-- E — Écart de conversion -->
+            <div class="bilan-section">E — {{ 'comptabilite.ecart_conversion' | translate }}</div>
+            <div class="cr-row italic-row"><span>Pertes de change latentes</span><span class="mono">—</span></div>
+            <div class="bilan-total-masse"><span>TOTAL E</span><span class="mono">0</span></div>
+
+            <div class="cr-total" style="margin-top:12px">
+              <span>{{ 'comptabilite.total_actif' | translate }} (A+B+C+D+E)</span>
+              <span class="mono" style="color:#0099ff;font-size:16px">{{ bilan().actif.total_actif | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
         </div>
 
-        <!-- PASSIF -->
+        <!-- ═══════════ PASSIF ═══════════ -->
         <div class="card">
           <div class="card-header" style="color:#a855f7">📋 {{ 'comptabilite.passif' | translate }}</div>
           <div class="card-body">
-            <div class="bilan-section">{{ 'comptabilite.capitaux_propres' | translate }}</div>
+
+            <!-- F — Capitaux Propres & Ressources Assimilées -->
+            <div class="bilan-section">F — {{ 'comptabilite.capitaux_propres' | translate }}</div>
             <div class="cr-row">
               <span>{{ 'comptabilite.capital' | translate }}</span>
-              <span class="mono" style="color:#a855f7">{{ bilan().passif.capital | number:'1.0-0' }}</span>
+              <span class="mono" style="color:#a855f7">{{ bilan().passif.capitaux_propres.capital | number:'1.0-0' }}</span>
             </div>
             <div class="cr-row">
               <span>{{ 'comptabilite.resultat_exercice' | translate }}</span>
-              <span class="mono" [style.color]="bilan().passif.resultat_net >= 0 ? '#10b981' : '#ef4444'">
-                {{ bilan().passif.resultat_net >= 0 ? '+' : '' }}{{ bilan().passif.resultat_net | number:'1.0-0' }}
+              <span class="mono" [style.color]="bilan().passif.capitaux_propres.resultat_net >= 0 ? '#10b981' : '#ef4444'">
+                {{ bilan().passif.capitaux_propres.resultat_net >= 0 ? '+' : '' }}{{ bilan().passif.capitaux_propres.resultat_net | number:'1.0-0' }}
               </span>
             </div>
-            <div class="cr-row bold-row">
-              <span>{{ 'comptabilite.total_capitaux' | translate }}</span>
-              <span class="mono" style="color:#a855f7">{{ bilan().passif.total_capitaux | number:'1.0-0' }}</span>
+            <div class="bilan-total-masse">
+              <span>TOTAL F — Capitaux Propres</span>
+              <span class="mono" style="color:#a855f7">{{ bilan().passif.capitaux_propres.total | number:'1.0-0' }}</span>
             </div>
-            <div class="bilan-section">{{ 'comptabilite.dettes' | translate }}</div>
+
+            <!-- G — Dettes Financières & Ressources Assimilées -->
+            <div class="bilan-section">G — {{ 'comptabilite.dettes_financieres' | translate }}</div>
+            <div class="cr-row italic-row" *ngIf="bilan().passif.dettes_financieres.total === 0">
+              <span>Emprunts et dettes financières</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngIf="bilan().passif.dettes_financieres.total > 0">
+              <span>Emprunts et dettes assimilées (16x-19x)</span>
+              <span class="mono danger">{{ bilan().passif.dettes_financieres.total | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL G — Dettes Financières</span>
+              <span class="mono">{{ bilan().passif.dettes_financieres.total | number:'1.0-0' }}</span>
+            </div>
+
+            <!-- H — Passif Circulant AO -->
+            <div class="bilan-section">H — {{ 'comptabilite.passif_circulant' | translate }}</div>
             <div class="cr-row">
               <span>{{ 'comptabilite.dettes_fournisseurs' | translate }}</span>
-              <span class="mono danger">{{ bilan().passif.dettes | number:'1.0-0' }}</span>
+              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.fournisseurs | number:'1.0-0' }}</span>
             </div>
-            <div class="cr-total">
-              <span>{{ 'comptabilite.total_passif' | translate }}</span>
-              <span class="mono" style="color:#a855f7">{{ bilan().passif.total_passif | number:'1.0-0' }} FCFA</span>
+            <div class="cr-row" *ngIf="bilan().passif.passif_circulant_ao.dettes_fiscales > 0">
+              <span>Dettes fiscales (44x)</span>
+              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.dettes_fiscales | number:'1.0-0' }}</span>
+            </div>
+            <div class="cr-row" *ngIf="bilan().passif.passif_circulant_ao.dettes_sociales > 0">
+              <span>Dettes sociales (43x)</span>
+              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.dettes_sociales | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL H — Passif Circulant AO</span>
+              <span class="mono" style="color:#ef4444">{{ bilan().passif.passif_circulant_ao.total | number:'1.0-0' }}</span>
+            </div>
+
+            <!-- I — Passif Circulant HAO -->
+            <div class="bilan-section">I — {{ 'comptabilite.passif_circulant_hao' | translate }}</div>
+            <div class="cr-row italic-row"><span>Dettes HAO</span><span class="mono">—</span></div>
+            <div class="bilan-total-masse"><span>TOTAL I</span><span class="mono">0</span></div>
+
+            <!-- J — Trésorerie-Passif -->
+            <div class="bilan-section">J — {{ 'comptabilite.tresorerie_passif' | translate }}</div>
+            <div *ngIf="bilan().passif.tresorerie_passif.detail.length === 0" class="cr-row italic-row">
+              <span>Aucun découvert bancaire</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let t of bilan().passif.tresorerie_passif.detail">
+              <span>{{ t.libelle }}</span><span class="mono danger">{{ t.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL J — Trésorerie-Passif</span>
+              <span class="mono danger">{{ bilan().passif.tresorerie_passif.total | number:'1.0-0' }}</span>
+            </div>
+
+            <!-- K — Écart de conversion -->
+            <div class="bilan-section">K — {{ 'comptabilite.ecart_conversion' | translate }}</div>
+            <div class="cr-row italic-row"><span>Gains de change latents</span><span class="mono">—</span></div>
+            <div class="bilan-total-masse"><span>TOTAL K</span><span class="mono">0</span></div>
+
+            <div class="cr-total" style="margin-top:12px">
+              <span>{{ 'comptabilite.total_passif' | translate }} (F+G+H+I+J+K)</span>
+              <span class="mono" style="color:#a855f7;font-size:16px">{{ bilan().passif.total_passif | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
         </div>
@@ -448,6 +647,69 @@ import { SelectModule } from 'primeng/select';
         </p-table>
       </div>
 
+  <!-- NOTES ANNEXES -->
+  <div *ngIf="onglet() === 'notes' && notesAnnexes()">
+    <div class="systeme-badge" [class.sn]="notesAnnexes().systeme === 'SN'" style="margin-bottom:16px">
+      📎 Notes Annexes — {{ notesAnnexes().systeme === 'SN' ? 'Système Normal' : 'Système Minimal de Trésorerie' }}
+      — Exercice {{ notesAnnexes().exercice }}
+    </div>
+
+    <!-- Note 1 — Présentation de l'entité -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header" style="color:#00d4aa">Note 1 — Présentation de l'entité</div>
+      <div class="card-body">
+        <div class="cr-row"><span>Secteur d'activité</span><span class="mono">{{ notesAnnexes().note1.secteur }}</span></div>
+        <div class="cr-row"><span>Référentiel comptable applicable</span><span class="mono">{{ notesAnnexes().note1.referentiel }}</span></div>
+        <div class="cr-row"><span>Exercice</span><span class="mono">{{ notesAnnexes().date_debut | date:'dd/MM/yyyy' }} → {{ notesAnnexes().date_fin | date:'dd/MM/yyyy' }}</span></div>
+        <div class="cr-row"><span>Nombre d'élèves inscrits</span><span class="mono">{{ notesAnnexes().note1.nb_eleves }}</span></div>
+        <div class="cr-row"><span>Nombre de paiements enregistrés</span><span class="mono">{{ notesAnnexes().note1.nb_paiements }}</span></div>
+        <div class="cr-row"><span>CAHT de l'exercice</span><span class="mono success">{{ notesAnnexes().caht | number:'1.0-0' }} FCFA</span></div>
+        <div class="cr-row"><span>Seuil SMT (services)</span><span class="mono">{{ notesAnnexes().seuil_smt | number:'1.0-0' }} FCFA</span></div>
+        <div style="margin-top:12px;font-size:11px;color:#64748b">Répartition par section :</div>
+        <div class="cr-row" *ngFor="let s of notesAnnexes().note1.sections">
+          <span style="padding-left:12px">└ {{ s.nom }}</span><span class="mono">{{ s.nb }} élèves</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Note 2 — Méthodes et principes comptables -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header" style="color:#00d4aa">Note 2 — Méthodes et principes comptables</div>
+      <div class="card-body">
+        <div class="cr-row"><span>Base d'évaluation</span><span class="mono">{{ notesAnnexes().note2.base_evaluation }}</span></div>
+        <div class="cr-row"><span>Amortissements</span><span class="mono">{{ notesAnnexes().note2.amortissement }}</span></div>
+        <div class="cr-row"><span>Créances clients</span><span class="mono">{{ notesAnnexes().note2.creances }}</span></div>
+        <div class="cr-row"><span>Trésorerie</span><span class="mono">{{ notesAnnexes().note2.tresorerie }}</span></div>
+        <div class="cr-row"><span>Méthode de comptabilisation</span><span class="mono">{{ notesAnnexes().note2.comptabilite }}</span></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Note 3 — Charges de personnel -->
+      <div class="card">
+        <div class="card-header" style="color:#00d4aa">Note 3 — Charges de personnel</div>
+        <div class="card-body">
+          <div class="cr-row"><span>Masse salariale (661+662)</span><span class="mono danger">{{ notesAnnexes().note3.masse_salariale | number:'1.0-0' }} FCFA</span></div>
+          <div class="cr-row"><span>Total charges de l'exercice</span><span class="mono danger">{{ notesAnnexes().note3.total_charges | number:'1.0-0' }} FCFA</span></div>
+        </div>
+      </div>
+
+      <!-- Note 4 — Trésorerie de clôture -->
+      <div class="card">
+        <div class="card-header" style="color:#00d4aa">Note 4 — Trésorerie de clôture</div>
+        <div class="card-body">
+          <div class="cr-row" *ngFor="let t of notesAnnexes().note4.comptes">
+            <span>{{ t.libelle }} ({{ t.compte }})</span>
+            <span class="mono" [style.color]="t.solde >= 0 ? '#10b981' : '#ef4444'">{{ t.solde | number:'1.0-0' }} FCFA</span>
+          </div>
+          <div *ngIf="notesAnnexes().note4.comptes.length === 0" class="cr-row italic-row">
+            <span>Aucun solde de trésorerie</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Dialog Nouvelle Charge -->
   <p-dialog [header]="'💸 ' + ('comptabilite.nouvelle_charge' | translate)" [(visible)]="dialogChargeVisible"
             [modal]="true" [style]="{width:'460px'}" [draggable]="false">
@@ -455,7 +717,8 @@ import { SelectModule } from 'primeng/select';
       <div class="form-group full">
         <label>{{ 'comptabilite.compte_charge' | translate }} *</label>
         <p-select [options]="planCharges" [(ngModel)]="nouvelleCharge.no_compte"
-                  optionLabel="label" optionValue="value" styleClass="w-full" />
+                  optionLabel="label" optionValue="value" styleClass="w-full"
+                  (onChange)="onCompteChargeChange()" />
       </div>
       <div class="form-group full">
         <label>{{ 'comptabilite.libelle' | translate }} *</label>
@@ -470,6 +733,11 @@ import { SelectModule } from 'primeng/select';
       <div class="form-group">
         <label>{{ 'comptabilite.date' | translate }}</label>
         <input pInputText type="date" [(ngModel)]="nouvelleCharge.date" class="w-full" />
+      </div>
+      <div class="form-group full">
+        <label>{{ 'comptabilite.compte_fournisseur' | translate }}</label>
+        <p-select [options]="planFournisseurs" [(ngModel)]="nouvelleCharge.compte_fournisseur"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
       <div class="form-group full">
         <label>{{ 'comptabilite.regle_via' | translate }}</label>
@@ -526,7 +794,16 @@ import { SelectModule } from 'primeng/select';
 
     .bilan-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-size:13px; font-weight:600; color:#e8f0fe; }
     .equilibre-badge { font-size:12px; padding:4px 12px; border-radius:20px; background:rgba(16,185,129,0.15); color:#10b981; }
-    .bilan-section { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin:10px 0 4px; }
+    .bilan-section        { font-size:11px; color:#00d4aa; text-transform:uppercase; letter-spacing:1px; margin:14px 0 4px; font-weight:600; border-bottom:1px solid rgba(0,212,170,0.2); padding-bottom:4px; }
+    .bilan-subsection     { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin:8px 0 2px; }
+    .bilan-total-masse    { display:flex; justify-content:space-between; padding:6px 0; font-size:12px; font-weight:700; color:#e8f0fe; background:rgba(0,0,0,0.15); margin:2px -18px; padding:6px 18px; }
+    .italic-row span:first-child { font-style:italic; color:#475569; }
+    ::ng-deep .synthetic-row td { background:rgba(0,212,170,0.06) !important; border-top:1px solid rgba(0,212,170,0.25) !important; }
+    .systeme-badge   { display:inline-block; font-size:11px; padding:4px 12px; border-radius:20px; background:rgba(100,116,139,0.2); color:#64748b; }
+    .systeme-badge.sn { background:rgba(0,212,170,0.15); color:#00d4aa; }
+    .sig-row      { display:flex; justify-content:space-between; padding:5px 0; font-size:12px; color:#94a3b8; border-bottom:1px solid rgba(42,63,95,0.2); }
+    .sig-label    { color:#94a3b8; padding-left:16px; }
+    .sig-subtotal { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; font-weight:700; color:#e8f0fe; border-top:1px solid #2a3f5f; margin-top:4px; }
 
     .flux-header { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600; color:#0099ff; margin-bottom:14px; }
     .flux-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:700; font-size:13px; border-top:2px solid #2a3f5f; margin-top:4px; }
@@ -559,6 +836,8 @@ export class ComptabiliteComponent implements OnInit {
   bilan          = signal<any>(null);
   flux           = signal<any>(null);
   historique     = signal<any>(null);
+  notesAnnexes   = signal<any>(null);
+  systeme        = signal<string>('SN');
   loadingJournal = signal(true);
   loadingGL      = signal(true);
   loadingBalance = signal(true);
@@ -567,29 +846,49 @@ loadingCharges = signal(false);
 savingCharge   = signal(false);
 dialogChargeVisible = false;
 nouvelleCharge = {
-    no_compte: '661',
-    libelle: '',
-    montant: 0,
-    date: new Date().toISOString().split('T')[0],
-    compte_credit: '571',
+    no_compte:          '661',
+    libelle:            '',
+    montant:            0,
+    date:               new Date().toISOString().split('T')[0],
+    compte_credit:      '571',
+    compte_fournisseur: '401',
 };
 planCharges = [
-    { label: '601 - Achats marchandises',         value: '601' },
-    { label: '604 - Achats fournitures',           value: '604' },
-    { label: '606 - Eau, électricité',             value: '606' },
-    { label: '611 - Transport',                    value: '611' },
-    { label: '612 - Loyer',                        value: '612' },
-    { label: '621 - Personnel extérieur',          value: '621' },
-    { label: '625 - Déplacements et missions',     value: '625' },
-    { label: '631 - Frais bancaires',              value: '631' },
-    { label: '641 - Impôts et taxes',              value: '641' },
-    { label: '661 - Salaires & charges',           value: '661' },
-    { label: '662 - Charges sociales',             value: '662' },
+    { label: '── CHARGES D\'EXPLOITATION ──', value: '' },
+    { label: '601 — Achats de marchandises',          value: '601' },
+    { label: '604 — Achats de fournitures',           value: '604' },
+    { label: '606 — Eau, électricité, fournitures',   value: '606' },
+    { label: '611 — Transports',                      value: '611' },
+    { label: '612 — Loyer',                           value: '612' },
+    { label: '613 — Locations diverses',              value: '613' },
+    { label: '621 — Personnel extérieur',             value: '621' },
+    { label: '622 — Rémunérations intermédiaires',    value: '622' },
+    { label: '623 — Publicité',                       value: '623' },
+    { label: '624 — Transport du personnel',          value: '624' },
+    { label: '625 — Déplacements et missions',        value: '625' },
+    { label: '631 — Frais bancaires',                 value: '631' },
+    { label: '641 — Impôts et taxes',                 value: '641' },
+    { label: '661 — Salaires',                        value: '661' },
+    { label: '662 — Charges sociales (IPRES/CSS)',    value: '662' },
+    { label: '681 — Dotations aux amortissements',    value: '681' },
+    { label: '── ACQUISITIONS D\'IMMOBILISATIONS ──', value: '' },
+    { label: '221 — Bâtiments',                       value: '221' },
+    { label: '231 — Matériel et outillage',           value: '231' },
+    { label: '241 — Mobilier',                        value: '241' },
+    { label: '244 — Matériel informatique',           value: '244' },
+    { label: '245 — Matériel de transport',           value: '245' },
+];
+planFournisseurs = [
+    { label: '401 — Fournisseurs (dettes en compte)',           value: '401' },
+    { label: '404 — Fournisseurs, acquisitions immobilisations', value: '404' },
+    { label: '481 — Fournisseurs d\'immobilisations',           value: '481' },
 ];
 comptesCredit = [
-    { label: '571 - Caisse',        value: '571' },
-    { label: '521 - Banque',        value: '521' },
-    { label: '552 - Wave/Mobile',   value: '552' },
+    { label: '571  — Caisse',        value: '571' },
+    { label: '521  — Banque',        value: '521' },
+    { label: '5521 — WAVE',          value: '5521' },
+    { label: '5522 — Orange Money',  value: '5522' },
+    { label: '5523 — Free Money',    value: '5523' },
 ];
 
   private translate = inject(TranslateService);
@@ -610,7 +909,13 @@ comptesCredit = [
       next: res => this.resultat.set(res)
     });
     this.compta.getBilan().subscribe({
-      next: res => this.bilan.set(res)
+      next: res => {
+        this.bilan.set(res);
+        if (res?.systeme) this.systeme.set(res.systeme);
+      }
+    });
+    this.compta.getNotesAnnexes().subscribe({
+      next: res => this.notesAnnexes.set(res)
     });
     this.compta.getTableauFlux().subscribe({
       next: res => this.flux.set(res)
@@ -673,9 +978,24 @@ comptesCredit = [
       this.nouvelleCharge = {
           no_compte: '661', libelle: '', montant: 0,
           date: new Date().toISOString().split('T')[0],
-          compte_credit: '571',
+          compte_credit: '571', compte_fournisseur: '401',
       };
       this.dialogChargeVisible = true;
+  }
+
+  onCompteChargeChange() {
+      const no = this.nouvelleCharge.no_compte || '';
+      // Auto-sélection du compte fournisseur selon la nature de la charge
+      if (no.startsWith('2')) {
+          // Acquisition immobilisation → 404
+          this.nouvelleCharge.compte_fournisseur = '404';
+      } else if (no === '681') {
+          // Dotation amortissement → 481 (provision interne)
+          this.nouvelleCharge.compte_fournisseur = '481';
+      } else {
+          // Charge d'exploitation → 401
+          this.nouvelleCharge.compte_fournisseur = '401';
+      }
   }
 
   sauvegarderCharge() {

@@ -10,12 +10,13 @@ class JournalEntry(TenantModel):
     libelle       = models.TextField()
     debit         = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     credit        = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    source        = models.CharField(max_length=20, blank=True)  # 'RECETTE' | 'CHARGE'
+    source        = models.CharField(max_length=20, blank=True)
     source_id     = models.UUIDField(null=True, blank=True)
+    ordre         = models.IntegerField(default=0)  # Position dans la pièce : 1=débit E1, 2=crédit E1, 3=débit E2, 4=crédit E2
 
     class Meta:
         db_table = 'journal_entries'
-        ordering = ['date_ecriture', 'no_piece']
+        ordering = ['date_ecriture', 'no_piece', 'ordre']
 
     def __str__(self):
         return f"{self.no_piece} — {self.libelle}"

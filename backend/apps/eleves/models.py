@@ -41,8 +41,11 @@ class Eleve(TenantModel):
     nom_complet       = models.CharField(max_length=200)
     genre             = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance    = models.DateField(null=True, blank=True)
-    telephone_parent  = models.CharField(max_length=20, blank=True)
-    nom_parent        = models.CharField(max_length=200, blank=True)
+    lieu_naissance    = models.CharField(max_length=200, blank=True)
+    nom_pere          = models.CharField(max_length=200, blank=True)
+    telephone_pere    = models.CharField(max_length=20, blank=True)
+    nom_mere          = models.CharField(max_length=200, blank=True)
+    telephone_mere    = models.CharField(max_length=20, blank=True)
     date_inscription  = models.DateField(auto_now_add=True)
     statut            = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
 
@@ -76,13 +79,10 @@ class Eleve(TenantModel):
 
     @property
     def niveau_alerte(self):
-        from django.utils import timezone
-        jours = (timezone.now().date() - self.date_inscription).days
-        reste = self.reste_a_payer
-        if reste <= 0:
+        total = float(self.total_attendu)
+        paye  = float(self.total_paye)
+        if total <= 0 or paye >= total:
             return 'OK'
-        if jours > 60:
+        if paye / total < 0.5:
             return 'URGENT'
-        if jours > 30:
-            return 'ATTENTION'
-        return 'OK'
+        return 'ATTENTION'

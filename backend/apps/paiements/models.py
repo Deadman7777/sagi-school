@@ -61,18 +61,3 @@ class Paiement(TenantModel):
             last = Paiement.objects.filter(exercice=self.exercice).count()
             self.no_piece = f"REC-{str(last + 1).zfill(4)}"
         super().save(*args, **kwargs)
-        # Génère automatiquement l'écriture comptable
-        self._generer_ecriture()
-
-    def _generer_ecriture(self):
-        from apps.comptabilite.models import JournalEntry
-        compte_tresorerie = {'WAVE': '5521', 'ORANGE_MONEY': '5522',
-                             'FREE_MONEY': '5523', 'ESPECE': '571',
-                             'VIREMENT': '521'}.get(self.mode_paiement, '571')
-        JournalEntry.objects.get_or_create(
-            exercice=self.exercice, no_piece=self.no_piece,
-            no_compte=compte_tresorerie,
-            defaults={'libelle': f"Encaissement - {self.eleve.nom_complet} ({self.mode_paiement})",
-                      'debit': self.total, 'credit': 0, 'source': 'RECETTE', 'source_id': self.id,
-                      'date_ecriture': self.date_paiement, 'tenant': self.tenant}
-        )

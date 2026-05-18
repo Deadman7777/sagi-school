@@ -38,7 +38,7 @@ class EleveViewSet(viewsets.ModelViewSet):
     serializer_class   = EleveSerializer
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields      = ['nom_complet', 'telephone_parent']
+    search_fields      = ['nom_complet', 'telephone_pere', 'telephone_mere']
     ordering_fields    = ['nom_complet', 'date_inscription', 'numero']
 
     def get_queryset(self):

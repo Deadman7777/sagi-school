@@ -88,9 +88,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         compte_reglement, libelle_compte = {
             'ESPECE':       ('571', 'Caisse'),
-            'WAVE':         ('552', 'Wave'),
-            'ORANGE_MONEY': ('552', 'Orange Money'),
-            'FREE_MONEY':   ('552', 'Free Money'),
+            'WAVE':         ('5521', 'WAVE'),
+            'ORANGE_MONEY': ('5522', 'Orange Money'),
+            'FREE_MONEY':   ('5523', 'Free Money'),
             'VIREMENT':     ('521', 'Banque'),
             'CHEQUE':       ('521', 'Banque'),
         }.get(paiement.mode_paiement, ('571', 'Caisse'))
@@ -98,11 +98,17 @@ class PaiementViewSet(viewsets.ModelViewSet):
         libelle = f"{eleve_nom} - {no_piece}"
         date = paiement.date_paiement
 
+        # Écriture 1 — Constatation créance : Débit 411 / Crédit 706
+        # Écriture 2 — Règlement           : Débit 5xx / Crédit 411
         ecritures = [
-            dict(no_compte='411', libelle=f"Créance scolarité - {libelle}", debit=montant, credit=0),
-            dict(no_compte='706', libelle=f"Créance scolarité - {libelle}", debit=0, credit=montant),
-            dict(no_compte=compte_reglement, libelle=f"Règlement {libelle_compte} - {libelle}", debit=montant, credit=0),
-            dict(no_compte='411', libelle=f"Règlement {libelle_compte} - {libelle}", debit=0, credit=montant),
+            dict(ordre=1, no_compte='411',           debit=montant, credit=0,
+                 libelle=f"Créance scolarité — {libelle}"),
+            dict(ordre=2, no_compte='706',           debit=0,       credit=montant,
+                 libelle=f"Créance scolarité — {libelle}"),
+            dict(ordre=3, no_compte=compte_reglement, debit=montant, credit=0,
+                 libelle=f"Règlement {libelle_compte} — {libelle}"),
+            dict(ordre=4, no_compte='411',           debit=0,       credit=montant,
+                 libelle=f"Règlement {libelle_compte} — {libelle}"),
         ]
 
         for e in ecritures:

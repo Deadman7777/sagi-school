@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (JournalView, GrandLivreView, BalanceView,
                     CompteResultatView, BilanView,
-                    TableauFluxView, HistoriqueExercicesView, ChargeView)
+                    TableauFluxView, HistoriqueExercicesView, ChargeView,
+                    NotesAnnexesView)
 from .pdf_views import ExportPDFView
 
 urlpatterns = [
@@ -12,6 +13,7 @@ urlpatterns = [
     path('bilan/',              BilanView.as_view()),
     path('tableau-flux/',       TableauFluxView.as_view()),
     path('historique/',         HistoriqueExercicesView.as_view()),
+    path('notes-annexes/',      NotesAnnexesView.as_view()),
     path('export-pdf/<str:type_doc>/', ExportPDFView.as_view()),
     path('charges/',            ChargeView.as_view()),
     path('charges/<str:pk>/',   ChargeView.as_view()),

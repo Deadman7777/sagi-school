@@ -36,14 +36,13 @@ class EleveSerializer(serializers.ModelSerializer):
         return float(obj.total_attendu) - paye
 
     def get_niveau_alerte(self, obj):
-        reste = self.get_reste_a_payer(obj)
-        if reste <= 0:
+        total = float(obj.total_attendu)
+        paye  = self.get_total_paye(obj)
+        if total <= 0 or paye >= total:
             return 'OK'
-        from django.utils import timezone
-        jours = (timezone.now().date() - obj.date_inscription).days
-        if jours > 60: return 'URGENT'
-        if jours > 30: return 'ATTENTION'
-        return 'OK'
+        if paye / total < 0.5:
+            return 'URGENT'
+        return 'ATTENTION'
 
 class SectionSerializer(serializers.ModelSerializer):
     total_annuel = serializers.ReadOnlyField()
