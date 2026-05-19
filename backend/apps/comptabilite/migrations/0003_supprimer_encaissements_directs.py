@@ -69,11 +69,11 @@ def restaurer_et_nettoyer(apps, schema_editor):
             )
         created_count += 4
 
-    print(f"\n  → {created_count} écriture(s) PAIEMENT reconstituée(s).")
+    print(f"\n  -> {created_count} ecriture(s) PAIEMENT reconstituee(s).")
 
     # Supprimer les encaissements directs (source='RECETTE')
     deleted, _ = JournalEntry.objects.filter(source='RECETTE').delete()
-    print(f"  → {deleted} écriture(s) 'Encaissement' en double supprimée(s).")
+    print(f"  -> {deleted} ecriture(s) 'Encaissement' en double supprimee(s).")
 
 
 class Migration(migrations.Migration):
