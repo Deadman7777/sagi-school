@@ -1,312 +1,504 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  ChangeDetectionStrategy, Component, OnInit, computed, inject, signal
+} from '@angular/core';
+import { DecimalPipe, SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { ElevesService } from '../../core/services/eleves.service';
-import { TableModule } from 'primeng/table';
-import { ButtonModule } from 'primeng/button';
-import { TagModule } from 'primeng/tag';
-import { AutoCompleteModule } from 'primeng/autocomplete';
-import { TranslateModule } from '@ngx-translate/core';
+import { TableModule }       from 'primeng/table';
+import { ButtonModule }      from 'primeng/button';
+import { TagModule }         from 'primeng/tag';
+import { AutoCompleteModule }from 'primeng/autocomplete';
+import { TranslateModule }   from '@ngx-translate/core';
 import { Eleve } from '../../core/models/eleve.model';
 
 @Component({
   selector: 'app-suivi-mensuel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule,
-            TagModule, AutoCompleteModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    DecimalPipe, SlicePipe, FormsModule,
+    TableModule, ButtonModule, TagModule, AutoCompleteModule, TranslateModule,
+  ],
   template: `
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">📅 {{ 'suivi.title' | translate }}</h2>
-        <span class="page-sub">{{ 'suivi.subtitle' | translate }}</span>
+<div class="page-header">
+  <div>
+    <h2 class="page-title">📅 {{ 'suivi.title' | translate }}</h2>
+    <span class="page-sub">{{ synthese()?.exercice }} — {{ 'suivi.subtitle' | translate }}</span>
+  </div>
+  <button class="btn-refresh" (click)="chargerTout()">↻ Actualiser</button>
+</div>
+
+<!-- ── Synthèse globale ── -->
+@if (synthese()) {
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--acc:#00d4aa">
+      <div class="kpi-icon">👩‍🎓</div>
+      <div class="kpi-label">{{ 'suivi.nb_inscrits' | translate }}</div>
+      <div class="kpi-value" style="color:#00d4aa">{{ synthese()!.nb_eleves }}</div>
+    </div>
+    <div class="kpi-card" style="--acc:#0099ff">
+      <div class="kpi-icon">🧾</div>
+      <div class="kpi-label">{{ 'suivi.total_attendu' | translate }}</div>
+      <div class="kpi-value" style="color:#0099ff">{{ synthese()!.total_attendu | number:'1.0-0' }}</div>
+      <div class="kpi-sub">FCFA attendus</div>
+    </div>
+    <div class="kpi-card" style="--acc:#10b981">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-label">{{ 'suivi.total_encaisse' | translate }}</div>
+      <div class="kpi-value" style="color:#10b981">{{ synthese()!.total_paye | number:'1.0-0' }}</div>
+      <div class="kpi-sub">FCFA encaissés</div>
+    </div>
+    <div class="kpi-card" style="--acc:#ef4444">
+      <div class="kpi-icon">⚠️</div>
+      <div class="kpi-label">{{ 'suivi.reste_global' | translate }}</div>
+      <div class="kpi-value" style="color:#ef4444">{{ synthese()!.reste | number:'1.0-0' }}</div>
+      <div class="kpi-sub">FCFA impayés</div>
+    </div>
+    <div class="kpi-card" style="--acc:#a855f7">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-label">{{ 'suivi.taux_recouvrement' | translate }}</div>
+      <div class="kpi-value" [style.color]="synthese()!.taux_recouvrement >= 80 ? '#10b981' : synthese()!.taux_recouvrement >= 50 ? '#f59e0b' : '#ef4444'">
+        {{ synthese()!.taux_recouvrement }} %
+      </div>
+      <div class="progress-mini">
+        <div class="pm-fill" [style.width.%]="synthese()!.taux_recouvrement"
+             [style.background]="synthese()!.taux_recouvrement >= 80 ? '#10b981' : synthese()!.taux_recouvrement >= 50 ? '#f59e0b' : '#ef4444'">
+        </div>
       </div>
     </div>
+  </div>
+}
 
-    <!-- Onglets -->
-    <div class="tabs-bar">
-      <button class="tab-btn" [class.active]="onglet() === 'global'"
-              (click)="onglet.set('global')">📊 {{ 'suivi.vue_globale' | translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'eleve'"
-              (click)="onglet.set('eleve')">👤 {{ 'suivi.par_eleve' | translate }}</button>
-    </div>
+<!-- ── Onglets ── -->
+<div class="tabs-bar">
+  <button class="tab-btn" [class.active]="onglet() === 'global'"
+          (click)="onglet.set('global')">📊 Évolution mensuelle</button>
+  <button class="tab-btn" [class.active]="onglet() === 'sections'"
+          (click)="onglet.set('sections')">🏫 Par section</button>
+  <button class="tab-btn" [class.active]="onglet() === 'creances'"
+          (click)="onglet.set('creances')">⚠️ Créances
+    @if (creances().length > 0) {
+      <span class="badge-count">{{ creances().length }}</span>
+    }
+  </button>
+  <button class="tab-btn" [class.active]="onglet() === 'eleve'"
+          (click)="onglet.set('eleve')">👤 Par élève</button>
+</div>
 
-    <!-- ══ VUE GLOBALE ══ -->
-    <ng-container *ngIf="onglet() === 'global'">
+<!-- ════ VUE GLOBALE MENSUELLE ════ -->
+@if (onglet() === 'global') {
 
-      <div class="kpi-row" *ngIf="globalData().length > 0">
-        <div class="kpi-mini teal">
-          <div class="km-label">{{ 'suivi.total_encaisse' | translate }}</div>
-          <div class="km-val">{{ totalGlobal() | number:'1.0-0' }} FCFA</div>
-        </div>
-        <div class="kpi-mini blue">
-          <div class="km-label">{{ 'suivi.nb_transactions' | translate }}</div>
-          <div class="km-val">{{ nbTransactions() }}</div>
-        </div>
-        <div class="kpi-mini green">
-          <div class="km-label">{{ 'suivi.mois_actifs' | translate }}</div>
-          <div class="km-val">{{ globalData().length }}</div>
-        </div>
-        <div class="kpi-mini orange">
-          <div class="km-label">{{ 'suivi.moyenne_mois' | translate }}</div>
-          <div class="km-val">{{ (totalGlobal() / globalData().length) | number:'1.0-0' }} FCFA</div>
-        </div>
+  <!-- Graphique en barres -->
+  @if (globalData().length > 0) {
+    <div class="bar-section">
+      <div class="bs-header">
+        <span class="bs-title">Encaissements mensuels — {{ synthese()?.exercice }}</span>
+        <span class="bs-total">Total : {{ totalGlobal() | number:'1.0-0' }} FCFA</span>
       </div>
-
-      <!-- Barres visuelles -->
-      <div class="bar-section" *ngIf="globalData().length > 0">
-        <div class="bs-title">{{ 'suivi.evolution' | translate }}</div>
-        <div class="bars-wrap">
-          <div class="bar-item" *ngFor="let m of globalData()">
+      <div class="bars-wrap">
+        @for (m of globalData(); track m.mois_num) {
+          <div class="bar-item" [class.bar-active]="m.total > 0">
+            <div class="bar-amount">
+              @if (m.total > 0) {
+                {{ m.total | number:'1.0-0' }}
+              }
+            </div>
             <div class="bar-track">
-              <div class="bar-fill" [style.height.%]="(m.total / maxMensuel()) * 100" [title]="m.total | number:'1.0-0'"></div>
+              <div class="bar-fill"
+                   [style.height.%]="maxMensuel() > 0 ? (m.total / maxMensuel()) * 100 : 0"
+                   [class.bar-fill-active]="m.total > 0">
+              </div>
             </div>
             <div class="bar-label">{{ m.mois_court }}</div>
-            <div class="bar-val">{{ m.total | number:'1.0-0' }}</div>
+            <div class="bar-nb" [class.nb-active]="m.nb > 0">{{ m.nb > 0 ? m.nb + ' pal.' : '' }}</div>
           </div>
-        </div>
+        }
       </div>
+    </div>
+  }
 
-      <!-- Tableau détail -->
-      <div class="table-card">
-        <p-table [value]="globalData()" [loading]="loading()" styleClass="p-datatable-sm" [showGridlines]="true">
-          <ng-template pTemplate="header">
-            <tr>
-              <th>{{ 'suivi.mois_col'       | translate }}</th>
-              <th class="text-right">{{ 'suivi.nb_paiements'  | translate }}</th>
-              <th class="text-right">{{ 'suivi.inscription_col'| translate }}</th>
-              <th class="text-right">{{ 'suivi.mensualite_col' | translate }}</th>
-              <th class="text-right">{{ 'suivi.uniforme_col'   | translate }}</th>
-              <th class="text-right">{{ 'suivi.fournitures_col'| translate }}</th>
-              <th class="text-right">{{ 'suivi.cantine_col'    | translate }}</th>
-              <th class="text-right">{{ 'suivi.total_mois'     | translate }}</th>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="body" let-m>
-            <tr>
-              <td class="bold">{{ m.mois }}</td>
-              <td class="mono text-right">{{ m.nb }}</td>
-              <td class="mono text-right">{{ m.inscription | number:'1.0-0' }}</td>
-              <td class="mono text-right">{{ m.mensualite  | number:'1.0-0' }}</td>
-              <td class="mono text-right">{{ m.uniforme    | number:'1.0-0' }}</td>
-              <td class="mono text-right">{{ m.fournitures | number:'1.0-0' }}</td>
-              <td class="mono text-right">{{ m.cantine     | number:'1.0-0' }}</td>
-              <td class="mono text-right teal bold">{{ m.total | number:'1.0-0' }}</td>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="footer">
-            <tr>
-              <td class="bold">{{ 'suivi.total_label' | translate }}</td>
-              <td class="mono text-right bold">{{ nbTransactions() }}</td>
-              <td colspan="5"></td>
-              <td class="mono text-right bold teal">{{ totalGlobal() | number:'1.0-0' }}</td>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="emptymessage">
-            <tr><td colspan="8" class="empty-msg">{{ 'suivi.aucun_paiement' | translate }}</td></tr>
-          </ng-template>
-        </p-table>
-      </div>
-    </ng-container>
+  <!-- Tableau mensuel -->
+  <div class="table-card">
+    <p-table [value]="globalData()" [loading]="loading()" styleClass="p-datatable-sm" [showGridlines]="true">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Mois</th>
+          <th class="tr">Nb Paiements</th>
+          <th class="tr">{{ 'suivi.inscription_col' | translate }}</th>
+          <th class="tr">{{ 'suivi.mensualite_col'  | translate }}</th>
+          <th class="tr">{{ 'suivi.uniforme_col'    | translate }}</th>
+          <th class="tr">{{ 'suivi.fournitures_col' | translate }}</th>
+          <th class="tr">{{ 'suivi.cantine_col'     | translate }}</th>
+          <th class="tr">Total Mois</th>
+          <th class="tr">Cumul</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-m>
+        <tr [class.row-empty]="m.total === 0" [class.row-active]="m.total > 0">
+          <td class="bold">{{ m.mois }}</td>
+          <td class="mono tr">{{ m.nb > 0 ? m.nb : '—' }}</td>
+          <td class="mono tr">{{ m.inscription > 0 ? (m.inscription | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr">{{ m.mensualite > 0  ? (m.mensualite  | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr">{{ m.uniforme > 0    ? (m.uniforme    | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr">{{ m.fournitures > 0 ? (m.fournitures | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr">{{ m.cantine > 0     ? (m.cantine     | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr bold" [class.teal]="m.total > 0">
+            {{ m.total > 0 ? (m.total | number:'1.0-0') : '—' }}
+          </td>
+          <td class="mono tr" style="color:#a855f7">{{ cumulJusquau(m) | number:'1.0-0' }}</td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="footer">
+        <tr>
+          <td class="bold">TOTAL EXERCICE</td>
+          <td class="mono tr bold">{{ nbTransactions() }}</td>
+          <td colspan="5"></td>
+          <td class="mono tr bold teal">{{ totalGlobal() | number:'1.0-0' }}</td>
+          <td></td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="9" class="empty-msg">{{ 'suivi.aucun_paiement' | translate }}</td></tr>
+      </ng-template>
+    </p-table>
+  </div>
+}
 
-    <!-- ══ VUE PAR ÉLÈVE ══ -->
-    <ng-container *ngIf="onglet() === 'eleve'">
-
-      <div class="search-zone">
-        <p-autoComplete
-          [(ngModel)]="eleveSelectionne"
-          [suggestions]="suggestions()"
-          (completeMethod)="chercher($event)"
-          field="nom_complet"
-          [placeholder]="'suivi.rechercher_eleve' | translate"
-          styleClass="w-full"
-          [forceSelection]="true"
-          (onSelect)="chargerSuiviEleve($event.value)">
-          <ng-template let-e pTemplate="item">
-            <div style="padding:6px 0">
-              <div style="font-weight:600">{{ e.nom_complet }}</div>
-              <div style="font-size:11px;color:#64748b">
-                {{ e.section_nom }} — {{ 'suivi.reste' | translate }} {{ e.reste_a_payer | number:'1.0-0' }} FCFA
+<!-- ════ PAR SECTION ════ -->
+@if (onglet() === 'sections') {
+  <div class="table-card">
+    <p-table [value]="sections()" [loading]="loading()" styleClass="p-datatable-sm">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Section</th>
+          <th class="tr">Effectif</th>
+          <th class="tr">Total Attendu</th>
+          <th class="tr">Total Encaissé</th>
+          <th class="tr">Reste à Payer</th>
+          <th style="width:200px">Taux de Recouvrement</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-s>
+        <tr>
+          <td class="bold">{{ s.nom }}</td>
+          <td class="mono tr">{{ s.nb_eleves }}</td>
+          <td class="mono tr">{{ s.total_attendu | number:'1.0-0' }}</td>
+          <td class="mono tr success">{{ s.total_paye | number:'1.0-0' }}</td>
+          <td class="mono tr danger">{{ s.reste | number:'1.0-0' }}</td>
+          <td>
+            <div class="taux-row">
+              <div class="taux-bar-track">
+                <div class="taux-bar-fill"
+                     [style.width.%]="s.taux"
+                     [style.background]="s.taux >= 80 ? '#10b981' : s.taux >= 50 ? '#f59e0b' : '#ef4444'">
+                </div>
               </div>
+              <span class="taux-val" [class.success]="s.taux >= 80" [class.warn-txt]="s.taux >= 50 && s.taux < 80" [class.danger]="s.taux < 50">
+                {{ s.taux }} %
+              </span>
             </div>
-          </ng-template>
-        </p-autoComplete>
-      </div>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="6" class="empty-msg">Aucune section</td></tr>
+      </ng-template>
+    </p-table>
+  </div>
+}
 
-      <!-- Fiche élève -->
-      <ng-container *ngIf="eleveDetail()">
-        <div class="eleve-card">
-          <div class="ec-avatar">{{ eleveDetail()!.nom.substring(0,2).toUpperCase() }}</div>
-          <div class="ec-info">
-            <div class="ec-nom">{{ eleveDetail()!.nom }}</div>
-            <div class="ec-section">{{ eleveDetail()!.section }}</div>
-          </div>
-          <div class="ec-stats">
-            <div class="ecs">
-              <div class="ecs-label">{{ 'suivi.total_attendu' | translate }}</div>
-              <div class="ecs-val">{{ eleveDetail()!.attendu | number:'1.0-0' }} FCFA</div>
-            </div>
-            <div class="ecs">
-              <div class="ecs-label">{{ 'suivi.total_paye' | translate }}</div>
-              <div class="ecs-val" style="color:#10b981">{{ eleveDetail()!.total_paye | number:'1.0-0' }} FCFA</div>
-            </div>
-            <div class="ecs">
-              <div class="ecs-label">{{ 'suivi.reste_e' | translate }}</div>
-              <div class="ecs-val" [style.color]="eleveDetail()!.reste > 0 ? '#ef4444' : '#10b981'">
-                {{ eleveDetail()!.reste | number:'1.0-0' }} FCFA
+<!-- ════ CRÉANCES ════ -->
+@if (onglet() === 'creances') {
+  <div class="table-card">
+    <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:#e8f0fe;font-weight:600">
+        ⚠️ {{ creances().length }} élèves avec solde impayé
+      </span>
+      <span class="teal bold mono">
+        Total créances : {{ totalCreances() | number:'1.0-0' }} FCFA
+      </span>
+    </div>
+    <p-table [value]="creances()" [loading]="loading()" styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Élève</th>
+          <th>Section</th>
+          <th class="tr">Attendu</th>
+          <th class="tr">Payé</th>
+          <th class="tr">Reste</th>
+          <th style="width:200px">Progression</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-e>
+        <tr>
+          <td class="bold">{{ e.nom }}</td>
+          <td class="small-txt">{{ e.section }}</td>
+          <td class="mono tr">{{ e.attendu | number:'1.0-0' }}</td>
+          <td class="mono tr success">{{ e.paye | number:'1.0-0' }}</td>
+          <td class="mono tr danger bold">{{ e.reste | number:'1.0-0' }}</td>
+          <td>
+            <div class="taux-row">
+              <div class="taux-bar-track">
+                <div class="taux-bar-fill"
+                     [style.width.%]="e.taux"
+                     [style.background]="e.taux >= 80 ? '#10b981' : e.taux >= 50 ? '#f59e0b' : '#ef4444'">
+                </div>
               </div>
+              <span class="taux-val" [class.success]="e.taux >= 80" [class.danger]="e.taux < 50">
+                {{ e.taux }} %
+              </span>
             </div>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="6" class="empty-msg">✅ Aucune créance — tous les élèves sont à jour !</td></tr>
+      </ng-template>
+    </p-table>
+  </div>
+}
+
+<!-- ════ PAR ÉLÈVE ════ -->
+@if (onglet() === 'eleve') {
+  <div class="search-zone">
+    <p-autoComplete
+      [(ngModel)]="eleveSelectionne"
+      [suggestions]="suggestions()"
+      (completeMethod)="chercher($event)"
+      field="nom_complet"
+      placeholder="Rechercher un élève..."
+      styleClass="w-full"
+      [forceSelection]="true"
+      (onSelect)="chargerSuiviEleve($event.value)">
+      <ng-template let-e pTemplate="item">
+        <div style="padding:6px 0">
+          <div style="font-weight:600">{{ e.nom_complet }}</div>
+          <div style="font-size:11px;color:#64748b">
+            {{ e.section_nom }} —
+            Reste : <span style="color:#ef4444">{{ e.reste_a_payer | number:'1.0-0' }} FCFA</span>
           </div>
         </div>
+      </ng-template>
+    </p-autoComplete>
+  </div>
 
-        <div class="progress-card">
-          <div class="pc-header">
-            <span>{{ 'suivi.taux_recouvrement' | translate }}</span>
-            <span class="mono teal">{{ pctRecouvrement() | number:'1.0-0' }}%</span>
-          </div>
-          <div class="progress-track">
-            <div class="progress-fill"
-                 [style.width.%]="pctRecouvrement()"
-                 [style.background]="pctRecouvrement() >= 80 ? '#10b981' :
-                                     pctRecouvrement() >= 50 ? '#f59e0b' : '#ef4444'">
-            </div>
-          </div>
-        </div>
-
-        <div class="table-card">
-          <p-table [value]="eleveDetail()!.paiements" styleClass="p-datatable-sm">
-            <ng-template pTemplate="header">
-              <tr>
-                <th>{{ 'suivi.no_piece'        | translate }}</th>
-                <th>{{ 'suivi.date_col'         | translate }}</th>
-                <th class="text-right">{{ 'suivi.inscription_col' | translate }}</th>
-                <th class="text-right">{{ 'suivi.mensualite_col'  | translate }}</th>
-                <th class="text-right">{{ 'suivi.uniforme_col'    | translate }}</th>
-                <th class="text-right">{{ 'suivi.fournitures_col' | translate }}</th>
-                <th class="text-right">{{ 'suivi.cantine_col'     | translate }}</th>
-                <th class="text-right">{{ 'suivi.total_col'       | translate }}</th>
-                <th class="text-right">{{ 'suivi.cumul_col'       | translate }}</th>
-                <th>{{ 'suivi.mode_col' | translate }}</th>
-              </tr>
-            </ng-template>
-            <ng-template pTemplate="body" let-p>
-              <tr>
-                <td class="mono">{{ p.no_piece }}</td>
-                <td>{{ p.date | date:'dd/MM/yyyy' }}</td>
-                <td class="mono text-right">{{ p.inscription | number:'1.0-0' }}</td>
-                <td class="mono text-right">{{ p.mensualite  | number:'1.0-0' }}</td>
-                <td class="mono text-right">{{ p.uniforme    | number:'1.0-0' }}</td>
-                <td class="mono text-right">{{ p.fournitures | number:'1.0-0' }}</td>
-                <td class="mono text-right">{{ p.cantine     | number:'1.0-0' }}</td>
-                <td class="mono text-right teal bold">{{ p.total | number:'1.0-0' }}</td>
-                <td class="mono text-right" style="color:#a855f7">{{ p.cumul | number:'1.0-0' }}</td>
-                <td><p-tag [value]="p.mode" severity="info" /></td>
-              </tr>
-            </ng-template>
-            <ng-template pTemplate="emptymessage">
-              <tr><td colspan="10" class="empty-msg">{{ 'suivi.aucun_paiement_eleve' | translate }}</td></tr>
-            </ng-template>
-          </p-table>
-        </div>
-      </ng-container>
-
-      <div class="empty-state" *ngIf="!eleveDetail()">
-        <div style="font-size:40px">👤</div>
-        <div style="color:#64748b;margin-top:12px">{{ 'suivi.rechercher_historique' | translate }}</div>
+  @if (eleveDetail()) {
+    @let ed = eleveDetail()!;
+    <div class="eleve-card">
+      <div class="ec-avatar">{{ ed.nom.substring(0,2).toUpperCase() }}</div>
+      <div class="ec-info">
+        <div class="ec-nom">{{ ed.nom }}</div>
+        <div class="ec-section">{{ ed.section }}</div>
       </div>
+      <div class="ec-stats">
+        <div class="ecs">
+          <div class="ecs-label">Attendu</div>
+          <div class="ecs-val">{{ ed.attendu | number:'1.0-0' }}</div>
+        </div>
+        <div class="ecs">
+          <div class="ecs-label">Payé</div>
+          <div class="ecs-val" style="color:#10b981">{{ ed.total_paye | number:'1.0-0' }}</div>
+        </div>
+        <div class="ecs">
+          <div class="ecs-label">Reste</div>
+          <div class="ecs-val" [style.color]="ed.reste > 0 ? '#ef4444' : '#10b981'">{{ ed.reste | number:'1.0-0' }}</div>
+        </div>
+        <div class="ecs">
+          <div class="ecs-label">Taux</div>
+          <div class="ecs-val" [style.color]="ed.taux >= 80 ? '#10b981' : ed.taux >= 50 ? '#f59e0b' : '#ef4444'">{{ ed.taux }} %</div>
+        </div>
+      </div>
+    </div>
 
-    </ng-container>
-  `,
+    <div class="progress-card">
+      <div class="pc-header">
+        <span>Taux de recouvrement</span>
+        <span class="mono" [style.color]="ed.taux >= 80 ? '#10b981' : ed.taux >= 50 ? '#f59e0b' : '#ef4444'">{{ ed.taux }} %</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill"
+             [style.width.%]="ed.taux"
+             [style.background]="ed.taux >= 80 ? '#10b981' : ed.taux >= 50 ? '#f59e0b' : '#ef4444'">
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <p-table [value]="ed.paiements" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>N° Pièce</th>
+            <th>Date</th>
+            <th class="tr">Inscription</th>
+            <th class="tr">Mensualité</th>
+            <th class="tr">Uniforme</th>
+            <th class="tr">Fournitures</th>
+            <th class="tr">Cantine</th>
+            <th class="tr">Total</th>
+            <th class="tr">Cumul</th>
+            <th>Mode</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-p>
+          <tr>
+            <td class="mono">{{ p.no_piece }}</td>
+            <td>{{ p.date | slice:0:10 }}</td>
+            <td class="mono tr">{{ p.inscription > 0 ? (p.inscription | number:'1.0-0') : '—' }}</td>
+            <td class="mono tr">{{ p.mensualite  > 0 ? (p.mensualite  | number:'1.0-0') : '—' }}</td>
+            <td class="mono tr">{{ p.uniforme    > 0 ? (p.uniforme    | number:'1.0-0') : '—' }}</td>
+            <td class="mono tr">{{ p.fournitures > 0 ? (p.fournitures | number:'1.0-0') : '—' }}</td>
+            <td class="mono tr">{{ p.cantine     > 0 ? (p.cantine     | number:'1.0-0') : '—' }}</td>
+            <td class="mono tr teal bold">{{ p.total | number:'1.0-0' }}</td>
+            <td class="mono tr" style="color:#a855f7">{{ p.cumul | number:'1.0-0' }}</td>
+            <td><p-tag [value]="p.mode" severity="info" /></td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="10" class="empty-msg">Aucun paiement enregistré</td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+
+  @if (!eleveDetail()) {
+    <div class="empty-state">
+      <div style="font-size:40px">👤</div>
+      <div style="color:#64748b;margin-top:12px">Recherchez un élève pour voir son historique</div>
+    </div>
+  }
+}
+`,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
     .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
     .page-sub    { font-size:12px; color:#64748b; }
-    .tabs-bar { display:flex; gap:4px; margin-bottom:20px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
-    .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:13px; cursor:pointer; transition:all 0.15s; font-family:inherit; }
-    .tab-btn:hover  { background:#1a2235; color:#e8f0fe; }
+    .btn-refresh { background:transparent; border:1px solid #2a3f5f; color:#64748b; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
+    .btn-refresh:hover { color:#00d4aa; border-color:#00d4aa; }
+    /* KPIs */
+    .kpi-grid  { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+    .kpi-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:14px; border-top:3px solid var(--acc); }
+    .kpi-icon  { font-size:20px; margin-bottom:6px; }
+    .kpi-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-value { font-size:20px; font-weight:700; font-family:monospace; margin:4px 0 6px; }
+    .kpi-sub   { font-size:10px; color:#64748b; }
+    .progress-mini { height:4px; background:#0b0f1a; border-radius:2px; overflow:hidden; }
+    .pm-fill   { height:100%; border-radius:2px; transition:width .4s; }
+    /* Onglets */
+    .tabs-bar  { display:flex; gap:4px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
+    .tab-btn   { flex:1; padding:7px 10px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; }
     .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
-    .kpi-row { display:flex; gap:12px; margin-bottom:20px; }
-    .kpi-mini { flex:1; background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; }
-    .km-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
-    .km-val   { font-size:20px; font-weight:700; font-family:monospace; }
-    .kpi-mini.teal  .km-val { color:#00d4aa; }
-    .kpi-mini.blue  .km-val { color:#0099ff; }
-    .kpi-mini.green .km-val { color:#10b981; }
-    .kpi-mini.orange .km-val { color:#f59e0b; }
+    .badge-count { display:inline-block; background:#ef4444; color:white; border-radius:10px; padding:1px 6px; font-size:10px; margin-left:4px; }
+    /* Graphique barres */
     .bar-section { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
-    .bs-title    { font-size:12px; color:#64748b; margin-bottom:14px; }
-    .bars-wrap   { display:flex; gap:8px; align-items:flex-end; height:120px; }
-    .bar-item    { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end; }
-    .bar-track   { width:100%; flex:1; display:flex; align-items:flex-end; }
-    .bar-fill    { width:100%; background:linear-gradient(to top,#00d4aa,#0099ff); border-radius:4px 4px 0 0; min-height:4px; transition:height 0.6s ease; }
-    .bar-label   { font-size:10px; color:#64748b; }
-    .bar-val     { font-size:9px; color:#94a3b8; font-family:monospace; display:none; }
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:16px; }
+    .bs-header   { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    .bs-title    { font-size:12px; color:#64748b; }
+    .bs-total    { font-size:12px; color:#00d4aa; font-family:monospace; font-weight:600; }
+    .bars-wrap   { display:flex; gap:6px; align-items:flex-end; height:130px; }
+    .bar-item    { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end; }
+    .bar-amount  { font-size:8px; color:#64748b; font-family:monospace; text-align:center; word-break:break-all; min-height:16px; }
+    .bar-track   { width:100%; flex:1; display:flex; align-items:flex-end; max-height:90px; }
+    .bar-fill    { width:100%; background:#2a3f5f; border-radius:4px 4px 0 0; min-height:3px; transition:height .5s ease; }
+    .bar-fill-active { background:linear-gradient(to top,#00d4aa,#0099ff); }
+    .bar-label   { font-size:10px; color:#94a3b8; font-weight:500; }
+    .bar-nb      { font-size:9px; color:#64748b; min-height:12px; }
+    .nb-active   { color:#00d4aa; }
+    .bar-active .bar-amount { color:#e8f0fe; }
+    /* Tableau */
+    .table-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:16px; }
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
     ::ng-deep .p-datatable .p-datatable-tfoot > tr { background:#111827 !important; }
+    .row-empty td { opacity:.4; }
+    .row-active td.bold { color:#e8f0fe; }
+    /* Taux bar */
+    .taux-row      { display:flex; align-items:center; gap:8px; }
+    .taux-bar-track{ flex:1; height:8px; background:#0b0f1a; border-radius:4px; overflow:hidden; }
+    .taux-bar-fill { height:100%; border-radius:4px; transition:width .4s; }
+    .taux-val      { font-size:11px; font-family:monospace; width:40px; text-align:right; }
+    /* Élève */
     .search-zone { margin-bottom:20px; }
-    .eleve-card { display:flex; align-items:center; gap:20px; background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:18px 20px; margin-bottom:14px; }
-    .ec-avatar  { width:52px; height:52px; border-radius:12px; background:linear-gradient(135deg,#00d4aa,#0099ff); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#000; flex-shrink:0; }
-    .ec-info    { flex:1; }
-    .ec-nom     { font-size:16px; font-weight:700; color:#e8f0fe; }
-    .ec-section { font-size:12px; color:#64748b; margin-top:2px; }
-    .ec-stats   { display:flex; gap:20px; }
-    .ecs        { text-align:center; }
-    .ecs-label  { font-size:10px; color:#64748b; text-transform:uppercase; }
-    .ecs-val    { font-size:14px; font-weight:700; font-family:monospace; color:#e8f0fe; margin-top:2px; }
-    .progress-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
-    .pc-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px; color:#94a3b8; }
-    .progress-track { height:8px; background:#0b0f1a; border-radius:4px; overflow:hidden; }
-    .progress-fill  { height:100%; border-radius:4px; transition:width 0.6s ease; }
-    .text-right { text-align:right; }
-    .mono  { font-family:monospace; font-size:12px; }
-    .bold  { font-weight:600; color:#e8f0fe; }
-    .teal  { color:#00d4aa; }
+    .eleve-card  { display:flex; align-items:center; gap:20px; background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:18px 20px; margin-bottom:14px; }
+    .ec-avatar   { width:52px; height:52px; border-radius:12px; background:linear-gradient(135deg,#00d4aa,#0099ff); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#000; flex-shrink:0; }
+    .ec-info     { flex:1; }
+    .ec-nom      { font-size:16px; font-weight:700; color:#e8f0fe; }
+    .ec-section  { font-size:12px; color:#64748b; margin-top:2px; }
+    .ec-stats    { display:flex; gap:24px; }
+    .ecs         { text-align:center; }
+    .ecs-label   { font-size:10px; color:#64748b; text-transform:uppercase; }
+    .ecs-val     { font-size:15px; font-weight:700; font-family:monospace; color:#e8f0fe; margin-top:2px; }
+    .progress-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+    .pc-header      { display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px; color:#94a3b8; }
+    .progress-track { height:10px; background:#0b0f1a; border-radius:5px; overflow:hidden; }
+    .progress-fill  { height:100%; border-radius:5px; transition:width .5s ease; }
+    /* Utils */
+    .mono      { font-family:monospace; font-size:12px; }
+    .bold      { font-weight:600; color:#e8f0fe; }
+    .small-txt { font-size:11px; color:#64748b; }
+    .teal      { color:#00d4aa; }
+    .success   { color:#10b981; }
+    .danger    { color:#ef4444; }
+    .warn-txt  { color:#f59e0b; }
+    .tr        { text-align:right; }
     .empty-msg   { text-align:center; padding:40px; color:#64748b; }
     .empty-state { text-align:center; padding:60px; }
     .w-full { width:100%; }
   `]
 })
 export class SuiviMensuelComponent implements OnInit {
-  onglet       = signal('global');
-  globalData   = signal<any[]>([]);
-  eleveDetail  = signal<any>(null);
-  suggestions  = signal<Eleve[]>([]);
-  loading      = signal(true);
+  private api          = inject(ApiService);
+  private elevesService = inject(ElevesService);
+
+  onglet      = signal('global');
+  globalData  = signal<any[]>([]);
+  synthese    = signal<any>(null);
+  sections    = signal<any[]>([]);
+  creances    = signal<any[]>([]);
+  eleveDetail = signal<any>(null);
+  suggestions = signal<Eleve[]>([]);
+  loading     = signal(true);
+
   eleveSelectionne: any = null;
 
-  constructor(private api: ApiService, private elevesService: ElevesService) {}
+  ngOnInit() { this.chargerTout(); }
 
-  ngOnInit() { this.chargerGlobal(); }
-
-  chargerGlobal() {
+  chargerTout() {
     this.loading.set(true);
     this.api.get<any>('/eleves/suivi-mensuel/').subscribe({
-      next: res => { this.globalData.set(res.global || []); this.loading.set(false); },
-      error: () => this.loading.set(false)
+      next: res => {
+        this.globalData.set(res.global  || []);
+        this.synthese.set(res.synthese  || null);
+        this.sections.set(res.sections  || []);
+        this.creances.set(res.creances  || []);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
     });
   }
 
   chercher(event: any) {
     this.elevesService.getEleves({ search: event.query }).subscribe({
-      next: res => this.suggestions.set(res.results || [])
+      next: res => this.suggestions.set(res.results || []),
     });
   }
 
   chargerSuiviEleve(eleve: Eleve) {
     this.api.get<any>(`/eleves/suivi-mensuel/?eleve_id=${eleve.id}`).subscribe({
-      next: res => this.eleveDetail.set(res.eleve)
+      next: res => this.eleveDetail.set(res.eleve),
     });
   }
 
-  totalGlobal(): number { return this.globalData().reduce((s, m) => s + m.total, 0); }
-  nbTransactions(): number { return this.globalData().reduce((s, m) => s + m.nb, 0); }
-  maxMensuel(): number { return Math.max(...this.globalData().map(m => m.total), 1); }
+  totalGlobal():   number { return this.globalData().reduce((s, m) => s + m.total, 0); }
+  nbTransactions():number { return this.globalData().reduce((s, m) => s + m.nb,    0); }
+  maxMensuel():    number { return Math.max(...this.globalData().map(m => m.total), 1); }
+  totalCreances(): number { return this.creances().reduce((s, e) => s + e.reste, 0); }
 
-  pctRecouvrement(): number {
-    if (!this.eleveDetail() || !this.eleveDetail()!.attendu) return 0;
-    return Math.min((this.eleveDetail()!.total_paye / this.eleveDetail()!.attendu) * 100, 100);
+  cumulJusquau(mois: any): number {
+    let cumul = 0;
+    for (const m of this.globalData()) {
+      cumul += m.total;
+      if (m.mois_num === mois.mois_num && m.annee === mois.annee) break;
+    }
+    return cumul;
   }
 }

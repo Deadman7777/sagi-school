@@ -1,64 +1,159 @@
 from django.db.models import Sum, Q
+from django.db.models.functions import ExtractMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import status as drf_status
 from apps.paiements.models import Exercice, Paiement
 from apps.eleves.models import Eleve
-from .models import JournalEntry
+from .models import JournalEntry, CompteComptable, BudgetLigne
 from django.utils import timezone
 
 
-# ── Plan comptable SYSCOHADA Révisé ──────────────────────────────────────────
+# ── Plan comptable SYSCOHADA Révisé — Enseignement privé Sénégal ─────────────
+# Référence : AUDCIF 2017 + Règlement n°01/2017/CM/UEMOA
 PLAN_COMPTABLE = {
-    '101':   'Capital',
+    # ── Classe 1 — Ressources durables ──
+    '10':    'Capitaux propres',
+    '101':   'Capital personnel',
     '111':   'Réserve légale',
     '118':   'Autres réserves',
-    '131':   'Résultat net de l\'exercice',
-    '201':   'Frais d\'établissement',
-    '211':   'Terrains',
-    '212':   'Aménagements terrains',
-    '221':   'Bâtiments',
-    '222':   'Installations techniques',
-    '231':   'Matériel et outillage',
-    '232':   'Matériel de bureau',
-    '241':   'Mobilier',
-    '244':   'Matériel informatique',
+    '12':    'Report à nouveau',
+    '131':   'Résultat net — Bénéfice',
+    '139':   'Résultat net — Perte',
+    '15':    'Provisions pour risques et charges',
+    '16':    'Emprunts et dettes financières',
+    # ── Classe 2 — Actif immobilisé ──
+    '21':    'Immobilisations incorporelles',
+    '211':   'Frais de développement capitalisés',
+    '212':   'Brevets, licences, logiciels',
+    '22':    'Terrains',
+    '221':   'Terrains naturels',
+    '222':   'Terrains bâtis',
+    '23':    'Bâtiments, installations et agencements',
+    '231':   'Bâtiments sur sol propre',
+    '232':   'Bâtiments sur sol d\'autrui',
+    '233':   'Installations techniques et agencements',
+    '234':   'Aménagements et agencements divers',
+    '24':    'Matériel, mobilier et actifs biologiques',
+    '241':   'Matériel et outillage',
+    '244':   'Matériel et mobilier',
     '245':   'Matériel de transport',
+    '248':   'Autres matériels et équipements',
+    '25':    'Avances et acomptes sur immobilisations',
+    '26':    'Titres de participation',
+    '27':    'Autres immobilisations financières',
+    '271':   'Prêts et créances non courantes',
+    '272':   'Dépôts et cautionnements versés',
+    '28':    'Amortissements',
     '281':   'Amort. immobilisations incorporelles',
-    '282':   'Amort. bâtiments',
-    '284':   'Amort. mobilier & matériel',
+    '282':   'Amort. terrains',
+    '283':   'Amort. bâtiments et installations',
+    '284':   'Amort. matériel et mobilier',
+    '285':   'Amort. matériel de transport',
+    # ── Classe 3 — Stocks ──
+    '32':    'Fournitures consommables',
+    # ── Classe 4 — Créances et dettes ──
+    '40':    'Fournisseurs et comptes rattachés',
     '401':   'Fournisseurs',
+    '408':   'Fournisseurs — factures non parvenues',
+    '41':    'Clients et comptes rattachés',
     '411':   'Clients (Parents / Élèves)',
+    '42':    'Personnel',
+    '421':   'Avances et acomptes sur salaires',
+    '422':   'Personnel — rémunérations dues',
+    '423':   'Oppositions et saisies-arrêts',
+    '43':    'Organismes sociaux',
+    '431':   'CSS / ATMP',
+    '4311':  'CSS — Prestations familiales',
+    '4312':  'ATMP — Accidents du travail',
+    '4313':  'IPRES — Cotisations retraite',
+    '44':    'État et organismes internationaux',
+    '441':   'État — impôts sur bénéfices',
+    '4421':  'CFCE — Contribution patronale',
+    '447':   'État — autres impôts et taxes',
+    '4472':  'État — IR retenu à la source',
+    '46':    'Débiteurs divers',
+    '47':    'Créditeurs divers',
+    # ── Classe 5 — Trésorerie ──
+    '52':    'Banques',
     '521':   'Banque — compte courant',
-    '552':   'Mobile Money (552)',
-    '5521':  'WAVE',
+    '522':   'Banque — compte d\'épargne',
+    '55':    'Mobile Money',
+    '5521':  'Wave',
     '5522':  'Orange Money',
     '5523':  'Free Money',
-    '571':   'Caisse',
+    '5524':  'Wizall',
+    '57':    'Caisse',
+    '571':   'Caisse principale',
+    # ── Classe 6 — Charges ──
+    '60':    'Achats et variations de stocks',
     '601':   'Achats de marchandises',
-    '602':   'Achats de matières premières',
-    '604':   'Achats de fournitures',
-    '606':   'Eau, électricité, fournitures',
-    '611':   'Transports',
-    '612':   'Loyer',
-    '613':   'Locations diverses',
-    '621':   'Personnel extérieur',
-    '622':   'Rémunérations intermédiaires',
-    '623':   'Publicité et publications',
-    '624':   'Transport du personnel',
-    '625':   'Déplacements et missions',
+    '604':   'Achats stockés — matières et fournitures consommables',
+    '605':   'Autres achats',
+    '6051':  'Fournitures non stockables — Eau',
+    '6052':  'Fournitures non stockables — Électricité',
+    '6054':  'Matériel et fournitures non stockables',
+    '61':    'Transports',
+    '614':   'Transports du personnel',
+    '618':   'Autres frais de transport',
+    '62':    'Services extérieurs A',
+    '621':   'Sous-traitance générale',
+    '622':   'Locations et charges locatives',
+    '624':   'Entretien, réparations et maintenance',
+    '625':   'Primes d\'assurance',
+    '626':   'Études, recherches et documentation',
+    '627':   'Publicité, publications et relations publiques',
+    '628':   'Frais de télécommunications',
+    '63':    'Services extérieurs B',
     '631':   'Frais bancaires',
-    '641':   'Impôts et taxes',
-    '651':   'Pertes sur créances',
-    '661':   'Salaires',
-    '662':   'Charges sociales (IPRES / CSS)',
-    '681':   'Dotations aux amortissements',
+    '633':   'Frais de formation du personnel',
+    '635':   'Frais de déplacements et de réception',
+    '64':    'Impôts et taxes',
+    '641':   'Impôts directs',
+    '6413':  'Taxes sur la masse salariale (CFCE)',
+    '645':   'Droits d\'enregistrement et de timbre',
+    '65':    'Autres charges',
+    '651':   'Pertes sur créances irrecouvrables',
+    '658':   'Charges diverses',
+    '66':    'Charges de personnel',
+    '661':   'Appointements et salaires',
+    '662':   'Charges sociales salariales (IPRES)',
+    '663':   'Indemnités et avantages divers',
+    '664':   'Cotisations sociales de l\'employeur',
+    '6641':  'Cotisations patronales (IPRES/CSS/ATMP)',
+    '67':    'Frais financiers et charges assimilées',
+    '671':   'Intérêts d\'emprunts',
+    '675':   'Escomptes accordés',
+    '68':    'Dotations aux amortissements et provisions',
+    '681':   'Dotations aux amortissements d\'exploitation',
+    '691':   'Dotations aux provisions d\'exploitation',
+    # ── Classe 7 — Produits ──
+    '70':    'Ventes et produits',
     '706':   'Prestations de services — Scolarité',
     '706.1': 'Prestations de services — Cantine',
-    '75':    'Autres produits d\'exploitation',
+    '706.2': 'Prestations de services — Transport',
+    '706.3': 'Activités extrascolaires',
+    '707':   'Ventes de marchandises',
+    '74':    'Subventions d\'exploitation',
+    '75':    'Autres produits',
+    '751':   'Redevances et recettes diverses',
+    '758':   'Produits divers d\'exploitation',
     '77':    'Revenus financiers',
-    '781':   'Reprises amortissements',
+    '771':   'Intérêts de dépôts et prêts',
+    '78':    'Transferts de charges',
+    '781':   'Reprises d\'amortissements et provisions',
 }
+
+
+def get_plan_dict(tenant):
+    """Retourne {no_compte: libelle} fusionné — DB tenant prioritaire sur le dict statique."""
+    try:
+        db = {c.no_compte: c.libelle
+              for c in CompteComptable.objects.filter(tenant=tenant, est_actif=True)}
+        return {**PLAN_COMPTABLE, **db}
+    except Exception:
+        return PLAN_COMPTABLE
 
 MOBILE_ACCOUNTS = ('552', '5521', '5522', '5523')
 
@@ -114,18 +209,23 @@ class JournalView(APIView):
         if not exercice:
             return Response([])
 
-        entries = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).order_by('date_ecriture', 'no_piece', 'ordre')
+        plan = get_plan_dict(tenant)
+        qs = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
+
+        if source_filter := request.query_params.get('source'):
+            qs = qs.filter(source=source_filter)
+
+        entries = qs.order_by('-date_ecriture', 'no_piece', 'ordre')
 
         return Response([{
-            'date':      str(e.date_ecriture),
-            'no_piece':  e.no_piece,
-            'no_compte': e.no_compte,
-            'libelle':   e.libelle,
-            'debit':     float(e.debit),
-            'credit':    float(e.credit),
-            'source':    e.source,
+            'date':           str(e.date_ecriture),
+            'no_piece':       e.no_piece,
+            'no_compte':      e.no_compte,
+            'libelle_compte': plan.get(e.no_compte, e.no_compte),
+            'libelle':        e.libelle,
+            'debit':          float(e.debit),
+            'credit':         float(e.credit),
+            'source':         e.source,
         } for e in entries])
 
 
@@ -150,6 +250,7 @@ class GrandLivreView(APIView):
 
         mob_d, mob_c = _mobile_aggregate(tenant, exercice)
 
+        plan = get_plan_dict(tenant)
         data = {}
         for c in comptes:
             no = c['no_compte']
@@ -159,7 +260,7 @@ class GrandLivreView(APIView):
                 d, cr = mob_d, mob_c
             data[no] = {
                 'no_compte':       no,
-                'libelle':         PLAN_COMPTABLE.get(no, no),
+                'libelle':         plan.get(no, no),
                 'total_debit':     round(d, 2),
                 'total_credit':    round(cr, 2),
                 'solde_debiteur':  round(max(d - cr, 0), 2),
@@ -171,7 +272,7 @@ class GrandLivreView(APIView):
             if '552' not in data:
                 data['552'] = {
                     'no_compte':       '552',
-                    'libelle':         PLAN_COMPTABLE['552'],
+                    'libelle':         plan.get('552', '552'),
                     'total_debit':     round(mob_d, 2),
                     'total_credit':    round(mob_c, 2),
                     'solde_debiteur':  round(max(mob_d - mob_c, 0), 2),
@@ -188,7 +289,7 @@ class GrandLivreView(APIView):
             if sub_d > 0 or sub_c > 0:
                 data[sub] = {
                     'no_compte':       sub,
-                    'libelle':         f"  └ {PLAN_COMPTABLE.get(sub, sub)}",
+                    'libelle':         f"  └ {plan.get(sub, sub)}",
                     'total_debit':     round(sub_d, 2),
                     'total_credit':    round(sub_c, 2),
                     'solde_debiteur':  round(max(sub_d - sub_c, 0), 2),
@@ -246,7 +347,7 @@ class BalanceView(APIView):
             if no not in lignes:
                 lignes[no] = {
                     'no_compte':    no,
-                    'libelle':      PLAN_COMPTABLE.get(no, no),
+                    'libelle':      plan.get(no, no),
                     'so_debiteur':  round(so_d, 2),
                     'so_crediteur': 0,
                     'mvt_debit':    round(mvt_d, 2),
@@ -266,7 +367,7 @@ class BalanceView(APIView):
             sf_c = round(max(mob_c - total_d, 0), 2)
             lignes['552'] = {
                 'no_compte':    '552',
-                'libelle':      PLAN_COMPTABLE['552'],
+                'libelle':      plan.get('552', '552'),
                 'so_debiteur':  round(so_d, 2),
                 'so_crediteur': 0,
                 'mvt_debit':    round(mob_d, 2),
@@ -310,7 +411,7 @@ class CompteResultatView(APIView):
             q |= Q(no_compte__startswith=p)
         rows = entries.filter(q).values('no_compte').annotate(t=Sum(field)).order_by('no_compte')
         return [{'compte': r['no_compte'],
-                 'libelle': PLAN_COMPTABLE.get(r['no_compte'], r['no_compte']),
+                 'libelle': plan.get(r['no_compte'], r['no_compte']),
                  'montant': round(float(r['t'] or 0), 2)}
                 for r in rows if float(r['t'] or 0) > 0]
 
@@ -343,7 +444,7 @@ class CompteResultatView(APIView):
         services_ext_b        = self._sum(entries, ['626', '627', '628'], 'debit')
         impots_taxes          = self._sum(entries, ['641', '642', '645'], 'debit')
         autres_charges        = self._sum(entries, ['651', '652', '653', '655', '658'], 'debit')
-        charges_personnel     = self._sum(entries, ['661', '662', '663', '664', '665', '666'], 'debit')
+        charges_personnel     = self._sum(entries, ['661', '662', '663', '664', '665', '666', '6641'], 'debit')
         dotations_amort       = self._sum(entries, ['681', '691'], 'debit')
 
         # ── SIG EN CASCADE (SYSCOHADA Révisé) ────────────────────────────
@@ -413,7 +514,7 @@ class CompteResultatView(APIView):
                 'resultat_net':             round(resultat_net, 2),
             },
             'detail_produits': self._detail(entries, ['706', '707', '708', '701', '74', '75', '781'], 'credit'),
-            'detail_charges':  self._detail(entries, ['601', '602', '604', '606', '61', '621', '622', '623', '624', '625', '641', '651', '661', '662', '681'], 'debit'),
+            'detail_charges':  self._detail(entries, ['601', '602', '604', '606', '61', '621', '622', '623', '624', '625', '641', '6413', '651', '661', '662', '6641', '681'], 'debit'),
             'total_produits':  round(total_produits, 2),
             'total_charges':   round(total_charges, 2),
             'resultat_net':    round(resultat_net, 2),
@@ -451,7 +552,7 @@ class BilanView(APIView):
             if net > 0:
                 result.append({
                     'compte':  r['no_compte'],
-                    'libelle': PLAN_COMPTABLE.get(r['no_compte'], r['no_compte']),
+                    'libelle': plan.get(r['no_compte'], r['no_compte']),
                     'montant': round(net, 2),
                 })
         return result
@@ -687,7 +788,7 @@ class TableauFluxView(APIView):
                                'encaisse': float(m['encaisse'] or 0)}
                               for m in mensuel if m['mois']],
             'charges_detail': [{'compte': c['no_compte'],
-                                 'libelle': PLAN_COMPTABLE.get(c['no_compte'], c['no_compte']),
+                                 'libelle': plan.get(c['no_compte'], c['no_compte']),
                                  'montant': float(c['total'] or 0)}
                                 for c in charges_detail],
         })
@@ -862,10 +963,11 @@ class ChargeView(APIView):
         if not exercice:
             return Response([])
 
-        # Afficher toutes les charges (6xx et immobilisations 2xx)
+        # Toutes les charges : manuelles (CHARGE) + paie (PAIE) sur comptes 6xx/2xx
         charges = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
-            source='CHARGE', debit__gt=0
+            source__in=('CHARGE', 'PAIE'),
+            debit__gt=0,
         ).filter(
             Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
         ).order_by('-date_ecriture')
@@ -948,4 +1050,223 @@ class ChargeView(APIView):
             ).delete()
         except JournalEntry.DoesNotExist:
             pass
+        return Response({'success': True})
+
+
+# ── Plan Comptable Paramétrable ───────────────────────────────────────────────
+class PlanComptableView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant = get_tenant(request)
+        plan   = get_plan_dict(tenant)
+
+        # Filtre optionnel ?type=CHARGE&classe=6
+        type_filter   = request.query_params.get('type')
+        classe_filter = request.query_params.get('classe')
+
+        # Comptes DB (avec flag est_systeme, est_actif)
+        db_comptes = {c.no_compte: c for c in CompteComptable.objects.filter(tenant=tenant)}
+
+        rows = []
+        for no, libelle in sorted(plan.items(), key=lambda x: _compte_sort_key(x[0])):
+            db = db_comptes.get(no)
+            classe = int(no[0]) if no and no[0].isdigit() else 0
+            type_compte = (
+                'CHARGE'  if classe == 6 else
+                'PRODUIT' if classe == 7 else
+                'BILAN'
+            )
+            if db:
+                type_compte = db.type
+                classe      = db.classe
+
+            if type_filter and type_compte != type_filter:
+                continue
+            if classe_filter and str(classe) != classe_filter:
+                continue
+
+            rows.append({
+                'no_compte':    no,
+                'libelle':      db.libelle if db else libelle,
+                'type':         type_compte,
+                'classe':       classe,
+                'est_actif':    db.est_actif if db else True,
+                'est_systeme':  db.est_systeme if db else False,
+                'est_personnalise': db is not None,
+            })
+        return Response(rows)
+
+    def post(self, request):
+        tenant = get_tenant(request)
+        no     = (request.data.get('no_compte') or '').strip()
+        if not no:
+            return Response({'error': 'no_compte requis'}, status=400)
+
+        libelle = request.data.get('libelle', '').strip() or PLAN_COMPTABLE.get(no, no)
+        try:
+            classe = int(no[0]) if no[0].isdigit() else 1
+        except (IndexError, ValueError):
+            classe = 6
+
+        type_compte = request.data.get('type') or (
+            'CHARGE' if classe == 6 else 'PRODUIT' if classe == 7 else 'BILAN'
+        )
+
+        obj, created = CompteComptable.objects.update_or_create(
+            tenant=tenant, no_compte=no,
+            defaults={
+                'libelle': libelle,
+                'type':    type_compte,
+                'classe':  classe,
+                'est_actif': True,
+            }
+        )
+        return Response({
+            'no_compte': obj.no_compte,
+            'libelle':   obj.libelle,
+            'type':      obj.type,
+            'classe':    obj.classe,
+        }, status=201 if created else 200)
+
+    def put(self, request, no_compte):
+        tenant = get_tenant(request)
+        try:
+            obj = CompteComptable.objects.get(tenant=tenant, no_compte=no_compte)
+        except CompteComptable.DoesNotExist:
+            # Créer à partir du dict statique
+            return self.post(request)
+
+        if 'libelle' in request.data:
+            obj.libelle = request.data['libelle']
+        if 'type' in request.data:
+            obj.type = request.data['type']
+        if 'est_actif' in request.data:
+            obj.est_actif = request.data['est_actif']
+        obj.save()
+        return Response({'no_compte': obj.no_compte, 'libelle': obj.libelle})
+
+    def delete(self, request, no_compte):
+        tenant = get_tenant(request)
+        try:
+            obj = CompteComptable.objects.get(tenant=tenant, no_compte=no_compte)
+            if obj.est_systeme:
+                return Response({'error': 'Compte système — non supprimable'}, status=403)
+            obj.delete()
+        except CompteComptable.DoesNotExist:
+            pass
+        return Response({'success': True})
+
+
+# ── Budget Prévisionnel ───────────────────────────────────────────────────────
+MOIS_CHAMPS = ['m01','m02','m03','m04','m05','m06','m07','m08','m09','m10','m11','m12']
+MOIS_NOMS   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
+
+
+class BudgetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _realise_par_mois(self, tenant, exercice, no_compte):
+        """Somme des débits par mois pour un compte (et ses sous-comptes)."""
+        qs = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            source__in=('CHARGE', 'PAIE'),
+            debit__gt=0,
+        ).filter(
+            Q(no_compte=no_compte) | Q(no_compte__startswith=no_compte)
+        ).annotate(
+            mois=ExtractMonth('date_ecriture')
+        ).values('mois').annotate(realise=Sum('debit'))
+        return {r['mois']: float(r['realise']) for r in qs}
+
+    def get(self, request):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'lignes': [], 'totaux': {}, 'exercice': None})
+
+        plan    = get_plan_dict(tenant)
+        lignes  = BudgetLigne.objects.filter(tenant=tenant, exercice=exercice)
+
+        result = []
+        total_prevu = total_realise = 0.0
+        total_fixe_prevu = total_fixe_realise = 0.0
+        total_var_prevu  = total_var_realise  = 0.0
+
+        for l in lignes:
+            realise_mois = self._realise_par_mois(tenant, exercice, l.no_compte)
+            mois_data = []
+            t_prevu = t_realise = 0.0
+
+            for i, champ in enumerate(MOIS_CHAMPS, start=1):
+                p = float(getattr(l, champ))
+                r = realise_mois.get(i, 0.0)
+                t_prevu   += p
+                t_realise += r
+                mois_data.append({'mois': i, 'nom': MOIS_NOMS[i-1], 'prevu': p, 'realise': r})
+
+            pct = round(t_realise / t_prevu * 100, 1) if t_prevu else 0
+
+            total_prevu   += t_prevu
+            total_realise += t_realise
+            if l.type_charge == 'FIXE':
+                total_fixe_prevu   += t_prevu
+                total_fixe_realise += t_realise
+            else:
+                total_var_prevu   += t_prevu
+                total_var_realise += t_realise
+
+            result.append({
+                'id':          str(l.id),
+                'no_compte':   l.no_compte,
+                'libelle':     l.libelle or plan.get(l.no_compte, l.no_compte),
+                'type_charge': l.type_charge,
+                'mois':        mois_data,
+                'total_prevu': round(t_prevu, 2),
+                'total_realise': round(t_realise, 2),
+                'taux_realisation': pct,
+            })
+
+        return Response({
+            'exercice': exercice.annee_scolaire,
+            'lignes':   result,
+            'totaux': {
+                'fixe':    {'prevu': round(total_fixe_prevu, 2), 'realise': round(total_fixe_realise, 2)},
+                'variable':{'prevu': round(total_var_prevu, 2),  'realise': round(total_var_realise, 2)},
+                'total':   {'prevu': round(total_prevu, 2),       'realise': round(total_realise, 2)},
+            },
+            'mois_noms': MOIS_NOMS,
+        })
+
+    def post(self, request):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        no_compte = (request.data.get('no_compte') or '').strip()
+        if not no_compte:
+            return Response({'error': 'no_compte requis'}, status=400)
+
+        plan    = get_plan_dict(tenant)
+        libelle = request.data.get('libelle') or plan.get(no_compte, no_compte)
+
+        defaults = {
+            'libelle':     libelle,
+            'type_charge': request.data.get('type_charge', 'FIXE'),
+        }
+        # Montants mensuels
+        for champ in MOIS_CHAMPS:
+            val = request.data.get(champ, 0)
+            defaults[champ] = float(val) if val else 0
+
+        obj, created = BudgetLigne.objects.update_or_create(
+            tenant=tenant, exercice=exercice, no_compte=no_compte,
+            defaults=defaults,
+        )
+        return Response({'id': str(obj.id), 'no_compte': obj.no_compte}, status=201 if created else 200)
+
+    def delete(self, request, pk):
+        tenant = get_tenant(request)
+        BudgetLigne.objects.filter(tenant=tenant, id=pk).delete()
         return Response({'success': True})

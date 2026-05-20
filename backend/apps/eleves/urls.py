@@ -7,6 +7,8 @@ router.register('sections', SectionViewSet, basename='section')
 router.register('liste', EleveViewSet, basename='eleve')
 router.register('', EleveViewSet, basename='eleve-root')
 
-urlpatterns = router.urls + [
+# IMPORTANT : les paths explicites doivent précéder router.urls
+# sinon le pattern ^(?P<pk>[^/.]+)/$ du router intercepte 'suivi-mensuel'
+urlpatterns = [
     path('suivi-mensuel/', SuiviMensuelView.as_view()),
-]
+] + router.urls

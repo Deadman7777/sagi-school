@@ -1,4 +1,4 @@
-import { Component, NgModule, OnInit, inject, signal } from '@angular/core';
+import { Component, NgModule, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComptabiliteService } from '../../core/services/comptabilite.service';
@@ -26,7 +26,7 @@ import { SelectModule } from 'primeng/select';
     <!-- Onglets -->
     <div class="tabs-bar">
       <button class="tab-btn" [class.active]="onglet() === 'journal'"
-              (click)="onglet.set('journal')">📒 {{ 'comptabilite.journal'     | translate }}</button>
+              (click)="chargerJournal(); onglet.set('journal')">📒 {{ 'comptabilite.journal'     | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'grand-livre'"
               (click)="onglet.set('grand-livre')">📖 {{ 'comptabilite.grand_livre' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'balance'"
@@ -44,36 +44,58 @@ import { SelectModule } from 'primeng/select';
               (click)="onglet.set('notes')">📎 {{ 'comptabilite.notes_annexes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'charges'"
         (click)="onglet.set('charges')">💸 {{ 'comptabilite.charges_tab'       | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'plan'"
+        (click)="chargerPlan(); onglet.set('plan')">📋 Plan Comptable</button>
+      <button class="tab-btn" [class.active]="onglet() === 'budget'"
+        (click)="chargerBudget(); onglet.set('budget')">🎯 Budget</button>
     </div>
 
     <!-- JOURNAL -->
     <div class="table-card" *ngIf="onglet() === 'journal'">
+      <!-- Filtre source -->
+      <div style="display:flex;gap:10px;padding:10px 16px 0;align-items:center">
+        <span style="font-size:11px;color:#64748b;text-transform:uppercase">Filtrer :</span>
+        <button class="src-btn" [class.active]="filtreSource === ''"     (click)="filtrerJournal('')">Tout</button>
+        <button class="src-btn paie" [class.active]="filtreSource === 'PAIE'"    (click)="filtrerJournal('PAIE')">💰 Paie</button>
+        <button class="src-btn pmt"  [class.active]="filtreSource === 'PAIEMENT'" (click)="filtrerJournal('PAIEMENT')">🎓 Scolarité</button>
+        <button class="src-btn chg"  [class.active]="filtreSource === 'CHARGE'"  (click)="filtrerJournal('CHARGE')">📋 Charges</button>
+        <button class="src-btn ava"  [class.active]="filtreSource === 'AVANCE'"  (click)="filtrerJournal('AVANCE')">💸 Avances</button>
+        <span style="margin-left:auto;font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
+      </div>
       <p-table [value]="journal()" [loading]="loadingJournal()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="25">
         <ng-template pTemplate="header">
           <tr>
+            <th>Source</th>
             <th>{{ 'comptabilite.date'     | translate }}</th>
             <th>{{ 'comptabilite.no_piece' | translate }}</th>
             <th>{{ 'comptabilite.no_compte'| translate }}</th>
+            <th>Compte (libellé)</th>
             <th>{{ 'comptabilite.libelle'  | translate }}</th>
             <th>{{ 'comptabilite.debit'    | translate }}</th>
             <th>{{ 'comptabilite.credit'   | translate }}</th>
-            <th>{{ 'comptabilite.source'   | translate }}</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-e>
           <tr>
-            <td>{{ e.date | date:'dd/MM/yyyy' }}</td>
+            <td>
+              <p-tag [value]="e.source"
+                     [severity]="e.source === 'PAIEMENT' ? 'success'
+                               : e.source === 'PAIE'     ? 'info'
+                               : e.source === 'AVANCE'   ? 'warn'
+                               : 'secondary'" />
+            </td>
+            <td class="mono">{{ e.date | date:'dd/MM/yyyy' }}</td>
             <td class="mono">{{ e.no_piece }}</td>
-            <td class="mono">{{ e.no_compte }}</td>
-            <td>{{ e.libelle }}</td>
+            <td class="mono bold">{{ e.no_compte }}</td>
+            <td style="font-size:11px;color:#64748b">{{ e.libelle_compte }}</td>
+            <td style="font-size:11px">{{ e.libelle }}</td>
             <td class="mono success">{{ e.debit  > 0 ? (e.debit  | number:'1.0-0') : '—' }}</td>
             <td class="mono info">   {{ e.credit > 0 ? (e.credit | number:'1.0-0') : '—' }}</td>
-            <td><p-tag [value]="e.source" [severity]="e.source === 'RECETTE' ? 'success' : 'danger'" /></td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="7" class="empty-msg">{{ 'comptabilite.aucune_ecriture' | translate }}</td></tr>
+          <tr><td colspan="8" class="empty-msg">{{ 'comptabilite.aucune_ecriture' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
@@ -751,6 +773,214 @@ import { SelectModule } from 'primeng/select';
                 [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
     </ng-template>
   </p-dialog>
+
+  <!-- ════════════════ PLAN COMPTABLE ════════════════ -->
+  <div class="table-card" *ngIf="onglet() === 'plan'">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="color:#e8f0fe;font-weight:600">Plan comptable SYSCOHADA Révisé</span>
+        <span style="font-size:11px;color:#64748b">({{ planComptable().length }} comptes)</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <p-select [options]="classesFiltres" [(ngModel)]="filtreClasse"
+                  (onChange)="filtrerPlan()" [showClear]="true"
+                  placeholder="Classe" styleClass="filter-sel" />
+        <p-select [options]="typesFiltres" [(ngModel)]="filtreType"
+                  (onChange)="filtrerPlan()" [showClear]="true"
+                  placeholder="Type" styleClass="filter-sel" />
+        <p-button label="+ Compte" severity="success" size="small" (onClick)="ouvrirDialogCompte()" />
+      </div>
+    </div>
+    <p-table [value]="planComptable()" [loading]="loadingPlan()"
+             styleClass="p-datatable-sm" [paginator]="true" [rows]="30"
+             [globalFilterFields]="['no_compte','libelle']">
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width:100px">N° Compte</th>
+          <th>Libellé</th>
+          <th style="width:80px">Classe</th>
+          <th style="width:100px">Type</th>
+          <th style="width:80px">Statut</th>
+          <th style="width:90px">Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-c>
+        <tr [class.compte-inactif]="!c.est_actif">
+          <td class="mono bold">{{ c.no_compte }}</td>
+          <td [class.bold]="c.no_compte.length <= 2">
+            {{ c.libelle }}
+            <span *ngIf="c.est_systeme" class="badge-sys">SYS</span>
+            <span *ngIf="c.est_personnalise && !c.est_systeme" class="badge-custom">✎</span>
+          </td>
+          <td class="mono text-center">{{ c.classe }}</td>
+          <td>
+            <p-tag [value]="c.type"
+                   [severity]="c.type === 'CHARGE' ? 'danger' : c.type === 'PRODUIT' ? 'success' : 'info'" />
+          </td>
+          <td>
+            <p-tag [value]="c.est_actif ? 'Actif' : 'Inactif'"
+                   [severity]="c.est_actif ? 'success' : 'secondary'" />
+          </td>
+          <td>
+            <div class="btn-row">
+              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="info"
+                        (onClick)="ouvrirDialogCompte(c)" pTooltip="Modifier" />
+              <p-button *ngIf="!c.est_systeme" icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                        (onClick)="supprimerCompte(c)" pTooltip="Supprimer" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+  <!-- ════════════════ BUDGET ════════════════ -->
+  <div class="budget-card" *ngIf="onglet() === 'budget'">
+    <div class="budget-header">
+      <div>
+        <h3 class="budget-title">🎯 Budget Prévisionnel — {{ budget()?.exercice }}</h3>
+        <span style="font-size:12px;color:#64748b">Charges fixes et variables · Prévision vs Réalisé</span>
+      </div>
+      <p-button label="+ Ligne budget" severity="success" (onClick)="ouvrirDialogBudget()" />
+    </div>
+
+    <!-- KPIs budget -->
+    <div class="kpi-grid" *ngIf="budget()?.totaux">
+      <div class="kpi-card" style="--acc:#0099ff">
+        <div class="kpi-label">Charges Fixes Prévues</div>
+        <div class="kpi-value" style="color:#0099ff">{{ budget()!.totaux.fixe.prevu | number:'1.0-0' }}</div>
+        <div class="kpi-sub">Réalisé : {{ budget()!.totaux.fixe.realise | number:'1.0-0' }}</div>
+      </div>
+      <div class="kpi-card" style="--acc:#f59e0b">
+        <div class="kpi-label">Charges Variables Prévues</div>
+        <div class="kpi-value" style="color:#f59e0b">{{ budget()!.totaux.variable.prevu | number:'1.0-0' }}</div>
+        <div class="kpi-sub">Réalisé : {{ budget()!.totaux.variable.realise | number:'1.0-0' }}</div>
+      </div>
+      <div class="kpi-card" style="--acc:#00d4aa">
+        <div class="kpi-label">Total Charges Prévues</div>
+        <div class="kpi-value" style="color:#00d4aa">{{ budget()!.totaux.total.prevu | number:'1.0-0' }}</div>
+        <div class="kpi-sub">Réalisé : {{ budget()!.totaux.total.realise | number:'1.0-0' }}</div>
+      </div>
+      <div class="kpi-card" style="--acc:#10b981">
+        <div class="kpi-label">Taux de Réalisation Global</div>
+        <div class="kpi-value" [style.color]="txRealisation() >= 100 ? '#ef4444' : '#10b981'">
+          {{ txRealisation() }} %
+        </div>
+      </div>
+    </div>
+
+    <!-- Tableau budget -->
+    <div class="budget-table-wrap" *ngIf="budget()?.lignes?.length">
+      <table class="budget-tbl">
+        <thead>
+          <tr>
+            <th class="compte-col">Compte</th>
+            <th class="libelle-col">Libellé</th>
+            <th class="type-col">Type</th>
+            <th *ngFor="let m of budget()!.mois_noms" class="mois-col">{{ m }}</th>
+            <th class="total-col">Prévu</th>
+            <th class="total-col realise-col">Réalisé</th>
+            <th class="pct-col">%</th>
+            <th style="width:50px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let l of budget()!.lignes" [class.ligne-depasse]="l.total_realise > l.total_prevu">
+            <td class="mono bold">{{ l.no_compte }}</td>
+            <td>{{ l.libelle }}</td>
+            <td>
+              <p-tag [value]="l.type_charge === 'FIXE' ? 'Fixe' : 'Variable'"
+                     [severity]="l.type_charge === 'FIXE' ? 'info' : 'warn'" />
+            </td>
+            <td *ngFor="let m of l.mois" class="mois-cell">
+              <span class="prevu-val">{{ m.prevu | number:'1.0-0' }}</span>
+              <span class="realise-small" *ngIf="m.realise > 0">{{ m.realise | number:'1.0-0' }}</span>
+            </td>
+            <td class="mono bold total-prevu">{{ l.total_prevu | number:'1.0-0' }}</td>
+            <td class="mono bold" [class.over-budget]="l.total_realise > l.total_prevu">{{ l.total_realise | number:'1.0-0' }}</td>
+            <td class="pct-cell" [class.over-budget]="l.taux_realisation > 100">{{ l.taux_realisation }} %</td>
+            <td>
+              <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                        (onClick)="supprimerBudgetLigne(l)" />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div *ngIf="!budget()?.lignes?.length && !loadingBudget()" class="empty-msg" style="padding:40px">
+      Aucune ligne de budget — ajoutez des postes de dépense
+    </div>
+  </div>
+
+  <!-- Dialog Plan Comptable -->
+  <p-dialog [header]="formCompte.no_compte ? 'Modifier compte ' + formCompte.no_compte : '+ Nouveau Compte'"
+            [(visible)]="dialogCompteVisible" [modal]="true" [style]="{width:'480px'}" [draggable]="false">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group">
+        <label>N° Compte *</label>
+        <input pInputText [(ngModel)]="formCompte.no_compte" class="w-full" [disabled]="editCompteMode" />
+      </div>
+      <div class="form-group">
+        <label>Classe (1-9)</label>
+        <p-select [options]="classeOptions" [(ngModel)]="formCompte.classe"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Libellé *</label>
+        <input pInputText [(ngModel)]="formCompte.libelle" class="w-full" />
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Type de compte</label>
+        <p-select [options]="typesCompte" [(ngModel)]="formCompte.type"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+    </div>
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogCompteVisible=false" />
+      <p-button label="Enregistrer" severity="success" [loading]="savingCompte()" (onClick)="sauvegarderCompte()" />
+    </ng-template>
+  </p-dialog>
+
+  <!-- Dialog Ligne Budget -->
+  <p-dialog header="🎯 Nouvelle Ligne Budget"
+            [(visible)]="dialogBudgetVisible" [modal]="true" [style]="{width:'700px'}" [draggable]="false">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="form-group">
+        <label>N° Compte *</label>
+        <p-select [options]="planComptableCharges()" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formBudget.no_compte" (onChange)="onBudgetCompteChange($event)"
+                  [filter]="true" filterBy="label" styleClass="w-full"
+                  placeholder="Sélectionner un compte" />
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <p-select [options]="[{label:'Charge fixe',value:'FIXE'},{label:'Charge variable',value:'VARIABLE'}]"
+                  [(ngModel)]="formBudget.type_charge" optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Libellé</label>
+        <input pInputText [(ngModel)]="formBudget.libelle" class="w-full" />
+      </div>
+    </div>
+    <!-- Répartition mensuelle -->
+    <div style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600">Montants mensuels (FCFA)</span>
+        <p-button label="Répliquer Jan sur tous" severity="secondary" size="small" (onClick)="repliquerMontant()" />
+      </div>
+      <div class="mois-grid">
+        <div *ngFor="let m of moisLabels; let i = index" class="mois-input-cell">
+          <label>{{ m }}</label>
+          <p-inputNumber [(ngModel)]="formBudget['m' + (i+1).toString().padStart(2,'0')]"
+                         [min]="0" mode="decimal" styleClass="mois-inp" />
+        </div>
+      </div>
+    </div>
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogBudgetVisible=false" />
+      <p-button label="Enregistrer" severity="success" [loading]="savingBudget()" (onClick)="sauvegarderBudget()" />
+    </ng-template>
+  </p-dialog>
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
@@ -825,13 +1055,73 @@ import { SelectModule } from 'primeng/select';
     .ea-annee  { font-size:16px; font-weight:700; color:#e8f0fe; }
     .ea-dates  { font-size:12px; color:#64748b; font-family:monospace; margin-left:auto; }
     .section-title-hist { font-size:14px; font-weight:600; color:#e8f0fe; margin-bottom:12px; }
+    .src-btn { border:1px solid #2a3f5f; border-radius:6px; background:transparent; color:#64748b; font-size:11px; padding:4px 10px; cursor:pointer; }
+    .src-btn.active, .src-btn:hover { background:#1e2d45; color:#e8f0fe; }
+    .src-btn.paie.active  { color:#38bdf8; border-color:#38bdf8; }
+    .src-btn.pmt.active   { color:#10b981; border-color:#10b981; }
+    .src-btn.chg.active   { color:#94a3b8; border-color:#94a3b8; }
+    .src-btn.ava.active   { color:#f59e0b; border-color:#f59e0b; }
+    /* Plan comptable */
+    .compte-inactif td { opacity:0.45; }
+    .badge-sys    { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; }
+    .badge-custom { font-size:10px; color:#00d4aa; margin-left:4px; }
+    .text-center  { text-align:center; }
+    /* Budget */
+    .budget-card   { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:20px; }
+    .budget-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+    .budget-title  { font-size:16px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
+    .budget-table-wrap { overflow-x:auto; margin-top:14px; }
+    .budget-tbl    { width:100%; border-collapse:collapse; font-size:11px; }
+    .budget-tbl th { background:#111827; color:#64748b; font-size:10px; text-transform:uppercase; padding:6px 8px; text-align:left; white-space:nowrap; border-bottom:2px solid #2a3f5f; }
+    .budget-tbl td { padding:5px 8px; border-bottom:1px solid rgba(42,63,95,0.3); color:#94a3b8; vertical-align:middle; }
+    .mois-col      { width:70px; text-align:right; }
+    .total-col     { width:90px; text-align:right; font-weight:700; }
+    .realise-col   { color:#00d4aa; }
+    .pct-col       { width:60px; text-align:center; }
+    .mois-cell     { text-align:right; }
+    .prevu-val     { display:block; color:#e8f0fe; }
+    .realise-small { display:block; font-size:9px; color:#00d4aa; }
+    .total-prevu   { color:#e8f0fe; }
+    .over-budget   { color:#ef4444; }
+    .ligne-depasse { background:rgba(239,68,68,0.04); }
+    .mois-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+    .mois-input-cell { display:flex; flex-direction:column; gap:4px; }
+    .mois-input-cell label { font-size:10px; color:#64748b; text-align:center; }
+    .mois-inp { width:100%; }
+    .btn-row { display:flex; gap:4px; }
   `]
 })
 export class ComptabiliteComponent implements OnInit {
   onglet         = signal('journal');
+  filtreSource   = '';
   journal        = signal<any[]>([]);
   grandLivre     = signal<any[]>([]);
   balance        = signal<any>(null);
+  // Plan comptable
+  planComptable     = signal<any[]>([]);
+  loadingPlan       = signal(false);
+  savingCompte      = signal(false);
+  dialogCompteVisible = false;
+  editCompteMode    = false;
+  filtreClasse      = '';
+  filtreType        = '';
+  formCompte: any   = {};
+  // Budget
+  budget            = signal<any>(null);
+  loadingBudget     = signal(false);
+  savingBudget      = signal(false);
+  dialogBudgetVisible = false;
+  formBudget: any   = {};
+  txRealisation     = computed(() => {
+    const t = this.budget()?.totaux?.total;
+    if (!t || !t.prevu) return 0;
+    return Math.round(t.realise / t.prevu * 100);
+  });
+  planComptableCharges = computed(() =>
+    this.planComptable()
+      .filter(c => c.type === 'CHARGE' && c.est_actif)
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte, libelle: c.libelle }))
+  );
   resultat       = signal<any>(null);
   bilan          = signal<any>(null);
   flux           = signal<any>(null);
@@ -893,12 +1183,118 @@ comptesCredit = [
 
   private translate = inject(TranslateService);
 
+  moisLabels = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  classesFiltres = [1,2,3,4,5,6,7,8,9].map(i => ({label:`Classe ${i}`, value: String(i)}));
+  typesFiltres   = [
+    {label:'Bilan',   value:'BILAN'},
+    {label:'Charge',  value:'CHARGE'},
+    {label:'Produit', value:'PRODUIT'},
+  ];
+  typesCompte    = [
+    {label:'Compte de bilan',   value:'BILAN'},
+    {label:'Compte de charge',  value:'CHARGE'},
+    {label:'Compte de produit', value:'PRODUIT'},
+  ];
+  classeOptions  = [1,2,3,4,5,6,7,8,9].map(i => ({label:`Classe ${i}`, value: i}));
+
   constructor(private compta: ComptabiliteService) {}
 
-  ngOnInit() {
-    this.compta.getJournal().subscribe({
-      next: res => { this.journal.set(res); this.loadingJournal.set(false); }
+  // ── Plan comptable ─────────────────────────────────────────────────────────
+  chargerPlan() {
+    this.loadingPlan.set(true);
+    const p: Record<string, string> = {};
+    if (this.filtreClasse) p['classe'] = this.filtreClasse;
+    if (this.filtreType)   p['type']   = this.filtreType;
+    this.compta.getPlanComptable(p).subscribe({
+      next: r => { this.planComptable.set(r); this.loadingPlan.set(false); },
+      error: () => this.loadingPlan.set(false),
     });
+  }
+
+  filtrerPlan() { this.chargerPlan(); }
+
+  ouvrirDialogCompte(c?: any) {
+    this.editCompteMode = !!c;
+    this.formCompte = c
+      ? { no_compte: c.no_compte, libelle: c.libelle, type: c.type, classe: c.classe }
+      : { no_compte: '', libelle: '', type: 'CHARGE', classe: 6 };
+    this.dialogCompteVisible = true;
+  }
+
+  sauvegarderCompte() {
+    if (!this.formCompte.no_compte || !this.formCompte.libelle) return;
+    this.savingCompte.set(true);
+    const obs = this.editCompteMode
+      ? this.compta.modifierCompte(this.formCompte.no_compte, this.formCompte)
+      : this.compta.creerCompte(this.formCompte);
+    obs.subscribe({
+      next: () => { this.dialogCompteVisible = false; this.savingCompte.set(false); this.chargerPlan(); },
+      error: () => this.savingCompte.set(false),
+    });
+  }
+
+  supprimerCompte(c: any) {
+    if (!confirm(`Supprimer le compte ${c.no_compte} — ${c.libelle} ?`)) return;
+    this.compta.supprimerCompte(c.no_compte).subscribe({ next: () => this.chargerPlan() });
+  }
+
+  // ── Budget ──────────────────────────────────────────────────────────────────
+  chargerBudget() {
+    this.loadingBudget.set(true);
+    this.compta.getBudget().subscribe({
+      next: r => { this.budget.set(r); this.loadingBudget.set(false); },
+      error: () => this.loadingBudget.set(false),
+    });
+  }
+
+  ouvrirDialogBudget() {
+    const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE' };
+    for (let i = 1; i <= 12; i++) base[`m${String(i).padStart(2,'0')}`] = 0;
+    this.formBudget = base;
+    this.dialogBudgetVisible = true;
+    if (!this.planComptable().length) this.chargerPlan();
+  }
+
+  onBudgetCompteChange(ev: any) {
+    const c = this.planComptableCharges().find(x => x.value === ev.value);
+    if (c) this.formBudget.libelle = c.libelle;
+  }
+
+  repliquerMontant() {
+    const m1 = this.formBudget['m01'] || 0;
+    for (let i = 2; i <= 12; i++) this.formBudget[`m${String(i).padStart(2,'0')}`] = m1;
+  }
+
+  sauvegarderBudget() {
+    if (!this.formBudget.no_compte) return;
+    this.savingBudget.set(true);
+    this.compta.sauvegarderBudgetLigne(this.formBudget).subscribe({
+      next: () => { this.dialogBudgetVisible = false; this.savingBudget.set(false); this.chargerBudget(); },
+      error: () => this.savingBudget.set(false),
+    });
+  }
+
+  supprimerBudgetLigne(l: any) {
+    if (!confirm(`Supprimer la ligne budget ${l.no_compte} ?`)) return;
+    this.compta.supprimerBudgetLigne(l.id).subscribe({ next: () => this.chargerBudget() });
+  }
+
+  chargerJournal(source = this.filtreSource) {
+    this.loadingJournal.set(true);
+    const params = source ? { source } : undefined;
+    this.compta.getJournal(params).subscribe({
+      next: res => { this.journal.set(res); this.loadingJournal.set(false); },
+      error: () => this.loadingJournal.set(false),
+    });
+  }
+
+  filtrerJournal(source: string) {
+    this.filtreSource = source;
+    this.chargerJournal(source);
+  }
+
+  ngOnInit() {
+    this.chargerJournal();
     this.compta.getGrandLivre().subscribe({
       next: res => { this.grandLivre.set(res); this.loadingGL.set(false); }
     });
