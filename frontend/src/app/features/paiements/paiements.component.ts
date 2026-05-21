@@ -14,14 +14,13 @@ import { ToastModule } from 'primeng/toast';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AutoCompleteModule } from 'primeng/autocomplete';
 
 @Component({
   selector: 'app-paiements',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, AutoCompleteModule],
+            InputNumberModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -91,44 +90,76 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     <p-dialog header="💰 Saisie de Paiement" [(visible)]="dialogVisible"
               [modal]="true" [style]="{width:'600px'}" [draggable]="false">
 
-      <!-- Recherche élève -->
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Élève * <span style="font-size:10px;color:#64748b">(tapez au moins 2 caractères : nom, matricule ou prénom du père)</span></label>
-        <p-autoComplete
-            [(ngModel)]="eleveTexte"
-            [suggestions]="elevesSuggestions()"
-            (completeMethod)="rechercherEleve($event)"
-            field="nom_complet" dataKey="id"
-            placeholder="Ex : Diallo, 2026-ETB, Mamadou…"
-            styleClass="w-full"
-            [minLength]="2"
-            [delay]="300"
-            [forceSelection]="true"
-            (onSelect)="onEleveSelect($event)"
-            (onClear)="onEleveClear()">
-          <ng-template let-e pTemplate="item">
-            <div style="padding:6px 0;border-bottom:1px solid rgba(42,63,95,0.3)">
+      <!-- Recherche élève — champ simple + liste déroulante -->
+      <div class="search-eleve-wrap">
+        <label class="search-label">
+          Rechercher l'élève *
+          @if (!eleveSelectionne) {
+            <span class="search-hint">Nom, matricule ou père (min. 2 caractères)</span>
+          }
+        </label>
 
-              <!-- Ligne 1 : nom + badges -->
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <strong style="color:#e8f0fe;font-size:13px">{{ e.nom_complet }}</strong>
-                <span style="font-size:10px;background:#2a3f5f;color:#94a3b8;padding:1px 6px;border-radius:3px;font-family:monospace">{{ e.matricule }}</span>
-                <span *ngIf="e.statut === 'ABANDONNE'" style="font-size:9px;background:#ef4444;color:white;padding:1px 5px;border-radius:3px">ABANDONNÉ</span>
-                <span *ngIf="e.statut === 'TRANSFERE'" style="font-size:9px;background:#f59e0b;color:white;padding:1px 5px;border-radius:3px">TRANSFÉRÉ</span>
-                <span *ngIf="e.prise_en_charge" style="font-size:9px;background:#7c3aed;color:white;padding:1px 5px;border-radius:3px">PEC {{ e.taux_prise_en_charge }}%</span>
-              </div>
+        @if (!eleveSelectionne) {
+          <!-- Champ de saisie -->
+          <div style="position:relative">
+            <input pInputText
+                   [(ngModel)]="rechercheInput"
+                   (ngModelChange)="onRechercheChange($event)"
+                   placeholder="Ex : Diallo, Fatou, 2026-ETB…"
+                   class="w-full search-input-field"
+                   autocomplete="off" />
+            @if (loadingRecherche()) {
+              <span class="search-spinner">⟳</span>
+            }
+          </div>
 
-              <!-- Ligne 2 : section + infos identificatrices -->
-              <div style="font-size:11px;color:#64748b;margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
-                <span>🏫 {{ e.section_nom }}</span>
-                <span *ngIf="e.date_naissance">📅 {{ e.date_naissance }}</span>
-                <span *ngIf="e.nom_pere">👤 Père : {{ e.nom_pere }}</span>
-                <span *ngIf="e.telephone_pere">📱 {{ e.telephone_pere }}</span>
-              </div>
-
+          <!-- Liste des résultats -->
+          @if (elevesSuggestions().length > 0) {
+            <div class="suggestions-list">
+              @for (e of elevesSuggestions(); track e.id) {
+                <div class="suggestion-item" (click)="selectionnerEleve(e)">
+                  <div class="si-top">
+                    <strong class="si-nom">{{ e.nom_complet }}</strong>
+                    @if (e.matricule) {
+                      <span class="si-matricule">{{ e.matricule }}</span>
+                    }
+                    @if (e.statut === 'ABANDONNE') {
+                      <span class="badge-statut rouge">Abandonné</span>
+                    }
+                    @if (e.statut === 'TRANSFERE') {
+                      <span class="badge-statut orange">Transféré</span>
+                    }
+                    @if (e.prise_en_charge) {
+                      <span class="badge-statut violet">PEC {{ e.taux_prise_en_charge }}%</span>
+                    }
+                  </div>
+                  <div class="si-bottom">
+                    <span>{{ e.section_nom }}</span>
+                    @if (e.date_naissance) { <span>· Né(e) {{ e.date_naissance }}</span> }
+                    @if (e.nom_pere) { <span>· Père : {{ e.nom_pere }}</span> }
+                    @if (e.telephone_pere) { <span>· {{ e.telephone_pere }}</span> }
+                  </div>
+                </div>
+              }
             </div>
-          </ng-template>
-        </p-autoComplete>
+          }
+
+          @if (rechercheInput.length >= 2 && !loadingRecherche() && elevesSuggestions().length === 0) {
+            <div class="search-empty">Aucun élève trouvé pour "{{ rechercheInput }}"</div>
+          }
+        }
+
+        <!-- Élève sélectionné -->
+        @if (eleveSelectionne) {
+          <div class="eleve-selected">
+            <div class="es-info">
+              <strong class="es-nom">{{ eleveSelectionne.nom_complet }}</strong>
+              <span class="si-matricule">{{ eleveSelectionne.matricule }}</span>
+              <span class="es-section">{{ eleveSelectionne.section_nom }}</span>
+            </div>
+            <button class="btn-changer" (click)="changerEleve()" type="button">✕ Changer</button>
+          </div>
+        }
       </div>
 
       <!-- Spinner chargement données élève -->
@@ -370,6 +401,33 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid #2a3f5f; margin-top:4px; }
     .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid #2a3f5f; }
     .fee-hint { font-size:10px; color:#00d4aa; margin-left:6px; font-weight:400; font-style:italic; }
+    /* Recherche élève */
+    .search-eleve-wrap { margin-bottom:14px; }
+    .search-label      { display:block; font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
+    .search-hint       { font-size:10px; color:#475569; text-transform:none; margin-left:6px; }
+    .search-input-field{ background:#111827; border:1px solid #2a3f5f; color:#e8f0fe; border-radius:6px; padding:9px 12px; font-size:13px; outline:none; }
+    .search-input-field:focus { border-color:#00d4aa; }
+    .search-spinner    { position:absolute; right:12px; top:10px; color:#00d4aa; font-size:14px; animation:spin 1s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .suggestions-list  { border:1px solid #2a3f5f; border-radius:6px; background:#1e2d45; margin-top:4px; max-height:260px; overflow-y:auto; }
+    .suggestion-item   { padding:10px 14px; cursor:pointer; border-bottom:1px solid rgba(42,63,95,0.5); }
+    .suggestion-item:last-child { border-bottom:none; }
+    .suggestion-item:hover { background:#263450; }
+    .si-top    { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:3px; }
+    .si-nom    { color:#e8f0fe; font-size:13px; font-weight:600; }
+    .si-matricule { font-family:monospace; font-size:11px; background:#0b1220; color:#00d4aa; padding:1px 6px; border-radius:3px; }
+    .si-bottom { font-size:11px; color:#64748b; display:flex; gap:8px; flex-wrap:wrap; }
+    .badge-statut { font-size:9px; padding:1px 5px; border-radius:3px; font-weight:600; }
+    .badge-statut.rouge  { background:#ef4444; color:white; }
+    .badge-statut.orange { background:#f59e0b; color:white; }
+    .badge-statut.violet { background:#7c3aed; color:white; }
+    .search-empty { font-size:12px; color:#64748b; padding:10px 14px; border:1px solid #2a3f5f; border-radius:6px; margin-top:4px; text-align:center; }
+    .eleve-selected { display:flex; justify-content:space-between; align-items:center; background:#0f2240; border:1px solid #00d4aa; border-radius:6px; padding:10px 14px; }
+    .es-info    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .es-nom     { color:#e8f0fe; font-size:13px; font-weight:700; }
+    .es-section { font-size:11px; color:#64748b; }
+    .btn-changer{ background:transparent; border:1px solid #475569; color:#94a3b8; border-radius:5px; padding:4px 10px; font-size:11px; cursor:pointer; }
+    .btn-changer:hover { border-color:#ef4444; color:#ef4444; }
     .type-btn { flex:1; padding:10px; border:1px solid #2a3f5f; border-radius:8px; background:#111827; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.2s; }
     .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
@@ -377,19 +435,21 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
   `]
 })
 export class PaiementsComponent implements OnInit {
-  paiements        = signal<any[]>([]);
-  stats            = signal<any>(null);
-  elevesSuggestions = signal<Eleve[]>([]);
-  loading          = signal(true);
-  saving           = signal(false);
-  loadingSaisie    = signal(false);
-  dialogVisible    = false;
-  recuVisible      = false;
-  recuData         = signal<any>(null);
-  saisieDonnees    = signal<any | null>(null);
+  paiements         = signal<any[]>([]);
+  stats             = signal<any>(null);
+  elevesSuggestions = signal<any[]>([]);
+  loading           = signal(true);
+  saving            = signal(false);
+  loadingSaisie     = signal(false);
+  loadingRecherche  = signal(false);
+  dialogVisible     = false;
+  recuVisible       = false;
+  recuData          = signal<any>(null);
+  saisieDonnees     = signal<any | null>(null);
   eleveSelectionne: any = null;
-  eleveTexte: string = '';
-  exerciceId       = '';
+  rechercheInput    = '';
+  private _searchTimer: any = null;
+  exerciceId        = '';
   typePaiement: 'INSCRIPTION' | 'MENSUALITE' = 'MENSUALITE';
 
   form = {
@@ -454,43 +514,50 @@ export class PaiementsComponent implements OnInit {
     });
   }
 
-  rechercherEleve(event: any) {
-    const q = (event.query || '').trim();
-    if (q.length < 2) { this.elevesSuggestions.set([]); return; }
-    // Endpoint léger : pas d'annotation paiements, max 15 résultats
-    this.elevesService.searchEleves(q).subscribe({
-      next: res => this.elevesSuggestions.set(Array.isArray(res) ? res : []),
-      error: () => this.elevesSuggestions.set([]),
-    });
+  onRechercheChange(q: string) {
+    clearTimeout(this._searchTimer);
+    this.elevesSuggestions.set([]);
+    if (!q || q.trim().length < 2) return;
+    this._searchTimer = setTimeout(() => {
+      this.loadingRecherche.set(true);
+      this.elevesService.searchEleves(q.trim()).subscribe({
+        next:  res => { this.elevesSuggestions.set(Array.isArray(res) ? res : []); this.loadingRecherche.set(false); },
+        error: ()  => this.loadingRecherche.set(false),
+      });
+    }, 300);
   }
 
-  onEleveClear() {
-    this.eleveSelectionne = null;
+  selectionnerEleve(e: any) {
+    this.eleveSelectionne = e;
+    this.rechercheInput   = '';
+    this.elevesSuggestions.set([]);
     this.saisieDonnees.set(null);
     this.resetForm();
-  }
-
-  onEleveSelect(event: any) {
-    const eleve = event?.value !== undefined ? event.value : event;
-    if (!eleve?.id) return;
-    this.eleveSelectionne = eleve;
-    this.eleveTexte       = eleve.nom_complet || '';
-    this.saisieDonnees.set(null);
-    this.resetForm();
-
-    // Charger les données de saisie calculées depuis le backend
+    // Charger les données de saisie calculées
     this.loadingSaisie.set(true);
-    this.elevesService.getSaisiePaiement(eleve.id).subscribe({
+    this.elevesService.getSaisiePaiement(e.id).subscribe({
       next: data => {
         this.saisieDonnees.set(data);
         this.loadingSaisie.set(false);
         if (data.exercice_id) this.exerciceId = data.exercice_id;
-        // Auto-remplir selon le type courant
         this.appliquerAutoRemplissage(data);
       },
       error: () => this.loadingSaisie.set(false),
     });
   }
+
+  changerEleve() {
+    this.eleveSelectionne = null;
+    this.rechercheInput   = '';
+    this.elevesSuggestions.set([]);
+    this.saisieDonnees.set(null);
+    this.resetForm();
+  }
+
+  // Compatibilité avec ancien code (non utilisé mais garde la cohérence)
+  rechercherEleve(event: any) { this.onRechercheChange(event?.query || ''); }
+  onEleveSelect(event: any)   { this.selectionnerEleve(event?.value ?? event); }
+  onEleveClear()              { this.changerEleve(); }
 
   private appliquerAutoRemplissage(data: any) {
     const reste = data.reste || {};
@@ -526,11 +593,10 @@ export class PaiementsComponent implements OnInit {
 
   ouvrirDialog() {
     this.eleveSelectionne = null;
-    this.eleveTexte       = '';
+    this.rechercheInput   = '';
+    this.elevesSuggestions.set([]);
     this.saisieDonnees.set(null);
-    this.form = { montant_inscription:0, montant_mensualite:0, montant_uniforme:0,
-                  montant_fournitures:0, montant_cantine:0, montant_divers:0,
-                  mode_paiement:'', observations:'' };
+    this.resetForm();
     this.typePaiement  = 'MENSUALITE';
     this.dialogVisible = true;
   }
