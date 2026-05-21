@@ -1,4 +1,5 @@
 from rest_framework import viewsets, filters
+from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -94,6 +95,85 @@ class EleveViewSet(viewsets.ModelViewSet):
         matricule = f"{annee}-{code_etb}-{str(numero).zfill(6)}"
 
         serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
+
+    @action(detail=True, methods=['get'], url_path='saisie-paiement')
+    def saisie_paiement(self, request, pk=None):
+        """Données pré-calculées pour le formulaire de saisie de paiement.
+        Inclut : frais de la section, prise en charge, déjà payé par catégorie, reste à payer.
+        """
+        from apps.paiements.models import Paiement
+        from django.db.models import Sum as _Sum
+
+        eleve    = self.get_object()
+        tenant   = eleve.tenant
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+        section  = eleve.section
+        taux_pec = float(eleve.taux_prise_en_charge or 0) / 100.0  # 50% → 0.50
+
+        # ── Frais bruts de la section ──────────────────────────────────
+        fees_bruts = {
+            'inscription':  float(section.frais_inscription)  if section else 0,
+            'mensualite':   float(section.frais_mensualite)   if section else 0,
+            'uniforme':     float(section.frais_uniforme)     if section else 0,
+            'fournitures':  float(section.frais_fournitures)  if section else 0,
+            'yendu':        float(section.frais_yendu)        if section else 0,
+        }
+
+        # ── Frais nets après prise en charge (réduction) ───────────────
+        fees_nets = {k: round(v * (1.0 - taux_pec), 2) for k, v in fees_bruts.items()}
+
+        # ── Déjà payé par catégorie pour cet exercice ──────────────────
+        if exercice:
+            pmt_qs = Paiement.objects.filter(eleve=eleve, exercice=exercice)
+            agg    = pmt_qs.aggregate(
+                inscription  = _Sum('montant_inscription'),
+                mensualite   = _Sum('montant_mensualite'),
+                uniforme     = _Sum('montant_uniforme'),
+                fournitures  = _Sum('montant_fournitures'),
+                cantine      = _Sum('montant_cantine'),
+                divers       = _Sum('montant_divers'),
+            )
+            deja_paye = {k: float(v or 0) for k, v in agg.items()}
+            nb_paiements = pmt_qs.count()
+        else:
+            deja_paye    = {k: 0.0 for k in ['inscription','mensualite','uniforme','fournitures','cantine','divers']}
+            nb_paiements = 0
+
+        # ── Reste à payer par catégorie ────────────────────────────────
+        reste = {
+            'inscription':  round(max(fees_nets['inscription']  - deja_paye['inscription'],  0), 2),
+            'mensualite':   round(max(fees_nets['mensualite']   - deja_paye['mensualite'],   0), 2),
+            'uniforme':     round(max(fees_nets['uniforme']     - deja_paye['uniforme'],     0), 2),
+            'fournitures':  round(max(fees_nets['fournitures']  - deja_paye['fournitures'],  0), 2),
+        }
+
+        total_net = round(sum(fees_nets.values()), 2)
+        total_paye = round(sum(deja_paye.values()), 2)
+
+        return Response({
+            'eleve_id':       str(eleve.id),
+            'nom_complet':    eleve.nom_complet,
+            'matricule':      eleve.matricule or '',
+            'statut':         eleve.statut,
+            'section_nom':    section.nom if section else '',
+            # Prise en charge
+            'prise_en_charge':     eleve.prise_en_charge or '',
+            'taux_pec':            float(eleve.taux_prise_en_charge or 0),
+            'obs_prise_en_charge': eleve.obs_prise_en_charge or '',
+            # Montants
+            'fees_bruts':    fees_bruts,
+            'fees_nets':     fees_nets,
+            'deja_paye':     deja_paye,
+            'reste':         reste,
+            # Résumé
+            'total_annuel_net':  total_net,
+            'total_paye':        total_paye,
+            'total_restant':     round(max(total_net - total_paye, 0), 2),
+            'nb_paiements':      nb_paiements,
+            'exercice_id':       str(exercice.id) if exercice else '',
+            'annee_scolaire':    exercice.annee_scolaire if exercice else '',
+        })
 
 
 MOIS_FR = {

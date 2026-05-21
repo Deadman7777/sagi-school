@@ -26,6 +26,10 @@ export class ElevesService {
     return this.api.delete(`/eleves/${id}/`);
   }
 
+  getSaisiePaiement(eleveId: string) {
+    return this.api.get<any>(`/eleves/${eleveId}/saisie-paiement/`);
+  }
+
   telechargerCertificat(eleveId: string, nomComplet: string): Promise<void> {
     const token    = localStorage.getItem('access_token') || '';
     const tenantId = localStorage.getItem('tenant_id')    || '';

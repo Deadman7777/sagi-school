@@ -88,117 +88,172 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     </div>
 
     <!-- Dialog saisie paiement -->
-    <p-dialog [header]="'💰 ' + ('paiements.nouveau' | translate)" [(visible)]="dialogVisible"
-              [modal]="true" [style]="{width:'560px'}" [draggable]="false">
+    <p-dialog header="💰 Saisie de Paiement" [(visible)]="dialogVisible"
+              [modal]="true" [style]="{width:'600px'}" [draggable]="false">
 
       <!-- Recherche élève -->
-      <div class="form-group" style="margin-bottom:20px">
-        <label>{{ 'paiements.eleve' | translate }} *</label>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Élève *</label>
         <p-autoComplete
             [(ngModel)]="eleveTexte"
             [suggestions]="elevesSuggestions()"
             (completeMethod)="rechercherEleve($event)"
-            field="nom_complet"
-            dataKey="id"
-            [placeholder]="'paiements.tapez_nom' | translate"
-            styleClass="w-full"
+            field="nom_complet" dataKey="id"
+            placeholder="Tapez le nom de l'élève..." styleClass="w-full"
             (onSelect)="onEleveSelect($event)">
-            <ng-template let-e pTemplate="item">
-                <div style="padding:6px 0">
-                    <div style="font-weight:600">{{ e.nom_complet }}</div>
-                    <div style="font-size:11px;color:#64748b">{{ e.section_nom }} — Reste: {{ e.reste_a_payer | number:'1.0-0' }} FCFA</div>
-                </div>
-            </ng-template>
+          <ng-template let-e pTemplate="item">
+            <div style="padding:5px 0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <strong>{{ e.nom_complet }}</strong>
+                <span *ngIf="e.statut === 'ABANDONNE'" style="font-size:10px;background:#ef4444;color:white;padding:1px 6px;border-radius:3px">ABANDONNÉ</span>
+                <span *ngIf="e.statut === 'TRANSFERE'" style="font-size:10px;background:#f59e0b;color:white;padding:1px 6px;border-radius:3px">TRANSFÉRÉ</span>
+                <span *ngIf="e.prise_en_charge" style="font-size:10px;background:#7c3aed;color:white;padding:1px 6px;border-radius:3px">PEC {{ e.taux_prise_en_charge }}%</span>
+              </div>
+              <div style="font-size:11px;color:#64748b">{{ e.section_nom }} — Reste : {{ e.reste_a_payer | number:'1.0-0' }} FCFA</div>
+            </div>
+          </ng-template>
         </p-autoComplete>
       </div>
 
-      <!-- Infos élève sélectionné -->
-      <div class="eleve-info" *ngIf="eleveSelectionne?.id">
-        <div class="ei-row"><span>{{ 'paiements.section_info'       | translate }}</span><span>{{ eleveSelectionne.section_nom }}</span></div>
-        <div class="ei-row"><span>{{ 'paiements.total_attendu_info' | translate }}</span><span>{{ eleveSelectionne.total_attendu | number:'1.0-0' }} FCFA</span></div>
-        <div class="ei-row"><span>{{ 'paiements.deja_paye'          | translate }}</span><span style="color:#10b981">{{ eleveSelectionne.total_paye | number:'1.0-0' }} FCFA</span></div>
-        <div class="ei-row"><span>{{ 'paiements.reste_a_payer'      | translate }}</span><span style="color:#ef4444;font-weight:700">{{ eleveSelectionne.reste_a_payer | number:'1.0-0' }} FCFA</span></div>
-      </div>
+      <!-- Spinner chargement données élève -->
+      @if (loadingSaisie()) {
+        <div style="text-align:center;padding:10px;color:#64748b;font-size:12px">⏳ Chargement des données...</div>
+      }
 
-      <!-- Montants -->
-      <div class="montants-grid">
-        <!-- Type de paiement -->
-        <div class="form-group full" style="margin-bottom:16px">
-          <label>{{ 'paiements.type_paiement' | translate }} *</label>
+      <!-- Alerte ABANDONNÉ -->
+      @if (saisieDonnees()?.statut === 'ABANDONNE') {
+        <div style="background:rgba(239,68,68,0.1);border:1px solid #ef4444;border-radius:6px;padding:10px 14px;font-size:12px;color:#ef4444;margin-bottom:10px">
+          ⚠️ Cet élève est marqué <strong>ABANDONNÉ</strong>. Le paiement sera enregistré mais ne sera pas comptabilisé dans les statistiques actives.
+        </div>
+      }
+
+      <!-- Badge Prise en charge -->
+      @if (saisieDonnees()?.taux_pec > 0) {
+        <div style="background:rgba(124,58,237,0.1);border:1px solid #7c3aed;border-radius:6px;padding:8px 14px;font-size:12px;color:#a78bfa;margin-bottom:10px">
+          🤝 Prise en charge : <strong>{{ saisieDonnees()!.taux_pec }}%</strong>
+          ({{ saisieDonnees()!.prise_en_charge }})
+          — Montants réduits automatiquement.
+          @if (saisieDonnees()?.obs_prise_en_charge) {
+            <span style="color:#64748b"> · {{ saisieDonnees()!.obs_prise_en_charge }}</span>
+          }
+        </div>
+      }
+
+      <!-- Récapitulatif situation financière -->
+      @if (saisieDonnees() && !loadingSaisie()) {
+        <div class="eleve-info" style="margin-bottom:14px">
+          <div class="ei-row"><span>Élève</span><strong>{{ saisieDonnees()!.nom_complet }}</strong></div>
+          <div class="ei-row"><span>Section</span><span>{{ saisieDonnees()!.section_nom }}</span></div>
+          <div class="ei-row"><span>Total annuel dû</span><span class="mono">{{ saisieDonnees()!.total_annuel_net | number:'1.0-0' }} FCFA</span></div>
+          <div class="ei-row"><span>Déjà versé</span><span class="mono success">{{ saisieDonnees()!.total_paye | number:'1.0-0' }} FCFA ({{ saisieDonnees()!.nb_paiements }} pmt)</span></div>
+          <div class="ei-row"><span>Reste à payer</span>
+            <strong class="mono" [class.success]="saisieDonnees()!.total_restant === 0" [class.danger]="saisieDonnees()!.total_restant > 0">
+              {{ saisieDonnees()!.total_restant === 0 ? '✅ Soldé' : (saisieDonnees()!.total_restant | number:'1.0-0') + ' FCFA' }}
+            </strong>
+          </div>
+        </div>
+      }
+
+      <!-- Type de paiement -->
+      @if (saisieDonnees() && !loadingSaisie()) {
+        <div class="form-group full" style="margin-bottom:12px">
+          <label>Type de paiement *</label>
           <div style="display:flex;gap:8px;margin-top:6px">
             <button [class]="typePaiement === 'INSCRIPTION' ? 'type-btn active-inscr' : 'type-btn'"
                     (click)="setTypePaiement('INSCRIPTION')">
-              🎓 {{ 'paiements.inscription_debut' | translate }}
+              🎓 Inscription / Frais d'entrée
             </button>
             <button [class]="typePaiement === 'MENSUALITE' ? 'type-btn active-mens' : 'type-btn'"
                     (click)="setTypePaiement('MENSUALITE')">
-              📅 {{ 'paiements.mensualite_type' | translate }}
+              📅 Mensualité
             </button>
           </div>
         </div>
 
-        <!-- Champs Inscription -->
-        <div class="montants-grid" *ngIf="typePaiement === 'INSCRIPTION'">
-          <div class="form-group">
-            <label>{{ 'paiements.inscription' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+        <!-- Montants avec indication reste -->
+        @if (typePaiement === 'INSCRIPTION') {
+          <div class="montants-grid">
+            <div class="form-group">
+              <label>Inscription
+                @if (saisieDonnees()!.fees_nets.inscription > 0) {
+                  <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.inscription | number:'1.0-0' }}</span>
+                }
+              </label>
+              <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Uniforme
+                @if (saisieDonnees()!.fees_nets.uniforme > 0) {
+                  <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.uniforme | number:'1.0-0' }}</span>
+                }
+              </label>
+              <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Fournitures
+                @if (saisieDonnees()!.fees_nets.fournitures > 0) {
+                  <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.fournitures | number:'1.0-0' }}</span>
+                }
+              </label>
+              <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Divers</label>
+              <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
           </div>
-          <div class="form-group">
-            <label>{{ 'paiements.uniforme' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
+        }
+
+        @if (typePaiement === 'MENSUALITE') {
+          <div class="montants-grid">
+            <div class="form-group">
+              <label>Mensualité
+                @if (saisieDonnees()!.fees_nets.mensualite > 0) {
+                  <span class="fee-hint">Tarif : {{ saisieDonnees()!.fees_nets.mensualite | number:'1.0-0' }}</span>
+                }
+              </label>
+              <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Cantine</label>
+              <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Divers</label>
+              <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
           </div>
-          <div class="form-group">
-            <label>{{ 'paiements.fournitures' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
-          <div class="form-group">
-            <label>{{ 'paiements.divers' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
+        }
+
+        <!-- Total -->
+        <div class="total-bar">
+          <span>Total à encaisser</span>
+          <span class="total-val">{{ totalForm() | number:'1.0-0' }} FCFA</span>
         </div>
 
-        <!-- Champs Mensualité -->
-        <div class="montants-grid" *ngIf="typePaiement === 'MENSUALITE'">
-          <div class="form-group">
-            <label>{{ 'paiements.mensualite' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
-          <div class="form-group">
-            <label>{{ 'paiements.cantine' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
-          <div class="form-group">
-            <label>{{ 'paiements.divers' | translate }}</label>
-            <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
+        <!-- Mode paiement -->
+        <div class="form-group" style="margin-top:12px">
+          <label>Mode de paiement *</label>
+          <p-select [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
+                    optionLabel="label" optionValue="value"
+                    placeholder="Choisir le mode..." styleClass="w-full" />
         </div>
-      </div>
 
-      <!-- Total calculé -->
-      <div class="total-bar">
-        <span>{{ 'paiements.total_encaisser' | translate }}</span>
-        <span class="total-val">{{ totalForm() | number:'1.0-0' }} FCFA</span>
-      </div>
-
-      <!-- Mode paiement -->
-      <div class="form-group" style="margin-top:14px">
-        <label>{{ 'paiements.mode' | translate }} *</label>
-        <p-select [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
-                  optionLabel="label" optionValue="value"
-                  [placeholder]="'paiements.choisir_mode_ph' | translate" styleClass="w-full" />
-      </div>
-
-      <div class="form-group" style="margin-top:10px">
-        <label>{{ 'paiements.observations' | translate }}</label>
-        <input pInputText [(ngModel)]="form.observations" class="w-full" [placeholder]="'paiements.obs_placeholder' | translate" />
-      </div>
+        <div class="form-group" style="margin-top:10px">
+          <label>Observations</label>
+          <input pInputText [(ngModel)]="form.observations" class="w-full"
+                 placeholder="Remarques éventuelles..." />
+        </div>
+      }
 
       <ng-template pTemplate="footer">
-        <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
-        <p-button [label]="'paiements.avec_recu'| translate" severity="success"
-                  [loading]="saving()" (onClick)="sauvegarder(true)" />
-        <p-button [label]="'paiements.enregistrer'| translate" severity="success" [outlined]="true"
-                  [loading]="saving()" (onClick)="sauvegarder(false)" />
+        <p-button label="Annuler" severity="secondary" (onClick)="dialogVisible=false" />
+        <p-button label="💾 Enregistrer + Reçu" severity="success"
+                  [loading]="saving()" [disabled]="!saisieDonnees() || totalForm() <= 0"
+                  (onClick)="sauvegarder(true)" />
+        <p-button label="Enregistrer" severity="success" [outlined]="true"
+                  [loading]="saving()" [disabled]="!saisieDonnees() || totalForm() <= 0"
+                  (onClick)="sauvegarder(false)" />
       </ng-template>
     </p-dialog>
 
@@ -298,6 +353,7 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     .recu-row span:first-child { color:#64748b; }
     .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid #2a3f5f; margin-top:4px; }
     .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid #2a3f5f; }
+    .fee-hint { font-size:10px; color:#00d4aa; margin-left:6px; font-weight:400; font-style:italic; }
     .type-btn { flex:1; padding:10px; border:1px solid #2a3f5f; border-radius:8px; background:#111827; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.2s; }
     .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
@@ -310,9 +366,11 @@ export class PaiementsComponent implements OnInit {
   elevesSuggestions = signal<Eleve[]>([]);
   loading          = signal(true);
   saving           = signal(false);
+  loadingSaisie    = signal(false);
   dialogVisible    = false;
   recuVisible      = false;
   recuData         = signal<any>(null);
+  saisieDonnees    = signal<any | null>(null);
   eleveSelectionne: any = null;
   eleveTexte: string = '';
   exerciceId       = '';
@@ -387,28 +445,51 @@ export class PaiementsComponent implements OnInit {
   }
 
   onEleveSelect(event: any) {
-    // p-autoComplete passe soit event directement soit event.value
     const eleve = event?.value !== undefined ? event.value : event;
+    if (!eleve?.id) return;
     this.eleveSelectionne = eleve;
-    this.eleveTexte = eleve?.nom_complet || '';
-    // Pré-remplir avec les frais de la section de l'élève sélectionné
-    if (eleve?.section) {
-      this.elevesService.getSections().subscribe({
-        next: res => {
-          const sections = (res as any).results || [];
-          const section  = sections.find((s: any) => s.id === eleve.section);
-          if (section) {
-            if (this.typePaiement === 'INSCRIPTION') {
-              this.form.montant_inscription = Number(section.frais_inscription);
-              this.form.montant_uniforme    = Number(section.frais_uniforme);
-              this.form.montant_fournitures = Number(section.frais_fournitures);
-            } else {
-              this.form.montant_mensualite  = Number(section.frais_mensualite);
-            }
-          }
-        }
-      });
+    this.eleveTexte       = eleve.nom_complet || '';
+    this.saisieDonnees.set(null);
+    this.resetForm();
+
+    // Charger les données de saisie calculées depuis le backend
+    this.loadingSaisie.set(true);
+    this.elevesService.getSaisiePaiement(eleve.id).subscribe({
+      next: data => {
+        this.saisieDonnees.set(data);
+        this.loadingSaisie.set(false);
+        if (data.exercice_id) this.exerciceId = data.exercice_id;
+        // Auto-remplir selon le type courant
+        this.appliquerAutoRemplissage(data);
+      },
+      error: () => this.loadingSaisie.set(false),
+    });
+  }
+
+  private appliquerAutoRemplissage(data: any) {
+    const reste = data.reste || {};
+    const nets  = data.fees_nets || {};
+    if (this.typePaiement === 'INSCRIPTION') {
+      this.form.montant_inscription  = reste.inscription  || 0;
+      this.form.montant_uniforme     = reste.uniforme     || 0;
+      this.form.montant_fournitures  = reste.fournitures  || 0;
+      this.form.montant_mensualite   = 0;
+      this.form.montant_cantine      = 0;
+    } else {
+      this.form.montant_mensualite   = nets.mensualite    || 0;
+      this.form.montant_inscription  = 0;
+      this.form.montant_uniforme     = 0;
+      this.form.montant_fournitures  = 0;
     }
+    this.form.montant_divers = 0;
+  }
+
+  private resetForm() {
+    this.form = {
+      montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
+      montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
+      mode_paiement: this.form.mode_paiement || '', observations: '',
+    };
   }
 
   get totalForm(): () => number {
@@ -419,12 +500,13 @@ export class PaiementsComponent implements OnInit {
 
   ouvrirDialog() {
     this.eleveSelectionne = null;
-    this.eleveTexte = '';
+    this.eleveTexte       = '';
+    this.saisieDonnees.set(null);
     this.form = { montant_inscription:0, montant_mensualite:0, montant_uniforme:0,
                   montant_fournitures:0, montant_cantine:0, montant_divers:0,
                   mode_paiement:'', observations:'' };
+    this.typePaiement  = 'MENSUALITE';
     this.dialogVisible = true;
-    this.typePaiement = 'MENSUALITE';
   }
 
   sauvegarder(avecRecu: boolean) {
@@ -481,41 +563,11 @@ export class PaiementsComponent implements OnInit {
 
   setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {
     this.typePaiement = type;
-    // Remettre à zéro les champs de l'autre type
-    if (type === 'INSCRIPTION') {
-        this.form.montant_mensualite = 0;
-        this.form.montant_cantine = 0;
-        // Pré-remplir depuis la section si élève sélectionné
-        if (this.eleveSelectionne?.section) {
-            this.elevesService.getSections().subscribe({
-                next: res => {
-                    const sections = res.results || [];
-                    const section = sections.find((s: any) => s.id === this.eleveSelectionne.section);
-                    if (section) {
-                        this.form.montant_inscription = Number(section.frais_inscription);
-                        this.form.montant_uniforme    = Number(section.frais_uniforme);
-                        this.form.montant_fournitures = Number(section.frais_fournitures);
-                    }
-                }
-            });
-        }
-    } else {
-        this.form.montant_inscription = 0;
-        this.form.montant_uniforme = 0;
-        this.form.montant_fournitures = 0;
-        // Pré-remplir mensualité
-        if (this.eleveSelectionne?.section) {
-            this.elevesService.getSections().subscribe({
-                next: res => {
-                    const sections = res.results || [];
-                    const section = sections.find((s: any) => s.id === this.eleveSelectionne.section);
-                    if (section) {
-                        this.form.montant_mensualite = Number(section.frais_mensualite);
-                    }
-                }
-            });
-        }
+    // Auto-remplissage si les données de saisie sont déjà chargées
+    const data = this.saisieDonnees();
+    if (data) {
+      this.appliquerAutoRemplissage(data);
     }
-}
+  }
 
 }
