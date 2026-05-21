@@ -318,7 +318,7 @@ async function waitForDjango(retries = 40) {
     const attempt = n => {
       http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
         console.log('[Electron] Django prêt !');
-        resolve();
+        setTimeout(resolve, 1500);
       }).on('error', () => {
         if (n <= 0) { resolve(); return; }
         console.log(`[Electron] Attente Django... (${n})`);
