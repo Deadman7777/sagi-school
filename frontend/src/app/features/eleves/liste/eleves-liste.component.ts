@@ -126,6 +126,8 @@ import { InputNumberModule } from 'primeng/inputnumber';
                 <div class="btn-row">
                   <p-button icon="pi pi-eye" [rounded]="true" [text]="true"
                             severity="info" pTooltip="Fiche complète" (onClick)="voirFiche(eleve)" />
+                  <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
+                            severity="danger" pTooltip="Certificat de scolarité" (onClick)="genererCertificat(eleve)" />
                   <p-button icon="pi pi-user-edit" [rounded]="true" [text]="true"
                             severity="warn" pTooltip="Changer statut" (onClick)="ouvrirChangerStatut(eleve)" />
                   <p-button icon="pi pi-heart" [rounded]="true" [text]="true"
@@ -242,6 +244,8 @@ import { InputNumberModule } from 'primeng/inputnumber';
         </div>
       }
       <ng-template pTemplate="footer">
+        <p-button label="📄 Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
+                  (onClick)="genererCertificat(eleveSelectionne())" />
         <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
       </ng-template>
     </p-dialog>
@@ -520,6 +524,13 @@ export class ElevesListeComponent implements OnInit {
   voirFiche(eleve: any) {
     this.eleveSelectionne.set(eleve);
     this.dialogFicheVisible = true;
+  }
+
+  genererCertificat(eleve: any) {
+    if (!eleve?.id) return;
+    this.elevesService.telechargerCertificat(eleve.id, eleve.nom_complet)
+      .catch(() => this.msg.add({ severity: 'error', summary: 'Erreur',
+                                   detail: 'Impossible de générer le certificat.' }));
   }
 
   ouvrirChangerStatut(eleve: any) {

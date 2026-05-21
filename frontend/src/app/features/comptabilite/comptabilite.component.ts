@@ -32,20 +32,20 @@ import { MessageService } from 'primeng/api';
       <button class="tab-btn" [class.active]="onglet() === 'journal'"
               (click)="chargerJournal(); onglet.set('journal')">📒 {{ 'comptabilite.journal'     | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'grand-livre'"
-              (click)="onglet.set('grand-livre')">📖 {{ 'comptabilite.grand_livre' | translate }}</button>
+              (click)="chargerGrandLivre(); onglet.set('grand-livre')">📖 {{ 'comptabilite.grand_livre' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'balance'"
-              (click)="onglet.set('balance')">⚖️ {{ 'comptabilite.balance'     | translate }}</button>
+              (click)="chargerBalance(); onglet.set('balance')">⚖️ {{ 'comptabilite.balance'     | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'resultat'"
-              (click)="onglet.set('resultat')">📈 {{ 'comptabilite.resultat'   | translate }}</button>
+              (click)="chargerResultat(); onglet.set('resultat')">📈 {{ 'comptabilite.resultat'   | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'bilan'"
-              (click)="onglet.set('bilan')">🏦 {{ 'comptabilite.bilan'         | translate }}</button>
+              (click)="chargerEtatsSynthese(); onglet.set('bilan')">🏦 {{ 'comptabilite.bilan'         | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'flux'"
               *ngIf="systeme() === 'SN'"
-              (click)="onglet.set('flux')">💧 {{ 'comptabilite.flux'           | translate }}</button>
+              (click)="chargerEtatsSynthese(); onglet.set('flux')">💧 {{ 'comptabilite.flux'           | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'historique'"
-              (click)="onglet.set('historique')">📚 {{ 'comptabilite.historique'| translate }}</button>
+              (click)="chargerEtatsSynthese(); onglet.set('historique')">📚 {{ 'comptabilite.historique'| translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'notes'"
-              (click)="onglet.set('notes')">📎 {{ 'comptabilite.notes_annexes' | translate }}</button>
+              (click)="chargerEtatsSynthese(); onglet.set('notes')">📎 {{ 'comptabilite.notes_annexes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'charges'"
         (click)="onglet.set('charges')">💸 {{ 'comptabilite.charges_tab'       | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'plan'"
@@ -1698,15 +1698,31 @@ comptesCredit = [
     });
   }
 
-  /** Rafraîchit journal + grand livre + balance + résultat après toute écriture. */
-  rafraichirComptabilite() {
-    this.chargerJournal();
-    this.chargerBalance();
-    this.chargerResultat();
+  chargerGrandLivre() {
+    this.loadingGL.set(true);
     this.compta.getGrandLivre().subscribe({
       next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
       error: ()  => this.loadingGL.set(false),
     });
+  }
+
+  chargerEtatsSynthese() {
+    this.compta.getBilan().subscribe({
+      next: res => { this.bilan.set(res); if (res?.systeme) this.systeme.set(res.systeme); },
+      error: () => {},
+    });
+    this.compta.getTableauFlux().subscribe({  next: res => this.flux.set(res),       error: () => {} });
+    this.compta.getNotesAnnexes().subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
+    this.compta.getHistorique().subscribe({   next: res => this.historique.set(res),  error: () => {} });
+  }
+
+  /** Rafraîchit tout le module comptable (Journal → GL → Balance → États) après écriture. */
+  rafraichirComptabilite() {
+    this.chargerJournal();
+    this.chargerGrandLivre();
+    this.chargerBalance();
+    this.chargerResultat();
+    this.chargerEtatsSynthese();
   }
 
   chargerBalance() {

@@ -304,3 +304,50 @@ class SuiviMensuelView(APIView):
             'creances': creances[:20],
             'eleve':    eleve_data,
         })
+
+
+class CertificatScolariteView(APIView):
+    """Génère le certificat de scolarité PDF d'un élève."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, eleve_id):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        tenant = get_tenant(request)
+        try:
+            eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
+        except Eleve.DoesNotExist:
+            return HttpResponse('Élève introuvable', status=404)
+
+        from apps.paiements.models import Exercice
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+        context = {
+            'tenant':          tenant,
+            'eleve':           eleve,
+            'section_nom':     eleve.section.nom if eleve.section else '—',
+            'annee_scolaire':  exercice.annee_scolaire if exercice else '—',
+            'date_edition':    timezone.now(),
+            'directeur_nom':   getattr(tenant, 'directeur_nom', '') or '',
+            'tenant_ville':    getattr(tenant, 'ville', '') or '',
+            'tenant_rccm':     getattr(tenant, 'rccm', '') or '',
+            'tenant_telephone':getattr(tenant, 'telephone', '') or '',
+        }
+
+        html_str = render_to_string('pdf/certificat_scolarite.html', context)
+        buf      = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération certificat.', status=500)
+
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="certificat_{safe_name}.pdf"'
+        return response

@@ -406,13 +406,14 @@ class CompteResultatView(APIView):
         agg = entries.filter(q).aggregate(t=Sum(field))
         return float(agg['t'] or 0)
 
-    def _detail(self, entries, prefixes, field='debit'):
+    def _detail(self, entries, prefixes, field='debit', plan_dict=None):
+        _plan = plan_dict or PLAN_COMPTABLE
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p)
         rows = entries.filter(q).values('no_compte').annotate(t=Sum(field)).order_by('no_compte')
         return [{'compte': r['no_compte'],
-                 'libelle': plan.get(r['no_compte'], r['no_compte']),
+                 'libelle': _plan.get(r['no_compte'], r['no_compte']),
                  'montant': round(float(r['t'] or 0), 2)}
                 for r in rows if float(r['t'] or 0) > 0]
 
@@ -422,6 +423,7 @@ class CompteResultatView(APIView):
         if not exercice:
             return Response({})
 
+        plan    = get_plan_dict(tenant)
         entries = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
         caht    = _sum_paiements(Paiement.objects.filter(tenant=tenant, exercice=exercice))
         systeme = _detecter_systeme(caht)
@@ -514,8 +516,8 @@ class CompteResultatView(APIView):
                 'impot':                    round(impot, 2),
                 'resultat_net':             round(resultat_net, 2),
             },
-            'detail_produits': self._detail(entries, ['706', '707', '708', '701', '74', '75', '781'], 'credit'),
-            'detail_charges':  self._detail(entries, ['601', '602', '604', '606', '61', '621', '622', '623', '624', '625', '641', '6413', '651', '661', '662', '6641', '681'], 'debit'),
+            'detail_produits': self._detail(entries, ['706', '707', '708', '701', '74', '75', '781'], 'credit', plan),
+            'detail_charges':  self._detail(entries, ['601', '602', '604', '606', '61', '621', '622', '623', '624', '625', '641', '6413', '651', '661', '662', '6641', '681'], 'debit', plan),
             'total_produits':  round(total_produits, 2),
             'total_charges':   round(total_charges, 2),
             'resultat_net':    round(resultat_net, 2),
@@ -540,7 +542,8 @@ class BilanView(APIView):
         agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
         return float(agg['d'] or 0), float(agg['c'] or 0)
 
-    def _detail_comptes(self, entries, prefixes):
+    def _detail_comptes(self, entries, prefixes, plan_dict=None):
+        _plan = plan_dict or PLAN_COMPTABLE
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p) if len(p) <= 3 else Q(no_compte=p)
@@ -553,7 +556,7 @@ class BilanView(APIView):
             if net > 0:
                 result.append({
                     'compte':  r['no_compte'],
-                    'libelle': plan.get(r['no_compte'], r['no_compte']),
+                    'libelle': _plan.get(r['no_compte'], r['no_compte']),
                     'montant': round(net, 2),
                 })
         return result
@@ -564,15 +567,16 @@ class BilanView(APIView):
         if not exercice:
             return Response({})
 
+        plan       = get_plan_dict(tenant)
         entries    = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
         paiements  = Paiement.objects.filter(tenant=tenant, exercice=exercice)
         caht       = _sum_paiements(paiements)
         systeme    = _detecter_systeme(caht)
 
         # ── ACTIF IMMOBILISÉ ─────────────────────────────────────────────
-        immo_incorporel = self._detail_comptes(entries, self.IMMO_INCORPOREL)
-        immo_corporel   = self._detail_comptes(entries, self.IMMO_CORPOREL)
-        immo_financier  = self._detail_comptes(entries, self.IMMO_FINANCIER)
+        immo_incorporel = self._detail_comptes(entries, self.IMMO_INCORPOREL, plan)
+        immo_corporel   = self._detail_comptes(entries, self.IMMO_CORPOREL, plan)
+        immo_financier  = self._detail_comptes(entries, self.IMMO_FINANCIER, plan)
         # Déduire dotations aux amortissements (681) des immobilisations corporelles
         amort_d, amort_c = self._solde_comptes(entries, ['681'])
         amort_net = float(amort_d)
@@ -637,9 +641,12 @@ class BilanView(APIView):
         capital = float(exercice.solde_initial_caisse +
                         exercice.solde_initial_banque +
                         exercice.solde_initial_mobile)
-        prod_7xx = entries.filter(no_compte__startswith='7').aggregate(t=Sum('credit'))
-        char_6xx = entries.filter(no_compte__startswith='6').aggregate(t=Sum('debit'))
-        resultat_net = float(prod_7xx['t'] or 0) - float(char_6xx['t'] or 0)
+        # Résultat net SYSCOHADA Révisé : net crédit des produits - net débit des charges
+        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
+        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
+        produits_net = float(_7agg['c'] or 0) - float(_7agg['d'] or 0)
+        charges_net  = float(_6agg['d'] or 0) - float(_6agg['c'] or 0)
+        resultat_net = round(produits_net - charges_net, 2)
         total_capitaux = round(capital + resultat_net, 2)
 
         # ── DETTES FINANCIÈRES & RESSOURCES ASSIMILÉES (classe 16, 17, 18, 19) ──
@@ -729,23 +736,40 @@ class TableauFluxView(APIView):
 
         paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
         entries   = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
-        caht      = _sum_paiements(paiements)
-        systeme   = _detecter_systeme(caht)
+        systeme   = _detecter_systeme(_sum_paiements(paiements))
 
-        encaissements_clients = caht
+        # SYSCOHADA : encaissements = débits sur comptes de trésorerie (5xx) source PAIEMENT
+        TRESO_COMPTES = list(MOBILE_ACCOUNTS) + ['521', '522', '571']
+        agg_enc = entries.filter(
+            source='PAIEMENT',
+            no_compte__in=TRESO_COMPTES,
+            debit__gt=0,
+        ).aggregate(t=Sum('debit'))
+        encaissements_clients = float(agg_enc['t'] or 0) or _sum_paiements(paiements)
 
+        # SYSCOHADA : décaissements = crédits sur comptes de trésorerie source CHARGE/PAIE/BUDGET/INVEST
         agg_dec = entries.filter(
-            source='CHARGE',
-            no_compte__in=list(MOBILE_ACCOUNTS) + ['521', '571']
+            source__in=('CHARGE', 'PAIE', 'BUDGET', 'INVEST'),
+            no_compte__in=TRESO_COMPTES,
+            credit__gt=0,
         ).aggregate(t=Sum('credit'))
         decaissements_charges = float(agg_dec['t'] or 0)
 
+        # Décaissements investissements (flux investissements SYSCOHADA)
+        agg_inv = entries.filter(
+            source='INVEST',
+            no_compte__startswith='2',
+            debit__gt=0,
+        ).aggregate(t=Sum('debit'))
+        flux_investissement = -float(agg_inv['t'] or 0)
+
+        plan           = get_plan_dict(tenant)
         flux_exploitation = encaissements_clients - decaissements_charges
 
         solde_initial = float(exercice.solde_initial_caisse +
                               exercice.solde_initial_banque +
                               exercice.solde_initial_mobile)
-        solde_final   = solde_initial + flux_exploitation
+        solde_final   = round(solde_initial + flux_exploitation + flux_investissement, 2)
 
         par_mode = paiements.values('mode_paiement').annotate(
             nb=Count('id'),
@@ -773,7 +797,7 @@ class TableauFluxView(APIView):
                 'decaissements_charges': round(decaissements_charges, 2),
                 'flux_net':              round(flux_exploitation, 2),
             },
-            'flux_investissement': {'acquisitions': 0, 'cessions': 0, 'flux_net': 0},
+            'flux_investissement': {'acquisitions': round(abs(flux_investissement), 2), 'cessions': 0, 'flux_net': round(flux_investissement, 2)},
             'flux_financement': {
                 'apports_capital': round(solde_initial, 2),
                 'flux_net':        round(solde_initial, 2),

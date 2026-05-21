@@ -66,7 +66,7 @@ class EmployeViewSet(viewsets.ModelViewSet):
         if not montant_raw:
             return Response({'error': 'montant requis'}, status=status.HTTP_400_BAD_REQUEST)
 
-        mode       = request.data.get('mode_paiement', 'CAISSE')
+        mode       = request.data.get('mode_paiement', 'ESPECE')
         date_raw   = request.data.get('date_avance', datetime.date.today().isoformat())
         try:
             date_avance = datetime.date.fromisoformat(str(date_raw))
