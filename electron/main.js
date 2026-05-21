@@ -225,8 +225,6 @@ async function ensureProductionConfig() {
   content = content.replace(/'PORT': '[^']*'/,     `'PORT': '${esc(creds.port)}'`);
   fs.writeFileSync(prodFile, content, 'utf8');
 
-  await checkPkgResources(getPython());
-
   try {
     await runMigrate(backendDir);
   } catch (err) {
