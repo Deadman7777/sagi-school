@@ -98,6 +98,41 @@ function runMigrate(backendDir) {
   return runManageCommand(backendDir, ['migrate', '--noinput'], 'migrate');
 }
 
+/**
+ * Installe / met à jour les dépendances Python depuis requirements/base.txt.
+ * Ne bloque pas le démarrage si pip échoue (log uniquement).
+ */
+function ensurePythonPackages(backendDir) {
+  return new Promise(resolve => {
+    const python  = getPython();
+    const reqFile = path.join(backendDir, 'requirements', 'base.txt');
+
+    if (!fs.existsSync(reqFile)) {
+      console.log('[Setup] requirements/base.txt introuvable, skip');
+      return resolve();
+    }
+
+    console.log('[Setup] Vérification des paquets Python...');
+
+    const pip = spawn(python, [
+      '-m', 'pip', 'install', '-r', reqFile,
+      '--quiet', '--no-warn-script-location',
+    ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+
+    pip.stdout.on('data', d => console.log('[pip]', d.toString().trim()));
+    pip.stderr.on('data', d => console.log('[pip]', d.toString().trim()));
+    pip.on('close', code => {
+      if (code === 0) console.log('[Setup] Paquets Python OK');
+      else console.warn('[Setup] pip a retourné le code', code, '— démarrage quand même');
+      resolve();
+    });
+    pip.on('error', err => {
+      console.error('[Setup] pip inaccessible:', err.message);
+      resolve(); // ne pas bloquer
+    });
+  });
+}
+
 async function ensureProductionConfig() {
   const backendDir  = getBackendDir();
   const prodFile    = path.join(backendDir, 'config', 'settings', 'production.py');
@@ -110,7 +145,12 @@ async function ensureProductionConfig() {
   // Échapper les apostrophes pour les chaînes Python single-quoted
   const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
+  // Clé secrète unique par installation
+  const crypto = require('crypto');
+  const secretKey = crypto.randomBytes(48).toString('hex');
+
   let content = fs.readFileSync(exampleFile, 'utf8');
+  content = content.replace(/SECRET_KEY\s*=\s*'[^']*'/, `SECRET_KEY = '${secretKey}'`);
   content = content.replace(/'PASSWORD': '[^']*'/, `'PASSWORD': '${esc(creds.password)}'`);
   content = content.replace(/'NAME': '[^']*'/,     `'NAME': '${esc(creds.name)}'`);
   content = content.replace(/'USER': '[^']*'/,     `'USER': '${esc(creds.user)}'`);
@@ -165,9 +205,17 @@ function startDjango() {
     }
 
     try {
-      djangoProcess = spawn(python, [
-        managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'
-      ], { cwd: backendDir, env });
+      // En production Windows → waitress (WSGI stable).
+      // En dev ou Linux → runserver Django.
+      const cmd = (!isDev && process.platform === 'win32')
+        ? ['-m', 'waitress',
+           `--host=127.0.0.1`, `--port=${DJANGO_PORT}`,
+           'config.wsgi:application']
+        : [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+
+      console.log('[Electron] Commande Django:', python, cmd.join(' '));
+
+      djangoProcess = spawn(python, cmd, { cwd: backendDir, env });
 
       djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
       djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
@@ -277,6 +325,9 @@ if (!gotTheLock) {
       } catch (e) {
         console.warn('[Electron] Vérification licence échouée:', e.message);
       }
+
+      // Installer/vérifier les paquets Python avant la config
+      await ensurePythonPackages(getBackendDir());
 
       try {
         await ensureProductionConfig();

@@ -58,6 +58,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Python requirements
+        working-directory: backend
+        run: pip install -r requirements/base.txt --quiet
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
