@@ -116,61 +116,87 @@ function initParametresFiscaux(backendDir) {
   });
 }
 
-/**
- * Installe / met à jour les dépendances Python depuis requirements/base.txt.
- * Commence par ensurepip pour garantir pip + setuptools (pkg_resources) sans internet.
- * Ne bloque pas le démarrage si pip échoue (log uniquement).
- */
-function ensurePythonPackages(backendDir) {
+function getSetupLogPath() {
+  const userData = app.getPath('userData');
+  if (!fs.existsSync(userData)) fs.mkdirSync(userData, { recursive: true });
+  return path.join(userData, 'setup.log');
+}
+
+function appendSetupLog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  console.log(msg);
+  try { fs.appendFileSync(getSetupLogPath(), line); } catch (_) {}
+}
+
+function runStep(label, python, args) {
   return new Promise(resolve => {
-    const python  = getPython();
-    const reqFile = path.join(backendDir, 'requirements', 'base.txt');
+    appendSetupLog(`>> ${label}`);
+    let out = '';
+    const p = spawn(python, args, { env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+    p.stdout.on('data', d => { out += d.toString(); });
+    p.stderr.on('data', d => { out += d.toString(); });
+    p.on('close', code => {
+      appendSetupLog(`<< ${label} exit=${code}\n${out.trim()}`);
+      resolve(code);
+    });
+    p.on('error', err => {
+      appendSetupLog(`<< ${label} ERROR: ${err.message}`);
+      resolve(-1);
+    });
+  });
+}
 
-    if (!fs.existsSync(reqFile)) {
-      console.log('[Setup] requirements/base.txt introuvable, skip');
-      return resolve();
-    }
+/**
+ * Installe / met à jour les dépendances Python.
+ * Séquence : ensurepip → force-reinstall setuptools → pip install requirements.
+ */
+async function ensurePythonPackages(backendDir) {
+  const python  = getPython();
+  const reqFile = path.join(backendDir, 'requirements', 'base.txt');
+  appendSetupLog(`=== ensurePythonPackages python=${python} ===`);
 
-    const installRequirements = () => {
-      console.log('[Setup] Installation des paquets Python...');
-      const pip = spawn(python, [
-        '-m', 'pip', 'install', '-r', reqFile,
-        '--quiet', '--no-warn-script-location',
-      ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+  if (!fs.existsSync(reqFile)) {
+    appendSetupLog('requirements/base.txt introuvable, skip');
+    return;
+  }
 
-      pip.stdout.on('data', d => console.log('[pip]', d.toString().trim()));
-      pip.stderr.on('data', d => console.log('[pip]', d.toString().trim()));
-      pip.on('close', code => {
-        if (code === 0) console.log('[Setup] Paquets Python OK');
-        else console.warn('[Setup] pip a retourné le code', code, '— démarrage quand même');
-        resolve();
-      });
-      pip.on('error', err => {
-        console.error('[Setup] pip inaccessible:', err.message);
-        resolve();
-      });
-    };
+  await runStep('ensurepip', python, ['-m', 'ensurepip', '--upgrade']);
+  await runStep('setuptools force-reinstall', python, [
+    '-m', 'pip', 'install', '--force-reinstall', '--upgrade', 'setuptools',
+    '--no-warn-script-location',
+  ]);
+  await runStep('pip install requirements', python, [
+    '-m', 'pip', 'install', '-r', reqFile, '--no-warn-script-location',
+  ]);
+  appendSetupLog('=== ensurePythonPackages done ===');
+}
 
-    // Étape 2 : installer setuptools explicitement (fournit pkg_resources).
-    const installSetuptools = () => {
-      console.log('[Setup] Installation setuptools...');
-      let d2 = false;
-      const p = spawn(python, [
-        '-m', 'pip', 'install', '--upgrade', 'setuptools', '--quiet',
-      ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
-      p.on('close', () => { if (!d2) { d2 = true; installRequirements(); } });
-      p.on('error', () => { if (!d2) { d2 = true; installRequirements(); } });
-    };
-
-    // Étape 1 : ensurepip — bootstrap pip depuis les wheels bundlés Python (pas d'internet requis).
-    console.log('[Setup] Bootstrap pip (ensurepip)...');
-    let done = false;
-    const ensurepip = spawn(python, ['-m', 'ensurepip', '--upgrade'], {
-      cwd: backendDir,
+/** Vérifie que pkg_resources est importable. Lève une erreur claire sinon. */
+function checkPkgResources(python) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(python, ['-c', 'import pkg_resources; print("OK")'], {
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
-    ensurepip.on('close', () => { if (!done) { done = true; installSetuptools(); } });
-    ensurepip.on('error', () => { if (!done) { done = true; installSetuptools(); } });
+    let out = '';
+    p.stdout.on('data', d => { out += d.toString(); });
+    p.stderr.on('data', d => { out += d.toString(); });
+    p.on('close', code => {
+      if (code === 0 && out.includes('OK')) {
+        appendSetupLog('pkg_resources OK');
+        resolve();
+      } else {
+        const logPath = getSetupLogPath();
+        appendSetupLog(`pkg_resources MANQUANT. Sortie: ${out.trim()}`);
+        reject(new Error(
+          `Le module Python "setuptools" (pkg_resources) n'est pas installé.\n\n` +
+          `Ouvrez un terminal Windows et exécutez :\n` +
+          `  python -m ensurepip --upgrade\n` +
+          `  python -m pip install --force-reinstall setuptools\n\n` +
+          `Log de diagnostic : ${logPath}`
+        ));
+      }
+    });
+    p.on('error', err => reject(new Error(`Python introuvable : ${err.message}`)));
   });
 }
 
@@ -198,6 +224,8 @@ async function ensureProductionConfig() {
   content = content.replace(/'HOST': '[^']*'/,     `'HOST': '${esc(creds.host)}'`);
   content = content.replace(/'PORT': '[^']*'/,     `'PORT': '${esc(creds.port)}'`);
   fs.writeFileSync(prodFile, content, 'utf8');
+
+  await checkPkgResources(getPython());
 
   try {
     await runMigrate(backendDir);
