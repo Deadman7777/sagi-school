@@ -156,7 +156,14 @@ import { MessageService } from 'primeng/api';
         <th>Débiteur</th><th>Créditeur</th>
       </tr>
     </ng-template>
-    <ng-template pTemplate="body" let-l>
+    <ng-template pTemplate="body" let-l let-i="rowIndex">
+      <!-- Séparateur de classe dans la Balance -->
+      <tr *ngIf="i === 0 || l.no_compte[0] !== (balance()?.lignes?.[i-1]?.no_compte?.[0])" class="classe-header-row">
+        <td colspan="8" style="padding:6px 10px;border-bottom:2px solid #00d4aa">
+          <span class="classe-badge">{{ l.no_compte[0] }}</span>
+          <strong style="color:#00d4aa;font-size:11px">{{ getClasseLabel(l.no_compte[0]) }}</strong>
+        </td>
+      </tr>
       <tr [class.synthetic-row]="l.is_synthetic">
         <td class="mono bold">{{ l.no_compte }}</td>
         <td [class.bold]="l.is_synthetic">{{ l.libelle }}</td>
@@ -817,16 +824,28 @@ import { MessageService } from 'primeng/api';
         </tr>
       </ng-template>
       <ng-template pTemplate="body" let-c>
-        <tr [class.compte-inactif]="!c.est_actif">
-          <td class="mono bold">{{ c.no_compte }}</td>
-          <td [class.bold]="c.no_compte.length <= 2">
+        <!-- Séparateur de classe SYSCOHADA -->
+        <tr *ngIf="c.row_type === 'CLASSE'" class="classe-header-row">
+          <td colspan="6">
+            <span class="classe-badge">{{ c.classe }}</span>
+            <strong style="color:#00d4aa;font-size:11px;letter-spacing:.5px">{{ c.libelle }}</strong>
+          </td>
+        </tr>
+        <!-- Ligne de compte -->
+        <tr *ngIf="c.row_type !== 'CLASSE'" [class.compte-inactif]="!c.est_actif"
+            [class.compte-parent]="c.profondeur === 0"
+            [class.compte-niveau1]="c.profondeur === 1"
+            [class.compte-niveau2]="c.profondeur >= 2">
+          <td class="mono" [class.bold]="c.profondeur === 0">{{ c.no_compte }}</td>
+          <td [style.paddingLeft.px]="8 + (c.profondeur * 14)">
             {{ c.libelle }}
             <span *ngIf="c.est_systeme" class="badge-sys">SYS</span>
             <span *ngIf="c.est_personnalise && !c.est_systeme" class="badge-custom">✎</span>
           </td>
           <td class="mono text-center">{{ c.classe }}</td>
           <td>
-            <p-tag [value]="c.type"
+            <p-tag *ngIf="c.type !== 'CLASSE'"
+                   [value]="c.type"
                    [severity]="c.type === 'CHARGE' ? 'danger' : c.type === 'PRODUIT' ? 'success' : 'info'" />
           </td>
           <td>
@@ -1290,7 +1309,15 @@ import { MessageService } from 'primeng/api';
     .src-btn.amt.active   { color:#ef4444; border-color:#ef4444; }
     .src-btn.bgt.active   { color:#00d4aa; border-color:#00d4aa; }
     /* Plan comptable */
-    .compte-inactif td { opacity:0.45; }
+    .compte-inactif td   { opacity:0.45; }
+    .classe-header-row   { background:#0b1220 !important; }
+    .classe-header-row td{ padding:8px 10px !important; border-bottom:2px solid #00d4aa !important; }
+    .classe-badge  { display:inline-block; background:#00d4aa; color:#0b0f1a; font-weight:900;
+                     font-size:12px; width:22px; height:22px; line-height:22px; text-align:center;
+                     border-radius:4px; margin-right:10px; }
+    .compte-parent td { color:#e8f0fe !important; font-weight:600; }
+    .compte-niveau1 td{ color:#94a3b8 !important; }
+    .compte-niveau2 td{ color:#64748b !important; font-size:11px; }
     .badge-sys    { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; }
     .badge-custom { font-size:10px; color:#00d4aa; margin-left:4px; }
     .text-center  { text-align:center; }
@@ -1385,7 +1412,7 @@ export class ComptabiliteComponent implements OnInit {
   });
   planComptableCharges = computed(() =>
     this.planComptable()
-      .filter(c => c.type === 'CHARGE' && c.est_actif)
+      .filter(c => c.type === 'CHARGE' && c.est_actif && c.row_type !== 'CLASSE' && c.no_compte)
       .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte, libelle: c.libelle }))
   );
   resultat       = signal<any>(null);
@@ -1449,6 +1476,21 @@ comptesCredit = [
 
   private translate = inject(TranslateService);
   private msg       = inject(MessageService);
+
+  getClasseLabel(digit: string): string {
+    const labels: Record<string, string> = {
+      '1': 'Classe 1 — Ressources Durables',
+      '2': 'Classe 2 — Actif Immobilisé',
+      '3': 'Classe 3 — Stocks',
+      '4': 'Classe 4 — Créances et Dettes',
+      '5': 'Classe 5 — Trésorerie',
+      '6': 'Classe 6 — Charges des Activités Ordinaires',
+      '7': 'Classe 7 — Produits des Activités Ordinaires',
+      '8': 'Classe 8 — Engagements Hors Bilan',
+      '9': 'Classe 9 — Comptes Analytiques',
+    };
+    return labels[digit] || `Classe ${digit}`;
+  }
 
   moisLabels = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
   classesFiltres = [1,2,3,4,5,6,7,8,9].map(i => ({label:`Classe ${i}`, value: String(i)}));

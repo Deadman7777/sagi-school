@@ -175,8 +175,14 @@ def get_exercice(tenant):
 
 
 def _compte_sort_key(no):
-    parts = no.replace('.', '__').split('__')
-    return tuple(p.zfill(6) for p in parts)
+    """Tri SYSCOHADA Révisé : regroupement hiérarchique par classe.
+    Ex : 10 < 101 < 102 < 11 < 111 < 12 < ... < 706 < 706.1 < 707
+    Méthode : padding trailing-zeros sur 8 chars (sans le point).
+    """
+    clean = no.replace('.', '').replace('_', '')
+    if clean.isdigit():
+        return clean.ljust(8, '0')
+    return '99999999'  # comptes non numériques en fin
 
 
 def _mobile_aggregate(tenant, exercice):
@@ -215,7 +221,7 @@ class JournalView(APIView):
         if source_filter := request.query_params.get('source'):
             qs = qs.filter(source=source_filter)
 
-        entries = qs.order_by('-date_ecriture', 'no_piece', 'ordre')
+        entries = qs.order_by('date_ecriture', 'no_piece', 'ordre')
 
         return Response([{
             'date':           str(e.date_ecriture),
@@ -1093,7 +1099,21 @@ class PlanComptableView(APIView):
         # Comptes DB (avec flag est_systeme, est_actif)
         db_comptes = {c.no_compte: c for c in CompteComptable.objects.filter(tenant=tenant)}
 
+        NOMS_CLASSES = {
+            1: 'Classe 1 — Ressources Durables',
+            2: 'Classe 2 — Actif Immobilisé',
+            3: 'Classe 3 — Stocks',
+            4: 'Classe 4 — Créances et Dettes',
+            5: 'Classe 5 — Trésorerie',
+            6: 'Classe 6 — Charges des Activités Ordinaires',
+            7: 'Classe 7 — Produits des Activités Ordinaires',
+            8: 'Classe 8 — Comptes des Engagements Hors Bilan',
+            9: 'Classe 9 — Comptes Analytiques',
+        }
+
         rows = []
+        classe_courante = None
+
         for no, libelle in sorted(plan.items(), key=lambda x: _compte_sort_key(x[0])):
             db = db_comptes.get(no)
             classe = int(no[0]) if no and no[0].isdigit() else 0
@@ -1111,6 +1131,25 @@ class PlanComptableView(APIView):
             if classe_filter and str(classe) != classe_filter:
                 continue
 
+            # Insérer un séparateur de classe (row_type='CLASSE') si la classe change
+            if classe != classe_courante and not type_filter and not classe_filter:
+                classe_courante = classe
+                rows.append({
+                    'no_compte':    '',
+                    'libelle':      NOMS_CLASSES.get(classe, f'Classe {classe}'),
+                    'type':         'CLASSE',
+                    'classe':       classe,
+                    'est_actif':    True,
+                    'est_systeme':  True,
+                    'est_personnalise': False,
+                    'row_type':     'CLASSE',
+                    'profondeur':   0,
+                })
+
+            # Profondeur basée sur la longueur du numéro de compte (sans les points)
+            clean_len = len(no.replace('.', ''))
+            profondeur = max(0, clean_len - 2)  # 2 chiffres = niveau 0, 3 = niveau 1, etc.
+
             rows.append({
                 'no_compte':    no,
                 'libelle':      db.libelle if db else libelle,
@@ -1119,6 +1158,8 @@ class PlanComptableView(APIView):
                 'est_actif':    db.est_actif if db else True,
                 'est_systeme':  db.est_systeme if db else False,
                 'est_personnalise': db is not None,
+                'row_type':     'COMPTE',
+                'profondeur':   profondeur,
             })
         return Response(rows)
 
