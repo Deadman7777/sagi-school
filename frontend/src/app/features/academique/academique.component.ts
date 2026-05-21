@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { lastValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -529,46 +530,87 @@ export class AcademiqueComponent implements OnInit {
     });
   }
 
-  sauvegarderNotes() {
+  async sauvegarderNotes() {
     if (!this.evalSelectionnee) return;
+    const eleves = this.elevesNotes().filter(e => e.id);
+    if (!eleves.length) {
+      this.msg.add({ severity: 'warn', summary: 'Aucun élève', detail: 'Aucune note à enregistrer.' });
+      return;
+    }
     this.saving.set(true);
-    const promises = this.elevesNotes().map(e => {
+    let nbOk = 0; let nbErr = 0;
+    for (const e of eleves) {
       const data = {
-        eleve: e.id,
+        eleve:      e.id,
         evaluation: this.evalSelectionnee.id,
-        valeur: e.note_saisie || 0,
-        absent: e.absent_saisie || false,
+        valeur:     e.note_saisie  ?? 0,
+        absent:     e.absent_saisie ?? false,
       };
-      if (e.note_id) {
-        return this.acad.modifierNote(e.note_id, data).toPromise();
-      } else {
-        return this.acad.creerNote(data).toPromise();
+      try {
+        if (e.note_id) {
+          await lastValueFrom(this.acad.modifierNote(e.note_id, data));
+        } else {
+          const res: any = await lastValueFrom(this.acad.creerNote(data));
+          e.note_id = res.id;
+        }
+        nbOk++;
+      } catch {
+        nbErr++;
       }
-    });
-    Promise.all(promises).then(() => {
-      this.msg.add({ severity: 'success', summary: this.translate.instant('academique.notes_enregistrees'), detail: `${promises.length}` });
-      this.saving.set(false);
-      this.selectionnerEvaluation(this.evalSelectionnee);
-    }).catch(() => this.saving.set(false));
+    }
+    this.saving.set(false);
+    if (nbErr === 0) {
+      this.msg.add({ severity: 'success', summary: 'Notes enregistrées',
+                     detail: `${nbOk} note(s) sauvegardée(s).` });
+    } else {
+      this.msg.add({ severity: 'warn', summary: `${nbOk} OK / ${nbErr} erreur(s)`,
+                     detail: 'Certaines notes n\'ont pas pu être enregistrées.' });
+    }
+    this.selectionnerEvaluation(this.evalSelectionnee);
+  }
+
+  private _getAnneeScolaire(): string {
+    const now = new Date();
+    const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${y}-${y + 1}`;
   }
 
   calculerMoyennes() {
-    if (!this.classeResultats) return;
+    if (!this.classeResultats) {
+      this.msg.add({ severity: 'warn', summary: 'Classe requise', detail: 'Sélectionnez une classe.' });
+      return;
+    }
+    if (!this.trimestreResultats) {
+      this.msg.add({ severity: 'warn', summary: 'Trimestre requis', detail: 'Sélectionnez un trimestre.' });
+      return;
+    }
     this.calculant.set(true);
     this.acad.calculerMoyennes({
-      classe_id: this.classeResultats,
-      trimestre: this.trimestreResultats,
+      classe_id:     this.classeResultats,
+      trimestre:     this.trimestreResultats,
+      annee_scolaire: this._getAnneeScolaire(),
     }).subscribe({
       next: res => {
-        this.resultats.set(res.resultats || []);
+        const resultats = res.resultats || [];
+        this.resultats.set(resultats);
         this.statsClasse.set(res.stats);
-        if (res.resultats?.length > 0) {
-          this.colonnesMatieres.set(res.resultats[0].matieres.map((m: any) => m.matiere));
+        if (resultats.length > 0) {
+          this.colonnesMatieres.set(resultats[0].matieres.map((m: any) => m.matiere));
         }
         this.calculant.set(false);
-        this.msg.add({ severity: 'success', summary: this.translate.instant('academique.calcul_termine'), detail: `${res.resultats?.length}` });
+        if (resultats.length === 0) {
+          this.msg.add({ severity: 'warn', summary: 'Aucun résultat',
+                         detail: 'Aucun élève trouvé pour cette classe. Vérifiez que le nom de la section correspond exactement au nom de la classe.' });
+        } else {
+          this.msg.add({ severity: 'success', summary: 'Calcul terminé',
+                         detail: `${resultats.length} élève(s) — Moy. classe : ${res.stats?.moy_classe}` });
+        }
       },
-      error: () => this.calculant.set(false)
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur calcul',
+                       detail: err?.error?.error || 'Impossible de calculer les moyennes.' });
+        this.calculant.set(false);
+      }
     });
   }
 
@@ -582,8 +624,15 @@ export class AcademiqueComponent implements OnInit {
     return this.translate.instant('academique.appr_insuffisant');
   }
 
-  ouvrirDialogClasse()   { this.formClasse   = { nom:'', code:'', niveau:'' }; this.dialogClasseVisible   = true; }
-  ouvrirDialogMatiere()  { this.formMatiere  = { nom:'', classe:'', coefficient:1, note_max:20 }; this.dialogMatiereVisible  = true; }
+  ouvrirDialogClasse()   {
+    this.formClasse = { nom:'', code:'', niveau:'' };
+    this.dialogClasseVisible = true;
+  }
+  ouvrirDialogMatiere()  {
+    // Pré-remplir avec la classe filtrée si active
+    this.formMatiere = { nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20 };
+    this.dialogMatiereVisible = true;
+  }
   ouvrirDialogTypeEval() { this.formTypeEval = { nom:'', poids:1 }; this.dialogTypeEvalVisible = true; }
   ouvrirDialogEvaluation() {
     if (!this.matiereNotes) { this.msg.add({ severity:'warn', summary: this.translate.instant('academique.select_matiere') }); return; }
@@ -592,43 +641,75 @@ export class AcademiqueComponent implements OnInit {
   }
 
   creerClasse() {
+    if (!this.formClasse.nom?.trim() || !this.formClasse.niveau) {
+      this.msg.add({ severity:'warn', summary:'Champs requis', detail:'Nom et niveau sont obligatoires.' });
+      return;
+    }
     this.acad.creerClasse(this.formClasse).subscribe({
       next: () => {
         this.dialogClasseVisible = false;
         this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.classe_creee') });
-      }
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de créer la classe.' }),
     });
   }
 
   creerMatiere() {
+    if (!this.formMatiere.nom?.trim() || !this.formMatiere.classe) {
+      this.msg.add({ severity:'warn', summary:'Champs requis', detail:'Nom et classe sont obligatoires.' });
+      return;
+    }
     this.acad.creerMatiere(this.formMatiere).subscribe({
       next: () => {
         this.dialogMatiereVisible = false;
         this.chargerMatieres();
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.matiere_creee') });
-      }
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de créer la matière.' }),
     });
   }
 
   creerTypeEval() {
+    if (!this.formTypeEval.nom?.trim()) {
+      this.msg.add({ severity:'warn', summary:'Champ requis', detail:'Le nom est obligatoire.' });
+      return;
+    }
     this.acad.creerTypeEval(this.formTypeEval).subscribe({
       next: () => {
         this.dialogTypeEvalVisible = false;
         this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.type_eval_cree') });
-      }
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de créer le type.' }),
     });
   }
 
   creerEvaluation() {
+    if (!this.formEval.type_eval) {
+      this.msg.add({ severity:'warn', summary:'Champ requis', detail:'Sélectionnez un type d\'évaluation.' });
+      return;
+    }
+    if (!this.formEval.date_eval) {
+      this.msg.add({ severity:'warn', summary:'Champ requis', detail:'La date est obligatoire.' });
+      return;
+    }
+    if (!this.matiereNotes) {
+      this.msg.add({ severity:'warn', summary:'Matière requise', detail:'Sélectionnez une matière.' });
+      return;
+    }
     const data = { ...this.formEval, matiere: this.matiereNotes };
     this.acad.creerEvaluation(data).subscribe({
       next: () => {
         this.dialogEvalVisible = false;
         this.chargerEvaluationsEtEleves();
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.evaluation_creee') });
-      }
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de créer l\'évaluation.' }),
     });
   }
 
@@ -639,10 +720,7 @@ export class AcademiqueComponent implements OnInit {
     }
     const token    = localStorage.getItem('access_token');
     const tenantId = localStorage.getItem('tenant_id') || '';
-    const now      = new Date();
-    // Année scolaire dynamique : si mois >= 9 (sept.) → année N/N+1, sinon N-1/N
-    const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    const annee    = `${y}-${y + 1}`;
+    const annee = this._getAnneeScolaire();
     const trimestre = this.trimestreResultats;
     const base = environment.apiUrl.replace(/\/api$/, '');
     fetch(`${base}/api/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`, {

@@ -178,10 +178,16 @@ class MoteurCalculView(APIView):
 
     def post(self, request):
         """Calculer les moyennes pour une classe et un trimestre."""
+        import datetime as _dt
         tenant    = get_tenant(request)
         classe_id = request.data.get('classe_id')
         trimestre = request.data.get('trimestre', 'T1')
-        annee     = request.data.get('annee_scolaire', '2025-2026')
+        # Année scolaire : fournie par le frontend ou calculée depuis exercice actif
+        annee = request.data.get('annee_scolaire')
+        if not annee:
+            from apps.paiements.models import Exercice as _Ex2
+            ex = _Ex2.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+            annee = ex.annee_scolaire if ex else f"{_dt.date.today().year-1}-{_dt.date.today().year}"
 
         try:
             classe = Classe.objects.get(id=classe_id, tenant=tenant)
@@ -190,7 +196,12 @@ class MoteurCalculView(APIView):
 
         matieres = Matiere.objects.filter(classe=classe, tenant=tenant, est_active=True)
         from apps.eleves.models import Eleve
-        eleves = Eleve.objects.filter(tenant=tenant, section__nom=classe.nom)
+        from apps.paiements.models import Exercice as _Exercice
+        exercice_actif = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        eleves_qs = Eleve.objects.filter(tenant=tenant, section__nom__iexact=classe.nom)
+        if exercice_actif:
+            eleves_qs = eleves_qs.filter(exercice=exercice_actif)
+        eleves = eleves_qs
 
         resultats = []
 
@@ -292,13 +303,28 @@ class MoteurCalculView(APIView):
         })
 
 
+def _get_annee_scolaire(tenant):
+    """Retourne l'année scolaire de l'exercice actif, ou calcule depuis la date courante."""
+    import datetime as _dt
+    from apps.paiements.models import Exercice as _ExAnne
+    ex = _ExAnne.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+    if ex:
+        return ex.annee_scolaire
+    today = _dt.date.today()
+    y = today.year if today.month >= 9 else today.year - 1
+    return f"{y}-{y+1}"
+
+
 class BulletinView(APIView):
-    """Générer le bulletin PDF d'un élève."""
+    """Retourne les données du bulletin d'un élève (JSON)."""
     permission_classes = [IsAuthenticated]
+
+    def _get_annee(self, request):
+        return _get_annee_scolaire(get_tenant(request))
 
     def get(self, request, eleve_id, trimestre):
         tenant = get_tenant(request)
-        annee  = request.query_params.get('annee', '2025-2026')
+        annee = request.query_params.get('annee') or self._get_annee(request)
 
         try:
             eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
@@ -354,6 +380,9 @@ class BulletinPDFView(APIView):
     """Générer le bulletin PDF d'un élève."""
     permission_classes = [IsAuthenticated]
 
+    def _get_annee(self, request):
+        return _get_annee_scolaire(get_tenant(request))
+
     def get_appreciation(self, moy, note_max):
         ratio = float(moy) / float(note_max) * 20
         if ratio >= 18: return 'Excellent'
@@ -380,7 +409,7 @@ class BulletinPDFView(APIView):
             return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant = get_tenant(request)
-        annee  = request.query_params.get('annee', '2025-2026')
+        annee = request.query_params.get('annee') or self._get_annee(request)
 
         try:
             eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
