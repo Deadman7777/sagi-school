@@ -4,85 +4,152 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:Arial, sans-serif; font-size:11px; color:#1a1a1a; width:100%; }
+  body { font-family:Arial, sans-serif; font-size:10px; color:#1a1a1a; }
 
-  /* ── En-tête ── */
-  .header-table { width:100%; border-bottom:3px solid #1a3c5e; padding-bottom:10px; margin-bottom:14px; }
-  .school-name  { font-size:16px; font-weight:bold; color:#1a3c5e; }
-  .school-sub   { font-size:9px; color:#666; margin-top:2px; }
-  .doc-title    { font-size:14px; font-weight:bold; color:#1a3c5e; text-align:right; }
-  .doc-no       { font-size:11px; color:#666; text-align:right; margin-top:3px; font-family:monospace; }
-  .doc-date     { font-size:10px; color:#666; text-align:right; margin-top:2px; }
+  /* ════ BANDEAU SUPÉRIEUR ════ */
+  .top-band { width:100%; border-bottom:3px solid #1a3c5e; margin-bottom:8px; }
+  .top-band td { padding:6px 0; vertical-align:middle; }
+  .rep { font-size:9px; color:#555; line-height:1.4; }
+  .rep-bold { font-weight:bold; font-size:10px; color:#1a3c5e; }
+  .school-block { text-align:center; }
+  .school-name { font-size:15px; font-weight:bold; color:#1a3c5e; text-transform:uppercase; }
+  .school-sub  { font-size:8px; color:#666; margin-top:2px; }
+  .doc-block   { text-align:right; }
+  .doc-title   { font-size:13px; font-weight:bold; color:#1a3c5e; }
+  .doc-no      { font-size:12px; font-family:monospace; color:#1a3c5e; margin-top:2px; font-weight:bold; }
+  .doc-meta    { font-size:8px; color:#666; margin-top:2px; line-height:1.5; }
 
-  /* ── Infos élève ── */
-  .eleve-table  { width:100%; border:1px solid #dee2e6; background:#f8f9fa; margin-bottom:14px; }
-  .eleve-table td { padding:6px 10px; border-right:1px solid #dee2e6; vertical-align:top; font-size:11px; }
+  /* ════ BANNIÈRE ORIGINALE ════ */
+  .originale { text-align:center; font-size:9px; font-weight:bold; color:white;
+               background:#1a3c5e; padding:3px; margin-bottom:8px; text-transform:uppercase;
+               letter-spacing:2px; }
+
+  /* ════ INFOS ÉTABLISSEMENT ════ */
+  .etab-row { width:100%; background:#f0f4ff; border:1px solid #c7d2fe; margin-bottom:8px; }
+  .etab-row td { padding:5px 8px; font-size:9px; border-right:1px solid #c7d2fe; }
+  .etab-row td:last-child { border-right:none; }
+  .lbl { color:#666; font-size:8px; text-transform:uppercase; letter-spacing:.3px; }
+  .val { font-weight:bold; color:#1a1a1a; margin-top:2px; font-size:10px; }
+
+  /* ════ INFOS ÉLÈVE ════ */
+  .section-title { font-size:9px; font-weight:bold; color:white; background:#1a3c5e;
+                   padding:3px 8px; margin-bottom:4px; text-transform:uppercase; }
+  .eleve-table { width:100%; border:1px solid #dee2e6; margin-bottom:8px; }
+  .eleve-table td { padding:4px 7px; border-right:1px solid #dee2e6; border-bottom:1px solid #dee2e6; font-size:10px; }
   .eleve-table td:last-child { border-right:none; }
-  .lbl { font-size:9px; color:#666; text-transform:uppercase; }
-  .val { font-weight:bold; color:#1a1a1a; margin-top:2px; }
 
-  /* ── Lignes paiement ── */
-  .detail-table { width:100%; border-collapse:collapse; margin-bottom:12px; }
-  .detail-table th { background:#1a3c5e; color:white; padding:6px 10px; text-align:left; font-size:10px; text-transform:uppercase; }
+  /* ════ DÉTAIL PAIEMENT ════ */
+  .detail-table { width:100%; border-collapse:collapse; margin-bottom:8px; }
+  .detail-table th { background:#1a3c5e; color:white; padding:5px 7px; font-size:9px;
+                     text-transform:uppercase; text-align:left; }
   .detail-table th.tr { text-align:right; }
-  .detail-table td { padding:6px 10px; border-bottom:1px solid #dee2e6; font-size:11px; }
-  .detail-table td.tr { text-align:right; font-family:monospace; }
-  .detail-table tfoot td { background:#e8f0fe; font-weight:bold; border-top:2px solid #1a3c5e; padding:8px 10px; font-size:13px; }
+  .detail-table td { padding:5px 7px; border-bottom:1px solid #dee2e6; font-size:10px; }
+  .detail-table td.tr { text-align:right; font-family:monospace; font-weight:bold; }
+  .detail-table tfoot td { background:#1a3c5e; color:white; font-weight:bold;
+                            padding:6px 7px; font-size:12px; }
+  .detail-table tfoot td.tr { text-align:right; }
 
-  /* ── Mode ── */
-  .mode-box { border:1px solid #dee2e6; padding:8px 12px; margin-bottom:14px; font-size:11px; }
+  /* ════ SUIVI FINANCIER ════ */
+  .suivi-table { width:100%; border:1px solid #dee2e6; margin-bottom:8px; }
+  .suivi-table td { padding:4px 8px; border-right:1px solid #dee2e6; border-bottom:1px solid #dee2e6; font-size:10px; text-align:center; }
+  .suivi-table td:last-child { border-right:none; }
+  .suivi-lbl { font-size:8px; color:#666; text-transform:uppercase; }
+  .suivi-val { font-size:11px; font-weight:bold; margin-top:2px; }
+  .s-blue { color:#1a3c5e; }
+  .s-green { color:#10b981; }
+  .s-orange { color:#f59e0b; }
+  .s-red { color:#ef4444; }
 
-  /* ── Signatures ── */
-  .sig-table { width:100%; margin-top:24px; }
-  .sig-table td { width:50%; padding:4px 10px; text-align:center; }
-  .sig-inner { border-top:1px solid #999; padding-top:6px; font-size:9px; color:#555; }
+  /* ════ MODE PAIEMENT ════ */
+  .mode-table { width:100%; border:1px solid #dee2e6; margin-bottom:8px; }
+  .mode-table td { padding:5px 8px; border-right:1px solid #dee2e6; font-size:10px; }
+  .mode-table td:last-child { border-right:none; }
 
-  /* ── Pied ── */
-  .footer-line { font-size:9px; color:#999; text-align:center; margin-top:10px; border-top:1px solid #eee; padding-top:6px; }
+  /* ════ SIGNATURES ════ */
+  .sig-table { width:100%; margin-top:12px; }
+  .sig-table td { width:33%; text-align:center; padding:4px 6px; }
+  .sig-box { border-top:1px solid #999; padding-top:6px; font-size:9px; color:#555; }
+  .sig-line { margin-top:20px; border-top:1px dashed #aaa; padding-top:4px; font-size:8px; color:#999; }
 
-  @page { size:A5; margin:10mm; }
+  /* ════ PIED DE PAGE ════ */
+  .footer-band { width:100%; border-top:1px solid #eee; margin-top:8px; }
+  .footer-band td { padding:4px 0; font-size:8px; color:#999; }
+
+  /* ════ NOTICE LÉGALE ════ */
+  .notice { font-size:7px; color:#aaa; text-align:center; margin-top:4px; }
+
+  @page { size:A5; margin:8mm; }
 </style>
 </head>
 <body>
 
+<!-- Bannière "ORIGINAL" -->
+<div class="originale">REÇU OFFICIEL — ORIGINAL</div>
+
 <!-- En-tête -->
-<table class="header-table">
+<table class="top-band">
   <tr>
-    <td style="width:60%">
-      <div class="school-name">{{ tenant_nom|upper }}</div>
-      <div class="school-sub">{{ tenant_ville }} {% if tenant_rccm %}| RCCM : {{ tenant_rccm }}{% endif %}</div>
+    <td style="width:28%">
+      <div class="rep">RÉPUBLIQUE DU SÉNÉGAL</div>
+      <div class="rep-bold">Un Peuple — Un But — Une Foi</div>
+      {% if tenant_rccm %}<div class="rep" style="margin-top:4px">RCCM : {{ tenant_rccm }}</div>{% endif %}
+      {% if tenant_telephone %}<div class="rep">Tél : {{ tenant_telephone }}</div>{% endif %}
     </td>
-    <td style="width:40%">
+    <td style="width:44%" class="school-block">
+      <div class="school-name">{{ tenant_nom }}</div>
+      {% if tenant_ville %}<div class="school-sub">{{ tenant_ville }}</div>{% endif %}
+      <div class="school-sub" style="margin-top:3px">Année Scolaire : <strong>{{ annee_scolaire }}</strong></div>
+    </td>
+    <td style="width:28%" class="doc-block">
       <div class="doc-title">REÇU DE PAIEMENT</div>
-      <div class="doc-no">N° {{ p.no_piece }}</div>
-      <div class="doc-date">Édité le {{ date_edition|date:"d/m/Y à H:i" }}</div>
+      <div class="doc-no">N° {{ no_piece }}</div>
+      <div class="doc-meta">
+        Date : {{ date }}<br>
+        Édité le : {{ date_edition }}
+      </div>
     </td>
   </tr>
 </table>
 
-<!-- Infos élève -->
+<!-- SECTION ÉLÈVE -->
+<div class="section-title">Informations de l'Élève</div>
 <table class="eleve-table">
   <tr>
     <td style="width:40%">
-      <div class="lbl">Élève</div>
-      <div class="val">{{ p.eleve.nom_complet|upper }}</div>
+      <div class="lbl">Nom &amp; Prénom</div>
+      <div class="val" style="text-transform:uppercase">{{ eleve }}</div>
     </td>
     <td style="width:20%">
       <div class="lbl">Matricule</div>
-      <div class="val">{{ p.eleve.matricule|default:"—" }}</div>
+      <div class="val">{{ matricule }}</div>
     </td>
-    <td style="width:25%">
+    <td style="width:22%">
       <div class="lbl">Classe / Section</div>
-      <div class="val">{% if p.eleve.section %}{{ p.eleve.section.nom }}{% else %}—{% endif %}</div>
+      <div class="val">{{ section }}</div>
     </td>
-    <td style="width:15%">
-      <div class="lbl">Date</div>
-      <div class="val">{{ p.date_paiement|date:"d/m/Y" }}</div>
+    <td style="width:18%">
+      <div class="lbl">N° reçu élève</div>
+      <div class="val" style="color:#1a3c5e">{{ nb_recu_eleve }}e paiement</div>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <div class="lbl">Père / Tuteur</div>
+      <div class="val">{{ nom_pere }}
+        {% if telephone_pere != '—' %}<span style="font-weight:normal;color:#555;font-size:9px"> — {{ telephone_pere }}</span>{% endif %}
+      </div>
+    </td>
+    <td colspan="2">
+      <div class="lbl">Mère</div>
+      <div class="val">{{ nom_mere }}
+        {% if telephone_mere != '—' %}<span style="font-weight:normal;color:#555;font-size:9px"> — {{ telephone_mere }}</span>{% endif %}
+      </div>
     </td>
   </tr>
 </table>
 
-<!-- Détail des montants -->
+<!-- DÉTAIL DU PAIEMENT -->
+<div class="section-title">Détail du Paiement</div>
 <table class="detail-table">
   <thead>
     <tr>
@@ -97,41 +164,103 @@
       <td class="tr">{{ montant|floatformat:0 }}</td>
     </tr>
     {% endfor %}
+    {% if observations %}
+    <tr>
+      <td colspan="2" style="font-size:9px;color:#666;font-style:italic">
+        Observations : {{ observations }}
+      </td>
+    </tr>
+    {% endif %}
   </tbody>
   <tfoot>
     <tr>
-      <td>TOTAL ENCAISSÉ</td>
-      <td class="tr" style="color:#1a3c5e;font-size:15px">{{ p.total|floatformat:0 }} FCFA</td>
+      <td>TOTAL ENCAISSÉ CE JOUR</td>
+      <td class="tr" style="font-size:14px">{{ total|floatformat:0 }} FCFA</td>
     </tr>
   </tfoot>
 </table>
 
-<!-- Mode de paiement -->
-<div class="mode-box">
-  Mode de paiement : <strong>{{ mode_label }}</strong>
-  {% if saisi_par %}&nbsp;|&nbsp; Saisi par : <strong>{{ saisi_par }}</strong>{% endif %}
-</div>
-
-<!-- Signatures -->
-<table class="sig-table">
+<!-- SUIVI FINANCIER -->
+<div class="section-title">Suivi Financier — Exercice {{ annee_scolaire }}</div>
+<table class="suivi-table">
   <tr>
     <td>
-      <div class="sig-inner">
-        Signature du Caissier / Receveur<br><br><br>
-        ____________________________
-      </div>
+      <div class="suivi-lbl">Total attendu</div>
+      <div class="suivi-val s-blue">{{ total_attendu|floatformat:0 }}</div>
     </td>
     <td>
-      <div class="sig-inner">
-        Signature du Payeur (Lu et approuvé)<br><br><br>
-        ____________________________
+      <div class="suivi-lbl">Déjà versé (avant)</div>
+      <div class="suivi-val s-green">{{ deja_paye_avant|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Ce paiement</div>
+      <div class="suivi-val s-green" style="font-size:13px">+ {{ total|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Total versé après</div>
+      <div class="suivi-val s-green">{{ total_paye_apres|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Reste à payer</div>
+      <div class="suivi-val {% if reste_apres == 0 %}s-green{% elif reste_apres < total_attendu|floatformat:0|add:"0" %}s-orange{% else %}s-red{% endif %}">
+        {% if reste_apres == 0 %}✓ SOLDÉ{% else %}{{ reste_apres|floatformat:0 }}{% endif %}
       </div>
     </td>
   </tr>
 </table>
 
-<div class="footer-line">
-  {{ tenant_nom }} &middot; SAGI SCHOOL &middot; Système de Gestion Scolaire &middot; {{ date_edition|date:"d/m/Y" }}
+<!-- MODE DE PAIEMENT -->
+<table class="mode-table">
+  <tr>
+    <td style="width:30%">
+      <div class="lbl">Mode de paiement</div>
+      <div class="val">{{ mode_label }}</div>
+    </td>
+    <td style="width:30%">
+      <div class="lbl">Caissier / Agent</div>
+      <div class="val">{{ saisi_par }}</div>
+    </td>
+    <td style="width:40%">
+      <div class="lbl">Date &amp; heure de la transaction</div>
+      <div class="val">{{ date }} à {{ heure_edition }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- SIGNATURES -->
+<table class="sig-table">
+  <tr>
+    <td>
+      <div class="sig-box">
+        Le Caissier / Receveur
+        <div class="sig-line">Signature &amp; cachet</div>
+      </div>
+    </td>
+    <td>
+      <div class="sig-box">
+        Le Directeur / La Directrice
+        <div class="sig-line">Visa</div>
+      </div>
+    </td>
+    <td>
+      <div class="sig-box">
+        Le Payeur (Lu &amp; approuvé)
+        <div class="sig-line">Signature</div>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- Pied de page -->
+<table class="footer-band">
+  <tr>
+    <td>{{ tenant_nom }} &middot; {{ tenant_ville }} &middot; Année {{ annee_scolaire }}</td>
+    <td style="text-align:right">Réf. : {{ no_piece }} &middot; SAGI SCHOOL</td>
+  </tr>
+</table>
+<div class="notice">
+  Ce reçu est un document officiel. Toute modification le rend nul et non avenu.
+  Conservez ce reçu pour tout recours ultérieur.
 </div>
 
 </body>

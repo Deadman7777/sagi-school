@@ -202,32 +202,56 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
       </ng-template>
     </p-dialog>
 
-    <!-- Dialog reçu impression -->
-    <p-dialog [header]="'🧾 ' + ('paiements.recu' | translate)" [(visible)]="recuVisible"
-              [modal]="true" [style]="{width:'420px'}" [draggable]="false">
+    <!-- Dialog reçu aperçu -->
+    <p-dialog header="🧾 Aperçu du Reçu" [(visible)]="recuVisible"
+              [modal]="true" [style]="{width:'480px'}" [draggable]="false">
       <div class="recu" *ngIf="recuData()">
+        <!-- Header reçu -->
         <div class="recu-header">
-          <div class="recu-titre">{{ 'paiements.recu_titre' | translate }}</div>
-          <div class="recu-no">{{ recuData().no_piece }}</div>
+          <div class="recu-titre">{{ recuData().tenant_nom }}</div>
+          <div class="recu-no">N° {{ recuData().no_piece }}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">
+            {{ recuData().date }} &nbsp;|&nbsp; Année {{ recuData().annee_scolaire }}
+          </div>
         </div>
-        <div class="recu-row"><span>{{ 'paiements.eleve'        | translate }}</span><strong>{{ recuData().eleve }}</strong></div>
-        <div class="recu-row"><span>{{ 'paiements.section_info' | translate }}</span><span>{{ recuData().section }}</span></div>
-        <div class="recu-row"><span>{{ 'paiements.date'         | translate }}</span><span>{{ recuData().date | date:'dd/MM/yyyy' }}</span></div>
-        <hr style="border-color:#2a3f5f;margin:10px 0">
-        <div class="recu-row" *ngIf="recuData().inscription">  <span>{{ 'paiements.inscription' | translate }}</span><span>{{ recuData().inscription  | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().mensualite">   <span>{{ 'paiements.mensualite'  | translate }}</span><span>{{ recuData().mensualite   | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().uniforme">     <span>{{ 'paiements.uniforme'    | translate }}</span><span>{{ recuData().uniforme     | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().fournitures">  <span>{{ 'paiements.fournitures' | translate }}</span><span>{{ recuData().fournitures  | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" *ngIf="recuData().cantine">      <span>{{ 'paiements.cantine'     | translate }}</span><span>{{ recuData().cantine      | number:'1.0-0' }} FCFA</span></div>
-        <hr style="border-color:#2a3f5f;margin:10px 0">
-        <div class="recu-total"><span>{{ 'paiements.total' | translate }}</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
-        <div class="recu-row" style="margin-top:8px"><span>{{ 'paiements.mode'     | translate }}</span><span>{{ recuData().mode_paiement }}</span></div>
-        <div class="recu-row"><span>{{ 'paiements.saisi_par' | translate }}</span><span>{{ recuData().saisi_par }}</span></div>
+
+        <!-- Élève -->
+        <div class="recu-section">👤 Élève</div>
+        <div class="recu-row"><span>Nom complet</span><strong style="text-transform:uppercase">{{ recuData().eleve }}</strong></div>
+        <div class="recu-row"><span>Matricule</span><span>{{ recuData().matricule }}</span></div>
+        <div class="recu-row"><span>Section</span><span>{{ recuData().section }}</span></div>
+        @if (recuData().nom_pere !== '—') {
+          <div class="recu-row"><span>Père / Tuteur</span><span>{{ recuData().nom_pere }} — {{ recuData().telephone_pere }}</span></div>
+        }
+        @if (recuData().nom_mere !== '—') {
+          <div class="recu-row"><span>Mère</span><span>{{ recuData().nom_mere }} — {{ recuData().telephone_mere }}</span></div>
+        }
+
+        <!-- Paiement -->
+        <div class="recu-section" style="margin-top:10px">💰 Paiement</div>
+        @for (ligne of recuData().lignes; track ligne[0]) {
+          <div class="recu-row"><span>{{ ligne[0] }}</span><span>{{ ligne[1] | number:'1.0-0' }} FCFA</span></div>
+        }
+        <div class="recu-total"><span>Total encaissé</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row" style="margin-top:4px"><span>Mode</span><span>{{ recuData().mode_label }}</span></div>
+        <div class="recu-row"><span>Caissier</span><span>{{ recuData().saisi_par }}</span></div>
+
+        <!-- Suivi -->
+        <div class="recu-section" style="margin-top:10px">📊 Suivi Financier</div>
+        <div class="recu-row"><span>Total attendu</span><span class="mono">{{ recuData().total_attendu | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row"><span>Déjà versé (avant)</span><span class="mono success">{{ recuData().deja_paye_avant | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row"><span>Total versé après</span><span class="mono success">{{ recuData().total_paye_apres | number:'1.0-0' }} FCFA</span></div>
+        <div class="recu-row">
+          <span>Reste à payer</span>
+          <strong [class.success]="recuData().reste_apres === 0" [class.danger]="recuData().reste_apres > 0">
+            {{ recuData().reste_apres === 0 ? '✅ SOLDÉ' : (recuData().reste_apres | number:'1.0-0') + ' FCFA' }}
+          </strong>
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button label="📄 Télécharger PDF" severity="success"
                   icon="pi pi-download" (onClick)="telechargerRecuPdf()" />
-        <p-button [label]="'common.fermer' | translate" severity="secondary" (onClick)="recuVisible=false" />
+        <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
       </ng-template>
     </p-dialog>
   `,
@@ -272,7 +296,8 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
     .recu-no    { font-size:12px; color:#64748b; font-family:monospace; margin-top:4px; }
     .recu-row   { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .recu-row span:first-child { color:#64748b; }
-    .recu-total { display:flex; justify-content:space-between; font-size:16px; font-weight:700; padding:8px 0; color:#00d4aa; }
+    .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid #2a3f5f; margin-top:4px; }
+    .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid #2a3f5f; }
     .type-btn { flex:1; padding:10px; border:1px solid #2a3f5f; border-radius:8px; background:#111827; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.2s; }
     .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
@@ -446,14 +471,11 @@ export class PaiementsComponent implements OnInit {
 
   telechargerRecuPdf() {
     const d = this.recuData();
-    if (!d) return;
-    // On a besoin de l'id du paiement — on le récupère depuis la liste
-    const paiement = this.paiements().find(p => p.no_piece === d.no_piece);
-    if (!paiement?.id) {
-      this.msg.add({ severity: 'warn', summary: 'ID manquant', detail: 'Impossible de récupérer le reçu PDF.' });
+    if (!d?.paiement_id) {
+      this.msg.add({ severity: 'warn', summary: 'Données manquantes', detail: 'Rechargez le reçu.' });
       return;
     }
-    this.paiementsService.telechargerRecuPdf(paiement.id, d.no_piece)
+    this.paiementsService.telechargerRecuPdf(d.paiement_id, d.no_piece)
       .catch(() => this.msg.add({ severity: 'error', summary: 'Erreur PDF', detail: 'Impossible de générer le reçu PDF.' }));
   }
 

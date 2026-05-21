@@ -153,71 +153,129 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'par_mode':        sorted(par_mode, key=lambda x: x['total'], reverse=True),
         })
 
+    def _build_recu_context(self, p):
+        """Construit le contexte complet du reçu (JSON + PDF)."""
+        from django.db.models import Sum as _Sum
+        from django.utils import timezone as _tz
+
+        MODE_LABELS = {
+            'ESPECE': 'Espèces (caisse)', 'WAVE': 'Wave',
+            'ORANGE_MONEY': 'Orange Money', 'FREE_MONEY': 'Free Money',
+            'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
+        }
+
+        # Cumul des paiements AVANT ce reçu
+        paiements_avant = Paiement.objects.filter(
+            tenant=p.tenant, eleve=p.eleve, exercice=p.exercice,
+            date_paiement__lt=p.date_paiement,
+        ).exclude(id=p.id)
+        # Inclure les paiements du même jour avec un no_piece inférieur
+        meme_jour = Paiement.objects.filter(
+            tenant=p.tenant, eleve=p.eleve, exercice=p.exercice,
+            date_paiement=p.date_paiement,
+        ).exclude(id=p.id).filter(no_piece__lt=p.no_piece)
+
+        def _sum_qs(qs):
+            a = qs.aggregate(
+                t=_Sum('montant_inscription') + _Sum('montant_mensualite') +
+                  _Sum('montant_uniforme')    + _Sum('montant_fournitures') +
+                  _Sum('montant_cantine')     + _Sum('montant_divers')
+            )
+            return float(a['t'] or 0)
+
+        deja_paye_avant = _sum_qs(paiements_avant) + _sum_qs(meme_jour)
+        total_attendu   = float(p.eleve.total_attendu)
+        total_paiement  = float(p.total)
+        reste_apres     = max(total_attendu - deja_paye_avant - total_paiement, 0)
+
+        # Lignes détail (uniquement les montants > 0)
+        lignes = []
+        if p.montant_inscription: lignes.append(('Frais d\'inscription',  float(p.montant_inscription)))
+        if p.montant_mensualite:  lignes.append(('Mensualité scolaire',   float(p.montant_mensualite)))
+        if p.montant_uniforme:    lignes.append(('Uniforme scolaire',     float(p.montant_uniforme)))
+        if p.montant_fournitures: lignes.append(('Fournitures scolaires', float(p.montant_fournitures)))
+        if p.montant_cantine:     lignes.append(('Cantine / Restauration',float(p.montant_cantine)))
+        if p.montant_divers:      lignes.append(('Frais divers',          float(p.montant_divers)))
+
+        # Numéro séquentiel du reçu pour cet élève
+        nb_recu_eleve = Paiement.objects.filter(
+            tenant=p.tenant, eleve=p.eleve, exercice=p.exercice
+        ).filter(date_paiement__lte=p.date_paiement).count()
+
+        return {
+            'paiement_id':       str(p.id),
+            'no_piece':          p.no_piece,
+            'date':              str(p.date_paiement),
+            'heure_edition':     _tz.now().strftime('%H:%M'),
+            'date_edition':      _tz.now().strftime('%d/%m/%Y à %H:%M'),
+            # Élève
+            'eleve':             p.eleve.nom_complet,
+            'matricule':         p.eleve.matricule or '—',
+            'section':           p.eleve.section.nom if p.eleve.section else '—',
+            'genre':             p.eleve.genre,
+            'date_naissance':    str(p.eleve.date_naissance) if p.eleve.date_naissance else '—',
+            'lieu_naissance':    p.eleve.lieu_naissance or '—',
+            # Parents
+            'nom_pere':          p.eleve.nom_pere or '—',
+            'telephone_pere':    p.eleve.telephone_pere or '—',
+            'nom_mere':          p.eleve.nom_mere or '—',
+            'telephone_mere':    p.eleve.telephone_mere or '—',
+            # Exercice
+            'annee_scolaire':    p.exercice.annee_scolaire,
+            # Montants
+            'lignes':            lignes,
+            'inscription':       float(p.montant_inscription),
+            'mensualite':        float(p.montant_mensualite),
+            'uniforme':          float(p.montant_uniforme),
+            'fournitures':       float(p.montant_fournitures),
+            'cantine':           float(p.montant_cantine),
+            'divers':            float(p.montant_divers),
+            'total':             total_paiement,
+            # Suivi financier
+            'total_attendu':     round(total_attendu, 2),
+            'deja_paye_avant':   round(deja_paye_avant, 2),
+            'total_paye_apres':  round(deja_paye_avant + total_paiement, 2),
+            'reste_apres':       round(reste_apres, 2),
+            'nb_recu_eleve':     nb_recu_eleve,
+            # Paiement
+            'mode_paiement':     p.mode_paiement,
+            'mode_label':        MODE_LABELS.get(p.mode_paiement, p.mode_paiement),
+            'observations':      p.observations or '',
+            'saisi_par':         p.saisi_par.nom if p.saisi_par else '—',
+            # Établissement
+            'tenant_nom':        p.tenant.nom   if p.tenant else 'SAGI SCHOOL',
+            'tenant_ville':      p.tenant.ville if p.tenant else '',
+            'tenant_rccm':       getattr(p.tenant, 'rccm', '') or '',
+            'tenant_telephone':  getattr(p.tenant, 'telephone', '') or '',
+        }
+
     @action(detail=True, methods=['get'])
     def recu(self, request, pk=None):
         """Données JSON du reçu."""
         p = self.get_object()
-        return Response({
-            'no_piece':      p.no_piece,
-            'date':          str(p.date_paiement),
-            'eleve':         p.eleve.nom_complet,
-            'matricule':     p.eleve.matricule or '',
-            'section':       p.eleve.section.nom if p.eleve.section else '',
-            'inscription':   float(p.montant_inscription),
-            'mensualite':    float(p.montant_mensualite),
-            'uniforme':      float(p.montant_uniforme),
-            'fournitures':   float(p.montant_fournitures),
-            'cantine':       float(p.montant_cantine),
-            'divers':        float(p.montant_divers),
-            'total':         float(p.total),
-            'mode_paiement': p.mode_paiement,
-            'saisi_par':     p.saisi_par.nom if p.saisi_par else '',
-            'tenant_nom':    p.tenant.nom if p.tenant else '',
-            'tenant_ville':  p.tenant.ville if p.tenant else '',
-        })
+        return Response(self._build_recu_context(p))
 
     @action(detail=True, methods=['get'])
     def recu_pdf(self, request, pk=None):
-        """Génère le PDF du reçu de paiement."""
+        """Génère le PDF professionnel du reçu de paiement."""
         from io import BytesIO
-        from django.utils import timezone as tz
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
         try:
             from xhtml2pdf import pisa
         except ImportError:
-            from django.http import HttpResponse
             return HttpResponse('xhtml2pdf non installé', status=500)
 
-        p = self.get_object()
-        MODE_LABELS = {
-            'ESPECE': 'Espèces', 'WAVE': 'Wave', 'ORANGE_MONEY': 'Orange Money',
-            'FREE_MONEY': 'Free Money', 'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
-        }
-        lignes = []
-        if p.montant_inscription: lignes.append(('Inscription',  float(p.montant_inscription)))
-        if p.montant_mensualite:  lignes.append(('Mensualité',   float(p.montant_mensualite)))
-        if p.montant_uniforme:    lignes.append(('Uniforme',     float(p.montant_uniforme)))
-        if p.montant_fournitures: lignes.append(('Fournitures',  float(p.montant_fournitures)))
-        if p.montant_cantine:     lignes.append(('Cantine',      float(p.montant_cantine)))
-        if p.montant_divers:      lignes.append(('Divers',       float(p.montant_divers)))
+        p       = self.get_object()
+        context = self._build_recu_context(p)
+        context['p'] = p  # accès direct à l'objet pour le template
 
-        context = {
-            'p':           p,
-            'tenant_nom':  p.tenant.nom   if p.tenant else 'SAGI SCHOOL',
-            'tenant_ville':p.tenant.ville if p.tenant else '',
-            'tenant_rccm': p.tenant.rccm  if p.tenant else '',
-            'lignes':      lignes,
-            'mode_label':  MODE_LABELS.get(p.mode_paiement, p.mode_paiement),
-            'saisi_par':   p.saisi_par.nom if p.saisi_par else '',
-            'date_edition':tz.now(),
-        }
-        from django.template.loader import render_to_string
         html_str = render_to_string('pdf/recu_paiement.html', context)
-        buf = BytesIO()
-        result = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        buf      = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
         if result.err:
-            from django.http import HttpResponse
-            return HttpResponse('Erreur PDF', status=500)
-        from django.http import HttpResponse
+            return HttpResponse('Erreur génération PDF reçu.', status=500)
+
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}.pdf"'
         return response
