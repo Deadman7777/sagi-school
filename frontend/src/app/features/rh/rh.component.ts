@@ -1096,7 +1096,11 @@ export class RhComponent implements OnInit {
         this.previewBulletin.set(r);
         this.loadingPreview.set(false);
       },
-      error: () => this.loadingPreview.set(false),
+      error: (err) => {
+        this.loadingPreview.set(false);
+        const detail = err?.error?.error || err?.error?.detail || 'Impossible de calculer le bulletin.';
+        this.msg.add({ severity: 'error', summary: 'Erreur prévisualisation', detail });
+      },
     });
   }
 

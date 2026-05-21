@@ -98,6 +98,24 @@ function runMigrate(backendDir) {
   return runManageCommand(backendDir, ['migrate', '--noinput'], 'migrate');
 }
 
+function initParametresFiscaux(backendDir) {
+  return new Promise(resolve => {
+    const python   = getPython();
+    const managePy = path.join(backendDir, 'manage.py');
+    const env = {
+      ...process.env,
+      DJANGO_SETTINGS_MODULE: 'config.settings.production',
+      PYTHONUNBUFFERED: '1',
+    };
+    const proc = spawn(python, [managePy, 'init_parametres_fiscaux'], { cwd: backendDir, env });
+    proc.on('close', code => {
+      console.log('[Setup] init_parametres_fiscaux code:', code);
+      resolve(); // ne pas bloquer si déjà initialisé
+    });
+    proc.on('error', () => resolve());
+  });
+}
+
 /**
  * Installe / met à jour les dépendances Python depuis requirements/base.txt.
  * Ne bloque pas le démarrage si pip échoue (log uniquement).
@@ -165,6 +183,9 @@ async function ensureProductionConfig() {
     if (!win.isDestroyed()) win.close();
     throw new Error(`Erreur migrate : ${err.message}`);
   }
+
+  // Initialiser les paramètres fiscaux RH (Sénégal) si pas encore fait
+  await initParametresFiscaux(backendDir);
 
   try {
     await runCollectstatic(backendDir);
@@ -311,22 +332,7 @@ if (!gotTheLock) {
 } else {
   app.whenReady().then(async () => {
     if (!isDev) {
-      try {
-        const { verifierLicence } = require('./licence-check');
-        const result = await verifierLicence();
-        if (!result.valide) {
-          dialog.showErrorBox('Licence SAGI SCHOOL', result.message);
-          app.quit();
-          return;
-        }
-        if (result.mode === 'offline') {
-          console.warn('[Electron] Mode offline:', result.message);
-        }
-      } catch (e) {
-        console.warn('[Electron] Vérification licence échouée:', e.message);
-      }
-
-      // Installer/vérifier les paquets Python avant la config
+      // ── 1. Paquets Python et config DB ───────────────────────
       await ensurePythonPackages(getBackendDir());
 
       try {
@@ -337,7 +343,32 @@ if (!gotTheLock) {
         return;
       }
     }
+
+    // ── 2. Démarrer Django (nécessaire pour la vérif licence) ──
     createWindow();
+
+    // ── 3. Vérification licence APRÈS démarrage Django ─────────
+    if (!isDev) {
+      try {
+        // Attendre que Django soit prêt avant de vérifier
+        await waitForDjango(20);
+        const { verifierLicence } = require('./licence-check');
+        const result = await verifierLicence();
+
+        if (!result.valide) {
+          dialog.showErrorBox(
+            '⚠️ Licence SAGI SCHOOL',
+            result.message + '\n\nContactez HADY GESMAN pour renouveler votre licence.'
+          );
+          // On ne quitte pas — on laisse l'utilisateur fermer manuellement
+        } else if (result.mode !== 'online') {
+          // Avertissement doux pour essai ou offline
+          console.log('[Licence]', result.message);
+        }
+      } catch (e) {
+        console.warn('[Licence] Vérification échouée (non bloquant):', e.message);
+      }
+    }
   });
 }
 
