@@ -1273,6 +1273,59 @@ class BudgetView(APIView):
         return Response({'success': True})
 
 
+class BudgetComptabiliserView(APIView):
+    """Génère une écriture de charge réelle depuis une ligne budget."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        try:
+            ligne = BudgetLigne.objects.get(tenant=tenant, id=pk)
+        except BudgetLigne.DoesNotExist:
+            return Response({'error': 'Ligne budget introuvable'}, status=404)
+
+        montant = float(request.data.get('montant', 0))
+        if montant <= 0:
+            return Response({'error': 'Montant invalide (doit être > 0)'}, status=400)
+
+        libelle    = request.data.get('libelle') or ligne.libelle
+        date_str   = request.data.get('date', str(timezone.now().date()))
+        compte_tresorerie  = request.data.get('compte_credit', '571')
+        compte_fournisseur = request.data.get('compte_fournisseur', '401')
+
+        import re as _re
+        from django.db.models import Max as _Max
+        last_piece = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+            m=_Max('no_piece')
+        )['m']
+        nums = _re.findall(r'\d+', last_piece or 'CHG-0000')
+        no_piece = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
+
+        no_compte    = ligne.no_compte
+        lib_compte   = ligne.libelle or no_compte
+        lib_fourn    = f"Fournisseur ({compte_fournisseur})"
+
+        for ordre, (nc, db, cr, lib) in enumerate([
+            (no_compte,         montant, 0,       f"{lib_compte} — {libelle}"),
+            (compte_fournisseur, 0,      montant, f"{lib_fourn} — {libelle}"),
+            (compte_fournisseur, montant, 0,      f"Règlement {lib_fourn} — {libelle}"),
+            (compte_tresorerie,  0,      montant, f"Règlement {lib_fourn} — {libelle}"),
+        ], 1):
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece, date_ecriture=date_str,
+                source='CHARGE', source_id=None,
+                no_compte=nc, debit=db, credit=cr,
+                libelle=lib, ordre=ordre,
+            )
+
+        return Response({'no_piece': no_piece, 'montant': montant, 'no_compte': no_compte})
+
+
 # ── Investissements / Immobilisations ─────────────────────────────────────────
 PLAN_IMMO = {
     '211': 'Terrains',

@@ -3,7 +3,7 @@ from .views import (JournalView, GrandLivreView, BalanceView,
                     CompteResultatView, BilanView,
                     TableauFluxView, HistoriqueExercicesView, ChargeView,
                     NotesAnnexesView, PlanComptableView, BudgetView,
-                    ImmobilisationView, AmortirView)
+                    BudgetComptabiliserView, ImmobilisationView, AmortirView)
 from .pdf_views import ExportPDFView
 
 urlpatterns = [
@@ -22,8 +22,9 @@ urlpatterns = [
     path('plan-comptable/',                  PlanComptableView.as_view()),
     path('plan-comptable/<str:no_compte>/', PlanComptableView.as_view()),
     # Budget prévisionnel
-    path('budget/',          BudgetView.as_view()),
-    path('budget/<str:pk>/', BudgetView.as_view()),
+    path('budget/',                              BudgetView.as_view()),
+    path('budget/<str:pk>/',                     BudgetView.as_view()),
+    path('budget/<str:pk>/comptabiliser/',       BudgetComptabiliserView.as_view()),
     # Investissements / Immobilisations
     path('immobilisations/',              ImmobilisationView.as_view()),
     path('immobilisations/<str:pk>/',     ImmobilisationView.as_view()),

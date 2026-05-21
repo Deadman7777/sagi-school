@@ -9,12 +9,16 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InputNumberModule} from 'primeng/inputnumber';
 import { DialogModule } from 'primeng/dialog';
 import { SelectModule } from 'primeng/select';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule],
+  providers: [MessageService],
   template: `
+    <p-toast />
     <div class="page-header">
       <div>
         <h2 class="page-title">📒 {{ 'comptabilite.title' | translate }}</h2>
@@ -64,7 +68,10 @@ import { SelectModule } from 'primeng/select';
         <button class="src-btn ava"  [class.active]="filtreSource === 'AVANCE'"  (click)="filtrerJournal('AVANCE')">💸 Avances</button>
         <button class="src-btn inv"  [class.active]="filtreSource === 'INVEST'"  (click)="filtrerJournal('INVEST')">🏗️ Investissement</button>
         <button class="src-btn amt"  [class.active]="filtreSource === 'AMORT'"   (click)="filtrerJournal('AMORT')">📉 Amortissements</button>
-        <span style="margin-left:auto;font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
+          <button class="src-btn" (click)="chargerJournal()" style="border-color:#00d4aa;color:#00d4aa">↻ Actualiser</button>
+        </span>
       </div>
       <p-table [value]="journal()" [loading]="loadingJournal()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="25">
@@ -904,6 +911,8 @@ import { SelectModule } from 'primeng/select';
             <td class="mono bold" [class.over-budget]="l.total_realise > l.total_prevu">{{ l.total_realise | number:'1.0-0' }}</td>
             <td class="pct-cell" [class.over-budget]="l.taux_realisation > 100">{{ l.taux_realisation }} %</td>
             <td>
+              <p-button icon="pi pi-check-circle" [rounded]="true" [text]="true" severity="success"
+                        pTooltip="Comptabiliser (créer écriture charge)" (onClick)="ouvrirComptabiliserBudget(l)" />
               <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                         pTooltip="Modifier" (onClick)="ouvrirModifierBudget(l)" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
@@ -1114,6 +1123,48 @@ import { SelectModule } from 'primeng/select';
     </ng-template>
   </p-dialog>
 
+  <!-- Dialog Comptabiliser Budget -->
+  <p-dialog header="✅ Comptabiliser une charge budgétée"
+            [(visible)]="dialogComptaVisible" [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+    @if (ligneAComptabiliser()) {
+      @let lb = ligneAComptabiliser()!;
+      <div class="employe-banner" style="margin-bottom:14px">
+        <div class="eb-name">{{ lb.no_compte }} — {{ lb.libelle }}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+          Prévu : <strong style="color:#0099ff">{{ lb.total_prevu | number:'1.0-0' }} FCFA</strong> ·
+          Réalisé : <strong style="color:#10b981">{{ lb.total_realise | number:'1.0-0' }} FCFA</strong>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Libellé de la charge *</label>
+          <input pInputText [(ngModel)]="formCompta.libelle" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>Montant à comptabiliser (FCFA) *</label>
+          <p-inputNumber [(ngModel)]="formCompta.montant" [min]="1" mode="decimal" styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label>Date écriture</label>
+          <input pInputText type="date" [(ngModel)]="formCompta.date" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>Compte trésorerie (crédit)</label>
+          <p-select [options]="comptesCredit" [(ngModel)]="formCompta.compte_credit"
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+      </div>
+      <div style="background:#111827;border-radius:6px;padding:8px 12px;font-size:11px;color:#64748b;margin-top:10px">
+        Écritures générées : Débit {{ lb.no_compte }} / Crédit 401 (fournisseur) + Débit 401 / Crédit {{ formCompta.compte_credit }} (règlement)
+      </div>
+    }
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogComptaVisible=false" />
+      <p-button label="Enregistrer les écritures" severity="success"
+                [loading]="savingBudget()" (onClick)="comptabiliserBudget()" />
+    </ng-template>
+  </p-dialog>
+
   <!-- Dialog Ligne Budget -->
   <p-dialog [header]="editBudgetMode ? '✏️ Modifier Ligne Budget' : '🎯 Nouvelle Ligne Budget'"
             [(visible)]="dialogBudgetVisible" [modal]="true" [style]="{width:'700px'}" [draggable]="false">
@@ -1285,9 +1336,12 @@ export class ComptabiliteComponent implements OnInit {
   budget            = signal<any>(null);
   loadingBudget     = signal(false);
   savingBudget      = signal(false);
-  dialogBudgetVisible = false;
-  editBudgetMode      = false;
-  formBudget: any   = {};
+  dialogBudgetVisible  = false;
+  editBudgetMode       = false;
+  formBudget: any    = {};
+  dialogComptaVisible  = false;
+  ligneAComptabiliser  = signal<any | null>(null);
+  formCompta: any    = {};
 
   // Investissement
   immobilisations    = signal<any>(null);
@@ -1392,6 +1446,7 @@ comptesCredit = [
 ];
 
   private translate = inject(TranslateService);
+  private msg       = inject(MessageService);
 
   moisLabels = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
   classesFiltres = [1,2,3,4,5,6,7,8,9].map(i => ({label:`Classe ${i}`, value: String(i)}));
@@ -1505,6 +1560,37 @@ comptesCredit = [
   supprimerBudgetLigne(l: any) {
     if (!confirm(`Supprimer la ligne budget ${l.no_compte} ?`)) return;
     this.compta.supprimerBudgetLigne(l.id).subscribe({ next: () => this.chargerBudget() });
+  }
+
+  ouvrirComptabiliserBudget(l: any) {
+    this.ligneAComptabiliser.set(l);
+    this.formCompta = {
+      libelle:       l.libelle,
+      montant:       l.total_prevu || 0,
+      date:          new Date().toISOString().split('T')[0],
+      compte_credit: '571',
+    };
+    this.dialogComptaVisible = true;
+  }
+
+  comptabiliserBudget() {
+    const l = this.ligneAComptabiliser();
+    if (!l || !this.formCompta.montant) return;
+    this.savingBudget.set(true);
+    this.compta.comptabiliserBudgetLigne(l.id, this.formCompta).subscribe({
+      next: (res) => {
+        this.msg.add({ severity: 'success', summary: 'Écriture enregistrée',
+                       detail: `N° pièce ${res.no_piece} — ${res.montant | 0} FCFA` });
+        this.dialogComptaVisible = false;
+        this.savingBudget.set(false);
+        this.chargerBudget();
+        this.chargerJournal();
+      },
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Erreur comptabilisation' });
+        this.savingBudget.set(false);
+      },
+    });
   }
 
   chargerJournal(source = this.filtreSource) {

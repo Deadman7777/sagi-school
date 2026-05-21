@@ -30,7 +30,17 @@ import { Eleve } from '../../core/models/eleve.model';
 </div>
 
 <!-- ── Synthèse globale ── -->
-@if (synthese()) {
+@if (loading()) {
+  <div class="empty-state">⏳ Chargement...</div>
+}
+@if (!loading() && globalData().length === 0) {
+  <div class="empty-state">
+    <div style="font-size:32px">📅</div>
+    <div style="color:#64748b;margin-top:8px">Aucun exercice actif ou aucun paiement enregistré.</div>
+    <div style="font-size:11px;color:#475569;margin-top:4px">Créez un exercice et enregistrez des paiements pour voir les données.</div>
+  </div>
+}
+@if (!loading()) {
   <div class="kpi-grid">
     <div class="kpi-card" style="--acc:#00d4aa">
       <div class="kpi-icon">👩‍🎓</div>
@@ -71,6 +81,7 @@ import { Eleve } from '../../core/models/eleve.model';
 }
 
 <!-- ── Onglets ── -->
+@if (!loading()) {
 <div class="tabs-bar">
   <button class="tab-btn" [class.active]="onglet() === 'global'"
           (click)="onglet.set('global')">📊 Évolution mensuelle</button>
@@ -368,6 +379,7 @@ import { Eleve } from '../../core/models/eleve.model';
     </div>
   }
 }
+}
 `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
@@ -466,13 +478,25 @@ export class SuiviMensuelComponent implements OnInit {
     this.loading.set(true);
     this.api.get<any>('/eleves/suivi-mensuel/').subscribe({
       next: res => {
-        this.globalData.set(res.global  || []);
-        this.synthese.set(res.synthese  || null);
-        this.sections.set(res.sections  || []);
-        this.creances.set(res.creances  || []);
+        this.globalData.set(res.global   || []);
+        this.sections.set(res.sections   || []);
+        this.creances.set(res.creances   || []);
+        // Normaliser synthese : toujours un objet avec des valeurs par défaut
+        const s = res.synthese || {};
+        this.synthese.set({
+          nb_eleves:         s.nb_eleves         ?? 0,
+          total_attendu:     s.total_attendu      ?? 0,
+          total_paye:        s.total_paye         ?? 0,
+          reste:             s.reste              ?? 0,
+          taux_recouvrement: s.taux_recouvrement  ?? 0,
+          exercice:          s.exercice           ?? '—',
+        });
         this.loading.set(false);
       },
-      error: () => this.loading.set(false),
+      error: () => {
+        this.synthese.set({ nb_eleves: 0, total_attendu: 0, total_paye: 0, reste: 0, taux_recouvrement: 0, exercice: '—' });
+        this.loading.set(false);
+      },
     });
   }
 

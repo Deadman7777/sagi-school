@@ -26,8 +26,9 @@ export class ComptabiliteService {
 
   // Budget prévisionnel
   getBudget()                           { return this.api.get<any>('/comptabilite/budget/'); }
-  sauvegarderBudgetLigne(data: unknown) { return this.api.post<any>('/comptabilite/budget/', data); }
-  supprimerBudgetLigne(id: string)      { return this.api.delete(`/comptabilite/budget/${id}/`); }
+  sauvegarderBudgetLigne(data: unknown)            { return this.api.post<any>('/comptabilite/budget/', data); }
+  supprimerBudgetLigne(id: string)                 { return this.api.delete(`/comptabilite/budget/${id}/`); }
+  comptabiliserBudgetLigne(id: string, data: unknown) { return this.api.post<any>(`/comptabilite/budget/${id}/comptabiliser/`, data); }
 
   // Investissements / Immobilisations
   getImmobilisations()                       { return this.api.get<any>('/comptabilite/immobilisations/'); }
