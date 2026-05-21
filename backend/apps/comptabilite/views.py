@@ -311,6 +311,7 @@ class BalanceView(APIView):
         if not exercice:
             return Response({'lignes': [], 'totaux': {}})
 
+        plan = get_plan_dict(tenant)
         soldes_initiaux = {
             '521': float(exercice.solde_initial_banque),
             '571': float(exercice.solde_initial_caisse),
