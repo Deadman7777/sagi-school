@@ -646,11 +646,23 @@ export class PaiementsComponent implements OnInit {
   telechargerRecuPdf() {
     const d = this.recuData();
     if (!d?.paiement_id) {
-      this.msg.add({ severity: 'warn', summary: 'Données manquantes', detail: 'Rechargez le reçu.' });
+      this.msg.add({ severity: 'warn', summary: 'ID manquant', detail: 'Fermez et rouvrez le reçu.' });
       return;
     }
-    this.paiementsService.telechargerRecuPdf(d.paiement_id, d.no_piece)
-      .catch(() => this.msg.add({ severity: 'error', summary: 'Erreur PDF', detail: 'Impossible de générer le reçu PDF.' }));
+    this.paiementsService.telechargerRecuPdf(d.paiement_id).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `recu_${d.no_piece}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer le reçu.' }),
+    });
   }
 
   setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {

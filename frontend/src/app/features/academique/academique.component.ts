@@ -1,6 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { lastValueFrom } from 'rxjs';
-import { environment } from '../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
@@ -715,28 +714,25 @@ export class AcademiqueComponent implements OnInit {
 
     telechargerBulletin(eleveId: string) {
     if (!this.trimestreResultats) {
-      alert('Sélectionnez un trimestre avant de télécharger le bulletin.');
+      this.msg.add({ severity: 'warn', summary: 'Trimestre requis',
+                     detail: 'Sélectionnez un trimestre avant de télécharger.' });
       return;
     }
-    const token    = localStorage.getItem('access_token');
-    const tenantId = localStorage.getItem('tenant_id') || '';
-    const annee = this._getAnneeScolaire();
+    const annee     = this._getAnneeScolaire();
     const trimestre = this.trimestreResultats;
-    const base = environment.apiUrl.replace(/\/api$/, '');
-    fetch(`${base}/api/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
-    })
-    .then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.blob();
-    })
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `bulletin_${trimestre}_${annee}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    })
-    .catch(() => alert('Impossible de générer le bulletin. Vérifiez que les moyennes ont été calculées.'));
+    this.acad.getBulletinPdf(eleveId, trimestre, annee).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `bulletin_${trimestre}_${annee}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
+    });
   }
 }

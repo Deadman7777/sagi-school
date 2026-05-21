@@ -1800,25 +1800,24 @@ comptesCredit = [
               : 'eleves';
 
     if (!['bilan','tableau_flux','compte_resultat','balance','eleves'].includes(type)) {
-      alert(this.translate.instant('comptabilite.export_indispo'));
+      this.msg.add({ severity: 'warn', summary: 'Export non disponible',
+                     detail: 'Naviguez vers un onglet exportable.' });
       return;
     }
 
-    const token    = localStorage.getItem('access_token');
-    const tenantId = localStorage.getItem('tenant_id') || '';
-
-    fetch(`http://127.0.0.1:8765/api/comptabilite/export-pdf/${type}/`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID':   tenantId
-      }
-    })
-    .then(r => r.blob())
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${type}_sagi_school.pdf`;
-      a.click();
+    this.compta.exportPDF(type).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `${type}_sagi_school.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer l\'export.' }),
     });
   }
 

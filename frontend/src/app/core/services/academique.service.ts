@@ -24,6 +24,9 @@ export class AcademiqueService {
   getBulletin(eleveId: string, trimestre: string, annee: string) {
     return this.api.get<any>(`/academique/bulletin/${eleveId}/${trimestre}/`, { annee });
   }
+  getBulletinPdf(eleveId: string, trimestre: string, annee: string) {
+    return this.api.getBlob(`/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`);
+  }
   getElevesPourClasse(classeId: string) {
     return this.api.get<any[]>(`/academique/classes/${classeId}/eleves/`);
   }

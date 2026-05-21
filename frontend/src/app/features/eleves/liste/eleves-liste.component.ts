@@ -528,9 +528,20 @@ export class ElevesListeComponent implements OnInit {
 
   genererCertificat(eleve: any) {
     if (!eleve?.id) return;
-    this.elevesService.telechargerCertificat(eleve.id, eleve.nom_complet)
-      .catch(() => this.msg.add({ severity: 'error', summary: 'Erreur',
-                                   detail: 'Impossible de générer le certificat.' }));
+    this.elevesService.telechargerCertificat(eleve.id).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `certificat_${(eleve.nom_complet || 'eleve').replace(/ /g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer le certificat.' }),
+    });
   }
 
   ouvrirChangerStatut(eleve: any) {

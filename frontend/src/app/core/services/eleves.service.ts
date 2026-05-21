@@ -34,24 +34,8 @@ export class ElevesService {
     return this.api.get<any>(`/eleves/${eleveId}/saisie-paiement/`);
   }
 
-  telechargerCertificat(eleveId: string, nomComplet: string): Promise<void> {
-    const token    = localStorage.getItem('access_token') || '';
-    const tenantId = localStorage.getItem('tenant_id')    || '';
-    const base = this.api.baseUrl.replace(/\/api$/, '');
-    return fetch(`${base}/api/eleves/${eleveId}/certificat/`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
-    })
-    .then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.blob();
-    })
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `certificat_${nomComplet.replace(/ /g, '_')}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
+  telechargerCertificat(eleveId: string) {
+    return this.api.getBlob(`/eleves/${eleveId}/certificat/`);
   }
 
   getSections() {

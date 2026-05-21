@@ -39,24 +39,9 @@ export class PaiementsService {
     return this.api.get<any>(`/paiements/paiements/${id}/recu/`);
   }
 
-  telechargerRecuPdf(id: string, noPiece: string): Promise<void> {
-    const token    = localStorage.getItem('access_token') || '';
-    const tenantId = localStorage.getItem('tenant_id')    || '';
-    const base = this.api.baseUrl.replace(/\/api$/, '');
-    return fetch(`${base}/api/paiements/paiements/${id}/recu-pdf/`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
-    })
-    .then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.blob();
-    })
-    .then(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `recu_${noPiece}.pdf`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
+  /** Téléchargement PDF via Angular HttpClient (intercepteur auth inclus). */
+  telechargerRecuPdf(id: string) {
+    return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`);
   }
 
   getExerciceActif() {
