@@ -225,8 +225,9 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
         <div class="recu-row"><span>{{ 'paiements.saisi_par' | translate }}</span><span>{{ recuData().saisi_par }}</span></div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button [label]="'paiements.imprimer' | translate" icon="pi pi-print" severity="success" (onClick)="imprimer()" />
-        <p-button [label]="'common.fermer'       | translate" severity="secondary" (onClick)="recuVisible=false" />
+        <p-button label="📄 Télécharger PDF" severity="success"
+                  icon="pi pi-download" (onClick)="telechargerRecuPdf()" />
+        <p-button [label]="'common.fermer' | translate" severity="secondary" (onClick)="recuVisible=false" />
       </ng-template>
     </p-dialog>
   `,
@@ -361,17 +362,24 @@ export class PaiementsComponent implements OnInit {
   }
 
   onEleveSelect(event: any) {
-    this.eleveSelectionne = event?.value !== undefined ? event.value : event;
-    this.eleveTexte = this.eleveSelectionne?.nom_complet || '';
-    // Pré-remplir avec les frais de la section
-    if (event.section_nom) {
+    // p-autoComplete passe soit event directement soit event.value
+    const eleve = event?.value !== undefined ? event.value : event;
+    this.eleveSelectionne = eleve;
+    this.eleveTexte = eleve?.nom_complet || '';
+    // Pré-remplir avec les frais de la section de l'élève sélectionné
+    if (eleve?.section) {
       this.elevesService.getSections().subscribe({
         next: res => {
-          const sections = res.results || [];
-          const section  = sections.find((s: any) => s.id === event.section);
+          const sections = (res as any).results || [];
+          const section  = sections.find((s: any) => s.id === eleve.section);
           if (section) {
-            this.form.montant_inscription = Number(section.frais_inscription) - Number(event.total_paye > 0 ? 0 : section.frais_inscription);
-            this.form.montant_mensualite  = Number(section.frais_mensualite);
+            if (this.typePaiement === 'INSCRIPTION') {
+              this.form.montant_inscription = Number(section.frais_inscription);
+              this.form.montant_uniforme    = Number(section.frais_uniforme);
+              this.form.montant_fournitures = Number(section.frais_fournitures);
+            } else {
+              this.form.montant_mensualite  = Number(section.frais_mensualite);
+            }
           }
         }
       });
@@ -430,9 +438,23 @@ export class PaiementsComponent implements OnInit {
   }
 
   imprimerRecu(paiement: any) {
+    if (!paiement?.id) return;
     this.paiementsService.getRecu(paiement.id).subscribe({
       next: res => { this.recuData.set(res); this.recuVisible = true; }
     });
+  }
+
+  telechargerRecuPdf() {
+    const d = this.recuData();
+    if (!d) return;
+    // On a besoin de l'id du paiement — on le récupère depuis la liste
+    const paiement = this.paiements().find(p => p.no_piece === d.no_piece);
+    if (!paiement?.id) {
+      this.msg.add({ severity: 'warn', summary: 'ID manquant', detail: 'Impossible de récupérer le reçu PDF.' });
+      return;
+    }
+    this.paiementsService.telechargerRecuPdf(paiement.id, d.no_piece)
+      .catch(() => this.msg.add({ severity: 'error', summary: 'Erreur PDF', detail: 'Impossible de générer le reçu PDF.' }));
   }
 
   setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {
@@ -474,5 +496,4 @@ export class PaiementsComponent implements OnInit {
     }
 }
 
-  imprimer() { window.print(); }
 }

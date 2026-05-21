@@ -24,11 +24,11 @@ export class PaiementsService {
   constructor(private api: ApiService) {}
 
   getPaiements(params?: Record<string, string>) {
-    return this.api.get<any>('/paiements/', params);
+    return this.api.get<any>('/paiements/paiements/', params);
   }
 
   creerPaiement(data: Partial<Paiement>) {
-      return this.api.post<Paiement>('/paiements/paiements/', data);
+    return this.api.post<Paiement>('/paiements/paiements/', data);
   }
 
   getStats() {
@@ -36,7 +36,27 @@ export class PaiementsService {
   }
 
   getRecu(id: string) {
-    return this.api.get<any>(`/paiements/${id}/recu/`);
+    return this.api.get<any>(`/paiements/paiements/${id}/recu/`);
+  }
+
+  telechargerRecuPdf(id: string, noPiece: string): Promise<void> {
+    const token    = localStorage.getItem('access_token') || '';
+    const tenantId = localStorage.getItem('tenant_id')    || '';
+    const base = this.api.baseUrl.replace(/\/api$/, '');
+    return fetch(`${base}/api/paiements/paiements/${id}/recu-pdf/`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
+    })
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    })
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `recu_${noPiece}.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
   }
 
   getExerciceActif() {

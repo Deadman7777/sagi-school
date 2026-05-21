@@ -155,12 +155,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def recu(self, request, pk=None):
-        """Génère les données du reçu pour impression."""
+        """Données JSON du reçu."""
         p = self.get_object()
         return Response({
             'no_piece':      p.no_piece,
-            'date':          p.date_paiement,
+            'date':          str(p.date_paiement),
             'eleve':         p.eleve.nom_complet,
+            'matricule':     p.eleve.matricule or '',
             'section':       p.eleve.section.nom if p.eleve.section else '',
             'inscription':   float(p.montant_inscription),
             'mensualite':    float(p.montant_mensualite),
@@ -171,7 +172,55 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'total':         float(p.total),
             'mode_paiement': p.mode_paiement,
             'saisi_par':     p.saisi_par.nom if p.saisi_par else '',
+            'tenant_nom':    p.tenant.nom if p.tenant else '',
+            'tenant_ville':  p.tenant.ville if p.tenant else '',
         })
+
+    @action(detail=True, methods=['get'])
+    def recu_pdf(self, request, pk=None):
+        """Génère le PDF du reçu de paiement."""
+        from io import BytesIO
+        from django.utils import timezone as tz
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            from django.http import HttpResponse
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        p = self.get_object()
+        MODE_LABELS = {
+            'ESPECE': 'Espèces', 'WAVE': 'Wave', 'ORANGE_MONEY': 'Orange Money',
+            'FREE_MONEY': 'Free Money', 'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
+        }
+        lignes = []
+        if p.montant_inscription: lignes.append(('Inscription',  float(p.montant_inscription)))
+        if p.montant_mensualite:  lignes.append(('Mensualité',   float(p.montant_mensualite)))
+        if p.montant_uniforme:    lignes.append(('Uniforme',     float(p.montant_uniforme)))
+        if p.montant_fournitures: lignes.append(('Fournitures',  float(p.montant_fournitures)))
+        if p.montant_cantine:     lignes.append(('Cantine',      float(p.montant_cantine)))
+        if p.montant_divers:      lignes.append(('Divers',       float(p.montant_divers)))
+
+        context = {
+            'p':           p,
+            'tenant_nom':  p.tenant.nom   if p.tenant else 'SAGI SCHOOL',
+            'tenant_ville':p.tenant.ville if p.tenant else '',
+            'tenant_rccm': p.tenant.rccm  if p.tenant else '',
+            'lignes':      lignes,
+            'mode_label':  MODE_LABELS.get(p.mode_paiement, p.mode_paiement),
+            'saisi_par':   p.saisi_par.nom if p.saisi_par else '',
+            'date_edition':tz.now(),
+        }
+        from django.template.loader import render_to_string
+        html_str = render_to_string('pdf/recu_paiement.html', context)
+        buf = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            from django.http import HttpResponse
+            return HttpResponse('Erreur PDF', status=500)
+        from django.http import HttpResponse
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}.pdf"'
+        return response
 
 
 class CloturerExerciceView(APIView):
