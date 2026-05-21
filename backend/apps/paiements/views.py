@@ -255,7 +255,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         p = self.get_object()
         return Response(self._build_recu_context(p))
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], url_path='recu-pdf')
     def recu_pdf(self, request, pk=None):
         """Génère le PDF professionnel du reçu de paiement."""
         from io import BytesIO
