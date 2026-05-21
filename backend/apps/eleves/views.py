@@ -96,6 +96,48 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
 
+    @action(detail=False, methods=['get'], url_path='search')
+    def search(self, request):
+        """Recherche ultra-légère pour l'autocomplétion — pas d'annotation paiements.
+        Renvoie max 15 résultats enrichis pour différencier les homonymes.
+        """
+        from django.db.models import Q as _Q
+        q = request.query_params.get('q', '').strip()
+        if len(q) < 2:
+            return Response([])
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+        qs = Eleve.objects.filter(tenant=tenant).select_related('section').order_by('nom_complet')
+        if exercice:
+            qs = qs.filter(exercice=exercice)
+
+        # Recherche multi-champs : nom, matricule, père, mère, téléphone
+        qs = qs.filter(
+            _Q(nom_complet__icontains=q) |
+            _Q(matricule__icontains=q)   |
+            _Q(nom_pere__icontains=q)    |
+            _Q(telephone_pere__icontains=q)
+        )[:15]
+
+        return Response([{
+            'id':                   str(e.id),
+            'numero':               e.numero,
+            'nom_complet':          e.nom_complet,
+            'matricule':            e.matricule or '',
+            'section_id':           str(e.section_id) if e.section_id else '',
+            'section_nom':          e.section.nom if e.section else '',
+            'date_naissance':       str(e.date_naissance) if e.date_naissance else '',
+            'lieu_naissance':       e.lieu_naissance or '',
+            'nom_pere':             e.nom_pere or '',
+            'telephone_pere':       e.telephone_pere or '',
+            'nom_mere':             e.nom_mere or '',
+            'statut':               e.statut,
+            'prise_en_charge':      e.prise_en_charge or '',
+            'taux_prise_en_charge': float(e.taux_prise_en_charge or 0),
+        } for e in qs])
+
     @action(detail=True, methods=['get'], url_path='saisie-paiement')
     def saisie_paiement(self, request, pk=None):
         """Données pré-calculées pour le formulaire de saisie de paiement.

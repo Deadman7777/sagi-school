@@ -93,23 +93,39 @@ import { AutoCompleteModule } from 'primeng/autocomplete';
 
       <!-- Recherche élève -->
       <div class="form-group" style="margin-bottom:14px">
-        <label>Élève *</label>
+        <label>Élève * <span style="font-size:10px;color:#64748b">(tapez au moins 2 caractères : nom, matricule ou prénom du père)</span></label>
         <p-autoComplete
             [(ngModel)]="eleveTexte"
             [suggestions]="elevesSuggestions()"
             (completeMethod)="rechercherEleve($event)"
             field="nom_complet" dataKey="id"
-            placeholder="Tapez le nom de l'élève..." styleClass="w-full"
-            (onSelect)="onEleveSelect($event)">
+            placeholder="Ex : Diallo, 2026-ETB, Mamadou…"
+            styleClass="w-full"
+            [minLength]="2"
+            [delay]="300"
+            [forceSelection]="true"
+            (onSelect)="onEleveSelect($event)"
+            (onClear)="onEleveClear()">
           <ng-template let-e pTemplate="item">
-            <div style="padding:5px 0">
-              <div style="display:flex;align-items:center;gap:8px">
-                <strong>{{ e.nom_complet }}</strong>
-                <span *ngIf="e.statut === 'ABANDONNE'" style="font-size:10px;background:#ef4444;color:white;padding:1px 6px;border-radius:3px">ABANDONNÉ</span>
-                <span *ngIf="e.statut === 'TRANSFERE'" style="font-size:10px;background:#f59e0b;color:white;padding:1px 6px;border-radius:3px">TRANSFÉRÉ</span>
-                <span *ngIf="e.prise_en_charge" style="font-size:10px;background:#7c3aed;color:white;padding:1px 6px;border-radius:3px">PEC {{ e.taux_prise_en_charge }}%</span>
+            <div style="padding:6px 0;border-bottom:1px solid rgba(42,63,95,0.3)">
+
+              <!-- Ligne 1 : nom + badges -->
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <strong style="color:#e8f0fe;font-size:13px">{{ e.nom_complet }}</strong>
+                <span style="font-size:10px;background:#2a3f5f;color:#94a3b8;padding:1px 6px;border-radius:3px;font-family:monospace">{{ e.matricule }}</span>
+                <span *ngIf="e.statut === 'ABANDONNE'" style="font-size:9px;background:#ef4444;color:white;padding:1px 5px;border-radius:3px">ABANDONNÉ</span>
+                <span *ngIf="e.statut === 'TRANSFERE'" style="font-size:9px;background:#f59e0b;color:white;padding:1px 5px;border-radius:3px">TRANSFÉRÉ</span>
+                <span *ngIf="e.prise_en_charge" style="font-size:9px;background:#7c3aed;color:white;padding:1px 5px;border-radius:3px">PEC {{ e.taux_prise_en_charge }}%</span>
               </div>
-              <div style="font-size:11px;color:#64748b">{{ e.section_nom }} — Reste : {{ e.reste_a_payer | number:'1.0-0' }} FCFA</div>
+
+              <!-- Ligne 2 : section + infos identificatrices -->
+              <div style="font-size:11px;color:#64748b;margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+                <span>🏫 {{ e.section_nom }}</span>
+                <span *ngIf="e.date_naissance">📅 {{ e.date_naissance }}</span>
+                <span *ngIf="e.nom_pere">👤 Père : {{ e.nom_pere }}</span>
+                <span *ngIf="e.telephone_pere">📱 {{ e.telephone_pere }}</span>
+              </div>
+
             </div>
           </ng-template>
         </p-autoComplete>
@@ -439,9 +455,19 @@ export class PaiementsComponent implements OnInit {
   }
 
   rechercherEleve(event: any) {
-    this.elevesService.getEleves({ search: event.query }).subscribe({
-      next: res => this.elevesSuggestions.set(res.results || [])
+    const q = (event.query || '').trim();
+    if (q.length < 2) { this.elevesSuggestions.set([]); return; }
+    // Endpoint léger : pas d'annotation paiements, max 15 résultats
+    this.elevesService.searchEleves(q).subscribe({
+      next: res => this.elevesSuggestions.set(Array.isArray(res) ? res : []),
+      error: () => this.elevesSuggestions.set([]),
     });
+  }
+
+  onEleveClear() {
+    this.eleveSelectionne = null;
+    this.saisieDonnees.set(null);
+    this.resetForm();
   }
 
   onEleveSelect(event: any) {
