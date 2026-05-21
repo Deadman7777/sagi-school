@@ -72,7 +72,9 @@ if ($sagiDir) {
         Write-OK "Telechargement termine"
         Start-Process -FilePath $setup -Wait
         foreach ($d in $sagiDirs) { if (Test-Path $d) { $sagiDir = $d; break } }
-        pip install django djangorestframework djangorestframework-simplejwt django-cors-headers psycopg2-binary python-decouple whitenoise django-filter waitress
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade setuptools
+        python -m pip install django djangorestframework djangorestframework-simplejwt django-cors-headers psycopg2-binary python-decouple whitenoise django-filter waitress
         Write-OK "SAGI SCHOOL installe"
     } catch {
         Write-ERR "Echec telechargement: $_"

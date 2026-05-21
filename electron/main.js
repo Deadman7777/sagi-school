@@ -151,16 +151,26 @@ function ensurePythonPackages(backendDir) {
       });
     };
 
-    // Bootstrap pip + setuptools depuis les wheels bundlés dans Python (pas besoin d'internet).
-    // Corrige le cas où setuptools/pkg_resources est absent (Python 3.10+ sans setuptools préinstallé).
-    console.log('[Setup] Bootstrap pip/setuptools (ensurepip)...');
+    // Étape 2 : installer setuptools explicitement (fournit pkg_resources).
+    const installSetuptools = () => {
+      console.log('[Setup] Installation setuptools...');
+      let d2 = false;
+      const p = spawn(python, [
+        '-m', 'pip', 'install', '--upgrade', 'setuptools', '--quiet',
+      ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+      p.on('close', () => { if (!d2) { d2 = true; installRequirements(); } });
+      p.on('error', () => { if (!d2) { d2 = true; installRequirements(); } });
+    };
+
+    // Étape 1 : ensurepip — bootstrap pip depuis les wheels bundlés Python (pas d'internet requis).
+    console.log('[Setup] Bootstrap pip (ensurepip)...');
     let done = false;
     const ensurepip = spawn(python, ['-m', 'ensurepip', '--upgrade'], {
       cwd: backendDir,
       env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
-    ensurepip.on('close', () => { if (!done) { done = true; installRequirements(); } });
-    ensurepip.on('error', () => { if (!done) { done = true; installRequirements(); } });
+    ensurepip.on('close', () => { if (!done) { done = true; installSetuptools(); } });
+    ensurepip.on('error', () => { if (!done) { done = true; installSetuptools(); } });
   });
 }
 
