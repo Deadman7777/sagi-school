@@ -118,6 +118,7 @@ function initParametresFiscaux(backendDir) {
 
 /**
  * Installe / met à jour les dépendances Python depuis requirements/base.txt.
+ * Commence par ensurepip pour garantir pip + setuptools (pkg_resources) sans internet.
  * Ne bloque pas le démarrage si pip échoue (log uniquement).
  */
 function ensurePythonPackages(backendDir) {
@@ -130,24 +131,36 @@ function ensurePythonPackages(backendDir) {
       return resolve();
     }
 
-    console.log('[Setup] Vérification des paquets Python...');
+    const installRequirements = () => {
+      console.log('[Setup] Installation des paquets Python...');
+      const pip = spawn(python, [
+        '-m', 'pip', 'install', '-r', reqFile,
+        '--quiet', '--no-warn-script-location',
+      ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
 
-    const pip = spawn(python, [
-      '-m', 'pip', 'install', '-r', reqFile,
-      '--quiet', '--no-warn-script-location',
-    ], { cwd: backendDir, env: { ...process.env, PYTHONUNBUFFERED: '1' } });
+      pip.stdout.on('data', d => console.log('[pip]', d.toString().trim()));
+      pip.stderr.on('data', d => console.log('[pip]', d.toString().trim()));
+      pip.on('close', code => {
+        if (code === 0) console.log('[Setup] Paquets Python OK');
+        else console.warn('[Setup] pip a retourné le code', code, '— démarrage quand même');
+        resolve();
+      });
+      pip.on('error', err => {
+        console.error('[Setup] pip inaccessible:', err.message);
+        resolve();
+      });
+    };
 
-    pip.stdout.on('data', d => console.log('[pip]', d.toString().trim()));
-    pip.stderr.on('data', d => console.log('[pip]', d.toString().trim()));
-    pip.on('close', code => {
-      if (code === 0) console.log('[Setup] Paquets Python OK');
-      else console.warn('[Setup] pip a retourné le code', code, '— démarrage quand même');
-      resolve();
+    // Bootstrap pip + setuptools depuis les wheels bundlés dans Python (pas besoin d'internet).
+    // Corrige le cas où setuptools/pkg_resources est absent (Python 3.10+ sans setuptools préinstallé).
+    console.log('[Setup] Bootstrap pip/setuptools (ensurepip)...');
+    let done = false;
+    const ensurepip = spawn(python, ['-m', 'ensurepip', '--upgrade'], {
+      cwd: backendDir,
+      env: { ...process.env, PYTHONUNBUFFERED: '1' },
     });
-    pip.on('error', err => {
-      console.error('[Setup] pip inaccessible:', err.message);
-      resolve(); // ne pas bloquer
-    });
+    ensurepip.on('close', () => { if (!done) { done = true; installRequirements(); } });
+    ensurepip.on('error', () => { if (!done) { done = true; installRequirements(); } });
   });
 }
 
