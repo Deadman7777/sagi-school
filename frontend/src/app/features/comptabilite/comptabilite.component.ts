@@ -1584,7 +1584,7 @@ comptesCredit = [
         this.dialogComptaVisible = false;
         this.savingBudget.set(false);
         this.chargerBudget();
-        this.chargerJournal();
+        this.rafraichirComptabilite();
       },
       error: (err) => {
         this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Erreur comptabilisation' });
@@ -1661,7 +1661,7 @@ comptesCredit = [
         this.dialogImmoVisible = false;
         this.savingImmo.set(false);
         this.chargerImmobilisations();
-        this.chargerJournal();
+        this.rafraichirComptabilite();
       },
       error: () => this.savingImmo.set(false),
     });
@@ -1690,9 +1690,20 @@ comptesCredit = [
         this.dialogAmortirVisible = false;
         this.savingImmo.set(false);
         this.chargerImmobilisations();
-        this.chargerJournal();
+        this.rafraichirComptabilite();
       },
       error: () => this.savingImmo.set(false),
+    });
+  }
+
+  /** Rafraîchit journal + grand livre + balance + résultat après toute écriture. */
+  rafraichirComptabilite() {
+    this.chargerJournal();
+    this.chargerBalance();
+    this.chargerResultat();
+    this.compta.getGrandLivre().subscribe({
+      next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
+      error: ()  => this.loadingGL.set(false),
     });
   }
 
@@ -1784,17 +1795,17 @@ comptesCredit = [
   }
 
   sauvegarderCharge() {
-      if (!this.nouvelleCharge.libelle || this.nouvelleCharge.montant <= 0) return;
-      this.savingCharge.set(true);
-      this.compta.creerCharge(this.nouvelleCharge).subscribe({
-          next: () => {
-              this.dialogChargeVisible = false;
-              this.savingCharge.set(false);
-              this.chargerCharges();
-              this.compta.getCompteResultat().subscribe({ next: res => this.resultat.set(res) });
-          },
-          error: () => this.savingCharge.set(false)
-      });
+    if (!this.nouvelleCharge.libelle || this.nouvelleCharge.montant <= 0) return;
+    this.savingCharge.set(true);
+    this.compta.creerCharge(this.nouvelleCharge).subscribe({
+      next: () => {
+        this.dialogChargeVisible = false;
+        this.savingCharge.set(false);
+        this.chargerCharges();
+        this.rafraichirComptabilite();
+      },
+      error: () => this.savingCharge.set(false),
+    });
   }
 
   totalCharges(): number {
