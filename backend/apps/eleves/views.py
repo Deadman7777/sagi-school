@@ -64,6 +64,10 @@ class EleveViewSet(viewsets.ModelViewSet):
             qs = qs.filter(section__nom=section)
         if exercice := self.request.query_params.get('exercice'):
             qs = qs.filter(exercice_id=exercice)
+        if statut := self.request.query_params.get('statut'):
+            qs = qs.filter(statut=statut)
+        if pec := self.request.query_params.get('prise_en_charge'):
+            qs = qs.filter(prise_en_charge=pec)
 
         return qs.order_by('numero')
 

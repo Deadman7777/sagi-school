@@ -106,40 +106,66 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <p-select [options]="matieresNotes()" [(ngModel)]="matiereNotes"
                   optionLabel="nom" optionValue="id"
                   [placeholder]="'academique.matiere_filter' | translate" styleClass="filter-drop"
-                  (onChange)="chargerEvaluations()" />
+                  (onChange)="onMatiereNotesChange()" />
         <p-select [options]="trimestres" [(ngModel)]="trimestreNotes"
                   optionLabel="label" optionValue="value"
-                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop" />
-        <p-button [label]="'academique.ajouter_eval' | translate" severity="success"
+                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop"
+                  (onChange)="onTrimestreNotesChange()" />
+        <p-button [label]="'academique.ajouter_eval' | translate" severity="secondary" size="small"
                   (onClick)="ouvrirDialogEvaluation()" [disabled]="!matiereNotes" />
       </div>
 
-      <!-- Liste évaluations -->
-      <div class="evals-list" *ngIf="evaluations().length > 0">
-        <div class="eval-card" *ngFor="let e of evaluations()"
-             [class.active]="evalSelectionnee?.id === e.id"
-             (click)="selectionnerEvaluation(e)">
-          <div class="ec-titre">{{ e.matiere_nom }} — {{ e.type_eval_nom }}</div>
-          <div class="ec-info">{{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}</div>
+      <!-- Message guide -->
+      <div *ngIf="!classeNotes" class="empty-msg" style="padding:20px">
+        ① Sélectionnez une classe → ② Sélectionnez une matière → ③ Choisissez le trimestre → Les élèves s'affichent automatiquement
+      </div>
+
+      <!-- Évaluations disponibles + création rapide -->
+      <div *ngIf="classeNotes && matiereNotes" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600">
+            Évaluations — {{ trimestreNotes || 'Tous trimestres' }}
+          </span>
+          <span style="font-size:11px;color:#2a3f5f">{{ evaluations().length }} évaluation(s)</span>
+        </div>
+        <div class="evals-list" *ngIf="evaluations().length > 0">
+          <div class="eval-card" *ngFor="let e of evaluations()"
+               [class.active]="evalSelectionnee?.id === e.id"
+               (click)="selectionnerEvaluation(e)">
+            <div class="ec-titre">{{ e.type_eval_nom || e.titre || 'Évaluation' }}</div>
+            <div class="ec-info">{{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}</div>
+          </div>
+        </div>
+        <div *ngIf="evaluations().length === 0" class="empty-msg" style="padding:10px;display:flex;align-items:center;gap:12px">
+          <span>Aucune évaluation — créez-en une pour commencer la saisie</span>
+          <p-button label="+ Créer évaluation" severity="success" size="small"
+                    (onClick)="ouvrirDialogEvaluation()" />
         </div>
       </div>
 
-      <!-- Grille de saisie notes -->
-      <div class="table-card" *ngIf="evalSelectionnee" style="margin-top:16px">
-        <div style="padding:12px 16px;border-bottom:1px solid #2a3f5f;display:flex;justify-content:space-between">
-          <span style="color:#e8f0fe;font-weight:600">
-            Notes — {{ evalSelectionnee.matiere_nom }} / {{ evalSelectionnee.type_eval_nom }}
-          </span>
+      <!-- Grille de saisie notes — s'affiche dès qu'une évaluation est sélectionnée -->
+      <div class="table-card" *ngIf="evalSelectionnee">
+        <div style="padding:12px 16px;border-bottom:1px solid #2a3f5f;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="color:#e8f0fe;font-weight:600">
+              {{ evalSelectionnee.matiere_nom }} · {{ evalSelectionnee.type_eval_nom }}
+            </span>
+            <span style="color:#64748b;font-size:11px;margin-left:8px">
+              {{ evalSelectionnee.trimestre }} · /{{ evalSelectionnee.note_max }} ·
+              {{ elevesNotes().length }} élève(s)
+            </span>
+          </div>
           <p-button [label]="'academique.enregistrer_tout' | translate" severity="success"
                     [loading]="saving()" (onClick)="sauvegarderNotes()" />
         </div>
         <p-table [value]="elevesNotes()" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
-              <th>{{ 'academique.num'      | translate }}</th>
-              <th>{{ 'academique.nom_eleve'| translate }}</th>
-              <th>{{ 'academique.absent'   | translate }}</th>
-              <th>{{ 'academique.absent'   | translate }}</th>
+              <th style="width:60px">N°</th>
+              <th>Élève</th>
+              <th style="width:140px">Note /{{ evalSelectionnee.note_max }}</th>
+              <th style="width:80px">Absent</th>
+              <th style="width:80px">Saisie</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-e>
@@ -153,11 +179,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                                mode="decimal" [maxFractionDigits]="2"
                                styleClass="note-input" />
               </td>
-              <td>
+              <td style="text-align:center">
                 <input type="checkbox" [(ngModel)]="e.absent_saisie"
                        (change)="e.absent_saisie && (e.note_saisie = 0)" />
               </td>
+              <td>
+                <p-tag *ngIf="e.note_id" value="Déjà saisie" severity="success" />
+                <p-tag *ngIf="!e.note_id" value="Nouvelle" severity="secondary" />
+              </td>
             </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="5" class="empty-msg">Aucun élève chargé pour cette classe</td></tr>
           </ng-template>
         </p-table>
       </div>
@@ -438,38 +471,60 @@ export class AcademiqueComponent implements OnInit {
     });
     this.evalSelectionnee = null;
     this.evaluations.set([]);
+    this.elevesNotes.set([]);
+    this.matiereNotes = '';
   }
 
-  chargerEvaluations() {
+  onMatiereNotesChange() {
+    this.chargerEvaluationsEtEleves();
+  }
+
+  onTrimestreNotesChange() {
+    if (this.matiereNotes) this.chargerEvaluationsEtEleves();
+  }
+
+  chargerEvaluationsEtEleves() {
     if (!this.matiereNotes) return;
-    this.acad.getEvaluations({ matiere: this.matiereNotes }).subscribe({
-      next: r => this.evaluations.set(r.results || [])
+    const params: Record<string, string> = { matiere: this.matiereNotes };
+    if (this.trimestreNotes) params['trimestre'] = this.trimestreNotes;
+    this.acad.getEvaluations(params).subscribe({
+      next: r => {
+        const evals = r.results || [];
+        this.evaluations.set(evals);
+        // Auto-sélectionner la première évaluation si une seule existe
+        if (evals.length === 1) {
+          this.selectionnerEvaluation(evals[0]);
+        } else {
+          this.evalSelectionnee = null;
+          this.elevesNotes.set([]);
+        }
+      }
     });
   }
 
   selectionnerEvaluation(eval_: any) {
     this.evalSelectionnee = eval_;
-    // Charger les élèves de la classe avec leurs notes existantes
-    this.elevesService.getEleves({ section: this.classeNotes }).subscribe({
-      next: r => {
-        const eleves = (r.results || []).map((e: any) => ({
+    this.acad.getElevesPourClasse(this.classeNotes).subscribe({
+      next: (eleves: any[]) => {
+        const mapped = eleves.map((e: any) => ({
           ...e,
           note_saisie: 0,
           absent_saisie: false,
           note_id: null,
         }));
-        // Charger notes existantes
         this.acad.getNotes({ evaluation: eval_.id }).subscribe({
           next: rn => {
             const notes = rn.results || [];
-            eleves.forEach((e: any) => {
+            mapped.forEach((e: any) => {
               const n = notes.find((n: any) => n.eleve === e.id);
-              if (n) { e.note_saisie = n.valeur; e.absent_saisie = n.absent; e.note_id = n.id; }
+              if (n) { e.note_saisie = parseFloat(n.valeur); e.absent_saisie = n.absent; e.note_id = n.id; }
             });
-            this.elevesNotes.set(eleves);
-          }
+            this.elevesNotes.set(mapped);
+          },
+          error: () => this.elevesNotes.set(mapped),
         });
-      }
+      },
+      error: () => this.elevesNotes.set([]),
     });
   }
 
@@ -570,7 +625,7 @@ export class AcademiqueComponent implements OnInit {
     this.acad.creerEvaluation(data).subscribe({
       next: () => {
         this.dialogEvalVisible = false;
-        this.chargerEvaluations();
+        this.chargerEvaluationsEtEleves();
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.evaluation_creee') });
       }
     });

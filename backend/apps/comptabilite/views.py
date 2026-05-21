@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status as drf_status
 from apps.paiements.models import Exercice, Paiement
 from apps.eleves.models import Eleve
-from .models import JournalEntry, CompteComptable, BudgetLigne
+from .models import JournalEntry, CompteComptable, BudgetLigne, Immobilisation
 from django.utils import timezone
 
 
@@ -1270,3 +1270,216 @@ class BudgetView(APIView):
         tenant = get_tenant(request)
         BudgetLigne.objects.filter(tenant=tenant, id=pk).delete()
         return Response({'success': True})
+
+
+# ── Investissements / Immobilisations ─────────────────────────────────────────
+PLAN_IMMO = {
+    '211': 'Terrains',
+    '221': 'Bâtiments',
+    '231': 'Matériel et outillage',
+    '241': 'Mobilier',
+    '244': 'Matériel informatique',
+    '245': 'Matériel de transport',
+    '248': 'Autres immobilisations corporelles',
+}
+PLAN_AMORT = {
+    '2811': 'Amort. Terrains',
+    '2821': 'Amort. Bâtiments',
+    '2831': 'Amort. Matériel et outillage',
+    '2841': 'Amort. Mobilier',
+    '2844': 'Amort. Matériel informatique',
+    '2845': 'Amort. Matériel de transport',
+    '2848': 'Amort. Autres immo. corporelles',
+}
+
+
+def _immo_to_dict(immo):
+    return {
+        'id':                    str(immo.id),
+        'no_bien':               immo.no_bien,
+        'libelle':               immo.libelle,
+        'date_entree':           str(immo.date_entree),
+        'valeur_entree':         float(immo.valeur_entree),
+        'duree_utilisation':     immo.duree_utilisation,
+        'mode_amortissement':    immo.mode_amortissement,
+        'taux_amortissement':    immo.taux_amortissement,
+        'annuite_amortissement': immo.annuite_amortissement,
+        'cumul_amortissements':  float(immo.cumul_amortissements),
+        'valeur_nette_comptable': immo.valeur_nette_comptable,
+        'no_compte_immobilisation': immo.no_compte_immobilisation,
+        'no_compte_amortissement':  immo.no_compte_amortissement,
+        'libelle_compte_immo':   PLAN_IMMO.get(immo.no_compte_immobilisation, immo.no_compte_immobilisation),
+        'est_cede':              immo.est_cede,
+        'est_amorti':            immo.est_amorti,
+    }
+
+
+class ImmobilisationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk=None):
+        tenant = get_tenant(request)
+        if pk:
+            try:
+                immo = Immobilisation.objects.get(tenant=tenant, id=pk)
+                return Response(_immo_to_dict(immo))
+            except Immobilisation.DoesNotExist:
+                return Response({'error': 'Non trouvé'}, status=404)
+
+        qs = Immobilisation.objects.filter(tenant=tenant)
+        if not request.query_params.get('include_cede'):
+            qs = qs.filter(est_cede=False)
+
+        lignes = [_immo_to_dict(i) for i in qs]
+        total_brut = sum(i['valeur_entree']         for i in lignes)
+        total_amort = sum(i['cumul_amortissements'] for i in lignes)
+        total_vnc   = sum(i['valeur_nette_comptable'] for i in lignes)
+
+        return Response({
+            'immobilisations': lignes,
+            'synthese': {
+                'total_brut':  round(total_brut, 2),
+                'total_amort': round(total_amort, 2),
+                'total_vnc':   round(total_vnc, 2),
+                'nb_biens':    len(lignes),
+            },
+        })
+
+    def post(self, request):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        data    = request.data
+        libelle = data.get('libelle', '').strip()
+        if not libelle:
+            return Response({'error': 'Libellé requis'}, status=400)
+
+        try:
+            valeur = float(data.get('valeur_entree', 0))
+            duree  = int(data.get('duree_utilisation', 0))
+        except (ValueError, TypeError):
+            return Response({'error': 'Valeur ou durée invalide'}, status=400)
+
+        if valeur <= 0 or duree <= 0:
+            return Response({'error': 'Valeur et durée doivent être > 0'}, status=400)
+
+        import re as _re
+        last = Immobilisation.objects.filter(tenant=tenant).order_by('-no_bien').first()
+        nums = _re.findall(r'\d+', last.no_bien if last else 'IMM-0000')
+        no_bien = f"IMM-{int(nums[-1]) + 1:04d}" if nums else 'IMM-0001'
+
+        date_str   = data.get('date_entree', str(timezone.now().date()))
+        no_immo    = data.get('no_compte_immobilisation', '231')
+        no_amort   = data.get('no_compte_amortissement',  '2831')
+
+        immo = Immobilisation.objects.create(
+            tenant=tenant,
+            no_bien=no_bien,
+            libelle=libelle,
+            date_entree=date_str,
+            valeur_entree=valeur,
+            duree_utilisation=duree,
+            mode_amortissement=data.get('mode_amortissement', 'LINEAIRE'),
+            no_compte_immobilisation=no_immo,
+            no_compte_amortissement=no_amort,
+        )
+
+        # Écriture d'acquisition : Débit 2xx / Crédit 404
+        from django.db.models import Max as _Max
+        last_piece = JournalEntry.objects.filter(tenant=tenant, source='INVEST').aggregate(_Max('no_piece'))['no_piece__max']
+        nums2 = _re.findall(r'\d+', last_piece or 'INV-0000')
+        no_piece = f"INV-{int(nums2[-1]) + 1:04d}" if nums2 else 'INV-0001'
+
+        libelle_immo = PLAN_IMMO.get(no_immo, no_immo)
+        for ordre, (nc, db, cr, lib) in enumerate([
+            (no_immo, valeur, 0,      f"Acquisition {libelle_immo} — {libelle}"),
+            ('404',   0,      valeur, f"404 Fournisseurs immo — {libelle}"),
+        ], 1):
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece, date_ecriture=date_str,
+                source='INVEST', source_id=immo.id,
+                no_compte=nc, debit=db, credit=cr,
+                libelle=lib, ordre=ordre,
+            )
+
+        return Response(_immo_to_dict(immo), status=201)
+
+    def put(self, request, pk):
+        tenant = get_tenant(request)
+        try:
+            immo = Immobilisation.objects.get(tenant=tenant, id=pk)
+        except Immobilisation.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+
+        for f in ('libelle', 'duree_utilisation', 'mode_amortissement',
+                  'no_compte_immobilisation', 'no_compte_amortissement'):
+            if f in request.data:
+                setattr(immo, f, request.data[f])
+        immo.save()
+        return Response(_immo_to_dict(immo))
+
+    def delete(self, request, pk):
+        tenant = get_tenant(request)
+        Immobilisation.objects.filter(tenant=tenant, id=pk).delete()
+        return Response({'success': True})
+
+
+class AmortirView(APIView):
+    """Enregistre la dotation aux amortissements d'une immobilisation."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        try:
+            immo = Immobilisation.objects.get(tenant=tenant, id=pk)
+        except Immobilisation.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+
+        if immo.est_amorti:
+            return Response({'error': 'Immobilisation totalement amortie'}, status=400)
+        if immo.est_cede:
+            return Response({'error': 'Immobilisation cédée'}, status=400)
+
+        # Annuité (peut être ajustée par le frontend)
+        montant = float(request.data.get('montant', immo.annuite_amortissement))
+        # Ne pas dépasser la VNC
+        montant = min(montant, immo.valeur_nette_comptable)
+        if montant <= 0:
+            return Response({'error': 'Montant invalide'}, status=400)
+
+        import re as _re
+        from django.db.models import Max as _Max
+        last_piece = JournalEntry.objects.filter(tenant=tenant, source='AMORT').aggregate(_Max('no_piece'))['no_piece__max']
+        nums = _re.findall(r'\d+', last_piece or 'AMT-0000')
+        no_piece = f"AMT-{int(nums[-1]) + 1:04d}" if nums else 'AMT-0001'
+
+        date_str = request.data.get('date', str(timezone.now().date()))
+        lib = f"Dotation amort. — {immo.libelle}"
+
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date_str,
+            source='AMORT', source_id=immo.id,
+            no_compte='681', debit=montant, credit=0,
+            libelle=lib, ordre=1,
+        )
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date_str,
+            source='AMORT', source_id=immo.id,
+            no_compte=immo.no_compte_amortissement, debit=0, credit=montant,
+            libelle=lib, ordre=2,
+        )
+
+        from decimal import Decimal
+        immo.cumul_amortissements += Decimal(str(montant))
+        immo.save()
+
+        return Response(_immo_to_dict(immo))

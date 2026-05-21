@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (JournalView, GrandLivreView, BalanceView,
                     CompteResultatView, BilanView,
                     TableauFluxView, HistoriqueExercicesView, ChargeView,
-                    NotesAnnexesView, PlanComptableView, BudgetView)
+                    NotesAnnexesView, PlanComptableView, BudgetView,
+                    ImmobilisationView, AmortirView)
 from .pdf_views import ExportPDFView
 
 urlpatterns = [
@@ -18,9 +19,13 @@ urlpatterns = [
     path('charges/',            ChargeView.as_view()),
     path('charges/<str:pk>/',   ChargeView.as_view()),
     # Plan comptable paramétrable
-    path('plan-comptable/',                        PlanComptableView.as_view()),
-    path('plan-comptable/<str:no_compte>/',        PlanComptableView.as_view()),
+    path('plan-comptable/',                  PlanComptableView.as_view()),
+    path('plan-comptable/<str:no_compte>/', PlanComptableView.as_view()),
     # Budget prévisionnel
-    path('budget/',         BudgetView.as_view()),
+    path('budget/',          BudgetView.as_view()),
     path('budget/<str:pk>/', BudgetView.as_view()),
+    # Investissements / Immobilisations
+    path('immobilisations/',              ImmobilisationView.as_view()),
+    path('immobilisations/<str:pk>/',     ImmobilisationView.as_view()),
+    path('immobilisations/<str:pk>/amortir/', AmortirView.as_view()),
 ]

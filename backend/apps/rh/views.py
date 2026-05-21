@@ -247,10 +247,11 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
         bulletin = self.get_object()
+        from io import BytesIO
         try:
-            from weasyprint import HTML
+            from xhtml2pdf import pisa
         except ImportError:
-            return HttpResponse('WeasyPrint non installé.', status=500)
+            return HttpResponse('xhtml2pdf non installé.', status=500)
 
         context = {
             'bulletin':     bulletin,
@@ -260,10 +261,13 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
             'nom_mois':     NOMS_MOIS.get(bulletin.mois, str(bulletin.mois)),
         }
         html_str = render_to_string('pdf/bulletin_paie.html', context)
-        pdf_bytes = HTML(string=html_str, base_url=request.build_absolute_uri()).write_pdf()
+        buffer = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération PDF.', status=500)
 
         filename = f"bulletin_{bulletin.employe.matricule}_{bulletin.mois:02d}_{bulletin.annee}.pdf"
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="{filename}"'
         return response
 

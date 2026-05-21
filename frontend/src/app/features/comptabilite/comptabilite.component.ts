@@ -48,6 +48,8 @@ import { SelectModule } from 'primeng/select';
         (click)="chargerPlan(); onglet.set('plan')">📋 Plan Comptable</button>
       <button class="tab-btn" [class.active]="onglet() === 'budget'"
         (click)="chargerBudget(); onglet.set('budget')">🎯 Budget</button>
+      <button class="tab-btn" [class.active]="onglet() === 'investissement'"
+        (click)="chargerImmobilisations(); onglet.set('investissement')">🏗️ Investissement</button>
     </div>
 
     <!-- JOURNAL -->
@@ -60,6 +62,8 @@ import { SelectModule } from 'primeng/select';
         <button class="src-btn pmt"  [class.active]="filtreSource === 'PAIEMENT'" (click)="filtrerJournal('PAIEMENT')">🎓 Scolarité</button>
         <button class="src-btn chg"  [class.active]="filtreSource === 'CHARGE'"  (click)="filtrerJournal('CHARGE')">📋 Charges</button>
         <button class="src-btn ava"  [class.active]="filtreSource === 'AVANCE'"  (click)="filtrerJournal('AVANCE')">💸 Avances</button>
+        <button class="src-btn inv"  [class.active]="filtreSource === 'INVEST'"  (click)="filtrerJournal('INVEST')">🏗️ Investissement</button>
+        <button class="src-btn amt"  [class.active]="filtreSource === 'AMORT'"   (click)="filtrerJournal('AMORT')">📉 Amortissements</button>
         <span style="margin-left:auto;font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
       </div>
       <p-table [value]="journal()" [loading]="loadingJournal()"
@@ -171,7 +175,7 @@ import { SelectModule } from 'primeng/select';
 </div>
 
     <!-- COMPTE DE RÉSULTAT — SIG SYSCOHADA Révisé -->
-    <div *ngIf="onglet() === 'resultat' && resultat()">
+    <div *ngIf="onglet() === 'resultat' && resultat() !== null">
       <div class="systeme-badge" [class.sn]="resultat().systeme === 'SN'">
         {{ resultat().systeme === 'SN' ? '📊 Système Normal' : '📋 Système Minimal de Trésorerie' }}
         — CAHT : {{ resultat().caht | number:'1.0-0' }} FCFA
@@ -900,8 +904,10 @@ import { SelectModule } from 'primeng/select';
             <td class="mono bold" [class.over-budget]="l.total_realise > l.total_prevu">{{ l.total_realise | number:'1.0-0' }}</td>
             <td class="pct-cell" [class.over-budget]="l.taux_realisation > 100">{{ l.taux_realisation }} %</td>
             <td>
+              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                        pTooltip="Modifier" (onClick)="ouvrirModifierBudget(l)" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
-                        (onClick)="supprimerBudgetLigne(l)" />
+                        pTooltip="Supprimer" (onClick)="supprimerBudgetLigne(l)" />
             </td>
           </tr>
         </tbody>
@@ -941,8 +947,175 @@ import { SelectModule } from 'primeng/select';
     </ng-template>
   </p-dialog>
 
+  <!-- INVESTISSEMENT -->
+  <div *ngIf="onglet() === 'investissement'">
+    <!-- KPIs -->
+    <div class="kpi-grid" style="margin-bottom:16px">
+      <div class="kpi-card" style="--acc:#7c3aed">
+        <div class="kpi-icon">🏗️</div>
+        <div class="kpi-label">Valeur Brute Totale</div>
+        <div class="kpi-value" style="color:#7c3aed">{{ (immobilisations()?.synthese?.total_brut || 0) | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA</div>
+      </div>
+      <div class="kpi-card" style="--acc:#ef4444">
+        <div class="kpi-icon">📉</div>
+        <div class="kpi-label">Cumul Amortissements</div>
+        <div class="kpi-value" style="color:#ef4444">{{ (immobilisations()?.synthese?.total_amort || 0) | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA</div>
+      </div>
+      <div class="kpi-card" style="--acc:#10b981">
+        <div class="kpi-icon">💎</div>
+        <div class="kpi-label">Valeur Nette Comptable</div>
+        <div class="kpi-value" style="color:#10b981">{{ (immobilisations()?.synthese?.total_vnc || 0) | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA</div>
+      </div>
+      <div class="kpi-card" style="--acc:#00d4aa">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-label">Nombre de Biens</div>
+        <div class="kpi-value" style="color:#00d4aa">{{ immobilisations()?.synthese?.nb_biens || 0 }}</div>
+        <div class="kpi-sub">immobilisations</div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <span class="tbl-count">🏗️ Immobilisations</span>
+        <p-button label="+ Ajouter un bien" severity="success" (onClick)="ouvrirDialogImmo()" />
+      </div>
+      <p-table [value]="immobilisations()?.immobilisations || []" [loading]="loadingImmo()"
+               styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>N° Bien</th>
+            <th>Libellé</th>
+            <th>Compte</th>
+            <th>Date entrée</th>
+            <th class="text-right">Valeur brute</th>
+            <th class="text-right">Cumul amort.</th>
+            <th class="text-right">VNC</th>
+            <th class="text-right">Taux</th>
+            <th class="text-right">Annuité</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-i>
+          <tr>
+            <td class="mono bold">{{ i.no_bien }}</td>
+            <td>{{ i.libelle }}</td>
+            <td class="mono" style="font-size:10px">{{ i.no_compte_immobilisation }} — {{ i.libelle_compte_immo }}</td>
+            <td>{{ i.date_entree }}</td>
+            <td class="mono text-right">{{ i.valeur_entree | number:'1.0-0' }}</td>
+            <td class="mono text-right" style="color:#ef4444">{{ i.cumul_amortissements | number:'1.0-0' }}</td>
+            <td class="mono text-right" style="color:#10b981;font-weight:700">{{ i.valeur_nette_comptable | number:'1.0-0' }}</td>
+            <td class="mono text-right">{{ i.taux_amortissement }} %</td>
+            <td class="mono text-right">{{ i.annuite_amortissement | number:'1.0-0' }}</td>
+            <td>
+              <p-tag *ngIf="i.est_amorti" value="Amorti"  severity="secondary" />
+              <p-tag *ngIf="!i.est_amorti" value="Actif" severity="success" />
+            </td>
+            <td>
+              <div class="btn-row">
+                <p-button icon="pi pi-calculator" [rounded]="true" [text]="true" severity="info"
+                          pTooltip="Enregistrer dotation" [disabled]="i.est_amorti"
+                          (onClick)="ouvrirDialogAmortir(i)" />
+                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                          pTooltip="Modifier" (onClick)="ouvrirDialogImmo(i)" />
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                          pTooltip="Supprimer" (onClick)="supprimerImmo(i)" />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="11" class="empty-msg">Aucune immobilisation — cliquez sur "+ Ajouter un bien"</td></tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+
+  <!-- Dialog Immobilisation -->
+  <p-dialog [header]="editImmoMode ? '✏️ Modifier un bien' : '🏗️ Ajouter une immobilisation'"
+            [(visible)]="dialogImmoVisible" [modal]="true" [style]="{width:'560px'}" [draggable]="false">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Libellé *</label>
+        <input pInputText [(ngModel)]="formImmo.libelle" class="w-full" placeholder="Ex: Ordinateur portable Dell" />
+      </div>
+      <div class="form-group">
+        <label>Compte immobilisation *</label>
+        <p-select [options]="comptesImmo" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.no_compte_immobilisation"
+                  (onChange)="onImmoCompteChange()" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Compte amortissement</label>
+        <p-select [options]="comptesAmort" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.no_compte_amortissement" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Valeur d'entrée (FCFA) *</label>
+        <p-inputNumber [(ngModel)]="formImmo.valeur_entree" [min]="1" mode="decimal" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Durée d'utilisation (années) *</label>
+        <p-inputNumber [(ngModel)]="formImmo.duree_utilisation" [min]="1" [max]="50" mode="decimal" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Date d'entrée</label>
+        <input pInputText type="date" [(ngModel)]="formImmo.date_entree" class="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Mode d'amortissement</label>
+        <p-select [options]="[{label:'Linéaire',value:'LINEAIRE'},{label:'Dégressif',value:'DEGRESSIF'}]"
+                  optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.mode_amortissement" styleClass="w-full" />
+      </div>
+      <div class="form-group full" *ngIf="formImmo.valeur_entree && formImmo.duree_utilisation">
+        <div style="background:#111827;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8">
+          Taux : <strong style="color:#00d4aa">{{ (100 / formImmo.duree_utilisation) | number:'1.2-2' }} %</strong> &nbsp;|&nbsp;
+          Annuité : <strong style="color:#00d4aa">{{ (formImmo.valeur_entree / formImmo.duree_utilisation) | number:'1.0-0' }} FCFA</strong>
+        </div>
+      </div>
+    </div>
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogImmoVisible=false" />
+      <p-button [label]="editImmoMode ? 'Mettre à jour' : 'Enregistrer'" severity="success"
+                [loading]="savingImmo()" (onClick)="sauvegarderImmo()" />
+    </ng-template>
+  </p-dialog>
+
+  <!-- Dialog Amortissement -->
+  <p-dialog header="📉 Enregistrer une dotation aux amortissements"
+            [(visible)]="dialogAmortirVisible" [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+    @if (immoAAmortir()) {
+      <div class="employe-banner" style="margin-bottom:14px">
+        <div class="eb-name">{{ immoAAmortir()!.no_bien }} — {{ immoAAmortir()!.libelle }}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+          VNC actuelle : <strong style="color:#10b981">{{ immoAAmortir()!.valeur_nette_comptable | number:'1.0-0' }} FCFA</strong>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Montant de la dotation (FCFA)</label>
+          <p-inputNumber [(ngModel)]="formAmortir.montant" [min]="1" mode="decimal" styleClass="w-full" />
+          <span style="font-size:10px;color:#64748b">Annuité théorique : {{ immoAAmortir()!.annuite_amortissement | number:'1.0-0' }} FCFA</span>
+        </div>
+        <div class="form-group full">
+          <label>Date d'écriture</label>
+          <input pInputText type="date" [(ngModel)]="formAmortir.date" class="w-full" />
+        </div>
+      </div>
+    }
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogAmortirVisible=false" />
+      <p-button label="Enregistrer la dotation" severity="warn"
+                [loading]="savingImmo()" (onClick)="enregistrerAmortissement()" />
+    </ng-template>
+  </p-dialog>
+
   <!-- Dialog Ligne Budget -->
-  <p-dialog header="🎯 Nouvelle Ligne Budget"
+  <p-dialog [header]="editBudgetMode ? '✏️ Modifier Ligne Budget' : '🎯 Nouvelle Ligne Budget'"
             [(visible)]="dialogBudgetVisible" [modal]="true" [style]="{width:'700px'}" [draggable]="false">
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
       <div class="form-group">
@@ -1061,6 +1234,8 @@ import { SelectModule } from 'primeng/select';
     .src-btn.pmt.active   { color:#10b981; border-color:#10b981; }
     .src-btn.chg.active   { color:#94a3b8; border-color:#94a3b8; }
     .src-btn.ava.active   { color:#f59e0b; border-color:#f59e0b; }
+    .src-btn.inv.active   { color:#7c3aed; border-color:#7c3aed; }
+    .src-btn.amt.active   { color:#ef4444; border-color:#ef4444; }
     /* Plan comptable */
     .compte-inactif td { opacity:0.45; }
     .badge-sys    { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; }
@@ -1111,7 +1286,42 @@ export class ComptabiliteComponent implements OnInit {
   loadingBudget     = signal(false);
   savingBudget      = signal(false);
   dialogBudgetVisible = false;
+  editBudgetMode      = false;
   formBudget: any   = {};
+
+  // Investissement
+  immobilisations    = signal<any>(null);
+  loadingImmo        = signal(false);
+  savingImmo         = signal(false);
+  dialogImmoVisible  = false;
+  editImmoMode       = false;
+  dialogAmortirVisible = false;
+  immoAAmortir       = signal<any | null>(null);
+  formImmo: any      = {};
+  formAmortir: any   = {};
+
+  comptesImmo = [
+    { label: '211 — Terrains',                     value: '211'  },
+    { label: '221 — Bâtiments',                    value: '221'  },
+    { label: '231 — Matériel et outillage',        value: '231'  },
+    { label: '241 — Mobilier',                     value: '241'  },
+    { label: '244 — Matériel informatique',        value: '244'  },
+    { label: '245 — Matériel de transport',        value: '245'  },
+    { label: '248 — Autres immobilisations',       value: '248'  },
+  ];
+  comptesAmort = [
+    { label: '2811 — Amort. Terrains',             value: '2811' },
+    { label: '2821 — Amort. Bâtiments',            value: '2821' },
+    { label: '2831 — Amort. Matériel/outillage',   value: '2831' },
+    { label: '2841 — Amort. Mobilier',             value: '2841' },
+    { label: '2844 — Amort. Matériel informatique',value: '2844' },
+    { label: '2845 — Amort. Matériel transport',   value: '2845' },
+    { label: '2848 — Amort. Autres immo.',         value: '2848' },
+  ];
+  private immoAmortMap: Record<string, string> = {
+    '211': '2811', '221': '2821', '231': '2831',
+    '241': '2841', '244': '2844', '245': '2845', '248': '2848',
+  };
   txRealisation     = computed(() => {
     const t = this.budget()?.totaux?.total;
     if (!t || !t.prevu) return 0;
@@ -1228,7 +1438,13 @@ comptesCredit = [
       ? this.compta.modifierCompte(this.formCompte.no_compte, this.formCompte)
       : this.compta.creerCompte(this.formCompte);
     obs.subscribe({
-      next: () => { this.dialogCompteVisible = false; this.savingCompte.set(false); this.chargerPlan(); },
+      next: () => {
+        this.dialogCompteVisible = false;
+        this.savingCompte.set(false);
+        this.filtreClasse = '';
+        this.filtreType   = '';
+        this.chargerPlan();
+      },
       error: () => this.savingCompte.set(false),
     });
   }
@@ -1248,9 +1464,21 @@ comptesCredit = [
   }
 
   ouvrirDialogBudget() {
+    this.editBudgetMode = false;
     const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE' };
     for (let i = 1; i <= 12; i++) base[`m${String(i).padStart(2,'0')}`] = 0;
     this.formBudget = base;
+    this.dialogBudgetVisible = true;
+    if (!this.planComptable().length) this.chargerPlan();
+  }
+
+  ouvrirModifierBudget(l: any) {
+    this.editBudgetMode = true;
+    this.formBudget = { ...l };
+    for (let i = 1; i <= 12; i++) {
+      const k = `m${String(i).padStart(2,'0')}`;
+      if (this.formBudget[k] === undefined) this.formBudget[k] = 0;
+    }
     this.dialogBudgetVisible = true;
     if (!this.planComptable().length) this.chargerPlan();
   }
@@ -1295,31 +1523,106 @@ comptesCredit = [
 
   ngOnInit() {
     this.chargerJournal();
+    this.chargerBalance();
+    this.chargerResultat();
     this.compta.getGrandLivre().subscribe({
-      next: res => { this.grandLivre.set(res); this.loadingGL.set(false); }
-    });
-    this.compta.getBalance().subscribe({
-      next: res => { this.balance.set(res); this.loadingBalance.set(false); }
-    });
-    this.compta.getCompteResultat().subscribe({
-      next: res => this.resultat.set(res)
+      next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
+      error: ()  => this.loadingGL.set(false),
     });
     this.compta.getBilan().subscribe({
-      next: res => {
-        this.bilan.set(res);
-        if (res?.systeme) this.systeme.set(res.systeme);
-      }
+      next:  res => { this.bilan.set(res); if (res?.systeme) this.systeme.set(res.systeme); },
+      error: ()  => {},
     });
-    this.compta.getNotesAnnexes().subscribe({
-      next: res => this.notesAnnexes.set(res)
-    });
-    this.compta.getTableauFlux().subscribe({
-      next: res => this.flux.set(res)
-    });
-    this.compta.getHistorique().subscribe({
-      next: res => this.historique.set(res)
-    });
+    this.compta.getNotesAnnexes().subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
+    this.compta.getTableauFlux().subscribe({  next: res => this.flux.set(res),          error: () => {} });
+    this.compta.getHistorique().subscribe({   next: res => this.historique.set(res),    error: () => {} });
     this.chargerCharges();
+  }
+
+  // ── Investissement ──────────────────────────────────────────────────────────
+  chargerImmobilisations() {
+    this.loadingImmo.set(true);
+    this.compta.getImmobilisations().subscribe({
+      next:  r => { this.immobilisations.set(r); this.loadingImmo.set(false); },
+      error: () => this.loadingImmo.set(false),
+    });
+  }
+
+  ouvrirDialogImmo(i?: any) {
+    this.editImmoMode = !!i;
+    const today = new Date().toISOString().split('T')[0];
+    this.formImmo = i ? { ...i } : {
+      libelle: '', valeur_entree: 0, duree_utilisation: 5,
+      date_entree: today, mode_amortissement: 'LINEAIRE',
+      no_compte_immobilisation: '231', no_compte_amortissement: '2831',
+    };
+    this.dialogImmoVisible = true;
+  }
+
+  onImmoCompteChange() {
+    const mapped = this.immoAmortMap[this.formImmo.no_compte_immobilisation];
+    if (mapped) this.formImmo.no_compte_amortissement = mapped;
+  }
+
+  sauvegarderImmo() {
+    if (!this.formImmo.libelle || !this.formImmo.valeur_entree) return;
+    this.savingImmo.set(true);
+    const obs = this.editImmoMode
+      ? this.compta.modifierImmobilisation(this.formImmo.id, this.formImmo)
+      : this.compta.creerImmobilisation(this.formImmo);
+    obs.subscribe({
+      next: () => {
+        this.dialogImmoVisible = false;
+        this.savingImmo.set(false);
+        this.chargerImmobilisations();
+        this.chargerJournal();
+      },
+      error: () => this.savingImmo.set(false),
+    });
+  }
+
+  supprimerImmo(i: any) {
+    if (!confirm(`Supprimer ${i.no_bien} — ${i.libelle} ?`)) return;
+    this.compta.supprimerImmobilisation(i.id).subscribe({ next: () => this.chargerImmobilisations() });
+  }
+
+  ouvrirDialogAmortir(i: any) {
+    this.immoAAmortir.set(i);
+    this.formAmortir = {
+      montant: i.annuite_amortissement,
+      date:    new Date().toISOString().split('T')[0],
+    };
+    this.dialogAmortirVisible = true;
+  }
+
+  enregistrerAmortissement() {
+    const i = this.immoAAmortir();
+    if (!i || !this.formAmortir.montant) return;
+    this.savingImmo.set(true);
+    this.compta.amortirImmobilisation(i.id, this.formAmortir).subscribe({
+      next: () => {
+        this.dialogAmortirVisible = false;
+        this.savingImmo.set(false);
+        this.chargerImmobilisations();
+        this.chargerJournal();
+      },
+      error: () => this.savingImmo.set(false),
+    });
+  }
+
+  chargerBalance() {
+    this.loadingBalance.set(true);
+    this.compta.getBalance().subscribe({
+      next:  res => { this.balance.set(res); this.loadingBalance.set(false); },
+      error: ()  => { this.balance.set({ lignes: [], totaux: {} }); this.loadingBalance.set(false); },
+    });
+  }
+
+  chargerResultat() {
+    this.compta.getCompteResultat().subscribe({
+      next:  res => this.resultat.set(res),
+      error: ()  => this.resultat.set({}),
+    });
   }
 
   maxFlux(): number {

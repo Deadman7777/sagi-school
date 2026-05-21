@@ -153,6 +153,28 @@ import { DecimalPipe, DatePipe } from '@angular/common';
             <div class="kpi-value" style="color:#a855f7">{{ d.kpis.total_attendu | number:'1.0-0' }} FCFA</div>
             <div class="kpi-sub">{{ 'dashboard.frais_annuels' | translate }}</div>
           </div>
+          <!-- Effectif -->
+          <div class="kpi-card" style="--acc:#00d4aa">
+            <div class="kpi-icon">🎓</div>
+            <div class="kpi-label">Effectif Total</div>
+            <div class="kpi-value" style="color:#00d4aa">{{ d.eleves.total }}</div>
+            <div class="kpi-sub">
+              <span style="color:#7c3aed">{{ d.eleves.garcons || 0 }}G</span> /
+              <span style="color:#ec4899">{{ d.eleves.filles || 0 }}F</span>
+            </div>
+          </div>
+          <div class="kpi-card" style="--acc:#ef4444">
+            <div class="kpi-icon">🚪</div>
+            <div class="kpi-label">Abandons</div>
+            <div class="kpi-value" style="color:#ef4444">{{ d.eleves.abandonnes || 0 }}</div>
+            <div class="kpi-sub">sur {{ d.eleves.total }} élèves</div>
+          </div>
+          <div class="kpi-card" style="--acc:#f59e0b">
+            <div class="kpi-icon">🤝</div>
+            <div class="kpi-label">Prises en charge</div>
+            <div class="kpi-value" style="color:#f59e0b">{{ d.prises_en_charge?.total || 0 }}</div>
+            <div class="kpi-sub">bénéficiaires</div>
+          </div>
         </div>
 
         <div class="grid-2">
@@ -171,9 +193,29 @@ import { DecimalPipe, DatePipe } from '@angular/common';
                 <div class="alert-num">{{ d.eleves.ok }}</div>
                 <div><div class="alert-title">{{ 'dashboard.a_jour' | translate }}</div><div class="alert-sub">{{ 'dashboard.paiements_ok' | translate }}</div></div>
               </div>
-              <div class="total-eleves">Total : <strong>{{ d.eleves.total }}</strong> {{ 'dashboard.total_eleves' | translate }}</div>
+              <div class="total-eleves">
+                Inscrits : <strong>{{ d.eleves.inscrits || d.eleves.total }}</strong> ·
+                Abandons : <strong style="color:#ef4444">{{ d.eleves.abandonnes || 0 }}</strong> ·
+                Transférés : <strong style="color:#f59e0b">{{ d.eleves.transferes || 0 }}</strong>
+              </div>
             </div>
           </div>
+          @if (d.prises_en_charge?.categories?.length) {
+            <div class="card">
+              <div class="card-header">🤝 Prises en charge</div>
+              <div class="card-body">
+                @for (cat of d.prises_en_charge!.categories; track cat.categorie) {
+                  <div class="mode-row">
+                    <div class="mode-info">
+                      <span class="mode-name">{{ pecLabel(cat.categorie) }}</span>
+                    </div>
+                    <span class="mode-total">{{ cat.nb }} élève(s)</span>
+                  </div>
+                }
+                <div class="total-eleves">Total : <strong>{{ d.prises_en_charge!.total }}</strong> bénéficiaires</div>
+              </div>
+            </div>
+          }
           <div class="card">
             <div class="card-header">📱 {{ 'dashboard.modes' | translate }}</div>
             <div class="card-body">
@@ -289,6 +331,10 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
+
+  pecLabel(cat: string) {
+    return { ORPHELIN: 'Orphelin', HANDICAP: 'Handicap', FAMILLE_DEMUNIE: 'Famille démunie', AUTRE: 'Autre' }[cat] || cat;
+  }
 
   ngOnInit() {
     if (this.isSuperAdmin()) {

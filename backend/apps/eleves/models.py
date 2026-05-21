@@ -33,21 +33,31 @@ class Eleve(TenantModel):
         ('ABANDONNE', 'Abandonné'),
         ('DIPLOME',   'Diplômé'),
     ]
+    PRISE_EN_CHARGE_CHOICES = [
+        ('ORPHELIN',        'Orphelin'),
+        ('HANDICAP',        'Handicap'),
+        ('FAMILLE_DEMUNIE', 'Famille démunie'),
+        ('AUTRE',           'Autre'),
+    ]
 
-    exercice          = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
-    section           = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
-    numero            = models.IntegerField(null=True, blank=True)
-    matricule = models.CharField(max_length=20, blank=True, unique=True, null=True)
-    nom_complet       = models.CharField(max_length=200)
-    genre             = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
-    date_naissance    = models.DateField(null=True, blank=True)
-    lieu_naissance    = models.CharField(max_length=200, blank=True)
-    nom_pere          = models.CharField(max_length=200, blank=True)
-    telephone_pere    = models.CharField(max_length=20, blank=True)
-    nom_mere          = models.CharField(max_length=200, blank=True)
-    telephone_mere    = models.CharField(max_length=20, blank=True)
-    date_inscription  = models.DateField(auto_now_add=True)
-    statut            = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
+    exercice              = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
+    section               = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
+    numero                = models.IntegerField(null=True, blank=True)
+    matricule             = models.CharField(max_length=20, blank=True, unique=True, null=True)
+    nom_complet           = models.CharField(max_length=200)
+    genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
+    date_naissance        = models.DateField(null=True, blank=True)
+    lieu_naissance        = models.CharField(max_length=200, blank=True)
+    nom_pere              = models.CharField(max_length=200, blank=True)
+    telephone_pere        = models.CharField(max_length=20, blank=True)
+    nom_mere              = models.CharField(max_length=200, blank=True)
+    telephone_mere        = models.CharField(max_length=20, blank=True)
+    date_inscription      = models.DateField(auto_now_add=True)
+    statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
+    # Prise en charge sociale
+    prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
+    taux_prise_en_charge  = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='% de réduction appliquée')
+    obs_prise_en_charge   = models.TextField(blank=True)
 
     class Meta:
         db_table = 'eleves'

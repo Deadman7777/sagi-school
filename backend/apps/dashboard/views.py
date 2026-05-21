@@ -178,6 +178,15 @@ class DashboardKPIView(APIView):
         total_impayes = max(total_attendu - total_paye, 0)
         taux_recouvrement = round((total_paye / total_attendu * 100), 1) if total_attendu > 0 else 0
 
+        # Statuts élèves
+        statuts_qs = eleves.values('statut').annotate(nb=Count('id'))
+        statuts    = {s['statut']: s['nb'] for s in statuts_qs}
+
+        # Prises en charge
+        pec_qs = eleves.filter(prise_en_charge__isnull=False).exclude(prise_en_charge='')
+        pec_nb = pec_qs.count()
+        pec_categories = list(pec_qs.values('prise_en_charge').annotate(nb=Count('id')))
+
         result = {
             'exercice': {
                 'annee_scolaire': exercice.annee_scolaire,
@@ -194,8 +203,20 @@ class DashboardKPIView(APIView):
                 'taux_recouvrement':   taux_recouvrement,
             },
             'eleves': {
-                'total': eleves.count(), 'urgent': urgent,
-                'attention': attention, 'ok': ok,
+                'total':        eleves.count(),
+                'inscrits':     statuts.get('INSCRIT',   0),
+                'abandonnes':   statuts.get('ABANDONNE', 0),
+                'transferes':   statuts.get('TRANSFERE', 0),
+                'diplomes':     statuts.get('DIPLOME',   0),
+                'urgent':       urgent,
+                'attention':    attention,
+                'ok':           ok,
+                'garcons':      eleves.filter(genre='G').count(),
+                'filles':       eleves.filter(genre='F').count(),
+            },
+            'prises_en_charge': {
+                'total':       pec_nb,
+                'categories':  [{'categorie': p['prise_en_charge'], 'nb': p['nb']} for p in pec_categories],
             },
             'modes_paiement': [{'mode_paiement': m['mode_paiement'],
                                  'nb': m['nb'], 'total': float(m['total'] or 0)}

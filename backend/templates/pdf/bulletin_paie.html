@@ -4,373 +4,367 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'DejaVu Sans', Arial, sans-serif; font-size:10px; color:#1a1a2e; }
+  body { font-family:Arial, sans-serif; font-size:10px; color:#1a1a2e; }
 
   /* ── En-tête ── */
-  .header {
-    display:flex; justify-content:space-between; align-items:flex-start;
-    padding:16px 28px; border-bottom:3px solid #00d4aa;
-  }
-  .logo { font-size:20px; font-weight:bold; color:#00d4aa; }
+  .header-table { width:100%; border-bottom:3px solid #00745a; padding-bottom:10px; margin-bottom:8px; }
+  .logo { font-size:18px; font-weight:bold; color:#00745a; }
   .sub  { font-size:9px; color:#666; text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
-  .doc-info { text-align:right; }
-  .doc-title { font-size:15px; font-weight:bold; color:#1a1a2e; }
-  .doc-meta  { font-size:9px; color:#666; margin-top:3px; line-height:1.5; }
+  .doc-title { font-size:14px; font-weight:bold; color:#1a1a2e; text-align:right; }
+  .doc-meta  { font-size:9px; color:#666; margin-top:3px; line-height:1.5; text-align:right; }
 
-  /* ── Bandeau école + salarié ── */
-  .info-band {
-    display:flex; gap:0; margin:12px 28px; border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;
-  }
-  .ib-cell {
-    flex:1; padding:8px 12px; border-right:1px solid #e0e0e0;
-  }
-  .ib-cell:last-child { border-right:none; }
+  /* ── Bandeau info ── */
+  .info-table { width:100%; border:1px solid #e0e0e0; margin:8px 0; }
+  .info-table td { padding:6px 10px; border-right:1px solid #e0e0e0; vertical-align:top; }
+  .info-table td:last-child { border-right:none; }
   .ib-label { font-size:8px; color:#999; text-transform:uppercase; letter-spacing:.5px; }
-  .ib-val   { font-size:11px; font-weight:bold; color:#1a1a2e; margin-top:2px; }
+  .ib-val   { font-size:10px; font-weight:bold; color:#1a1a2e; margin-top:2px; }
 
   /* ── Sections ── */
-  .content { padding:0 28px; }
   .section-title {
-    font-size:11px; font-weight:bold; color:white;
-    background:#1a1a2e; padding:5px 10px; margin:12px 0 0;
+    font-size:10px; font-weight:bold; color:white;
+    background:#1a1a2e; padding:4px 8px; margin:10px 0 0;
   }
-  .section-title.green { background:#00745a; }
-  .section-title.blue  { background:#0052a0; }
-  .section-title.orange{ background:#c05700; }
+  .section-title.green  { background:#00745a; }
+  .section-title.blue   { background:#0052a0; }
+  .section-title.orange { background:#c05700; }
 
   /* ── Tables ── */
   table { width:100%; border-collapse:collapse; }
   thead th {
-    background:#f0f0f0; color:#1a1a2e; padding:5px 8px;
+    background:#f0f0f0; color:#1a1a2e; padding:4px 8px;
     font-size:9px; text-align:left; border-bottom:2px solid #1a1a2e;
   }
   thead th.right { text-align:right; }
   tbody tr:nth-child(even) { background:#fafafa; }
-  tbody td { padding:5px 8px; border-bottom:1px solid #eeeeee; font-size:10px; }
+  tbody td { padding:4px 8px; border-bottom:1px solid #eeeeee; font-size:10px; }
   tbody td.right { text-align:right; }
   tfoot td {
     background:#e8f0fe; font-weight:bold;
-    padding:6px 8px; border-top:2px solid #1a1a2e; font-size:10px;
+    padding:5px 8px; border-top:2px solid #1a1a2e; font-size:10px;
   }
   tfoot td.right { text-align:right; }
   .zero { color:#bbb; }
 
   /* ── Net à payer ── */
   .net-box {
-    margin:14px 0;
-    border:2px solid #00d4aa; border-radius:8px;
-    padding:14px 20px; display:flex;
-    justify-content:space-between; align-items:center;
+    margin:12px 0;
+    border:2px solid #00745a;
+    padding:10px 16px;
     background:#f0fdf9;
   }
-  .net-label { font-size:13px; font-weight:bold; color:#1a1a2e; }
-  .net-val   { font-size:22px; font-weight:bold; color:#00745a; }
-  .net-mode  { font-size:9px; color:#666; margin-top:3px; }
+  .net-box-table { width:100%; }
+  .net-label { font-size:12px; font-weight:bold; color:#1a1a2e; }
+  .net-val   { font-size:18px; font-weight:bold; color:#00745a; text-align:right; }
+  .net-mode  { font-size:9px; color:#666; margin-top:2px; }
 
   /* ── Résumé coûts ── */
-  .cost-row {
-    display:flex; gap:10px; margin:8px 0;
-  }
-  .cost-box {
-    flex:1; border:1px solid #e0e0e0; border-radius:5px;
-    padding:8px 12px; text-align:center;
-  }
+  .cost-table { width:100%; margin:6px 0; }
+  .cost-table td { width:25%; padding:6px 8px; text-align:center; border:1px solid #e0e0e0; }
   .cost-label { font-size:8px; color:#999; text-transform:uppercase; }
-  .cost-val   { font-size:13px; font-weight:bold; margin-top:3px; }
-  .cost-box.teal .cost-val  { color:#00745a; }
-  .cost-box.blue .cost-val  { color:#0052a0; }
-  .cost-box.red  .cost-val  { color:#c05700; }
+  .cost-val   { font-size:12px; font-weight:bold; margin-top:2px; }
+  .cost-teal  { color:#00745a; }
+  .cost-blue  { color:#0052a0; }
+  .cost-red   { color:#c05700; }
 
   /* ── Signatures ── */
-  .signatures {
-    display:flex; justify-content:space-between;
-    margin:20px 0 10px; padding-top:10px;
-    border-top:1px dashed #ccc;
-  }
-  .sig-block { text-align:center; width:42%; }
-  .sig-label { font-size:9px; color:#666; text-transform:uppercase; margin-bottom:28px; }
-  .sig-line  { border-top:1px solid #333; padding-top:4px; font-size:9px; color:#666; }
+  .sig-table { width:100%; margin:16px 0 8px; border-top:1px dashed #ccc; padding-top:8px; }
+  .sig-table td { width:50%; text-align:center; padding:4px 8px; }
+  .sig-label { font-size:9px; color:#666; text-transform:uppercase; margin-bottom:24px; }
+  .sig-line  { border-top:1px solid #333; padding-top:4px; font-size:9px; color:#666; margin-top:24px; }
 
   /* ── Pied de page ── */
-  .footer {
-    position:fixed; bottom:0; left:0; right:0;
-    padding:6px 28px; border-top:1px solid #e0e0e0;
-    display:flex; justify-content:space-between;
-    font-size:8px; color:#999; background:white;
+  .footer-row {
+    font-size:8px; color:#999; border-top:1px solid #e0e0e0;
+    padding:4px 0; margin-top:8px;
   }
+  .footer-row td { padding:4px 0; }
 
-  @page { size:A4; margin:10mm 10mm 18mm 10mm; }
+  @page { size:A4; margin:10mm 10mm 12mm 10mm; }
 </style>
 </head>
 <body>
 
 <!-- En-tête -->
-<div class="header">
-  <div>
-    <div class="logo">SAGI SCHOOL</div>
-    <div class="sub">Système de Gestion Scolaire · by HADY GESMAN</div>
-  </div>
-  <div class="doc-info">
-    <div class="doc-title">BULLETIN DE PAIE</div>
-    <div class="doc-meta">
-      Période : {{ nom_mois }} {{ bulletin.annee }}<br>
-      Édité le {{ date_edition|date:"d/m/Y à H:i" }}
-    </div>
-  </div>
-</div>
+<table class="header-table">
+  <tr>
+    <td style="width:50%">
+      <div class="logo">SAGI SCHOOL</div>
+      <div class="sub">Système de Gestion Scolaire &middot; by HADY GESMAN</div>
+    </td>
+    <td style="width:50%; text-align:right">
+      <div class="doc-title">BULLETIN DE PAIE</div>
+      <div class="doc-meta">
+        Période : {{ nom_mois }} {{ bulletin.annee }}<br>
+        Édité le {{ date_edition|date:"d/m/Y à H:i" }}
+      </div>
+    </td>
+  </tr>
+</table>
 
 <!-- Bandeau établissement -->
-<div class="info-band">
-  <div class="ib-cell">
-    <div class="ib-label">Établissement</div>
-    <div class="ib-val">{{ tenant.nom }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Ville</div>
-    <div class="ib-val">{{ tenant.ville|default:"—" }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">NINEA / RCCM</div>
-    <div class="ib-val">{{ tenant.rccm|default:"—" }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Statut bulletin</div>
-    <div class="ib-val">{{ bulletin.get_statut_display }}</div>
-  </div>
-</div>
+<table class="info-table">
+  <tr>
+    <td>
+      <div class="ib-label">Établissement</div>
+      <div class="ib-val">{{ tenant.nom }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Ville</div>
+      <div class="ib-val">{{ tenant.ville|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="ib-label">NINEA / RCCM</div>
+      <div class="ib-val">{{ tenant.rccm|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Statut bulletin</div>
+      <div class="ib-val">{{ bulletin.get_statut_display }}</div>
+    </td>
+  </tr>
+</table>
 
 <!-- Bandeau salarié -->
-<div class="info-band">
-  <div class="ib-cell">
-    <div class="ib-label">Nom &amp; Prénom</div>
-    <div class="ib-val">{{ employe.nom_complet }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Matricule</div>
-    <div class="ib-val">{{ employe.matricule }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Poste</div>
-    <div class="ib-val">{{ employe.poste }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Niveau / Type</div>
-    <div class="ib-val">{{ employe.get_niveau_enseignement_display|default:employe.get_type_employe_display }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Contrat</div>
-    <div class="ib-val">{{ employe.get_type_contrat_display }}</div>
-  </div>
-  <div class="ib-cell">
-    <div class="ib-label">Situation fam.</div>
-    <div class="ib-val">{{ employe.get_situation_matrimoniale_display }} / {{ employe.nb_enfants }} enf.</div>
-  </div>
+<table class="info-table">
+  <tr>
+    <td>
+      <div class="ib-label">Nom &amp; Prénom</div>
+      <div class="ib-val">{{ employe.nom_complet }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Matricule</div>
+      <div class="ib-val">{{ employe.matricule }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Poste</div>
+      <div class="ib-val">{{ employe.poste }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Niveau / Type</div>
+      <div class="ib-val">{{ employe.get_niveau_enseignement_display|default:employe.get_type_employe_display }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Contrat</div>
+      <div class="ib-val">{{ employe.get_type_contrat_display }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Situation fam.</div>
+      <div class="ib-val">{{ employe.get_situation_matrimoniale_display }} / {{ employe.nb_enfants }} enf.</div>
+    </td>
+  </tr>
+</table>
+
+<!-- ══ GAINS ══ -->
+<div class="section-title green">ÉLÉMENTS DE RÉMUNÉRATION (GAINS)</div>
+<table>
+  <thead>
+    <tr>
+      <th>Libellé</th>
+      <th class="right">Montant (FCFA)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Salaire de base</td>
+      <td class="right">{{ bulletin.salaire_base|floatformat:0 }}</td>
+    </tr>
+    {% if bulletin.heures_sup_montant %}
+    <tr>
+      <td>Heures supplémentaires ({{ bulletin.nb_heures_sup }} h/sem.)</td>
+      <td class="right">{{ bulletin.heures_sup_montant|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.indemnite_sujetion %}
+    <tr>
+      <td>Indemnité de sujétion</td>
+      <td class="right">{{ bulletin.indemnite_sujetion|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.indemnite_logement %}
+    <tr>
+      <td>Indemnité de logement</td>
+      <td class="right">{{ bulletin.indemnite_logement|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.allocation_salaire_unique %}
+    <tr>
+      <td>Allocation salaire unique</td>
+      <td class="right">{{ bulletin.allocation_salaire_unique|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>Prime de transport</td>
+      <td class="right">{{ bulletin.prime_transport|floatformat:0 }}</td>
+    </tr>
+    {% if bulletin.primes_diverses %}
+    <tr>
+      <td>Primes diverses</td>
+      <td class="right">{{ bulletin.primes_diverses|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.avantages_nature %}
+    <tr>
+      <td>Avantages en nature</td>
+      <td class="right">{{ bulletin.avantages_nature|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td><strong>SALAIRE BRUT</strong></td>
+      <td class="right"><strong>{{ bulletin.salaire_brut|floatformat:0 }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- ══ RETENUES SALARIALES ══ -->
+<div class="section-title blue">RETENUES SALARIALES</div>
+<table>
+  <thead>
+    <tr>
+      <th>Libellé</th>
+      <th class="right">Montant (FCFA)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>IPRES — cotisation générale salarié ({{ bulletin.parametres_fiscaux.taux_ipres_general_salarie }} %)</td>
+      <td class="right">{{ bulletin.ipres_general_salarie|floatformat:0 }}</td>
+    </tr>
+    {% if bulletin.ipres_cadre_salarie %}
+    <tr>
+      <td>IPRES — cotisation cadre salarié ({{ bulletin.parametres_fiscaux.taux_ipres_cadre_salarie }} %)</td>
+      <td class="right">{{ bulletin.ipres_cadre_salarie|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>Impôt sur le Revenu (IR) retenu à la source</td>
+      <td class="right">{{ bulletin.ir_retenu|floatformat:0 }}</td>
+    </tr>
+    {% if bulletin.avance_sur_salaire %}
+    <tr>
+      <td>Avance sur salaire</td>
+      <td class="right">{{ bulletin.avance_sur_salaire|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.opposition_saisie %}
+    <tr>
+      <td>Opposition / saisie</td>
+      <td class="right">{{ bulletin.opposition_saisie|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if bulletin.autres_retenues %}
+    <tr>
+      <td>Autres retenues</td>
+      <td class="right">{{ bulletin.autres_retenues|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td><strong>TOTAL RETENUES SALARIALES</strong></td>
+      <td class="right"><strong>{{ bulletin.total_retenues_salariales|floatformat:0 }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- ══ NET À PAYER ══ -->
+<div class="net-box">
+  <table class="net-box-table">
+    <tr>
+      <td>
+        <div class="net-label">NET À PAYER</div>
+        <div class="net-mode">Mode de paiement : {{ bulletin.get_mode_paiement_effectif_display }}</div>
+      </td>
+      <td class="net-val">{{ bulletin.net_a_payer|floatformat:0 }} FCFA</td>
+    </tr>
+  </table>
 </div>
 
-<div class="content">
+<!-- ══ CHARGES PATRONALES ══ -->
+<div class="section-title orange">CHARGES PATRONALES (informatives)</div>
+<table>
+  <thead>
+    <tr>
+      <th>Libellé</th>
+      <th class="right">Montant (FCFA)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>IPRES — cotisation générale patronale ({{ bulletin.parametres_fiscaux.taux_ipres_general_patronal }} %)</td>
+      <td class="right">{{ bulletin.ipres_general_patronal|floatformat:0 }}</td>
+    </tr>
+    {% if bulletin.ipres_cadre_patronal %}
+    <tr>
+      <td>IPRES — cotisation cadre patronale ({{ bulletin.parametres_fiscaux.taux_ipres_cadre_patronal }} %)</td>
+      <td class="right">{{ bulletin.ipres_cadre_patronal|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td>CSS — Prestations familiales ({{ bulletin.parametres_fiscaux.taux_css_prestations_familiales }} %)</td>
+      <td class="right">{{ bulletin.css_prestations_familiales|floatformat:0 }}</td>
+    </tr>
+    <tr>
+      <td>ATMP — Accidents du travail ({{ bulletin.parametres_fiscaux.taux_atmp }} %)</td>
+      <td class="right">{{ bulletin.atmp|floatformat:0 }}</td>
+    </tr>
+    <tr>
+      <td>CFCE — Contribution forfaitaire ({{ bulletin.parametres_fiscaux.taux_cfce }} %)</td>
+      <td class="right">{{ bulletin.cfce|floatformat:0 }}</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td><strong>TOTAL CHARGES PATRONALES</strong></td>
+      <td class="right"><strong>{{ bulletin.total_charges_patronales|floatformat:0 }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
 
-  <!-- ══ GAINS ══ -->
-  <div class="section-title green">ÉLÉMENTS DE RÉMUNÉRATION (GAINS)</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Libellé</th>
-        <th class="right">Montant (FCFA)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Salaire de base</td>
-        <td class="right">{{ bulletin.salaire_base|floatformat:0 }}</td>
-      </tr>
-      {% if bulletin.heures_sup_montant %}
-      <tr>
-        <td>Heures supplémentaires ({{ bulletin.nb_heures_sup }} h/sem.)</td>
-        <td class="right">{{ bulletin.heures_sup_montant|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.indemnite_sujetion %}
-      <tr>
-        <td>Indemnité de sujétion</td>
-        <td class="right">{{ bulletin.indemnite_sujetion|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.indemnite_logement %}
-      <tr>
-        <td>Indemnité de logement</td>
-        <td class="right">{{ bulletin.indemnite_logement|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.allocation_salaire_unique %}
-      <tr>
-        <td>Allocation salaire unique</td>
-        <td class="right">{{ bulletin.allocation_salaire_unique|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>Prime de transport</td>
-        <td class="right">{{ bulletin.prime_transport|floatformat:0 }}</td>
-      </tr>
-      {% if bulletin.primes_diverses %}
-      <tr>
-        <td>Primes diverses</td>
-        <td class="right">{{ bulletin.primes_diverses|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.avantages_nature %}
-      <tr>
-        <td>Avantages en nature</td>
-        <td class="right">{{ bulletin.avantages_nature|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td><strong>SALAIRE BRUT</strong></td>
-        <td class="right"><strong>{{ bulletin.salaire_brut|floatformat:0 }}</strong></td>
-      </tr>
-    </tfoot>
-  </table>
-
-  <!-- ══ RETENUES SALARIALES ══ -->
-  <div class="section-title blue">RETENUES SALARIALES</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Libellé</th>
-        <th class="right">Montant (FCFA)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>IPRES — cotisation générale salarié ({{ bulletin.parametres_fiscaux.taux_ipres_general_salarie }} %)</td>
-        <td class="right">{{ bulletin.ipres_general_salarie|floatformat:0 }}</td>
-      </tr>
-      {% if bulletin.ipres_cadre_salarie %}
-      <tr>
-        <td>IPRES — cotisation cadre salarié ({{ bulletin.parametres_fiscaux.taux_ipres_cadre_salarie }} %)</td>
-        <td class="right">{{ bulletin.ipres_cadre_salarie|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>Impôt sur le Revenu (IR) retenu à la source</td>
-        <td class="right">{{ bulletin.ir_retenu|floatformat:0 }}</td>
-      </tr>
-      {% if bulletin.avance_sur_salaire %}
-      <tr>
-        <td>Avance sur salaire</td>
-        <td class="right">{{ bulletin.avance_sur_salaire|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.opposition_saisie %}
-      <tr>
-        <td>Opposition / saisie</td>
-        <td class="right">{{ bulletin.opposition_saisie|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      {% if bulletin.autres_retenues %}
-      <tr>
-        <td>Autres retenues</td>
-        <td class="right">{{ bulletin.autres_retenues|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td><strong>TOTAL RETENUES SALARIALES</strong></td>
-        <td class="right"><strong>{{ bulletin.total_retenues_salariales|floatformat:0 }}</strong></td>
-      </tr>
-    </tfoot>
-  </table>
-
-  <!-- ══ NET À PAYER ══ -->
-  <div class="net-box">
-    <div>
-      <div class="net-label">NET À PAYER</div>
-      <div class="net-mode">Mode de paiement : {{ bulletin.get_mode_paiement_effectif_display }}</div>
-    </div>
-    <div class="net-val">{{ bulletin.net_a_payer|floatformat:0 }} FCFA</div>
-  </div>
-
-  <!-- ══ CHARGES PATRONALES ══ -->
-  <div class="section-title orange">CHARGES PATRONALES (informatives)</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Libellé</th>
-        <th class="right">Montant (FCFA)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>IPRES — cotisation générale patronale ({{ bulletin.parametres_fiscaux.taux_ipres_general_patronal }} %)</td>
-        <td class="right">{{ bulletin.ipres_general_patronal|floatformat:0 }}</td>
-      </tr>
-      {% if bulletin.ipres_cadre_patronal %}
-      <tr>
-        <td>IPRES — cotisation cadre patronale ({{ bulletin.parametres_fiscaux.taux_ipres_cadre_patronal }} %)</td>
-        <td class="right">{{ bulletin.ipres_cadre_patronal|floatformat:0 }}</td>
-      </tr>
-      {% endif %}
-      <tr>
-        <td>CSS — Prestations familiales ({{ bulletin.parametres_fiscaux.taux_css_prestations_familiales }} %)</td>
-        <td class="right">{{ bulletin.css_prestations_familiales|floatformat:0 }}</td>
-      </tr>
-      <tr>
-        <td>ATMP — Accidents du travail ({{ bulletin.parametres_fiscaux.taux_atmp }} %)</td>
-        <td class="right">{{ bulletin.atmp|floatformat:0 }}</td>
-      </tr>
-      <tr>
-        <td>CFCE — Contribution forfaitaire ({{ bulletin.parametres_fiscaux.taux_cfce }} %)</td>
-        <td class="right">{{ bulletin.cfce|floatformat:0 }}</td>
-      </tr>
-    </tbody>
-    <tfoot>
-      <tr>
-        <td><strong>TOTAL CHARGES PATRONALES</strong></td>
-        <td class="right"><strong>{{ bulletin.total_charges_patronales|floatformat:0 }}</strong></td>
-      </tr>
-    </tfoot>
-  </table>
-
-  <!-- Récapitulatif coûts -->
-  <div class="cost-row">
-    <div class="cost-box">
+<!-- Récapitulatif coûts -->
+<table class="cost-table">
+  <tr>
+    <td>
       <div class="cost-label">Salaire Brut</div>
       <div class="cost-val">{{ bulletin.salaire_brut|floatformat:0 }}</div>
-    </div>
-    <div class="cost-box teal">
+    </td>
+    <td>
       <div class="cost-label">Net à Payer</div>
-      <div class="cost-val teal">{{ bulletin.net_a_payer|floatformat:0 }}</div>
-    </div>
-    <div class="cost-box blue">
+      <div class="cost-val cost-teal">{{ bulletin.net_a_payer|floatformat:0 }}</div>
+    </td>
+    <td>
       <div class="cost-label">Charges Patronales</div>
-      <div class="cost-val">{{ bulletin.total_charges_patronales|floatformat:0 }}</div>
-    </div>
-    <div class="cost-box red">
+      <div class="cost-val cost-blue">{{ bulletin.total_charges_patronales|floatformat:0 }}</div>
+    </td>
+    <td>
       <div class="cost-label">Coût Total Employeur</div>
-      <div class="cost-val">{{ bulletin.cout_total_employeur|floatformat:0 }}</div>
-    </div>
-  </div>
+      <div class="cost-val cost-red">{{ bulletin.cout_total_employeur|floatformat:0 }}</div>
+    </td>
+  </tr>
+</table>
 
-  <!-- Signatures -->
-  <div class="signatures">
-    <div class="sig-block">
+<!-- Signatures -->
+<table class="sig-table">
+  <tr>
+    <td>
       <div class="sig-label">Le Directeur / La Directrice</div>
       <div class="sig-line">Signature &amp; cachet</div>
-    </div>
-    <div class="sig-block">
+    </td>
+    <td>
       <div class="sig-label">Le Salarié (Bon pour accord)</div>
       <div class="sig-line">Signature</div>
-    </div>
-  </div>
+    </td>
+  </tr>
+</table>
 
-</div><!-- /content -->
-
-<div class="footer">
-  <span>SAGI SCHOOL · Conforme SYSCOHADA Révisé · Convention Collective Enseignement Privé Sénégal 2018</span>
-  <span>République du Sénégal — {{ date_edition|date:"d/m/Y" }}</span>
-</div>
+<!-- Pied de page -->
+<table class="footer-row">
+  <tr>
+    <td>SAGI SCHOOL &middot; Conforme SYSCOHADA Révisé &middot; Convention Collective Enseignement Privé Sénégal 2018</td>
+    <td style="text-align:right">République du Sénégal — {{ date_edition|date:"d/m/Y" }}</td>
+  </tr>
+</table>
 
 </body>
 </html>

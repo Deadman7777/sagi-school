@@ -25,6 +25,9 @@ export interface Eleve {
   telephone_mere: string;
   date_inscription: string;
   statut: string;
+  prise_en_charge: string | null;
+  taux_prise_en_charge: number;
+  obs_prise_en_charge: string;
   total_attendu: number;
   total_paye: number;
   reste_a_payer: number;

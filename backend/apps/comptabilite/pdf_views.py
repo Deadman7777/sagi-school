@@ -14,10 +14,11 @@ class ExportPDFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, type_doc):
+        from io import BytesIO
         try:
-            from weasyprint import HTML, CSS
+            from xhtml2pdf import pisa
         except ImportError:
-            return HttpResponse('WeasyPrint non installé', status=500)
+            return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(
@@ -27,12 +28,15 @@ class ExportPDFView(APIView):
         if not exercice:
             return HttpResponse('Aucun exercice actif', status=404)
 
-        context = self._build_context(tenant, exercice, type_doc)
+        context  = self._build_context(tenant, exercice, type_doc)
         html_str = render_to_string(f'pdf/{type_doc}.html', context)
 
-        pdf = HTML(string=html_str, base_url=request.build_absolute_uri()).write_pdf()
+        buffer = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération PDF.', status=500)
 
-        response = HttpResponse(pdf, content_type='application/pdf')
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{type_doc}_{exercice.annee_scolaire}.pdf"'
         return response
 

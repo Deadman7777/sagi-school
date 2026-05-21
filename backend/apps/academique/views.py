@@ -46,6 +46,43 @@ class ClasseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
 
+    @action(detail=True, methods=['get'])
+    def eleves(self, request, pk=None):
+        """Retourne les élèves inscrits dans la section dont le nom correspond à cette classe."""
+        tenant = get_tenant(request)
+        try:
+            classe = Classe.objects.get(id=pk, tenant=tenant)
+        except Classe.DoesNotExist:
+            return Response([], status=200)
+
+        from apps.eleves.models import Eleve
+        from apps.paiements.models import Exercice
+        from django.db.models import Sum, Value, DecimalField
+        from django.db.models.functions import Coalesce
+
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response([])
+
+        # Chercher par nom de section = nom de classe (convention)
+        qs = Eleve.objects.filter(
+            tenant=tenant, exercice=exercice
+        ).filter(
+            section__nom__iexact=classe.nom
+        ).select_related('section').order_by('numero')
+
+        # Si aucun résultat, renvoyer tous les élèves de l'exercice (fallback)
+        if not qs.exists():
+            qs = Eleve.objects.filter(tenant=tenant, exercice=exercice).select_related('section').order_by('numero')
+
+        return Response([{
+            'id':          str(e.id),
+            'numero':      e.numero,
+            'matricule':   e.matricule,
+            'nom_complet': e.nom_complet,
+            'section_nom': e.section.nom if e.section else '—',
+        } for e in qs])
+
 
 class TypeEvaluationViewSet(viewsets.ModelViewSet):
     serializer_class   = TypeEvaluationSerializer
@@ -336,11 +373,11 @@ class BulletinPDFView(APIView):
         return 'Ajourné(e) — Un soutien scolaire est fortement recommandé'
 
     def get(self, request, eleve_id, trimestre):
+        from io import BytesIO
         try:
-            from weasyprint import HTML
+            from xhtml2pdf import pisa
         except ImportError:
-            return HttpResponse('WeasyPrint non installé', status=500)
-
+            return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant = get_tenant(request)
         annee  = request.query_params.get('annee', '2025-2026')
@@ -423,8 +460,11 @@ class BulletinPDFView(APIView):
         }
 
         html_str = render_to_string('pdf/bulletin.html', context)
-        pdf = HTML(string=html_str, base_url=request.build_absolute_uri()).write_pdf()
+        buffer   = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération bulletin PDF.', status=500)
 
-        response = HttpResponse(pdf, content_type='application/pdf')
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="bulletin_{eleve.nom_complet}_{trimestre}.pdf"'
         return response

@@ -12,7 +12,12 @@ export interface DashboardKPI {
   total_impayes: number;
   taux_recouvrement: number;
 };
-  eleves: { total: number; urgent: number; attention: number; ok: number; };
+  eleves: {
+    total: number; urgent: number; attention: number; ok: number;
+    inscrits: number; abandonnes: number; transferes: number; diplomes: number;
+    garcons: number; filles: number;
+  };
+  prises_en_charge?: { total: number; categories: { categorie: string; nb: number; }[]; };
   modes_paiement: { mode_paiement: string; nb: number; total: number; }[];
   recettes_mensuelles: { mois: string; total: number; }[];
 }

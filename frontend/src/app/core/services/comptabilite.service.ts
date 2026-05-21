@@ -28,4 +28,11 @@ export class ComptabiliteService {
   getBudget()                           { return this.api.get<any>('/comptabilite/budget/'); }
   sauvegarderBudgetLigne(data: unknown) { return this.api.post<any>('/comptabilite/budget/', data); }
   supprimerBudgetLigne(id: string)      { return this.api.delete(`/comptabilite/budget/${id}/`); }
+
+  // Investissements / Immobilisations
+  getImmobilisations()                       { return this.api.get<any>('/comptabilite/immobilisations/'); }
+  creerImmobilisation(data: unknown)         { return this.api.post<any>('/comptabilite/immobilisations/', data); }
+  modifierImmobilisation(id: string, data: unknown) { return this.api.put<any>(`/comptabilite/immobilisations/${id}/`, data); }
+  supprimerImmobilisation(id: string)        { return this.api.delete(`/comptabilite/immobilisations/${id}/`); }
+  amortirImmobilisation(id: string, data: unknown) { return this.api.post<any>(`/comptabilite/immobilisations/${id}/amortir/`, data); }
 }
