@@ -1171,7 +1171,7 @@ class BudgetView(APIView):
         """Somme des débits par mois pour un compte (et ses sous-comptes)."""
         qs = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
-            source__in=('CHARGE', 'PAIE'),
+            source__in=('CHARGE', 'PAIE', 'BUDGET'),
             debit__gt=0,
         ).filter(
             Q(no_compte=no_compte) | Q(no_compte__startswith=no_compte)
@@ -1310,15 +1310,15 @@ class BudgetComptabiliserView(APIView):
         lib_fourn    = f"Fournisseur ({compte_fournisseur})"
 
         for ordre, (nc, db, cr, lib) in enumerate([
-            (no_compte,         montant, 0,       f"{lib_compte} — {libelle}"),
-            (compte_fournisseur, 0,      montant, f"{lib_fourn} — {libelle}"),
-            (compte_fournisseur, montant, 0,      f"Règlement {lib_fourn} — {libelle}"),
-            (compte_tresorerie,  0,      montant, f"Règlement {lib_fourn} — {libelle}"),
+            (no_compte,          montant, 0,       f"{lib_compte} — {libelle}"),
+            (compte_fournisseur, 0,       montant, f"{lib_fourn} — {libelle}"),
+            (compte_fournisseur, montant, 0,       f"Règlement {lib_fourn} — {libelle}"),
+            (compte_tresorerie,  0,       montant, f"Règlement {lib_fourn} — {libelle}"),
         ], 1):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece, date_ecriture=date_str,
-                source='CHARGE', source_id=None,
+                source='BUDGET', source_id=None,
                 no_compte=nc, debit=db, credit=cr,
                 libelle=lib, ordre=ordre,
             )

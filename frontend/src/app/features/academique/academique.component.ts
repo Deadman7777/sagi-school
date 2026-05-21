@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { environment } from '../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
@@ -632,19 +633,32 @@ export class AcademiqueComponent implements OnInit {
   }
 
     telechargerBulletin(eleveId: string) {
-      const token    = localStorage.getItem('access_token');
-      const tenantId = localStorage.getItem('tenant_id') || '';
-      const annee    = '2025-2026';
-      const trimestre = this.trimestreResultats;
-      fetch(`http://127.0.0.1:8765/api/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`, {
-          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
-      })
-      .then(r => r.blob())
-      .then(blob => {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `bulletin_${trimestre}.pdf`;
-          a.click();
-      });
+    if (!this.trimestreResultats) {
+      alert('Sélectionnez un trimestre avant de télécharger le bulletin.');
+      return;
+    }
+    const token    = localStorage.getItem('access_token');
+    const tenantId = localStorage.getItem('tenant_id') || '';
+    const now      = new Date();
+    // Année scolaire dynamique : si mois >= 9 (sept.) → année N/N+1, sinon N-1/N
+    const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    const annee    = `${y}-${y + 1}`;
+    const trimestre = this.trimestreResultats;
+    const base = environment.apiUrl.replace(/\/api$/, '');
+    fetch(`${base}/api/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId }
+    })
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    })
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `bulletin_${trimestre}_${annee}.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    })
+    .catch(() => alert('Impossible de générer le bulletin. Vérifiez que les moyennes ont été calculées.'));
   }
 }

@@ -68,6 +68,7 @@ import { MessageService } from 'primeng/api';
         <button class="src-btn ava"  [class.active]="filtreSource === 'AVANCE'"  (click)="filtrerJournal('AVANCE')">💸 Avances</button>
         <button class="src-btn inv"  [class.active]="filtreSource === 'INVEST'"  (click)="filtrerJournal('INVEST')">🏗️ Investissement</button>
         <button class="src-btn amt"  [class.active]="filtreSource === 'AMORT'"   (click)="filtrerJournal('AMORT')">📉 Amortissements</button>
+        <button class="src-btn bgt"  [class.active]="filtreSource === 'BUDGET'"  (click)="filtrerJournal('BUDGET')">🎯 Budget mensuel</button>
         <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
           <button class="src-btn" (click)="chargerJournal()" style="border-color:#00d4aa;color:#00d4aa">↻ Actualiser</button>
@@ -1287,6 +1288,7 @@ import { MessageService } from 'primeng/api';
     .src-btn.ava.active   { color:#f59e0b; border-color:#f59e0b; }
     .src-btn.inv.active   { color:#7c3aed; border-color:#7c3aed; }
     .src-btn.amt.active   { color:#ef4444; border-color:#ef4444; }
+    .src-btn.bgt.active   { color:#00d4aa; border-color:#00d4aa; }
     /* Plan comptable */
     .compte-inactif td { opacity:0.45; }
     .badge-sys    { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; }
@@ -1408,7 +1410,6 @@ nouvelleCharge = {
     compte_fournisseur: '401',
 };
 planCharges = [
-    { label: '── CHARGES D\'EXPLOITATION ──', value: '' },
     { label: '601 — Achats de marchandises',          value: '601' },
     { label: '604 — Achats de fournitures',           value: '604' },
     { label: '606 — Eau, électricité, fournitures',   value: '606' },
@@ -1422,15 +1423,16 @@ planCharges = [
     { label: '625 — Déplacements et missions',        value: '625' },
     { label: '631 — Frais bancaires',                 value: '631' },
     { label: '641 — Impôts et taxes',                 value: '641' },
+    { label: '651 — Pertes sur créances',             value: '651' },
+    { label: '658 — Charges diverses',                value: '658' },
     { label: '661 — Salaires',                        value: '661' },
     { label: '662 — Charges sociales (IPRES/CSS)',    value: '662' },
     { label: '681 — Dotations aux amortissements',    value: '681' },
-    { label: '── ACQUISITIONS D\'IMMOBILISATIONS ──', value: '' },
-    { label: '221 — Bâtiments',                       value: '221' },
-    { label: '231 — Matériel et outillage',           value: '231' },
-    { label: '241 — Mobilier',                        value: '241' },
-    { label: '244 — Matériel informatique',           value: '244' },
-    { label: '245 — Matériel de transport',           value: '245' },
+    { label: '221 — Bâtiments (acquisition)',         value: '221' },
+    { label: '231 — Matériel et outillage (acq.)',    value: '231' },
+    { label: '241 — Mobilier (acquisition)',          value: '241' },
+    { label: '244 — Matériel informatique (acq.)',    value: '244' },
+    { label: '245 — Matériel de transport (acq.)',    value: '245' },
 ];
 planFournisseurs = [
     { label: '401 — Fournisseurs (dettes en compte)',           value: '401' },
@@ -1795,16 +1797,32 @@ comptesCredit = [
   }
 
   sauvegarderCharge() {
-    if (!this.nouvelleCharge.libelle || this.nouvelleCharge.montant <= 0) return;
+    if (!this.nouvelleCharge.no_compte) {
+      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Sélectionnez un compte de charge.' });
+      return;
+    }
+    if (!this.nouvelleCharge.libelle) {
+      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Saisissez un libellé.' });
+      return;
+    }
+    if (!this.nouvelleCharge.montant || this.nouvelleCharge.montant <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être supérieur à 0.' });
+      return;
+    }
     this.savingCharge.set(true);
     this.compta.creerCharge(this.nouvelleCharge).subscribe({
       next: () => {
         this.dialogChargeVisible = false;
         this.savingCharge.set(false);
+        this.msg.add({ severity: 'success', summary: 'Charge enregistrée',
+                       detail: `${this.nouvelleCharge.no_compte} — ${this.nouvelleCharge.libelle}` });
         this.chargerCharges();
         this.rafraichirComptabilite();
       },
-      error: () => this.savingCharge.set(false),
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Impossible d\'enregistrer la charge.' });
+        this.savingCharge.set(false);
+      },
     });
   }
 
