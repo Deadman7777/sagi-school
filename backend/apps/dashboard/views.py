@@ -133,6 +133,11 @@ class DashboardKPIView(APIView):
                                exercice.solde_initial_mobile)
 
         today  = timezone.now().date()
+        debut          = exercice.date_debut
+        months_elapsed = max(0, min(
+            (today.year - debut.year) * 12 + (today.month - debut.month), 10
+        ))
+
         eleves = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         ).annotate(
@@ -144,18 +149,32 @@ class DashboardKPIView(APIView):
                 Sum('paiements__montant_cantine')     +
                 Sum('paiements__montant_divers'),
                 Value(0), output_field=DecimalField()
-            )
+            ),
+            mensualites_payees_sql=Coalesce(
+                Sum('paiements__montant_mensualite'),
+                Value(0), output_field=DecimalField()
+            ),
         ).select_related('section')
 
-        urgent = attention = ok = 0
+        critique = urgent = attention = ok = a_jour = 0
         for e in eleves:
-            reste = float(e.total_attendu) - float(e.total_paye_sql or 0)
-            if reste <= 0:
-                ok += 1; continue
-            jours = (today - e.date_inscription).days
-            if jours > 60:   urgent    += 1
-            elif jours > 30: attention += 1
-            else:            ok        += 1
+            total = float(e.total_attendu)
+            paye  = float(e.total_paye_sql or 0)
+            if total <= 0 or paye >= total:
+                a_jour += 1; continue
+            mensualite = float(e.section.frais_mensualite) if e.section else 0
+            if mensualite > 0:
+                mens_payees = float(e.mensualites_payees_sql or 0)
+                arrieres    = max(0.0, months_elapsed * mensualite - mens_payees)
+                if arrieres <= 0:
+                    ok += 1
+                else:
+                    nb_arr = arrieres / mensualite
+                    if nb_arr * 30 >= 60 and nb_arr >= 2: critique   += 1
+                    elif nb_arr * 30 >= 30 and nb_arr >= 1: urgent    += 1
+                    else:                                    attention += 1
+            else:
+                ok += 1
 
         modes_raw = paiements.values('mode_paiement').annotate(
             nb=Count('id'),
@@ -203,16 +222,18 @@ class DashboardKPIView(APIView):
                 'taux_recouvrement':   taux_recouvrement,
             },
             'eleves': {
-                'total':        eleves.count(),
-                'inscrits':     statuts.get('INSCRIT',   0),
-                'abandonnes':   statuts.get('ABANDONNE', 0),
-                'transferes':   statuts.get('TRANSFERE', 0),
-                'diplomes':     statuts.get('DIPLOME',   0),
-                'urgent':       urgent,
-                'attention':    attention,
-                'ok':           ok,
-                'garcons':      eleves.filter(genre='G').count(),
-                'filles':       eleves.filter(genre='F').count(),
+                'total':      eleves.count(),
+                'inscrits':   statuts.get('INSCRIT',   0),
+                'abandonnes': statuts.get('ABANDONNE', 0),
+                'transferes': statuts.get('TRANSFERE', 0),
+                'diplomes':   statuts.get('DIPLOME',   0),
+                'critique':   critique,
+                'urgent':     urgent,
+                'attention':  attention,
+                'ok':         ok,
+                'a_jour':     a_jour,
+                'garcons':    eleves.filter(genre='G').count(),
+                'filles':     eleves.filter(genre='F').count(),
             },
             'prises_en_charge': {
                 'total':       pec_nb,
@@ -244,6 +265,11 @@ class DashboardAlerteView(APIView):
             return Response([])
 
         today  = timezone.now().date()
+        debut  = exercice.date_debut
+        months_elapsed = max(0, min(
+            (today.year - debut.year) * 12 + (today.month - debut.month), 10
+        ))
+
         eleves = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         ).annotate(
@@ -255,7 +281,11 @@ class DashboardAlerteView(APIView):
                 Sum('paiements__montant_cantine')     +
                 Sum('paiements__montant_divers'),
                 Value(0), output_field=DecimalField()
-            )
+            ),
+            mensualites_payees_sql=Coalesce(
+                Sum('paiements__montant_mensualite'),
+                Value(0), output_field=DecimalField()
+            ),
         ).select_related('section')
 
         data = []
@@ -264,14 +294,34 @@ class DashboardAlerteView(APIView):
             paye  = float(e.total_paye_sql or 0)
             reste = total - paye
             if reste <= 0: continue
-            ratio  = paye / total if total > 0 else 0
-            alerte = 'URGENT' if ratio < 0.5 else 'ATTENTION'
+
+            mensualite  = float(e.section.frais_mensualite) if e.section else 0
+            nb_arrieres = 0.0
+
+            if mensualite > 0:
+                mens_payees = float(e.mensualites_payees_sql or 0)
+                arrieres    = max(0.0, months_elapsed * mensualite - mens_payees)
+                if arrieres <= 0:
+                    continue  # aucun arriéré — pas d'alerte
+                nb_arrieres  = arrieres / mensualite
+                jours_retard = nb_arrieres * 30
+                if jours_retard >= 60 and nb_arrieres >= 2: alerte = 'CRITIQUE'
+                elif jours_retard >= 30 and nb_arrieres >= 1: alerte = 'URGENT'
+                else:                                          alerte = 'ATTENTION'
+            else:
+                ratio  = paye / total if total > 0 else 0
+                alerte = 'URGENT' if ratio < 0.5 else 'ATTENTION'
+
             data.append({
-                'id': str(e.id), 'nom_complet': e.nom_complet,
-                'section': e.section.nom if e.section else '',
-                'telephone': e.telephone_pere,
-                'reste_a_payer': reste, 'niveau_alerte': alerte,
+                'id':                    str(e.id),
+                'nom_complet':           e.nom_complet,
+                'section':               e.section.nom if e.section else '',
+                'telephone':             e.telephone_pere,
+                'reste_a_payer':         reste,
+                'niveau_alerte':         alerte,
+                'nb_mensualites_arrieres': round(nb_arrieres, 1),
             })
 
-        data.sort(key=lambda x: x['reste_a_payer'], reverse=True)
-        return Response(data[:20])
+        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2}
+        data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['reste_a_payer']))
+        return Response(data[:30])

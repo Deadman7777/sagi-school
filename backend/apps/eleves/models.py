@@ -89,10 +89,41 @@ class Eleve(TenantModel):
 
     @property
     def niveau_alerte(self):
+        from django.utils import timezone
+        from django.db.models import Sum
+
         total = float(self.total_attendu)
         paye  = float(self.total_paye)
+
         if total <= 0 or paye >= total:
+            return 'A_JOUR'
+
+        mensualite = float(self.section.frais_mensualite) if self.section else 0
+
+        if mensualite <= 0:
+            ratio = paye / total if total > 0 else 0
+            return 'URGENT' if ratio < 0.5 else 'ATTENTION'
+
+        today  = timezone.now().date()
+        debut  = self.exercice.date_debut
+        months = max(0, min(
+            (today.year - debut.year) * 12 + (today.month - debut.month),
+            10
+        ))
+
+        mensualites_payees = float(
+            self.paiements.aggregate(t=Sum('montant_mensualite'))['t'] or 0
+        )
+        arrieres = max(0.0, months * mensualite - mensualites_payees)
+
+        if arrieres <= 0:
             return 'OK'
-        if paye / total < 0.5:
+
+        nb_arrieres  = arrieres / mensualite
+        jours_retard = nb_arrieres * 30
+
+        if jours_retard >= 60 and nb_arrieres >= 2:
+            return 'CRITIQUE'
+        if jours_retard >= 30 and nb_arrieres >= 1:
             return 'URGENT'
         return 'ATTENTION'

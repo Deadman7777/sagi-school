@@ -113,16 +113,34 @@ class Immobilisation(TenantModel):
         ('2848', '2848 — Amort. Autres immo. corporelles'),
     ]
 
-    no_bien                = models.CharField(max_length=20, unique=False)
-    libelle                = models.CharField(max_length=200)
-    date_entree            = models.DateField()
-    valeur_entree          = models.DecimalField(max_digits=15, decimal_places=2)
-    duree_utilisation      = models.IntegerField(help_text='Années')
-    mode_amortissement     = models.CharField(max_length=10, choices=MODE_CHOICES, default='LINEAIRE')
+    COMPTE_FOURN_CHOICES = [
+        ('404', '404 — Fournisseurs d\'immobilisations'),
+        ('481', '481 — Fournisseurs d\'immo. (autre tiers)'),
+    ]
+    MODE_REGLEMENT_CHOICES = [
+        ('',            'Non réglé (à payer)'),
+        ('ESPECE',      'Espèce'),
+        ('WAVE',        'Wave'),
+        ('ORANGE_MONEY','Orange Money'),
+        ('FREE_MONEY',  'Free Money'),
+        ('VIREMENT',    'Virement'),
+        ('CHEQUE',      'Chèque'),
+    ]
+
+    no_bien                  = models.CharField(max_length=20, unique=False)
+    libelle                  = models.CharField(max_length=200)
+    date_entree              = models.DateField()
+    valeur_entree            = models.DecimalField(max_digits=15, decimal_places=2)
+    duree_utilisation        = models.IntegerField(help_text='Années')
+    mode_amortissement       = models.CharField(max_length=10, choices=MODE_CHOICES, default='LINEAIRE')
     no_compte_immobilisation = models.CharField(max_length=10, default='231')
     no_compte_amortissement  = models.CharField(max_length=10, default='2831')
-    cumul_amortissements   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    est_cede               = models.BooleanField(default=False)
+    cumul_amortissements     = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    est_cede                 = models.BooleanField(default=False)
+    # Règlement
+    compte_fournisseur       = models.CharField(max_length=5, choices=COMPTE_FOURN_CHOICES, default='404')
+    mode_reglement           = models.CharField(max_length=20, choices=MODE_REGLEMENT_CHOICES, blank=True, default='')
+    compte_tresorerie        = models.CharField(max_length=10, blank=True, default='')
 
     class Meta:
         db_table = 'immobilisations'

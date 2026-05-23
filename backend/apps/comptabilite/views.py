@@ -1428,6 +1428,10 @@ def _immo_to_dict(immo):
         'no_compte_immobilisation': immo.no_compte_immobilisation,
         'no_compte_amortissement':  immo.no_compte_amortissement,
         'libelle_compte_immo':   PLAN_IMMO.get(immo.no_compte_immobilisation, immo.no_compte_immobilisation),
+        'compte_fournisseur':    immo.compte_fournisseur,
+        'mode_reglement':        immo.mode_reglement,
+        'compte_tresorerie':     immo.compte_tresorerie,
+        'est_regle':             bool(immo.mode_reglement),
         'est_cede':              immo.est_cede,
         'est_amorti':            immo.est_amorti,
     }
@@ -1489,9 +1493,15 @@ class ImmobilisationView(APIView):
         nums = _re.findall(r'\d+', last.no_bien if last else 'IMM-0000')
         no_bien = f"IMM-{int(nums[-1]) + 1:04d}" if nums else 'IMM-0001'
 
-        date_str   = data.get('date_entree', str(timezone.now().date()))
-        no_immo    = data.get('no_compte_immobilisation', '231')
-        no_amort   = data.get('no_compte_amortissement',  '2831')
+        date_str           = data.get('date_entree', str(timezone.now().date()))
+        no_immo            = data.get('no_compte_immobilisation', '231')
+        no_amort           = data.get('no_compte_amortissement',  '2831')
+        compte_fournisseur = data.get('compte_fournisseur', '404')
+        mode_reglement     = data.get('mode_reglement', '')
+        compte_tresorerie  = data.get('compte_tresorerie', '571') if mode_reglement else ''
+
+        if compte_fournisseur not in ('404', '481'):
+            compte_fournisseur = '404'
 
         immo = Immobilisation.objects.create(
             tenant=tenant,
@@ -1503,19 +1513,33 @@ class ImmobilisationView(APIView):
             mode_amortissement=data.get('mode_amortissement', 'LINEAIRE'),
             no_compte_immobilisation=no_immo,
             no_compte_amortissement=no_amort,
+            compte_fournisseur=compte_fournisseur,
+            mode_reglement=mode_reglement,
+            compte_tresorerie=compte_tresorerie,
         )
 
-        # Écriture d'acquisition : Débit 2xx / Crédit 404
         from django.db.models import Max as _Max
         last_piece = JournalEntry.objects.filter(tenant=tenant, source='INVEST').aggregate(_Max('no_piece'))['no_piece__max']
         nums2 = _re.findall(r'\d+', last_piece or 'INV-0000')
         no_piece = f"INV-{int(nums2[-1]) + 1:04d}" if nums2 else 'INV-0001'
 
-        libelle_immo = PLAN_IMMO.get(no_immo, no_immo)
-        for ordre, (nc, db, cr, lib) in enumerate([
-            (no_immo, valeur, 0,      f"Acquisition {libelle_immo} — {libelle}"),
-            ('404',   0,      valeur, f"404 Fournisseurs immo — {libelle}"),
-        ], 1):
+        libelle_immo  = PLAN_IMMO.get(no_immo, no_immo)
+        lib_fourn     = f"{compte_fournisseur} Fournisseurs immo"
+
+        # Écriture de constatation (engagement) : Débit 2xx / Crédit 404|481
+        ecritures = [
+            (no_immo,           valeur, 0,      f"Acquisition {libelle_immo} — {libelle}", 1),
+            (compte_fournisseur, 0,     valeur, f"{lib_fourn} — {libelle}",                2),
+        ]
+
+        # Écriture de règlement : Débit 404|481 / Crédit 5xx (uniquement si règlement immédiat)
+        if mode_reglement:
+            ecritures += [
+                (compte_fournisseur, valeur, 0,      f"Règlement {lib_fourn} — {libelle}",        3),
+                (compte_tresorerie,  0,      valeur, f"Règlement par {mode_reglement} — {libelle}", 4),
+            ]
+
+        for nc, db, cr, lib, ordre in ecritures:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece, date_ecriture=date_str,
