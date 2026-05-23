@@ -39,6 +39,11 @@ class Eleve(TenantModel):
         ('FAMILLE_DEMUNIE', 'Famille démunie'),
         ('AUTRE',           'Autre'),
     ]
+    TYPE_PEC_CHOICES = [
+        ('INSCRIPTION',  "Frais d'inscription uniquement"),
+        ('MENSUALITES',  'Mensualités uniquement'),
+        ('TOTALE',       'Prise en charge totale'),
+    ]
 
     exercice              = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
     section               = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
@@ -54,10 +59,17 @@ class Eleve(TenantModel):
     telephone_mere        = models.CharField(max_length=20, blank=True)
     date_inscription      = models.DateField(auto_now_add=True)
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
-    # Prise en charge sociale
+    # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
-    taux_prise_en_charge  = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='% de réduction appliquée')
     obs_prise_en_charge   = models.TextField(blank=True)
+    # Prise en charge — type et taux détaillés
+    type_pec              = models.CharField(max_length=20, choices=TYPE_PEC_CHOICES, blank=True, null=True)
+    taux_pec_inscription  = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                                 help_text='% réduction sur frais inscription')
+    taux_pec_mensualite   = models.DecimalField(max_digits=5, decimal_places=2, default=0,
+                                                 help_text='% réduction sur mensualités')
+    # Conservé pour compatibilité (ancienne valeur globale)
+    taux_prise_en_charge  = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     class Meta:
         db_table = 'eleves'
@@ -66,9 +78,49 @@ class Eleve(TenantModel):
     def __str__(self):
         return self.nom_complet
 
+    # ── Prise en charge ──────────────────────────────────────────────────
+    @property
+    def montant_pec_inscription(self):
+        if not self.section or not self.type_pec:
+            return 0.0
+        if self.type_pec in ('INSCRIPTION', 'TOTALE'):
+            return round(float(self.section.frais_inscription) * float(self.taux_pec_inscription) / 100, 2)
+        return 0.0
+
+    @property
+    def montant_pec_mensualite_mensuel(self):
+        """Réduction sur une mensualité (montant mensuel)."""
+        if not self.section or not self.type_pec:
+            return 0.0
+        if self.type_pec in ('MENSUALITES', 'TOTALE'):
+            return round(float(self.section.frais_mensualite) * float(self.taux_pec_mensualite) / 100, 2)
+        return 0.0
+
+    @property
+    def montant_pec_annuel(self):
+        """Total annuel pris en charge (inscription + 10 mois × réduction mensualité)."""
+        return round(self.montant_pec_inscription + self.montant_pec_mensualite_mensuel * 10, 2)
+
+    @property
+    def total_theorique(self):
+        """Total annuel brut sans prise en charge."""
+        return float(self.section.total_annuel) if self.section else 0.0
+
+    @property
+    def frais_mensualite_effectif(self):
+        """Mensualité réelle après prise en charge."""
+        if not self.section:
+            return 0.0
+        base = float(self.section.frais_mensualite)
+        if self.type_pec in ('MENSUALITES', 'TOTALE') and self.taux_pec_mensualite:
+            return round(base * (1 - float(self.taux_pec_mensualite) / 100), 2)
+        return base
+
+    # ── Montants attendus / payés ─────────────────────────────────────────
     @property
     def total_attendu(self):
-        return self.section.total_annuel if self.section else 0
+        """Total annuel réel attendu après déduction de la prise en charge."""
+        return round(max(self.total_theorique - self.montant_pec_annuel, 0.0), 2)
 
     @property
     def total_paye(self):
@@ -98,7 +150,7 @@ class Eleve(TenantModel):
         if total <= 0 or paye >= total:
             return 'A_JOUR'
 
-        mensualite = float(self.section.frais_mensualite) if self.section else 0
+        mensualite = self.frais_mensualite_effectif  # tient compte de la prise en charge
 
         if mensualite <= 0:
             ratio = paye / total if total > 0 else 0

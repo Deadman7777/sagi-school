@@ -151,19 +151,31 @@ class EleveViewSet(viewsets.ModelViewSet):
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
         section  = eleve.section
-        taux_pec = float(eleve.taux_prise_en_charge or 0) / 100.0  # 50% → 0.50
+        type_pec         = eleve.type_pec or ''
+        taux_inscription = float(eleve.taux_pec_inscription or 0) / 100.0
+        taux_mensualite  = float(eleve.taux_pec_mensualite  or 0) / 100.0
 
         # ── Frais bruts de la section ──────────────────────────────────
         fees_bruts = {
-            'inscription':  float(section.frais_inscription)  if section else 0,
-            'mensualite':   float(section.frais_mensualite)   if section else 0,
-            'uniforme':     float(section.frais_uniforme)     if section else 0,
-            'fournitures':  float(section.frais_fournitures)  if section else 0,
-            'yendu':        float(section.frais_yendu)        if section else 0,
+            'inscription': float(section.frais_inscription) if section else 0,
+            'mensualite':  float(section.frais_mensualite)  if section else 0,
+            'uniforme':    float(section.frais_uniforme)    if section else 0,
+            'fournitures': float(section.frais_fournitures) if section else 0,
+            'yendu':       float(section.frais_yendu)       if section else 0,
         }
 
-        # ── Frais nets après prise en charge (réduction) ───────────────
-        fees_nets = {k: round(v * (1.0 - taux_pec), 2) for k, v in fees_bruts.items()}
+        # ── Frais nets selon le type de prise en charge ────────────────
+        def _appliquer_pec(nature, montant):
+            if type_pec == 'TOTALE':
+                if nature == 'inscription': return round(montant * (1 - taux_inscription), 2)
+                if nature == 'mensualite':  return round(montant * (1 - taux_mensualite),  2)
+            elif type_pec == 'INSCRIPTION' and nature == 'inscription':
+                return round(montant * (1 - taux_inscription), 2)
+            elif type_pec == 'MENSUALITES' and nature == 'mensualite':
+                return round(montant * (1 - taux_mensualite), 2)
+            return montant
+
+        fees_nets = {k: _appliquer_pec(k, v) for k, v in fees_bruts.items()}
 
         # ── Déjà payé par catégorie pour cet exercice ──────────────────
         if exercice:
@@ -200,9 +212,14 @@ class EleveViewSet(viewsets.ModelViewSet):
             'statut':         eleve.statut,
             'section_nom':    section.nom if section else '',
             # Prise en charge
-            'prise_en_charge':     eleve.prise_en_charge or '',
-            'taux_pec':            float(eleve.taux_prise_en_charge or 0),
-            'obs_prise_en_charge': eleve.obs_prise_en_charge or '',
+            'prise_en_charge':        eleve.prise_en_charge or '',
+            'type_pec':               eleve.type_pec or '',
+            'taux_pec_inscription':   float(eleve.taux_pec_inscription or 0),
+            'taux_pec_mensualite':    float(eleve.taux_pec_mensualite  or 0),
+            'montant_pec_inscription':eleve.montant_pec_inscription,
+            'montant_pec_mensuel':    eleve.montant_pec_mensualite_mensuel,
+            'montant_pec_annuel':     eleve.montant_pec_annuel,
+            'obs_prise_en_charge':    eleve.obs_prise_en_charge or '',
             # Montants
             'fees_bruts':    fees_bruts,
             'fees_nets':     fees_nets,
@@ -425,6 +442,117 @@ class SuiviMensuelView(APIView):
             'sections': sections_data,
             'creances': creances[:20],
             'eleve':    eleve_data,
+        })
+
+
+class PriseEnChargeStatsView(APIView):
+    """Statistiques et impact financier des prises en charge."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False
+        ).order_by('-date_debut').first()
+
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        eleves_tous = Eleve.objects.filter(
+            tenant=tenant, exercice=exercice, statut='INSCRIT'
+        ).select_related('section')
+
+        # ── Totaux globaux ────────────────────────────────────────────────
+        total_theorique_global   = 0.0
+        total_attendu_global     = 0.0
+        cout_mensuel_pec_global  = 0.0
+        cout_annuel_pec_global   = 0.0
+
+        for e in eleves_tous:
+            total_theorique_global  += e.total_theorique
+            total_attendu_global    += float(e.total_attendu)
+            cout_mensuel_pec_global += e.montant_pec_mensualite_mensuel
+            cout_annuel_pec_global  += e.montant_pec_annuel
+
+        perte_annuelle = round(total_theorique_global - total_attendu_global, 2)
+
+        # ── Élèves sous prise en charge ───────────────────────────────────
+        eleves_pec = [e for e in eleves_tous if e.type_pec]
+        nb_pec     = len(eleves_pec)
+
+        # Par type
+        from collections import Counter
+        compteur_type  = Counter(e.type_pec                  for e in eleves_pec if e.type_pec)
+        compteur_motif = Counter(e.prise_en_charge            for e in eleves_pec if e.prise_en_charge)
+
+        nb_par_type  = [{'type':  t, 'libelle': dict(Eleve.TYPE_PEC_CHOICES).get(t, t), 'nb': n}
+                        for t, n in sorted(compteur_type.items())]
+        nb_par_motif = [{'motif': m, 'libelle': dict(Eleve.PRISE_EN_CHARGE_CHOICES).get(m, m), 'nb': n}
+                        for m, n in sorted(compteur_motif.items())]
+
+        # Paiements réels des élèves en prise en charge
+        from apps.paiements.models import Paiement
+        from django.db.models import Sum as DSum
+        ids_pec = [e.id for e in eleves_pec]
+        pmt_pec = {}
+        if ids_pec:
+            rows = Paiement.objects.filter(
+                tenant=tenant, exercice=exercice, eleve_id__in=ids_pec
+            ).values('eleve_id').annotate(
+                paye=DSum('montant_inscription') + DSum('montant_mensualite') +
+                     DSum('montant_uniforme')    + DSum('montant_fournitures') +
+                     DSum('montant_cantine')     + DSum('montant_divers')
+            )
+            pmt_pec = {r['eleve_id']: float(r['paye'] or 0) for r in rows}
+
+        # ── Détail par élève ──────────────────────────────────────────────
+        detail = []
+        for e in sorted(eleves_pec, key=lambda x: x.nom_complet):
+            paye  = pmt_pec.get(e.id, 0.0)
+            reste = round(float(e.total_attendu) - paye, 2)
+            detail.append({
+                'eleve_id':               str(e.id),
+                'nom_complet':            e.nom_complet,
+                'section':                e.section.nom if e.section else '—',
+                'motif':                  e.prise_en_charge or '',
+                'type_pec':               e.type_pec or '',
+                'taux_pec_inscription':   float(e.taux_pec_inscription or 0),
+                'taux_pec_mensualite':    float(e.taux_pec_mensualite  or 0),
+                'montant_pec_inscription':e.montant_pec_inscription,
+                'montant_pec_mensuel':    e.montant_pec_mensualite_mensuel,
+                'montant_pec_annuel':     e.montant_pec_annuel,
+                'total_theorique':        e.total_theorique,
+                'total_attendu':          float(e.total_attendu),
+                'total_paye':             paye,
+                'reste_a_payer':          reste,
+                'niveau_alerte':          e.niveau_alerte,
+            })
+
+        # ── Recettes mensuelles théoriques vs réelles ─────────────────────
+        nb_eleves_total = eleves_tous.count()
+        mensualite_theorique_mensuelle = sum(
+            float(e.section.frais_mensualite) for e in eleves_tous if e.section
+        )
+        mensualite_reelle_mensuelle = sum(
+            e.frais_mensualite_effectif for e in eleves_tous
+        )
+
+        return Response({
+            'nb_total_eleves':    nb_eleves_total,
+            'nb_eleves_pec':      nb_pec,
+            'nb_par_type':        nb_par_type,
+            'nb_par_motif':       nb_par_motif,
+            'financier': {
+                'recettes_theoriques_annuelles':    round(total_theorique_global, 2),
+                'recettes_reelles_attendues':        round(total_attendu_global, 2),
+                'perte_annuelle_pec':                perte_annuelle,
+                'cout_mensuel_pec':                  round(cout_mensuel_pec_global, 2),
+                'cout_annuel_pec':                   round(cout_annuel_pec_global, 2),
+                'mensualite_theorique_mensuelle':     round(mensualite_theorique_mensuelle, 2),
+                'mensualite_reelle_mensuelle':        round(mensualite_reelle_mensuelle, 2),
+                'ecart_mensuel':                      round(mensualite_theorique_mensuelle - mensualite_reelle_mensuelle, 2),
+            },
+            'detail': detail,
         })
 
 

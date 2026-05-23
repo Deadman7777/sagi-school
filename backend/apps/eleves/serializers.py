@@ -12,11 +12,15 @@ class SectionSerializer(serializers.ModelSerializer):
 
 
 class EleveSerializer(serializers.ModelSerializer):
-    section_nom   = serializers.CharField(source='section.nom', read_only=True)
-    total_attendu = serializers.ReadOnlyField()
-    total_paye    = serializers.SerializerMethodField()
-    reste_a_payer = serializers.SerializerMethodField()
-    niveau_alerte = serializers.SerializerMethodField()
+    section_nom                  = serializers.CharField(source='section.nom', read_only=True)
+    total_theorique              = serializers.ReadOnlyField()
+    total_attendu                = serializers.ReadOnlyField()
+    montant_pec_inscription      = serializers.ReadOnlyField()
+    montant_pec_mensualite_mensuel = serializers.ReadOnlyField()
+    montant_pec_annuel           = serializers.ReadOnlyField()
+    total_paye                   = serializers.SerializerMethodField()
+    reste_a_payer                = serializers.SerializerMethodField()
+    niveau_alerte                = serializers.SerializerMethodField()
 
     class Meta:
         model  = Eleve
@@ -32,17 +36,11 @@ class EleveSerializer(serializers.ModelSerializer):
         return float(obj.total_paye)
 
     def get_reste_a_payer(self, obj):
-        paye = self.get_total_paye(obj)
-        return float(obj.total_attendu) - paye
+        return round(float(obj.total_attendu) - self.get_total_paye(obj), 2)
 
     def get_niveau_alerte(self, obj):
-        total = float(obj.total_attendu)
-        paye  = self.get_total_paye(obj)
-        if total <= 0 or paye >= total:
-            return 'OK'
-        if paye / total < 0.5:
-            return 'URGENT'
-        return 'ATTENTION'
+        # Délègue au modèle pour cohérence avec le dashboard
+        return obj.niveau_alerte
 
 class SectionSerializer(serializers.ModelSerializer):
     total_annuel = serializers.ReadOnlyField()
