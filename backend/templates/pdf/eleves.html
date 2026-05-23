@@ -2,38 +2,94 @@
 {% block doc_title %}Liste des Élèves{% endblock %}
 {% block content %}
 
-<div class="section-title">👥 BASE DES ÉLÈVES — {{ exercice.annee_scolaire }}</div>
+<!-- KPIs financiers -->
+<table class="kpi-table">
+  <tr>
+    <td>
+      <div class="kb-label">Total Élèves</div>
+      <div class="kb-val kb-teal">{{ nb_eleves }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total Attendu</div>
+      <div class="kb-val kb-blue">{{ total_attendu|floatformat:0 }} FCFA</div>
+    </td>
+    <td>
+      <div class="kb-label">Total Payé</div>
+      <div class="kb-val kb-green">{{ total_paye|floatformat:0 }} FCFA</div>
+    </td>
+    <td>
+      <div class="kb-label">Total Reste</div>
+      <div class="kb-val {% if total_reste > 0 %}red{% else %}kb-green{% endif %}">{{ total_reste|floatformat:0 }} FCFA</div>
+    </td>
+  </tr>
+</table>
+
+<!-- KPIs alertes -->
+{% if nb_critique or nb_urgent or nb_attention %}
+<table class="kpi-table">
+  <tr>
+    <td><div class="kb-label">Critiques</div><div class="kb-val red">{{ nb_critique }}</div></td>
+    <td><div class="kb-label">Urgents</div><div class="kb-val kb-orange">{{ nb_urgent }}</div></td>
+    <td><div class="kb-label">En attention</div><div class="kb-val" style="color:#ca8a04">{{ nb_attention }}</div></td>
+    <td></td>
+  </tr>
+</table>
+{% endif %}
+
+<div class="section-title">
+  BASE DES ÉLÈVES — {{ exercice.annee_scolaire }}
+  {% if filtre_statut %} &nbsp;·&nbsp; Statut : {{ filtre_statut }}{% endif %}
+  {% if filtre_alerte %} &nbsp;·&nbsp; Alerte : {{ filtre_alerte }}{% endif %}
+</div>
+
 <table>
   <thead>
     <tr>
-      <th>N°</th><th>Nom Complet</th><th>Section</th><th>Genre</th>
-      <th class="text-right">Total Attendu</th>
-      <th class="text-right">Payé</th>
-      <th class="text-right">Reste</th>
-      <th>Alerte</th>
+      <th style="width:4%">N°</th>
+      <th style="width:20%">Nom Complet</th>
+      <th style="width:11%">Section</th>
+      <th style="width:4%" class="text-center">G/F</th>
+      <th style="width:9%">Statut</th>
+      <th style="width:4%" class="text-center">PEC</th>
+      <th style="width:13%" class="text-right">Attendu (FCFA)</th>
+      <th style="width:12%" class="text-right">Payé (FCFA)</th>
+      <th style="width:12%" class="text-right">Reste (FCFA)</th>
+      <th style="width:11%">Alerte</th>
     </tr>
   </thead>
   <tbody>
     {% for e in eleves %}
-    {% with paye=e.total_paye_sql|default:0 attendu=e.total_attendu %}
     <tr>
       <td>{{ e.numero }}</td>
       <td class="bold">{{ e.nom_complet }}</td>
-      <td>{{ e.section.nom }}</td>
+      <td>{{ e.section_nom }}</td>
       <td class="text-center">{{ e.genre }}</td>
-      <td class="text-right">{{ attendu|floatformat:0 }}</td>
-      <td class="text-right green">{{ paye|floatformat:0 }}</td>
-      <td class="text-right {% if attendu > paye %}red{% else %}green{% endif %}">
-        {{ attendu|add:"-"|add:paye|floatformat:0 }}
-      </td>
-      <td>
-        {% if attendu <= paye %}✅
-        {% else %}⚠️{% endif %}
+      <td style="font-size:9px">{{ e.statut }}</td>
+      <td class="text-center">{% if e.prise_en_charge %}&#10003;{% else %}—{% endif %}</td>
+      <td class="text-right">{{ e.total_attendu|floatformat:0 }}</td>
+      <td class="text-right green">{{ e.total_paye|floatformat:0 }}</td>
+      <td class="text-right {% if e.reste > 0 %}red{% else %}green{% endif %}">{{ e.reste|floatformat:0 }}</td>
+      <td style="font-size:9px;font-weight:bold;
+        {% if e.niveau_alerte == 'CRITIQUE' %}color:#dc2626;
+        {% elif e.niveau_alerte == 'URGENT' %}color:#ea580c;
+        {% elif e.niveau_alerte == 'ATTENTION' %}color:#ca8a04;
+        {% elif e.niveau_alerte == 'OK' %}color:#2563eb;
+        {% else %}color:#10b981;{% endif %}">
+        {% if e.niveau_alerte == 'A_JOUR' %}A JOUR
+        {% else %}{{ e.niveau_alerte }}{% endif %}
       </td>
     </tr>
-    {% endwith %}
     {% endfor %}
   </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="6" class="bold">TOTAUX — {{ nb_eleves }} élève(s)</td>
+      <td class="text-right bold">{{ total_attendu|floatformat:0 }}</td>
+      <td class="text-right bold green">{{ total_paye|floatformat:0 }}</td>
+      <td class="text-right bold {% if total_reste > 0 %}red{% else %}green{% endif %}">{{ total_reste|floatformat:0 }}</td>
+      <td></td>
+    </tr>
+  </tfoot>
 </table>
 
 {% endblock %}

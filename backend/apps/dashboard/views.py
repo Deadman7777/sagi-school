@@ -325,3 +325,106 @@ class DashboardAlerteView(APIView):
         POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2}
         data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['reste_a_payer']))
         return Response(data[:30])
+
+
+class DashboardTresorerieCanauView(APIView):
+    """Solde de trésorerie par canal de paiement — encaissements vs décaissements."""
+    permission_classes = [IsAuthenticated]
+
+    # (mode_paiement, libellé, compte_trésorerie, clé_solde_initial)
+    CANAUX = [
+        ('ESPECE',       'Espèce',       '571',  'caisse'),
+        ('WAVE',         'Wave',          '5521', 'mobile'),
+        ('ORANGE_MONEY', 'Orange Money',  '5522', None),
+        ('FREE_MONEY',   'Free Money',    '5523', None),
+        ('VIREMENT',     'Virement',      '521',  'banque'),
+        ('CHEQUE',       'Chèque',        '521',  None),
+    ]
+
+    def get(self, request):
+        if request.user.role == 'SUPER_ADMIN':
+            return Response({'error': 'Non disponible pour super admin'}, status=400)
+
+        tenant = get_tenant(request)
+        if not tenant:
+            return Response({'exercice': None, 'canaux': [], 'totaux': {}})
+
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False
+        ).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'exercice': None, 'canaux': [], 'totaux': {}})
+
+        soldes_initiaux = {
+            'caisse': float(exercice.solde_initial_caisse),
+            'banque': float(exercice.solde_initial_banque),
+            'mobile': float(exercice.solde_initial_mobile),
+        }
+
+        # Encaissements par canal (source: table Paiement — mode_paiement fiable)
+        enc_qs = Paiement.objects.filter(
+            tenant=tenant, exercice=exercice
+        ).values('mode_paiement').annotate(
+            nb=Count('id'),
+            montant=Sum('montant_inscription') + Sum('montant_mensualite') +
+                    Sum('montant_uniforme')    + Sum('montant_fournitures') +
+                    Sum('montant_cantine')     + Sum('montant_divers')
+        )
+        enc_by_canal = {
+            e['mode_paiement']: {'nb': e['nb'], 'montant': float(e['montant'] or 0)}
+            for e in enc_qs
+        }
+
+        # Décaissements par compte tréso (crédits sur comptes de trésorerie = sorties)
+        # Les débits sur comptes tréso = encaissements paiements (source PAIEMENT) → exclus ici
+        dec_qs = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            no_compte__in=('571', '5521', '5522', '5523', '521'),
+            credit__gt=0
+        ).exclude(source='PAIEMENT').values('no_compte').annotate(montant=Sum('credit'))
+        dec_by_compte = {d['no_compte']: float(d['montant'] or 0) for d in dec_qs}
+
+        canaux_result = []
+        dec_521_attribue = False  # évite double-comptage VIREMENT + CHEQUE sur même compte 521
+
+        for mode, libelle, compte, initial_key in self.CANAUX:
+            enc          = enc_by_canal.get(mode, {'nb': 0, 'montant': 0.0})
+            solde_initial = soldes_initiaux.get(initial_key, 0.0) if initial_key else 0.0
+
+            if compte == '521':
+                if not dec_521_attribue:
+                    decaissements = dec_by_compte.get('521', 0.0)
+                    dec_521_attribue = True
+                else:
+                    decaissements = 0.0
+            else:
+                decaissements = dec_by_compte.get(compte, 0.0)
+
+            solde = round(solde_initial + enc['montant'] - decaissements, 2)
+
+            if enc['nb'] > 0 or solde_initial > 0 or decaissements > 0:
+                canaux_result.append({
+                    'canal':         mode,
+                    'libelle':       libelle,
+                    'compte':        compte,
+                    'nb':            enc['nb'],
+                    'solde_initial': round(solde_initial, 2),
+                    'encaissements': round(enc['montant'], 2),
+                    'decaissements': round(decaissements, 2),
+                    'solde':         solde,
+                })
+
+        total_initial = sum(soldes_initiaux.values())
+        total_enc     = sum(c['encaissements'] for c in canaux_result)
+        total_dec     = sum(c['decaissements'] for c in canaux_result)
+
+        return Response({
+            'exercice': exercice.annee_scolaire,
+            'canaux':   canaux_result,
+            'totaux': {
+                'solde_initial': round(total_initial, 2),
+                'encaissements': round(total_enc, 2),
+                'decaissements': round(total_dec, 2),
+                'solde':         round(total_initial + total_enc - total_dec, 2),
+            },
+        })

@@ -236,8 +236,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <tr>
               <td class="mono bold" style="color:#f59e0b">{{ r.rang }}e</td>
               <td class="bold">{{ r.eleve_nom }}</td>
-              <td class="mono" *ngFor="let m of r.matieres">
-                {{ m.moyenne !== null ? m.moyenne : '—' }}
+              <td class="mono" *ngFor="let m of r.matieres" style="text-align:center">
+                <div>{{ m.moyenne !== null ? m.moyenne : '—' }}</div>
+                <div *ngIf="m.rang_matiere" style="font-size:10px;color:#64748b">{{ m.rang_matiere }}e</div>
               </td>
               <td class="mono bold" style="color:#00d4aa">{{ r.moy_generale }}</td>
               <td>{{ getAppreciation(r.moy_generale, 20) }}</td>

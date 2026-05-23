@@ -45,9 +45,22 @@
   .appr-insuffisant{ color:#ef4444; }
   .rang-badge { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; padding:1px 5px; font-weight:bold; }
 
-  /* ── Décision ── */
-  .decision-box { border:2px solid #10b981; padding:10px 12px; margin-bottom:14px; }
-  .decision-title { font-weight:bold; color:#065f46; margin-bottom:4px; }
+  /* ── Décision / Mention ── */
+  .decision-box { border:2px solid #10b981; padding:10px 12px; margin-bottom:14px; background:#f0fdf4; }
+  .decision-title { font-weight:bold; color:#065f46; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  .decision-text  { font-size:12px; font-weight:bold; color:#1a1a1a; }
+  /* T1/T2 — mention positive */
+  .mention-box-pos { border:2px solid #3b82f6; padding:10px 12px; margin-bottom:14px; background:#eff6ff; }
+  .mention-title-pos { font-weight:bold; color:#1d4ed8; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  /* T1/T2 — mention négative */
+  .mention-box-neg { border:2px solid #f59e0b; padding:10px 12px; margin-bottom:14px; background:#fffbeb; }
+  .mention-title-neg { font-weight:bold; color:#b45309; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  /* T3 — admission */
+  .final-box-pos { border:2px solid #10b981; padding:10px 12px; margin-bottom:14px; background:#f0fdf4; }
+  .final-title-pos { font-weight:bold; color:#065f46; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  /* T3 — redoublement */
+  .final-box-neg { border:2px solid #ef4444; padding:10px 12px; margin-bottom:14px; background:#fef2f2; }
+  .final-title-neg { font-weight:bold; color:#991b1b; margin-bottom:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
 
   /* ── Signatures ── */
   .sig-table { width:100%; margin-top:24px; }
@@ -149,16 +162,14 @@
       <td class="tc">{{ m.note_max }}</td>
       <td class="tc moy">{% if m.moyenne %}{{ m.moyenne }}{% else %}—{% endif %}</td>
       <td class="tc">{% if m.points %}{{ m.points }}{% else %}—{% endif %}</td>
-      <td class="tc">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
+      <td class="tc">{% if m.rang %}<span class="rang-badge">{{ m.rang }}e</span>{% else %}—{% endif %}</td>
       <td class="
-        {% if m.moyenne %}
-          {% if m.moyenne >= 18 %}appr-excellent
-          {% elif m.moyenne >= 16 %}appr-tresb
-          {% elif m.moyenne >= 14 %}appr-bien
-          {% elif m.moyenne >= 12 %}appr-assezb
-          {% elif m.moyenne >= 10 %}appr-passable
-          {% else %}appr-insuffisant
-          {% endif %}
+        {% if m.appreciation == 'Excellent' %}appr-excellent
+        {% elif m.appreciation == 'Très Bien' %}appr-tresb
+        {% elif m.appreciation == 'Bien' %}appr-bien
+        {% elif m.appreciation == 'Assez Bien' %}appr-assezb
+        {% elif m.appreciation == 'Passable' %}appr-passable
+        {% elif m.appreciation %}appr-insuffisant
         {% endif %}">
         {{ m.appreciation|default:"—" }}
       </td>
@@ -178,11 +189,32 @@
   </tfoot>
 </table>
 
-<!-- Décision du Conseil de Classe -->
-<div class="decision-box">
-  <div class="decision-title">Décision du Conseil de Classe</div>
-  <div>{{ decision }}</div>
-</div>
+<!-- Décision / Mention du Conseil de Classe -->
+{% if is_final %}
+  {% if decision_positive %}
+  <div class="final-box-pos">
+    <div class="final-title-pos">Décision du Conseil de Classe — {{ trimestre }}</div>
+    <div class="decision-text">{{ decision }}</div>
+  </div>
+  {% else %}
+  <div class="final-box-neg">
+    <div class="final-title-neg">Décision du Conseil de Classe — {{ trimestre }}</div>
+    <div class="decision-text">{{ decision }}</div>
+  </div>
+  {% endif %}
+{% else %}
+  {% if decision_positive %}
+  <div class="mention-box-pos">
+    <div class="mention-title-pos">Mention du Conseil de Classe — {{ trimestre }}</div>
+    <div class="decision-text">{{ decision }}</div>
+  </div>
+  {% else %}
+  <div class="mention-box-neg">
+    <div class="mention-title-neg">Mention du Conseil de Classe — {{ trimestre }}</div>
+    <div class="decision-text">{{ decision }}</div>
+  </div>
+  {% endif %}
+{% endif %}
 
 <!-- Signatures -->
 <table class="sig-table">

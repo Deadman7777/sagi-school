@@ -1,5 +1,5 @@
 import { Component, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
-import { DashboardService, DashboardKPI, DashboardSuperAdmin } from '../../core/services/dashboard.service';
+import { DashboardService, DashboardKPI, DashboardSuperAdmin, TresorerieCanaux } from '../../core/services/dashboard.service';
 import { AuthService } from '../../core/services/auth.service';
 import { TagModule } from 'primeng/tag';
 import { TableModule } from 'primeng/table';
@@ -217,18 +217,74 @@ import { DecimalPipe, DatePipe } from '@angular/common';
             </div>
           }
           <div class="card">
-            <div class="card-header">📱 {{ 'dashboard.modes' | translate }}</div>
-            <div class="card-body">
-              @for (m of d.modes_paiement; track m.mode_paiement) {
-                <div class="mode-row">
-                  <div class="mode-info">
-                    <span class="mode-name">{{ m.mode_paiement }}</span>
-                    <span class="mode-nb">{{ m.nb }} opérations</span>
-                  </div>
-                  <span class="mode-total">{{ m.total | number:'1.0-0' }} FCFA</span>
+            <div class="card-header">🏦 Trésorerie par canal</div>
+            @if (tresoCanaux(); as tc) {
+              <div class="card-body" style="padding:0">
+                <table style="width:100%;border-collapse:collapse;font-size:11px">
+                  <thead>
+                    <tr style="background:#111827">
+                      <th style="padding:6px 12px;color:#64748b;text-align:left;font-weight:500">Canal</th>
+                      <th style="padding:6px 8px;color:#64748b;text-align:right">Encaissements</th>
+                      <th style="padding:6px 8px;color:#64748b;text-align:right">Décaissements</th>
+                      <th style="padding:6px 12px;color:#64748b;text-align:right">Solde</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (c of tc.canaux; track c.canal) {
+                      <tr style="border-bottom:1px solid rgba(42,63,95,0.4)">
+                        <td style="padding:8px 12px">
+                          <span style="margin-right:6px">{{ canalIcon(c.canal) }}</span>
+                          <span style="color:#e8f0fe;font-weight:500">{{ c.libelle }}</span>
+                          @if (c.nb > 0) {
+                            <span style="color:#64748b;font-size:10px;margin-left:6px">{{ c.nb }} op.</span>
+                          }
+                          @if (c.solde_initial > 0) {
+                            <div style="color:#64748b;font-size:10px;margin-top:2px">
+                              Init : {{ c.solde_initial | number:'1.0-0' }}
+                            </div>
+                          }
+                        </td>
+                        <td style="padding:8px;text-align:right;color:#10b981;font-family:monospace">
+                          {{ c.encaissements | number:'1.0-0' }}
+                        </td>
+                        <td style="padding:8px;text-align:right;color:#ef4444;font-family:monospace">
+                          {{ c.decaissements > 0 ? (c.decaissements | number:'1.0-0') : '—' }}
+                        </td>
+                        <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700"
+                            [style.color]="c.solde >= 0 ? '#00d4aa' : '#ef4444'">
+                          {{ c.solde | number:'1.0-0' }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot>
+                    <tr style="background:#111827;border-top:2px solid #2a3f5f">
+                      <td style="padding:8px 12px;color:#94a3b8;font-weight:600;font-size:11px">TOTAL</td>
+                      <td style="padding:8px;text-align:right;color:#10b981;font-family:monospace;font-weight:700">
+                        {{ tc.totaux.encaissements | number:'1.0-0' }}
+                      </td>
+                      <td style="padding:8px;text-align:right;color:#ef4444;font-family:monospace;font-weight:700">
+                        {{ tc.totaux.decaissements | number:'1.0-0' }}
+                      </td>
+                      <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;font-size:13px"
+                          [style.color]="tc.totaux.solde >= 0 ? '#00d4aa' : '#ef4444'">
+                        {{ tc.totaux.solde | number:'1.0-0' }}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <div style="padding:8px 12px;font-size:10px;color:#64748b;border-top:1px solid #2a3f5f">
+                  Solde initial global : <strong style="color:#94a3b8">{{ tc.totaux.solde_initial | number:'1.0-0' }} FCFA</strong>
+                  &nbsp;·&nbsp; Exercice {{ tc.exercice }}
                 </div>
-              }
-            </div>
+              </div>
+            } @else {
+              <div class="card-body">
+                <div class="empty-msg" style="padding:20px;text-align:center;color:#64748b;font-size:12px">
+                  Chargement...
+                </div>
+              </div>
+            }
           </div>
         </div>
 
@@ -321,9 +377,10 @@ import { DecimalPipe, DatePipe } from '@angular/common';
   `]
 })
 export class DashboardComponent implements OnInit {
-  data    = signal<DashboardKPI | null>(null);
-  saData  = signal<DashboardSuperAdmin | null>(null);
-  alertes = signal<any[]>([]);
+  data             = signal<DashboardKPI | null>(null);
+  saData           = signal<DashboardSuperAdmin | null>(null);
+  alertes          = signal<any[]>([]);
+  tresoCanaux      = signal<TresorerieCanaux | null>(null);
 
   constructor(
     private dashService: DashboardService,
@@ -351,6 +408,18 @@ export class DashboardComponent implements OnInit {
         next:  res => this.alertes.set(res),
         error: err => console.error('Alertes error', err)
       });
+      this.dashService.getTresorerieCanaux().subscribe({
+        next:  res => this.tresoCanaux.set(res),
+        error: () => {}
+      });
     }
+  }
+
+  canalIcon(canal: string): string {
+    const icons: Record<string, string> = {
+      ESPECE: '💵', WAVE: '📱', ORANGE_MONEY: '🟠',
+      FREE_MONEY: '🔴', VIREMENT: '🏦', CHEQUE: '📝',
+    };
+    return icons[canal] ?? '💰';
   }
 }

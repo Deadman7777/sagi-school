@@ -204,6 +204,7 @@ class MoteurCalculView(APIView):
         eleves = eleves_qs
 
         resultats = []
+        matieres_classement: dict = {str(m.id): [] for m in matieres}
 
         for eleve in eleves:
             total_points = 0
@@ -254,13 +255,17 @@ class MoteurCalculView(APIView):
                     }
                 )
 
+                matieres_classement[str(matiere.id)].append((str(eleve.id), round(moyenne, 2)))
+
                 detail_matieres.append({
+                    'matiere_id':   str(matiere.id),
                     'matiere':      matiere.nom,
                     'coefficient':  float(matiere.coefficient),
                     'note_max':     float(matiere.note_max),
                     'moyenne':      round(moyenne, 2),
                     'points':       round(points, 2),
                     'appreciation': appreciation,
+                    'rang_matiere': None,  # rempli après
                 })
 
             moy_generale = total_points / total_coef if total_coef > 0 else 0
@@ -284,6 +289,41 @@ class MoteurCalculView(APIView):
             else:
                 r['rang'] = rang
             rang += 1
+
+        # Calcul des rangs par matière
+        rang_par_matiere: dict = {}
+        for matiere_id, liste in matieres_classement.items():
+            if not liste:
+                continue
+            sorted_liste = sorted(liste, key=lambda x: -x[1])
+            rang_map: dict = {}
+            prev_moy: float = -1.0
+            prev_rang = 0
+            position = 0
+            for eleve_id, moy in sorted_liste:
+                position += 1
+                if moy == prev_moy:
+                    rang_map[eleve_id] = prev_rang
+                else:
+                    rang_map[eleve_id] = position
+                    prev_rang = position
+                    prev_moy = moy
+            rang_par_matiere[matiere_id] = rang_map
+            # Mettre à jour BulletinCache avec rang_matiere
+            for eleve_id, _ in liste:
+                r_mat = rang_map.get(eleve_id)
+                if r_mat is not None:
+                    BulletinCache.objects.filter(
+                        tenant=tenant, eleve_id=eleve_id, matiere_id=matiere_id,
+                        trimestre=trimestre, annee_scolaire=annee
+                    ).update(rang_matiere=r_mat)
+
+        # Injecter rang_matiere dans le détail de chaque résultat
+        for r in resultats:
+            for dm in r['matieres']:
+                mat_id = dm.get('matiere_id')
+                if mat_id:
+                    dm['rang_matiere'] = rang_par_matiere.get(mat_id, {}).get(r['eleve_id'])
 
         # Statistiques classe
         moyennes = [r['moy_generale'] for r in resultats if r['moy_generale'] > 0]
@@ -393,13 +433,21 @@ class BulletinPDFView(APIView):
         if ratio >= 8:  return 'Insuffisant'
         return 'Très Insuffisant'
 
-    def get_decision(self, moy, note_max):
+    def get_decision(self, moy, note_max, trimestre='T1'):
         ratio = float(moy) / float(note_max) * 20
-        if ratio >= 16: return 'Admis(e) avec félicitations du Conseil de Classe'
-        if ratio >= 14: return 'Admis(e) avec encouragements du Conseil de Classe'
-        if ratio >= 10: return 'Admis(e)'
-        if ratio >= 8:  return 'Ajourné(e) — Des efforts supplémentaires sont nécessaires'
-        return 'Ajourné(e) — Un soutien scolaire est fortement recommandé'
+        if trimestre == 'T3':
+            if ratio >= 16: return 'Admis(e) avec félicitations — Passage en classe supérieure'
+            if ratio >= 14: return 'Admis(e) avec encouragements — Passage en classe supérieure'
+            if ratio >= 10: return 'Admis(e) — Passage en classe supérieure'
+            if ratio >= 8:  return 'Ajourné(e) — Décision soumise au Conseil de Classe'
+            return 'Redoublement recommandé par le Conseil de Classe'
+        else:  # T1, T2 — mentions
+            if ratio >= 16: return 'Félicitations du Conseil de Classe'
+            if ratio >= 14: return 'Encouragements du Conseil de Classe'
+            if ratio >= 12: return 'Compliments du Conseil de Classe'
+            if ratio >= 10: return 'Résultats satisfaisants'
+            if ratio >= 8:  return 'Avertissement de travail'
+            return 'Blâme de travail — Soutien scolaire recommandé'
 
     def get(self, request, eleve_id, trimestre):
         from io import BytesIO
@@ -485,7 +533,9 @@ class BulletinPDFView(APIView):
                 'nb_eleves':    len(moyennes_classe),
             },
             'appreciation_generale': self.get_appreciation(moy_generale, note_max),
-            'decision':              self.get_decision(moy_generale, note_max),
+            'decision':              self.get_decision(moy_generale, note_max, trimestre),
+            'is_final':              trimestre == 'T3',
+            'decision_positive':     moy_generale >= (note_max * 10 / 20),
         }
 
         html_str = render_to_string('pdf/bulletin.html', context)

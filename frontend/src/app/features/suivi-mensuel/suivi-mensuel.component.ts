@@ -93,6 +93,8 @@ import { Eleve } from '../../core/models/eleve.model';
       <span class="badge-count">{{ creances().length }}</span>
     }
   </button>
+  <button class="tab-btn" [class.active]="onglet() === 'charges'"
+          (click)="onglet.set('charges')">💸 Charges &amp; Marge</button>
   <button class="tab-btn" [class.active]="onglet() === 'eleve'"
           (click)="onglet.set('eleve')">👤 Par élève</button>
 </div>
@@ -265,6 +267,88 @@ import { Eleve } from '../../core/models/eleve.model';
       </ng-template>
       <ng-template pTemplate="emptymessage">
         <tr><td colspan="6" class="empty-msg">✅ Aucune créance — tous les élèves sont à jour !</td></tr>
+      </ng-template>
+    </p-table>
+  </div>
+}
+
+<!-- ════ CHARGES & MARGE ════ -->
+@if (onglet() === 'charges') {
+
+  <!-- KPIs synthèse financière -->
+  @if (synthese(); as s) {
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+      <div class="kpi-card" style="--acc:#ef4444">
+        <div class="kpi-icon">💸</div>
+        <div class="kpi-label">Charges opérationnelles</div>
+        <div class="kpi-value" style="color:#ef4444">{{ s.total_charges | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA décaissés</div>
+      </div>
+      <div class="kpi-card" style="--acc:#f59e0b">
+        <div class="kpi-icon">🏗️</div>
+        <div class="kpi-label">Investissements</div>
+        <div class="kpi-value" style="color:#f59e0b">{{ s.total_investissements | number:'1.0-0' }}</div>
+        <div class="kpi-sub">FCFA immobilisés</div>
+      </div>
+      <div class="kpi-card" [style]="'--acc:' + (s.marge_globale >= 0 ? '#10b981' : '#ef4444')">
+        <div class="kpi-icon">{{ s.marge_globale >= 0 ? '📈' : '📉' }}</div>
+        <div class="kpi-label">Marge nette</div>
+        <div class="kpi-value" [style.color]="s.marge_globale >= 0 ? '#10b981' : '#ef4444'">
+          {{ s.marge_globale | number:'1.0-0' }}
+        </div>
+        <div class="kpi-sub">{{ s.marge_globale >= 0 ? 'Excédent' : 'Déficit' }}</div>
+      </div>
+    </div>
+  }
+
+  <!-- Tableau mensuel charges vs encaissements -->
+  <div class="table-card">
+    <p-table [value]="globalData()" [loading]="loading()" styleClass="p-datatable-sm" [showGridlines]="true">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Mois</th>
+          <th class="tr">Encaissements</th>
+          <th class="tr">Charges</th>
+          <th class="tr">Invest.</th>
+          <th class="tr">Total Décaiss.</th>
+          <th class="tr">Marge</th>
+          <th class="tr">Cumul Marge</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-m>
+        <tr [class.row-empty]="m.total === 0 && m.decaissements === 0"
+            [style.background]="m.marge < 0 ? 'rgba(239,68,68,0.04)' : 'inherit'">
+          <td class="bold">{{ m.mois }}</td>
+          <td class="mono tr success">{{ m.total > 0 ? (m.total | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr danger">{{ m.charges > 0 ? (m.charges | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr warn-txt">{{ m.investissements > 0 ? (m.investissements | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr" style="color:#94a3b8">
+            {{ m.decaissements > 0 ? (m.decaissements | number:'1.0-0') : '—' }}
+          </td>
+          <td class="mono tr bold"
+              [style.color]="m.marge > 0 ? '#10b981' : m.marge < 0 ? '#ef4444' : '#64748b'">
+            {{ (m.total > 0 || m.decaissements > 0) ? (m.marge | number:'1.0-0') : '—' }}
+          </td>
+          <td class="mono tr" style="color:#a855f7">
+            {{ cumulMargeJusquau(m) | number:'1.0-0' }}
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="footer">
+        <tr>
+          <td class="bold">TOTAL EXERCICE</td>
+          <td class="mono tr bold success">{{ totalGlobal() | number:'1.0-0' }}</td>
+          <td class="mono tr bold danger">{{ totalCharges() | number:'1.0-0' }}</td>
+          <td class="mono tr bold warn-txt">{{ totalInvestissements() | number:'1.0-0' }}</td>
+          <td class="mono tr bold" style="color:#94a3b8">{{ totalDecaissements() | number:'1.0-0' }}</td>
+          <td class="mono tr bold" [style.color]="margeGlobale() >= 0 ? '#10b981' : '#ef4444'">
+            {{ margeGlobale() | number:'1.0-0' }}
+          </td>
+          <td></td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="7" class="empty-msg">Aucune donnée disponible</td></tr>
       </ng-template>
     </p-table>
   </div>
@@ -484,17 +568,20 @@ export class SuiviMensuelComponent implements OnInit {
         // Normaliser synthese : toujours un objet avec des valeurs par défaut
         const s = res.synthese || {};
         this.synthese.set({
-          nb_eleves:         s.nb_eleves         ?? 0,
-          total_attendu:     s.total_attendu      ?? 0,
-          total_paye:        s.total_paye         ?? 0,
-          reste:             s.reste              ?? 0,
-          taux_recouvrement: s.taux_recouvrement  ?? 0,
-          exercice:          s.exercice           ?? '—',
+          nb_eleves:            s.nb_eleves            ?? 0,
+          total_attendu:        s.total_attendu         ?? 0,
+          total_paye:           s.total_paye            ?? 0,
+          reste:                s.reste                 ?? 0,
+          taux_recouvrement:    s.taux_recouvrement     ?? 0,
+          exercice:             s.exercice              ?? '—',
+          total_charges:        s.total_charges         ?? 0,
+          total_investissements:s.total_investissements ?? 0,
+          marge_globale:        s.marge_globale         ?? 0,
         });
         this.loading.set(false);
       },
       error: () => {
-        this.synthese.set({ nb_eleves: 0, total_attendu: 0, total_paye: 0, reste: 0, taux_recouvrement: 0, exercice: '—' });
+        this.synthese.set({ nb_eleves: 0, total_attendu: 0, total_paye: 0, reste: 0, taux_recouvrement: 0, exercice: '—', total_charges: 0, total_investissements: 0, marge_globale: 0 });
         this.loading.set(false);
       },
     });
@@ -521,6 +608,20 @@ export class SuiviMensuelComponent implements OnInit {
     let cumul = 0;
     for (const m of this.globalData()) {
       cumul += m.total;
+      if (m.mois_num === mois.mois_num && m.annee === mois.annee) break;
+    }
+    return cumul;
+  }
+
+  totalCharges():         number { return this.globalData().reduce((s, m) => s + (m.charges        || 0), 0); }
+  totalInvestissements(): number { return this.globalData().reduce((s, m) => s + (m.investissements || 0), 0); }
+  totalDecaissements():   number { return this.globalData().reduce((s, m) => s + (m.decaissements   || 0), 0); }
+  margeGlobale():         number { return this.totalGlobal() - this.totalDecaissements(); }
+
+  cumulMargeJusquau(mois: any): number {
+    let cumul = 0;
+    for (const m of this.globalData()) {
+      cumul += (m.marge || 0);
       if (m.mois_num === mois.mois_num && m.annee === mois.annee) break;
     }
     return cumul;

@@ -22,6 +22,17 @@ export interface DashboardKPI {
   recettes_mensuelles: { mois: string; total: number; }[];
 }
 
+export interface CanalTresorerie {
+  canal: string; libelle: string; compte: string; nb: number;
+  solde_initial: number; encaissements: number; decaissements: number; solde: number;
+}
+
+export interface TresorerieCanaux {
+  exercice: string;
+  canaux: CanalTresorerie[];
+  totaux: { solde_initial: number; encaissements: number; decaissements: number; solde: number; };
+}
+
 export interface DashboardSuperAdmin {
   ecoles: { total: number; actives: number; expirees: number; essai: number; nouvelles_ce_mois: number; };
   finances: { revenus_annuels: number; revenus_mensuels: number; };
@@ -31,7 +42,8 @@ export interface DashboardSuperAdmin {
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   constructor(private api: ApiService) {}
-  getKPIs()        { return this.api.get<DashboardKPI>('/dashboard/kpis/'); }
-  getAlertes()     { return this.api.get<any[]>('/dashboard/alertes/'); }
-  getSuperAdmin()  { return this.api.get<DashboardSuperAdmin>('/dashboard/superadmin/'); }
+  getKPIs()              { return this.api.get<DashboardKPI>('/dashboard/kpis/'); }
+  getAlertes()           { return this.api.get<any[]>('/dashboard/alertes/'); }
+  getSuperAdmin()        { return this.api.get<DashboardSuperAdmin>('/dashboard/superadmin/'); }
+  getTresorerieCanaux()  { return this.api.get<TresorerieCanaux>('/dashboard/tresorerie-canaux/'); }
 }

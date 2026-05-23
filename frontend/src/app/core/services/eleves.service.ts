@@ -42,6 +42,10 @@ export class ElevesService {
     return this.api.get<PriseEnChargeStats>('/eleves/prises-en-charge/stats/');
   }
 
+  exporterListePDF(params?: Record<string, string>) {
+    return this.api.getBlob('/eleves/export-pdf/', params);
+  }
+
   getSections() {
     return this.api.get<PaginatedResponse<Section>>('/eleves/sections/');
   }

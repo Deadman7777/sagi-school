@@ -31,7 +31,9 @@ export class ApiService {
     return this.http.delete<T>(`${this.base}${path}`);
   }
 
-  getBlob(path: string) {
-    return this.http.get(`${this.base}${path}`, { responseType: 'blob' });
+  getBlob(path: string, params?: Record<string, string>) {
+    let httpParams = new HttpParams();
+    if (params) Object.entries(params).forEach(([k, v]) => httpParams = httpParams.set(k, v));
+    return this.http.get(`${this.base}${path}`, { responseType: 'blob', params: httpParams });
   }
 }

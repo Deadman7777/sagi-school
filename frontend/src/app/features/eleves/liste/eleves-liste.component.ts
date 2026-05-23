@@ -42,6 +42,8 @@ interface PecForm {
         <p-button [label]="onglet() === 'liste' ? 'Prise en charge' : 'Liste élèves'"
                   severity="secondary" size="small"
                   (onClick)="basculerOnglet()" />
+        <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
+                  [loading]="exportant()" (onClick)="exporterListePDF()" />
         <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success" (onClick)="ouvrirDialog()" />
       </div>
     </div>
@@ -628,6 +630,7 @@ export class ElevesListeComponent implements OnInit {
   statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);
   saving        = signal(false);
+  exportant     = signal(false);
   onglet        = signal<'liste' | 'prise_en_charge'>('liste');
 
   dialogVisible       = false;
@@ -799,6 +802,31 @@ export class ElevesListeComponent implements OnInit {
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le certificat.' }),
+    });
+  }
+
+  exporterListePDF() {
+    this.exportant.set(true);
+    const params: Record<string, string> = {};
+    if (this.filtreStatut) params['statut'] = this.filtreStatut;
+    if (this.filtreAlerte) params['alerte']  = this.filtreAlerte;
+    this.elevesService.exporterListePDF(params).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `eleves_liste.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        this.exportant.set(false);
+      },
+      error: () => {
+        this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                       detail: 'Impossible de générer la liste PDF.' });
+        this.exportant.set(false);
+      },
     });
   }
 

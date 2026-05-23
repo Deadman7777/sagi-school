@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Value, DecimalField
 from django.db.models.functions import Coalesce, TruncMonth
+from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from .models import Eleve, Section
 from apps.paiements.models import Exercice
@@ -290,6 +291,30 @@ class SuiviMensuelView(APIView):
                 key = (m['mois_tronc'].year, m['mois_tronc'].month)
                 pmt_par_mois[key] = m
 
+        # ── Charges mensuelles (débits 6xx depuis journal) ───────────────────
+        charges_qs = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            no_compte__startswith='6', debit__gt=0
+        ).annotate(mois_tronc=TruncMonth('date_ecriture')).values('mois_tronc').annotate(
+            total=Sum('debit')
+        ).order_by('mois_tronc')
+        charges_par_mois = {
+            (c['mois_tronc'].year, c['mois_tronc'].month): float(c['total'] or 0)
+            for c in charges_qs if c['mois_tronc']
+        }
+
+        # ── Investissements mensuels (débits 2xx, source INVEST) ─────────────
+        invest_qs = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            source='INVEST', no_compte__startswith='2', debit__gt=0
+        ).annotate(mois_tronc=TruncMonth('date_ecriture')).values('mois_tronc').annotate(
+            total=Sum('debit')
+        ).order_by('mois_tronc')
+        invest_par_mois = {
+            (i['mois_tronc'].year, i['mois_tronc'].month): float(i['total'] or 0)
+            for i in invest_qs if i['mois_tronc']
+        }
+
         # Générer TOUS les mois de l'exercice (même à 0)
         debut = exercice.date_debut.replace(day=1)
         fin   = exercice.date_fin.replace(day=1)
@@ -298,18 +323,26 @@ class SuiviMensuelView(APIView):
         while cur <= fin:
             key = (cur.year, cur.month)
             m   = pmt_par_mois.get(key, {})
+            enc           = float(m.get('total') or 0)
+            charges       = round(charges_par_mois.get(key, 0.0), 2)
+            investissements = round(invest_par_mois.get(key, 0.0), 2)
+            decaissements = round(charges + investissements, 2)
             global_data.append({
-                'mois':        f"{MOIS_FR[cur.month]} {cur.year}",
-                'mois_court':  MOIS_COURT_FR[cur.month],
-                'mois_num':    cur.month,
-                'annee':       cur.year,
-                'total':       float(m.get('total')       or 0),
-                'nb':          m.get('nb', 0),
-                'inscription': float(m.get('inscription') or 0),
-                'mensualite':  float(m.get('mensualite')  or 0),
-                'uniforme':    float(m.get('uniforme')    or 0),
-                'fournitures': float(m.get('fournitures') or 0),
-                'cantine':     float(m.get('cantine')     or 0),
+                'mois':            f"{MOIS_FR[cur.month]} {cur.year}",
+                'mois_court':      MOIS_COURT_FR[cur.month],
+                'mois_num':        cur.month,
+                'annee':           cur.year,
+                'total':           enc,
+                'nb':              m.get('nb', 0),
+                'inscription':     float(m.get('inscription') or 0),
+                'mensualite':      float(m.get('mensualite')  or 0),
+                'uniforme':        float(m.get('uniforme')    or 0),
+                'fournitures':     float(m.get('fournitures') or 0),
+                'cantine':         float(m.get('cantine')     or 0),
+                'charges':         charges,
+                'investissements': investissements,
+                'decaissements':   decaissements,
+                'marge':           round(enc - decaissements, 2),
             })
             cur += relativedelta(months=1)
 
@@ -323,13 +356,19 @@ class SuiviMensuelView(APIView):
         reste_global   = total_attendu - total_paiements
         taux_global    = round(total_paiements / total_attendu * 100, 1) if total_attendu else 0
 
+        total_charges = sum(charges_par_mois.values())
+        total_invest  = sum(invest_par_mois.values())
+
         synthese = {
-            'nb_eleves':         eleves_qs.count(),
-            'total_attendu':     round(total_attendu, 2),
-            'total_paye':        round(total_paiements, 2),
-            'reste':             round(reste_global, 2),
-            'taux_recouvrement': taux_global,
-            'exercice':          exercice.annee_scolaire,
+            'nb_eleves':              eleves_qs.count(),
+            'total_attendu':          round(total_attendu, 2),
+            'total_paye':             round(total_paiements, 2),
+            'reste':                  round(reste_global, 2),
+            'taux_recouvrement':      taux_global,
+            'exercice':               exercice.annee_scolaire,
+            'total_charges':          round(total_charges, 2),
+            'total_investissements':  round(total_invest, 2),
+            'marge_globale':          round(total_paiements - total_charges - total_invest, 2),
         }
 
         # ── 3. Par section ──────────────────────────────────────────────────
@@ -554,6 +593,109 @@ class PriseEnChargeStatsView(APIView):
             },
             'detail': detail,
         })
+
+
+class ElevesListePDFView(APIView):
+    """Génère la liste PDF des élèves avec montants payés, restes et alertes."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return HttpResponse('Aucun exercice actif', status=404)
+
+        qs = Eleve.objects.filter(
+            tenant=tenant, exercice=exercice
+        ).select_related('section').prefetch_related('paiements').annotate(
+            total_paye_sql=Coalesce(
+                Sum('paiements__montant_inscription') +
+                Sum('paiements__montant_mensualite')  +
+                Sum('paiements__montant_uniforme')    +
+                Sum('paiements__montant_fournitures') +
+                Sum('paiements__montant_cantine')     +
+                Sum('paiements__montant_divers'),
+                Value(0), output_field=DecimalField()
+            )
+        ).order_by('section__nom', 'numero')
+
+        filtre_statut = request.query_params.get('statut', '')
+        filtre_alerte = request.query_params.get('alerte', '')
+        if filtre_statut:
+            qs = qs.filter(statut=filtre_statut)
+
+        eleves_data = []
+        total_attendu_global = 0.0
+        total_paye_global    = 0.0
+        nb_critique = nb_urgent = nb_attention = 0
+
+        for e in qs:
+            attendu = float(e.total_attendu)
+            paye    = float(e.total_paye_sql or 0)
+            reste   = round(max(0.0, attendu - paye), 0)
+            alerte  = e.niveau_alerte
+
+            if alerte == 'CRITIQUE':   nb_critique  += 1
+            elif alerte == 'URGENT':   nb_urgent    += 1
+            elif alerte == 'ATTENTION': nb_attention += 1
+
+            total_attendu_global += attendu
+            total_paye_global    += paye
+
+            eleves_data.append({
+                'numero':       e.numero,
+                'matricule':    e.matricule or '—',
+                'nom_complet':  e.nom_complet,
+                'genre':        e.genre,
+                'section_nom':  e.section.nom if e.section else '—',
+                'statut':       e.statut,
+                'prise_en_charge': bool(e.prise_en_charge or e.type_pec),
+                'total_attendu': round(attendu, 0),
+                'total_paye':    round(paye, 0),
+                'reste':         reste,
+                'niveau_alerte': alerte,
+            })
+
+        if filtre_alerte:
+            eleves_data = [e for e in eleves_data if e['niveau_alerte'] == filtre_alerte]
+
+        total_reste_global = round(max(0.0, total_attendu_global - total_paye_global), 0)
+
+        context = {
+            'tenant':            tenant,
+            'exercice':          exercice,
+            'date_edition':      timezone.now(),
+            'eleves':            eleves_data,
+            'nb_eleves':         len(eleves_data),
+            'total_attendu':     round(total_attendu_global, 0),
+            'total_paye':        round(total_paye_global, 0),
+            'total_reste':       total_reste_global,
+            'nb_critique':       nb_critique,
+            'nb_urgent':         nb_urgent,
+            'nb_attention':      nb_attention,
+            'filtre_statut':     filtre_statut,
+            'filtre_alerte':     filtre_alerte,
+        }
+
+        html_str = render_to_string('pdf/eleves.html', context)
+        buffer   = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération PDF', status=500)
+
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        fname    = f"eleves_{exercice.annee_scolaire}.pdf"
+        response['Content-Disposition'] = f'inline; filename="{fname}"'
+        return response
 
 
 class CertificatScolariteView(APIView):
