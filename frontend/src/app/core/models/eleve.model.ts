@@ -9,6 +9,9 @@ export interface Section {
   total_annuel: number;
 }
 
+export type NiveauAlerte = 'A_JOUR' | 'OK' | 'ATTENTION' | 'URGENT' | 'CRITIQUE';
+export type TypePEC = 'INSCRIPTION' | 'MENSUALITES' | 'TOTALE';
+
 export interface Eleve {
   id: string;
   numero: number;
@@ -25,13 +28,58 @@ export interface Eleve {
   telephone_mere: string;
   date_inscription: string;
   statut: string;
+  // Prise en charge — motif
   prise_en_charge: string | null;
-  taux_prise_en_charge: number;
   obs_prise_en_charge: string;
+  // Prise en charge — type et taux détaillés
+  type_pec: TypePEC | null;
+  taux_pec_inscription: number;
+  taux_pec_mensualite: number;
+  // Legacy
+  taux_prise_en_charge: number;
+  // Montants calculés (read-only depuis le backend)
+  total_theorique: number;
   total_attendu: number;
+  montant_pec_inscription: number;
+  montant_pec_mensualite_mensuel: number;
+  montant_pec_annuel: number;
   total_paye: number;
   reste_a_payer: number;
-  niveau_alerte: 'OK' | 'ATTENTION' | 'URGENT';
+  niveau_alerte: NiveauAlerte;
+}
+
+export interface PriseEnChargeStats {
+  nb_total_eleves: number;
+  nb_eleves_pec: number;
+  nb_par_type: { type: TypePEC; libelle: string; nb: number }[];
+  nb_par_motif: { motif: string; libelle: string; nb: number }[];
+  financier: {
+    recettes_theoriques_annuelles: number;
+    recettes_reelles_attendues: number;
+    perte_annuelle_pec: number;
+    cout_mensuel_pec: number;
+    cout_annuel_pec: number;
+    mensualite_theorique_mensuelle: number;
+    mensualite_reelle_mensuelle: number;
+    ecart_mensuel: number;
+  };
+  detail: {
+    eleve_id: string;
+    nom_complet: string;
+    section: string;
+    motif: string;
+    type_pec: TypePEC;
+    taux_pec_inscription: number;
+    taux_pec_mensualite: number;
+    montant_pec_inscription: number;
+    montant_pec_mensuel: number;
+    montant_pec_annuel: number;
+    total_theorique: number;
+    total_attendu: number;
+    total_paye: number;
+    reste_a_payer: number;
+    niveau_alerte: NiveauAlerte;
+  }[];
 }
 
 export interface PaginatedResponse<T> {

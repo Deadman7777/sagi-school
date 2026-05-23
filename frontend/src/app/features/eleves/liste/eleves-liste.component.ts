@@ -1,9 +1,9 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Eleve } from '../../../core/models/eleve.model';
+import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -15,9 +15,17 @@ import { MessageService } from 'primeng/api';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { InputNumberModule } from 'primeng/inputnumber';
 
+interface PecForm {
+  prise_en_charge: string | null;
+  type_pec: TypePEC | null;
+  taux_pec_inscription: number;
+  taux_pec_mensualite: number;
+  obs_prise_en_charge: string;
+}
+
 @Component({
   selector: 'app-eleves-liste',
-  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule],
   providers: [MessageService],
@@ -33,12 +41,12 @@ import { InputNumberModule } from 'primeng/inputnumber';
       <div style="display:flex;gap:8px">
         <p-button [label]="onglet() === 'liste' ? 'Prise en charge' : 'Liste élèves'"
                   severity="secondary" size="small"
-                  (onClick)="onglet.set(onglet() === 'liste' ? 'prise_en_charge' : 'liste')" />
+                  (onClick)="basculerOnglet()" />
         <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success" (onClick)="ouvrirDialog()" />
       </div>
     </div>
 
-    <!-- KPIs statuts (onglet liste) -->
+    <!-- ══════════════════════════ ONGLET LISTE ══════════════════════════ -->
     @if (onglet() === 'liste') {
       <div class="kpi-row" style="margin-bottom:14px">
         <div class="kpi-mini" (click)="filtreStatut='';filtrer()">
@@ -71,7 +79,6 @@ import { InputNumberModule } from 'primeng/inputnumber';
         </div>
       </div>
 
-      <!-- Filtres -->
       <div class="filters-bar">
         <input pInputText [(ngModel)]="recherche" (input)="filtrer()"
                [placeholder]="'eleves.rechercher' | translate" class="search-input" />
@@ -83,7 +90,6 @@ import { InputNumberModule } from 'primeng/inputnumber';
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
       </div>
 
-      <!-- Table -->
       <div class="table-card">
         <p-table [value]="elevesFiltres()" [loading]="loading()"
                  [rowHover]="true" styleClass="p-datatable-sm"
@@ -120,7 +126,8 @@ import { InputNumberModule } from 'primeng/inputnumber';
               <td class="mono success">{{ eleve.total_paye | number }} FCFA</td>
               <td class="mono" [class.danger]="eleve.reste_a_payer > 0">{{ eleve.reste_a_payer | number }} FCFA</td>
               <td>
-                <p-tag [value]="eleve.niveau_alerte" [severity]="alerteSeverity(eleve.niveau_alerte)" />
+                <p-tag [value]="alerteLabel(eleve.niveau_alerte)"
+                       [severity]="alerteSeverity(eleve.niveau_alerte)" />
               </td>
               <td>
                 <div class="btn-row">
@@ -143,22 +150,77 @@ import { InputNumberModule } from 'primeng/inputnumber';
       </div>
     }
 
-    <!-- ONGLET PRISE EN CHARGE -->
+    <!-- ══════════════════════ ONGLET PRISE EN CHARGE ══════════════════════ -->
     @if (onglet() === 'prise_en_charge') {
+
+      <!-- KPIs prises en charge -->
       <div class="kpi-row" style="margin-bottom:14px">
         <div class="kpi-mini" style="border-color:#7c3aed">
           <span class="km-val" style="color:#7c3aed">{{ elevesPEC().length }}</span>
           <span class="km-label">Bénéficiaires</span>
         </div>
-        <div class="kpi-mini" *ngFor="let cat of categoriesPEC">
-          <span class="km-val" style="color:#00d4aa">{{ countPEC(cat.value) }}</span>
-          <span class="km-label">{{ cat.label }}</span>
+        <div class="kpi-mini" style="border-color:#3b82f6">
+          <span class="km-val" style="color:#3b82f6">{{ countTypePEC('INSCRIPTION') }}</span>
+          <span class="km-label">Inscription</span>
         </div>
+        <div class="kpi-mini" style="border-color:#10b981">
+          <span class="km-val" style="color:#10b981">{{ countTypePEC('MENSUALITES') }}</span>
+          <span class="km-label">Mensualités</span>
+        </div>
+        <div class="kpi-mini" style="border-color:#f59e0b">
+          <span class="km-val" style="color:#f59e0b">{{ countTypePEC('TOTALE') }}</span>
+          <span class="km-label">Totale</span>
+        </div>
+        @if (statsPEC()) {
+          <div class="kpi-mini" style="border-color:#ef4444">
+            <span class="km-val" style="color:#ef4444">{{ statsPEC()!.financier.perte_annuelle_pec | number:'1.0-0' }}</span>
+            <span class="km-label">Perte annuelle (FCFA)</span>
+          </div>
+          <div class="kpi-mini" style="border-color:#f59e0b">
+            <span class="km-val" style="color:#f59e0b">{{ statsPEC()!.financier.cout_mensuel_pec | number:'1.0-0' }}</span>
+            <span class="km-label">Coût mensuel (FCFA)</span>
+          </div>
+        }
       </div>
 
+      <!-- Panel financier impact -->
+      @if (statsPEC()) {
+        @let fin = statsPEC()!.financier;
+        <div class="stats-panel">
+          <div class="stats-panel-title">Impact financier des prises en charge</div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">Recettes théoriques annuelles</span>
+              <span class="stat-val">{{ fin.recettes_theoriques_annuelles | number:'1.0-0' }} FCFA</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Recettes réelles attendues</span>
+              <span class="stat-val success">{{ fin.recettes_reelles_attendues | number:'1.0-0' }} FCFA</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Perte annuelle (écart PEC)</span>
+              <span class="stat-val danger">{{ fin.perte_annuelle_pec | number:'1.0-0' }} FCFA</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Coût mensuel total PEC</span>
+              <span class="stat-val warn">{{ fin.cout_mensuel_pec | number:'1.0-0' }} FCFA</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Coût annuel total PEC</span>
+              <span class="stat-val warn">{{ fin.cout_annuel_pec | number:'1.0-0' }} FCFA</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Écart mensuel sur mensualités</span>
+              <span class="stat-val" style="color:#a78bfa">{{ fin.ecart_mensuel | number:'1.0-0' }} FCFA</span>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Table détail PEC -->
       <div class="table-card">
         <div class="table-toolbar">
-          <span class="tbl-count">🤝 Prise en charge — {{ elevesPEC().length }} bénéficiaires</span>
+          <span class="tbl-count">Prise en charge — {{ elevesPEC().length }} bénéficiaires</span>
         </div>
         <p-table [value]="elevesPEC()" styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
           <ng-template pTemplate="header">
@@ -166,9 +228,14 @@ import { InputNumberModule } from 'primeng/inputnumber';
               <th>Matricule</th>
               <th>Nom complet</th>
               <th>Section</th>
-              <th>Catégorie</th>
-              <th class="text-right">Taux prise en charge</th>
-              <th>Observations</th>
+              <th>Motif</th>
+              <th>Type PEC</th>
+              <th class="text-right">Taux inscr.</th>
+              <th class="text-right">Taux mens.</th>
+              <th class="text-right">PEC mensuel</th>
+              <th class="text-right">PEC annuel</th>
+              <th class="text-right">Reste à payer</th>
+              <th>Alerte</th>
               <th>Actions</th>
             </tr>
           </ng-template>
@@ -178,31 +245,57 @@ import { InputNumberModule } from 'primeng/inputnumber';
               <td class="bold">{{ e.nom_complet }}</td>
               <td>{{ e.section_nom }}</td>
               <td>
-                <p-tag [value]="pecLabel(e.prise_en_charge)" [severity]="pecSeverity(e.prise_en_charge)" />
+                <p-tag [value]="pecLabel(e.prise_en_charge)"
+                       [severity]="pecSeverity(e.prise_en_charge)" />
               </td>
-              <td class="mono text-right" style="color:#00d4aa">{{ e.taux_prise_en_charge }} %</td>
-              <td style="font-size:11px;color:#64748b">{{ e.obs_prise_en_charge || '—' }}</td>
+              <td>
+                @if (e.type_pec) {
+                  <p-tag [value]="typePecLabel(e.type_pec)"
+                         [severity]="typePecSeverity(e.type_pec)" />
+                } @else {
+                  <span style="color:#64748b;font-size:11px">—</span>
+                }
+              </td>
+              <td class="mono text-right">
+                {{ e.taux_pec_inscription > 0 ? (e.taux_pec_inscription + ' %') : '—' }}
+              </td>
+              <td class="mono text-right">
+                {{ e.taux_pec_mensualite > 0 ? (e.taux_pec_mensualite + ' %') : '—' }}
+              </td>
+              <td class="mono text-right" style="color:#f59e0b">
+                {{ e.montant_pec_mensualite_mensuel > 0 ? ((e.montant_pec_mensualite_mensuel | number:'1.0-0') + ' FCFA') : '—' }}
+              </td>
+              <td class="mono text-right" style="color:#ef4444">
+                {{ e.montant_pec_annuel > 0 ? ((e.montant_pec_annuel | number:'1.0-0') + ' FCFA') : '—' }}
+              </td>
+              <td class="mono text-right" [class.danger]="e.reste_a_payer > 0">
+                {{ e.reste_a_payer | number:'1.0-0' }} FCFA
+              </td>
+              <td>
+                <p-tag [value]="alerteLabel(e.niveau_alerte)"
+                       [severity]="alerteSeverity(e.niveau_alerte)" />
+              </td>
               <td>
                 <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
-                          severity="warn" (onClick)="ouvrirPriseEnCharge(e)" />
+                          severity="warn" pTooltip="Modifier PEC" (onClick)="ouvrirPriseEnCharge(e)" />
               </td>
             </tr>
           </ng-template>
           <ng-template pTemplate="emptymessage">
-            <tr><td colspan="7" class="empty-msg">Aucun élève en prise en charge</td></tr>
+            <tr><td colspan="12" class="empty-msg">Aucun élève en prise en charge</td></tr>
           </ng-template>
         </p-table>
       </div>
     }
 
-    <!-- Dialog Fiche Élève -->
-    <p-dialog header="📋 Fiche Élève" [(visible)]="dialogFicheVisible"
-              [modal]="true" [style]="{width:'600px'}" [draggable]="false">
+    <!-- ══════════════════════════ DIALOG FICHE ══════════════════════════ -->
+    <p-dialog header="Fiche Élève" [(visible)]="dialogFicheVisible"
+              [modal]="true" [style]="{width:'620px'}" [draggable]="false">
       @if (eleveSelectionne()) {
         @let e = eleveSelectionne()!;
         <div class="fiche-grid">
           <div class="fiche-section">
-            <div class="fiche-title">👤 Identité</div>
+            <div class="fiche-title">Identité</div>
             <div class="fiche-row"><span>Nom complet</span><strong>{{ e.nom_complet }}</strong></div>
             <div class="fiche-row"><span>Matricule</span><strong class="mono" style="color:#00d4aa">{{ e.matricule }}</strong></div>
             <div class="fiche-row"><span>N° interne</span><strong>{{ e.numero }}</strong></div>
@@ -211,26 +304,45 @@ import { InputNumberModule } from 'primeng/inputnumber';
             <div class="fiche-row"><span>Lieu naissance</span><strong>{{ e.lieu_naissance || '—' }}</strong></div>
           </div>
           <div class="fiche-section">
-            <div class="fiche-title">🏫 Scolarité</div>
+            <div class="fiche-title">Scolarité</div>
             <div class="fiche-row"><span>Section</span><strong>{{ e.section_nom }}</strong></div>
             <div class="fiche-row"><span>Statut</span>
               <p-tag [value]="statutLabel(e.statut)" [severity]="statutSeverity(e.statut)" /></div>
             <div class="fiche-row"><span>Date inscription</span><strong>{{ e.date_inscription || '—' }}</strong></div>
-            @if (e.prise_en_charge) {
-              <div class="fiche-row"><span>Prise en charge</span>
+            @if (e.prise_en_charge || e.type_pec) {
+              <div class="fiche-row"><span>Motif PEC</span>
                 <p-tag [value]="pecLabel(e.prise_en_charge)" [severity]="pecSeverity(e.prise_en_charge)" /></div>
-              <div class="fiche-row"><span>Taux PEC</span><strong style="color:#00d4aa">{{ e.taux_prise_en_charge }} %</strong></div>
+              @if (e.type_pec) {
+                <div class="fiche-row"><span>Type PEC</span>
+                  <p-tag [value]="typePecLabel(e.type_pec)" [severity]="typePecSeverity(e.type_pec)" /></div>
+                @if (e.taux_pec_inscription > 0) {
+                  <div class="fiche-row"><span>Taux inscription</span>
+                    <strong style="color:#00d4aa">{{ e.taux_pec_inscription }} %</strong></div>
+                }
+                @if (e.taux_pec_mensualite > 0) {
+                  <div class="fiche-row"><span>Taux mensualités</span>
+                    <strong style="color:#00d4aa">{{ e.taux_pec_mensualite }} %</strong></div>
+                }
+                <div class="fiche-row"><span>PEC annuel</span>
+                  <strong style="color:#ef4444">{{ e.montant_pec_annuel | number:'1.0-0' }} FCFA</strong></div>
+              }
             }
           </div>
           <div class="fiche-section">
-            <div class="fiche-title">👪 Parents / Tuteurs</div>
+            <div class="fiche-title">Parents / Tuteurs</div>
             <div class="fiche-row"><span>Père</span><strong>{{ e.nom_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Tél. père</span><strong class="mono">{{ e.telephone_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Mère</span><strong>{{ e.nom_mere || '—' }}</strong></div>
             <div class="fiche-row"><span>Tél. mère</span><strong class="mono">{{ e.telephone_mere || '—' }}</strong></div>
           </div>
           <div class="fiche-section">
-            <div class="fiche-title">💰 Situation financière</div>
+            <div class="fiche-title">Situation financière</div>
+            @if (e.montant_pec_annuel > 0) {
+              <div class="fiche-row"><span>Total théorique</span>
+                <strong class="mono" style="color:#64748b">{{ e.total_theorique | number:'1.0-0' }} FCFA</strong></div>
+              <div class="fiche-row"><span>Prise en charge</span>
+                <strong class="mono" style="color:#ef4444">- {{ e.montant_pec_annuel | number:'1.0-0' }} FCFA</strong></div>
+            }
             <div class="fiche-row"><span>Total attendu</span><strong class="mono">{{ e.total_attendu | number }} FCFA</strong></div>
             <div class="fiche-row"><span>Total payé</span><strong class="mono success">{{ e.total_paye | number }} FCFA</strong></div>
             <div class="fiche-row"><span>Reste à payer</span>
@@ -239,19 +351,19 @@ import { InputNumberModule } from 'primeng/inputnumber';
               </strong>
             </div>
             <div class="fiche-row"><span>Alerte</span>
-              <p-tag [value]="e.niveau_alerte" [severity]="alerteSeverity(e.niveau_alerte)" /></div>
+              <p-tag [value]="alerteLabel(e.niveau_alerte)" [severity]="alerteSeverity(e.niveau_alerte)" /></div>
           </div>
         </div>
       }
       <ng-template pTemplate="footer">
-        <p-button label="📄 Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
+        <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
                   (onClick)="genererCertificat(eleveSelectionne())" />
         <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
       </ng-template>
     </p-dialog>
 
-    <!-- Dialog Changer Statut -->
-    <p-dialog header="🔄 Changer le statut" [(visible)]="dialogStatutVisible"
+    <!-- ══════════════════════ DIALOG CHANGER STATUT ══════════════════════ -->
+    <p-dialog header="Changer le statut" [(visible)]="dialogStatutVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
       @if (eleveSelectionne()) {
         <div style="margin-bottom:14px">
@@ -269,31 +381,90 @@ import { InputNumberModule } from 'primeng/inputnumber';
       </ng-template>
     </p-dialog>
 
-    <!-- Dialog Prise en charge -->
-    <p-dialog header="🤝 Prise en charge" [(visible)]="dialogPECVisible"
-              [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+    <!-- ══════════════════════ DIALOG PRISE EN CHARGE ══════════════════════ -->
+    <p-dialog header="Prise en charge" [(visible)]="dialogPECVisible"
+              [modal]="true" [style]="{width:'520px'}" [draggable]="false">
       @if (eleveSelectionne()) {
-        <div style="margin-bottom:14px">
-          <strong style="color:#e8f0fe">{{ eleveSelectionne()!.nom_complet }}</strong>
+        @let e = eleveSelectionne()!;
+        <div class="pec-eleve-header">
+          <strong>{{ e.nom_complet }}</strong>
+          <span>{{ e.section_nom }}</span>
         </div>
+
         <div class="form-grid">
+          <!-- Motif -->
           <div class="form-group full">
-            <label>Catégorie</label>
+            <label>Motif / Catégorie</label>
             <p-select [options]="categoriesPEC" [(ngModel)]="formPEC.prise_en_charge"
                       optionLabel="label" optionValue="value" styleClass="w-full"
                       placeholder="Aucune prise en charge" [showClear]="true" />
           </div>
+
+          <!-- Type PEC -->
           <div class="form-group full">
-            <label>Taux de prise en charge (%)</label>
-            <p-inputNumber [(ngModel)]="formPEC.taux_prise_en_charge"
-                           [min]="0" [max]="100" mode="decimal" styleClass="w-full" />
+            <label>Type de prise en charge</label>
+            <p-select [options]="typesPEC" [(ngModel)]="formPEC.type_pec"
+                      optionLabel="label" optionValue="value" styleClass="w-full"
+                      placeholder="Sélectionner le type" [showClear]="true" />
           </div>
+
+          <!-- Taux inscription — si INSCRIPTION ou TOTALE -->
+          @if (formPEC.type_pec === 'INSCRIPTION' || formPEC.type_pec === 'TOTALE') {
+            <div class="form-group">
+              <label>Taux prise en charge inscription (%)</label>
+              <p-inputNumber [(ngModel)]="formPEC.taux_pec_inscription"
+                             [min]="0" [max]="100" [step]="5" mode="decimal"
+                             styleClass="w-full" placeholder="0 – 100" />
+            </div>
+          }
+
+          <!-- Taux mensualité — si MENSUALITES ou TOTALE -->
+          @if (formPEC.type_pec === 'MENSUALITES' || formPEC.type_pec === 'TOTALE') {
+            <div class="form-group">
+              <label>Taux prise en charge mensualités (%)</label>
+              <p-inputNumber [(ngModel)]="formPEC.taux_pec_mensualite"
+                             [min]="0" [max]="100" [step]="5" mode="decimal"
+                             styleClass="w-full" placeholder="0 – 100" />
+            </div>
+          }
+
+          <!-- Observations -->
           <div class="form-group full">
             <label>Observations</label>
             <input pInputText [(ngModel)]="formPEC.obs_prise_en_charge" class="w-full"
-                   placeholder="Ex: Orphelin de père, suivi par la commune..." />
+                   placeholder="Ex : Orphelin de père, suivi par la commune…" />
           </div>
         </div>
+
+        <!-- Simulation financière -->
+        @if (formPEC.type_pec && previewPEC()) {
+          @let pv = previewPEC()!;
+          <div class="pec-preview">
+            <div class="pec-preview-title">Simulation impact financier</div>
+            <div class="pec-preview-grid">
+              @if (pv.inscr > 0) {
+                <div class="pv-row">
+                  <span>Réduction inscription</span>
+                  <strong style="color:#3b82f6">{{ pv.inscr | number:'1.0-0' }} FCFA</strong>
+                </div>
+              }
+              @if (pv.mens > 0) {
+                <div class="pv-row">
+                  <span>Réduction mensualité</span>
+                  <strong style="color:#3b82f6">{{ pv.mens | number:'1.0-0' }} FCFA / mois</strong>
+                </div>
+              }
+              <div class="pv-row highlight">
+                <span>Prise en charge annuelle totale</span>
+                <strong style="color:#f59e0b">{{ pv.annuel | number:'1.0-0' }} FCFA</strong>
+              </div>
+              <div class="pv-row">
+                <span>Reste à payer par l'élève</span>
+                <strong style="color:#10b981">{{ pv.restant | number:'1.0-0' }} FCFA</strong>
+              </div>
+            </div>
+          </div>
+        }
       }
       <ng-template pTemplate="footer">
         <p-button label="Annuler" severity="secondary" (onClick)="dialogPECVisible=false" />
@@ -301,9 +472,9 @@ import { InputNumberModule } from 'primeng/inputnumber';
       </ng-template>
     </p-dialog>
 
-    <!-- Dialog Nouvel Élève -->
+    <!-- ══════════════════════ DIALOG NOUVEL ÉLÈVE ══════════════════════ -->
     <p-dialog [header]="'eleves.nouveau' | translate" [(visible)]="dialogVisible"
-              [modal]="true" [style]="{width: '480px'}" [draggable]="false">
+              [modal]="true" [style]="{width:'480px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
           <label>{{ 'eleves.nom_complet' | translate }} *</label>
@@ -312,13 +483,13 @@ import { InputNumberModule } from 'primeng/inputnumber';
         <div class="form-group">
           <label>{{ 'eleves.section' | translate }} *</label>
           <p-select [options]="sections()" [(ngModel)]="nouvelEleve.section"
-                      optionLabel="nom" optionValue="id"
-                      [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
+                    optionLabel="nom" optionValue="id"
+                    [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
         <div class="form-group">
           <label>{{ 'eleves.genre' | translate }}</label>
           <p-select [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
-                      optionLabel="label" optionValue="value" styleClass="w-full" />
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
           <label>{{ 'eleves.date_naissance' | translate }}</label>
@@ -349,7 +520,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible = false" />
+        <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
         <p-button [label]="'common.enregistrer'| translate" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
       </ng-template>
     </p-dialog>
@@ -370,12 +541,27 @@ import { InputNumberModule } from 'primeng/inputnumber';
     .km-val   { display:block; font-size:22px; font-weight:700; color:#e8f0fe; font-family:monospace; }
     .km-label { display:block; font-size:10px; color:#64748b; text-transform:uppercase; margin-top:2px; }
 
+    /* Panel stats financières */
+    .stats-panel { background:#111827; border:1px solid #2a3f5f; border-radius:10px;
+                   padding:14px 18px; margin-bottom:14px; }
+    .stats-panel-title { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase;
+                         letter-spacing:.5px; margin-bottom:12px; }
+    .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .stat-item { background:#1e2d45; border-radius:8px; padding:10px 12px; }
+    .stat-label { display:block; font-size:10px; color:#64748b; text-transform:uppercase;
+                  letter-spacing:.3px; margin-bottom:4px; }
+    .stat-val { display:block; font-size:15px; font-weight:700; color:#e8f0fe; font-family:monospace; }
+    .stat-val.success { color:#10b981; }
+    .stat-val.danger  { color:#ef4444; }
+    .stat-val.warn    { color:#f59e0b; }
+
     .filters-bar { display:flex; gap:12px; margin-bottom:16px; }
     .search-input { flex:1; }
     ::ng-deep .filter-drop { min-width:160px; }
 
     .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
-    .table-toolbar { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; }
+    .table-toolbar { display:flex; justify-content:space-between; align-items:center;
+                     padding:12px 16px; border-bottom:1px solid #2a3f5f; }
     .tbl-count { color:#e8f0fe; font-weight:600; font-size:13px; }
 
     ::ng-deep .p-datatable .p-datatable-thead > tr > th {
@@ -396,62 +582,109 @@ import { InputNumberModule } from 'primeng/inputnumber';
     .btn-row { display:flex; gap:2px; }
     .text-right { text-align:right; }
 
+    /* Fiche */
     .fiche-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .fiche-section { background:#111827; border-radius:8px; padding:12px; }
-    .fiche-title { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; margin-bottom:8px; letter-spacing:.5px; }
+    .fiche-title { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase;
+                   margin-bottom:8px; letter-spacing:.5px; }
     .fiche-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0;
                  border-bottom:1px solid rgba(42,63,95,0.3); font-size:11px; }
     .fiche-row span { color:#64748b; }
     .fiche-row strong { color:#e8f0fe; }
 
+    /* Formulaires */
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:5px; }
     .form-group.full { grid-column:1/-1; }
     .form-group label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; }
     .w-full { width:100%; }
+
+    /* Dialog PEC */
+    .pec-eleve-header { display:flex; align-items:center; gap:10px; margin-bottom:16px;
+                        padding:10px 14px; background:#111827; border-radius:8px; }
+    .pec-eleve-header strong { color:#e8f0fe; font-size:14px; }
+    .pec-eleve-header span { color:#64748b; font-size:12px; }
+
+    .pec-preview { background:#111827; border:1px solid #2a3f5f; border-radius:8px;
+                   padding:14px; margin-top:16px; }
+    .pec-preview-title { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase;
+                         letter-spacing:.5px; margin-bottom:10px; }
+    .pec-preview-grid { display:flex; flex-direction:column; gap:6px; }
+    .pv-row { display:flex; justify-content:space-between; align-items:center;
+              padding:5px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; }
+    .pv-row span { color:#94a3b8; }
+    .pv-row.highlight { border-top:1px solid #2a3f5f; margin-top:4px; padding-top:8px;
+                        border-bottom:none; }
   `]
 })
 export class ElevesListeComponent implements OnInit {
+  private translate     = inject(TranslateService);
+  private elevesService = inject(ElevesService);
+  private msg           = inject(MessageService);
+
   eleves        = signal<Eleve[]>([]);
   elevesFiltres = signal<Eleve[]>([]);
   sections      = signal<any[]>([]);
+  statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);
   saving        = signal(false);
   onglet        = signal<'liste' | 'prise_en_charge'>('liste');
 
-  dialogVisible      = false;
-  dialogFicheVisible = false;
+  dialogVisible       = false;
+  dialogFicheVisible  = false;
   dialogStatutVisible = false;
-  dialogPECVisible   = false;
-  eleveSelectionne   = signal<any | null>(null);
-  recherche     = '';
-  filtreAlerte  = '';
-  filtreStatut  = '';
-  formStatut    = 'INSCRIT';
-  formPEC: any  = {};
+  dialogPECVisible    = false;
+  eleveSelectionne    = signal<Eleve | null>(null);
 
-  private translate = inject(TranslateService);
-  private elevesService = inject(ElevesService);
+  recherche    = '';
+  filtreAlerte = '';
+  filtreStatut = '';
+  formStatut   = 'INSCRIT';
+  formPEC: PecForm = this.pecFormVide();
 
-  elevesPEC = computed(() => this.eleves().filter(e => e.prise_en_charge));
+  elevesPEC = computed(() =>
+    this.eleves().filter(e => e.prise_en_charge || e.type_pec)
+  );
+
+  previewPEC = computed(() => {
+    const eleve = this.eleveSelectionne();
+    const form  = this.formPEC;
+    if (!eleve || !form.type_pec) return null;
+    const section = this.sections().find(s => s.id === eleve.section);
+    if (!section) return null;
+    const tauxI   = (form.taux_pec_inscription || 0) / 100;
+    const tauxM   = (form.taux_pec_mensualite   || 0) / 100;
+    const type    = form.type_pec;
+    const inscr   = (type === 'INSCRIPTION' || type === 'TOTALE')
+                    ? Math.round(section.frais_inscription * tauxI) : 0;
+    const mens    = (type === 'MENSUALITES'  || type === 'TOTALE')
+                    ? Math.round(section.frais_mensualite  * tauxM) : 0;
+    const annuel  = inscr + mens * 10;
+    const restant = Math.max((section.total_annuel || 0) - annuel, 0);
+    return { inscr, mens, annuel, restant };
+  });
+
+  nouvelEleve: Partial<Eleve> = {};
 
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
-    { label: '🔴 URGENT',     value: 'URGENT' },
-    { label: '🟡 ATTENTION',  value: 'ATTENTION' },
-    { label: '✅ OK',         value: 'OK' },
+    { label: 'CRITIQUE',       value: 'CRITIQUE' },
+    { label: 'URGENT',         value: 'URGENT' },
+    { label: 'ATTENTION',      value: 'ATTENTION' },
+    { label: 'OK',             value: 'OK' },
+    { label: 'A JOUR',         value: 'A_JOUR' },
   ];
   filtresStatut = [
     { label: 'Tous statuts',  value: '' },
-    { label: '✅ Inscrit',    value: 'INSCRIT' },
-    { label: '❌ Abandonné',  value: 'ABANDONNE' },
-    { label: '↗️ Transféré', value: 'TRANSFERE' },
-    { label: '🎓 Diplômé',   value: 'DIPLOME' },
+    { label: 'Inscrit',       value: 'INSCRIT' },
+    { label: 'Abandonné',     value: 'ABANDONNE' },
+    { label: 'Transféré',     value: 'TRANSFERE' },
+    { label: 'Diplômé',       value: 'DIPLOME' },
   ];
   statutOptions = [
-    { label: 'Inscrit',    value: 'INSCRIT' },
-    { label: 'Abandonné',  value: 'ABANDONNE' },
-    { label: 'Transféré',  value: 'TRANSFERE' },
+    { label: 'Inscrit',   value: 'INSCRIT' },
+    { label: 'Abandonné', value: 'ABANDONNE' },
+    { label: 'Transféré', value: 'TRANSFERE' },
     { label: 'Diplômé',   value: 'DIPLOME' },
   ];
   categoriesPEC = [
@@ -460,18 +693,27 @@ export class ElevesListeComponent implements OnInit {
     { label: 'Famille démunie', value: 'FAMILLE_DEMUNIE' },
     { label: 'Autre',           value: 'AUTRE' },
   ];
+  typesPEC = [
+    { label: "Frais d'inscription uniquement", value: 'INSCRIPTION' },
+    { label: 'Mensualités uniquement',          value: 'MENSUALITES' },
+    { label: 'Prise en charge totale',          value: 'TOTALE' },
+  ];
   genreOptions = [
     { label: 'Garçon', value: 'G' },
     { label: 'Fille',  value: 'F' },
   ];
 
-  nouvelEleve: Partial<Eleve> = {};
-
-  constructor(private msg: MessageService) {}
-
   ngOnInit() {
     this.chargerEleves();
     this.chargerSections();
+  }
+
+  basculerOnglet() {
+    const next = this.onglet() === 'liste' ? 'prise_en_charge' : 'liste';
+    this.onglet.set(next);
+    if (next === 'prise_en_charge' && !this.statsPEC()) {
+      this.chargerStatsPEC();
+    }
   }
 
   chargerEleves() {
@@ -493,40 +735,56 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  chargerStatsPEC() {
+    this.elevesService.getPriseEnChargeStats().subscribe({
+      next: stats => this.statsPEC.set(stats),
+      error: ()   => {}
+    });
+  }
+
   filtrer() {
     let data = this.eleves();
     if (this.recherche)    data = data.filter(e => e.nom_complet.toLowerCase().includes(this.recherche.toLowerCase()));
-    if (this.filtreAlerte) data = data.filter(e => (e as any).niveau_alerte === this.filtreAlerte);
-    if (this.filtreStatut) data = data.filter(e => (e as any).statut === this.filtreStatut);
+    if (this.filtreAlerte) data = data.filter(e => e.niveau_alerte === this.filtreAlerte as NiveauAlerte);
+    if (this.filtreStatut) data = data.filter(e => e.statut === this.filtreStatut);
     this.elevesFiltres.set(data);
   }
 
-  countStatut(s: string) { return this.eleves().filter(e => (e as any).statut === s).length; }
-  countGenre(g: string)  { return this.eleves().filter(e => e.genre === g).length; }
-  countPEC(cat: string)  { return this.eleves().filter(e => (e as any).prise_en_charge === cat).length; }
+  countStatut(s: string)      { return this.eleves().filter(e => e.statut === s).length; }
+  countGenre(g: string)       { return this.eleves().filter(e => e.genre === g).length; }
+  countTypePEC(t: TypePEC)    { return this.elevesPEC().filter(e => e.type_pec === t).length; }
 
-  alerteSeverity(a: string): 'danger' | 'warn' | 'success' {
-    return a === 'URGENT' ? 'danger' : a === 'ATTENTION' ? 'warn' : 'success';
+  alerteLabel(a: NiveauAlerte | string): string {
+    return { CRITIQUE: 'CRITIQUE', URGENT: 'URGENT', ATTENTION: 'ATTENTION', OK: 'OK', A_JOUR: 'A JOUR' }[a] || a;
+  }
+  alerteSeverity(a: NiveauAlerte | string): 'danger' | 'warn' | 'success' | 'secondary' {
+    return ({ CRITIQUE:'danger', URGENT:'danger', ATTENTION:'warn', OK:'success', A_JOUR:'success' } as any)[a] || 'secondary';
   }
   statutLabel(s: string) {
     return { INSCRIT:'Inscrit', ABANDONNE:'Abandonné', TRANSFERE:'Transféré', DIPLOME:'Diplômé' }[s] || s;
   }
-  statutSeverity(s: string): any {
-    return { INSCRIT:'success', ABANDONNE:'danger', TRANSFERE:'warn', DIPLOME:'info' }[s] || 'secondary';
+  statutSeverity(s: string): 'success' | 'danger' | 'warn' | 'info' | 'secondary' {
+    return ({ INSCRIT:'success', ABANDONNE:'danger', TRANSFERE:'warn', DIPLOME:'info' } as any)[s] || 'secondary';
   }
-  pecLabel(c: string) {
-    return { ORPHELIN:'Orphelin', HANDICAP:'Handicap', FAMILLE_DEMUNIE:'Fam. démunie', AUTRE:'Autre' }[c] || c;
+  pecLabel(c: string | null): string {
+    return { ORPHELIN:'Orphelin', HANDICAP:'Handicap', FAMILLE_DEMUNIE:'Fam. démunie', AUTRE:'Autre' }[c || ''] || (c || '—');
   }
-  pecSeverity(c: string): any {
-    return { ORPHELIN:'danger', HANDICAP:'warn', FAMILLE_DEMUNIE:'info', AUTRE:'secondary' }[c] || 'secondary';
+  pecSeverity(c: string | null): 'danger' | 'warn' | 'info' | 'secondary' {
+    return ({ ORPHELIN:'danger', HANDICAP:'warn', FAMILLE_DEMUNIE:'info', AUTRE:'secondary' } as any)[c || ''] || 'secondary';
+  }
+  typePecLabel(t: TypePEC | null): string {
+    return { INSCRIPTION:'Inscription', MENSUALITES:'Mensualités', TOTALE:'Totale' }[t || ''] || (t || '—');
+  }
+  typePecSeverity(t: TypePEC | null): 'info' | 'success' | 'warn' | 'secondary' {
+    return ({ INSCRIPTION:'info', MENSUALITES:'success', TOTALE:'warn' } as any)[t || ''] || 'secondary';
   }
 
-  voirFiche(eleve: any) {
+  voirFiche(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.dialogFicheVisible = true;
   }
 
-  genererCertificat(eleve: any) {
+  genererCertificat(eleve: Eleve | null) {
     if (!eleve?.id) return;
     this.elevesService.telechargerCertificat(eleve.id).subscribe({
       next: (blob: Blob) => {
@@ -544,7 +802,7 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
-  ouvrirChangerStatut(eleve: any) {
+  ouvrirChangerStatut(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.formStatut = eleve.statut || 'INSCRIT';
     this.dialogStatutVisible = true;
@@ -554,7 +812,7 @@ export class ElevesListeComponent implements OnInit {
     const e = this.eleveSelectionne();
     if (!e) return;
     this.saving.set(true);
-    this.elevesService.updateEleve(e.id, { statut: this.formStatut } as any).subscribe({
+    this.elevesService.updateEleve(e.id, { statut: this.formStatut } as Partial<Eleve>).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: 'Statut mis à jour', detail: e.nom_complet });
         this.dialogStatutVisible = false;
@@ -565,12 +823,14 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
-  ouvrirPriseEnCharge(eleve: any) {
+  ouvrirPriseEnCharge(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.formPEC = {
       prise_en_charge:      eleve.prise_en_charge || null,
-      taux_prise_en_charge: eleve.taux_prise_en_charge || 0,
-      obs_prise_en_charge:  eleve.obs_prise_en_charge || '',
+      type_pec:             eleve.type_pec        || null,
+      taux_pec_inscription: eleve.taux_pec_inscription || 0,
+      taux_pec_mensualite:  eleve.taux_pec_mensualite  || 0,
+      obs_prise_en_charge:  eleve.obs_prise_en_charge  || '',
     };
     this.dialogPECVisible = true;
   }
@@ -579,11 +839,20 @@ export class ElevesListeComponent implements OnInit {
     const e = this.eleveSelectionne();
     if (!e) return;
     this.saving.set(true);
-    this.elevesService.updateEleve(e.id, this.formPEC).subscribe({
+    const payload: Partial<Eleve> = {
+      prise_en_charge:      this.formPEC.prise_en_charge || undefined,
+      type_pec:             this.formPEC.type_pec        || undefined,
+      taux_pec_inscription: this.formPEC.taux_pec_inscription,
+      taux_pec_mensualite:  this.formPEC.taux_pec_mensualite,
+      obs_prise_en_charge:  this.formPEC.obs_prise_en_charge,
+    } as Partial<Eleve>;
+    this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Prise en charge enregistrée' });
+        this.msg.add({ severity: 'success', summary: 'Prise en charge enregistrée',
+                       detail: e.nom_complet });
         this.dialogPECVisible = false;
         this.saving.set(false);
+        this.statsPEC.set(null);  // invalider le cache stats
         this.chargerEleves();
       },
       error: () => this.saving.set(false),
@@ -616,5 +885,11 @@ export class ElevesListeComponent implements OnInit {
         this.saving.set(false);
       }
     });
+  }
+
+  private pecFormVide(): PecForm {
+    return { prise_en_charge: null, type_pec: null,
+             taux_pec_inscription: 0, taux_pec_mensualite: 0,
+             obs_prise_en_charge: '' };
   }
 }

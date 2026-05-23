@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
-import { Eleve, Section, PaginatedResponse } from '../models/eleve.model';
+import { Eleve, Section, PaginatedResponse, PriseEnChargeStats } from '../models/eleve.model';
 
 @Injectable({ providedIn: 'root' })
 export class ElevesService {
@@ -36,6 +36,10 @@ export class ElevesService {
 
   telechargerCertificat(eleveId: string) {
     return this.api.getBlob(`/eleves/${eleveId}/certificat/`);
+  }
+
+  getPriseEnChargeStats() {
+    return this.api.get<PriseEnChargeStats>('/eleves/prises-en-charge/stats/');
   }
 
   getSections() {
