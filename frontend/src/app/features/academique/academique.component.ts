@@ -35,6 +35,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <button class="tab-btn" [class.active]="onglet()==='parametrage'" (click)="onglet.set('parametrage')">⚙️ {{ 'academique.onglet_parametrage' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='notes'" (click)="onglet.set('notes')">📝 {{ 'academique.onglet_notes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 {{ 'academique.onglet_resultats' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet()==='analyse'" (click)="onglet.set('analyse'); chargerAnalyse()">📈 Analyse</button>
     </div>
 
     <!-- PARAMÉTRAGE -->
@@ -253,6 +254,109 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
     </div>
 
+    <!-- ANALYSE PERFORMANCE -->
+    <div *ngIf="onglet()==='analyse'">
+      @if (loadingAnalyse()) {
+        <div class="empty-msg" style="padding:40px; text-align:center; color:#64748b">Chargement...</div>
+      } @else if (analyse()) {
+        <!-- KPI distribution -->
+        <div class="analyse-grid" style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px">
+          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #f59e0b">
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Excellent ≥16</div>
+            <div style="font-size:22px; font-weight:700; color:#f59e0b">{{ analyse()!.distribution.excellent }}</div>
+          </div>
+          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #10b981">
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Bien ≥14</div>
+            <div style="font-size:22px; font-weight:700; color:#10b981">{{ analyse()!.distribution.bien }}</div>
+          </div>
+          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #0099ff">
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Assez bien ≥12</div>
+            <div style="font-size:22px; font-weight:700; color:#0099ff">{{ analyse()!.distribution.assez_bien }}</div>
+          </div>
+          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #a855f7">
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Passable ≥10</div>
+            <div style="font-size:22px; font-weight:700; color:#a855f7">{{ analyse()!.distribution.passable }}</div>
+          </div>
+          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #ef4444">
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Insuffisant &lt;10</div>
+            <div style="font-size:22px; font-weight:700; color:#ef4444">{{ analyse()!.distribution.insuffisant }}</div>
+          </div>
+        </div>
+
+        <!-- Évolution par trimestre -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+
+          <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden">
+            <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">📈 Évolution par trimestre</div>
+            <table style="width:100%; border-collapse:collapse">
+              <thead><tr>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Trimestre</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Élèves</th>
+              </tr></thead>
+              <tbody>
+                @for (t of analyse()!.evolution; track t.trimestre) {
+                  <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
+                    <td style="padding:8px 12px; font-weight:600; color:#00d4aa">{{ t.trimestre }}</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#e8f0fe">{{ t.moyenne }}/20</td>
+                    <td style="padding:8px 12px; text-align:right; color:#64748b">{{ t.nb_eleves }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Top classes -->
+          <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden">
+            <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">🏫 Top Classes — {{ analyse()!.trimestre_ref }}</div>
+            <table style="width:100%; border-collapse:collapse">
+              <thead><tr>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Rang</th>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Classe</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Effectif</th>
+              </tr></thead>
+              <tbody>
+                @for (c of analyse()!.top_classes; track c.rang) {
+                  <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
+                    <td style="padding:8px 12px; color:#f59e0b; font-weight:700">{{ c.rang }}</td>
+                    <td style="padding:8px 12px; color:#e8f0fe">{{ c.classe }}</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa">{{ c.moyenne }}/20</td>
+                    <td style="padding:8px 12px; text-align:right; color:#64748b">{{ c.nb }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Top élèves -->
+        <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-top:16px">
+          <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">🏆 Top 10 Élèves — {{ analyse()!.trimestre_ref }}</div>
+          <table style="width:100%; border-collapse:collapse">
+            <thead><tr>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Rang</th>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Élève</th>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Classe</th>
+              <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
+            </tr></thead>
+            <tbody>
+              @for (e of analyse()!.top_eleves; track e.rang) {
+                <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
+                  <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : '#64748b' }}">{{ e.rang }}</td>
+                  <td style="padding:8px 12px; font-weight:600; color:#e8f0fe">{{ e.nom }}</td>
+                  <td style="padding:8px 12px; color:#64748b">{{ e.classe }}</td>
+                  <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa; font-weight:700">{{ e.moyenne }}/20</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div style="text-align:center; padding:60px; color:#64748b">Aucune donnée disponible. Calculez d'abord les moyennes.</div>
+      }
+    </div>
+
     <!-- Dialog Classe -->
     <p-dialog [header]="'🏫 ' + ('academique.nouvelle_classe' | translate)" [(visible)]="dialogClasseVisible"
               [modal]="true" [style]="{width:'400px'}">
@@ -412,9 +516,11 @@ export class AcademiqueComponent implements OnInit {
   resultats     = signal<any[]>([]);
   statsClasse   = signal<any>(null);
   colonnesMatieres = signal<string[]>([]);
-  loading  = signal(false);
-  saving   = signal(false);
-  calculant= signal(false);
+  loading       = signal(false);
+  saving        = signal(false);
+  calculant     = signal(false);
+  loadingAnalyse= signal(false);
+  analyse       = signal<any>(null);
 
   classeFiltre    = '';
   classeNotes     = '';
@@ -464,6 +570,15 @@ export class AcademiqueComponent implements OnInit {
     if (!this.classeFiltre) return;
     this.acad.getMatieres({ classe: this.classeFiltre }).subscribe({
       next: r => this.matieres.set(r.results || [])
+    });
+  }
+
+  chargerAnalyse() {
+    if (this.analyse()) return;
+    this.loadingAnalyse.set(true);
+    this.acad.getAnalysePerformance().subscribe({
+      next: r => { this.analyse.set(r); this.loadingAnalyse.set(false); },
+      error: ()  => this.loadingAnalyse.set(false),
     });
   }
 

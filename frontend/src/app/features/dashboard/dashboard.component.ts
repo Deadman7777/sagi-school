@@ -288,6 +288,36 @@ import { DecimalPipe, DatePipe } from '@angular/common';
           </div>
         </div>
 
+        @if (auditLog().length > 0) {
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">🔍 Journal d'audit (100 dernières actions)</div>
+            <p-table [value]="auditLog()" styleClass="p-datatable-sm" [rows]="10" [paginator]="true">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th style="width:140px">Date</th>
+                  <th style="width:100px">Action</th>
+                  <th style="width:130px">Module</th>
+                  <th style="width:140px">Utilisateur</th>
+                  <th>Détail</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-e>
+                <tr>
+                  <td class="mono" style="font-size:11px">{{ e.created_at | date:'dd/MM/yy HH:mm' }}</td>
+                  <td>
+                    <p-tag [value]="e.action"
+                           [severity]="e.action === 'DELETE' || e.action === 'ANNULER' ? 'danger' : e.action === 'VALIDATE' ? 'success' : 'info'"
+                           [style]="{'font-size':'10px'}" />
+                  </td>
+                  <td style="font-size:11px; color:#94a3b8">{{ e.modele }}</td>
+                  <td style="font-size:11px">{{ e.utilisateur }}</td>
+                  <td style="font-size:11px; color:#64748b">{{ e.description }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </div>
+        }
+
         @if (alertes().length > 0) {
           <div class="card">
             <div class="card-header">📋 {{ 'dashboard.relancer' | translate }}</div>
@@ -381,6 +411,7 @@ export class DashboardComponent implements OnInit {
   saData           = signal<DashboardSuperAdmin | null>(null);
   alertes          = signal<any[]>([]);
   tresoCanaux      = signal<TresorerieCanaux | null>(null);
+  auditLog         = signal<any[]>([]);
 
   constructor(
     private dashService: DashboardService,
@@ -410,6 +441,10 @@ export class DashboardComponent implements OnInit {
       });
       this.dashService.getTresorerieCanaux().subscribe({
         next:  res => this.tresoCanaux.set(res),
+        error: () => {}
+      });
+      this.dashService.getAuditLog().subscribe({
+        next:  res => this.auditLog.set(res),
         error: () => {}
       });
     }

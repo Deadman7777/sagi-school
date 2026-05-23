@@ -30,4 +30,8 @@ export class AcademiqueService {
   getElevesPourClasse(classeId: string) {
     return this.api.get<any[]>(`/academique/classes/${classeId}/eleves/`);
   }
+
+  getAnalysePerformance() {
+    return this.api.get<any>('/academique/analyse/');
+  }
 }

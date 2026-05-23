@@ -46,4 +46,5 @@ export class DashboardService {
   getAlertes()           { return this.api.get<any[]>('/dashboard/alertes/'); }
   getSuperAdmin()        { return this.api.get<DashboardSuperAdmin>('/dashboard/superadmin/'); }
   getTresorerieCanaux()  { return this.api.get<TresorerieCanaux>('/dashboard/tresorerie-canaux/'); }
+  getAuditLog()          { return this.api.get<any[]>('/dashboard/audit-log/'); }
 }

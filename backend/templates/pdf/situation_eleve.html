@@ -1,0 +1,104 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Situation Financière Élève{% endblock %}
+{% block content %}
+
+<!-- Info élève -->
+<table class="kpi-table" style="margin-bottom:10px">
+  <tr>
+    <td style="text-align:left; padding:10px 14px">
+      <div class="kb-label">Nom complet</div>
+      <div style="font-size:14px; font-weight:bold; color:#1a1a2e; margin-top:4px">{{ eleve.nom_complet }}</div>
+    </td>
+    <td style="text-align:left; padding:10px 14px">
+      <div class="kb-label">Section</div>
+      <div style="font-size:12px; font-weight:bold; margin-top:4px">{{ section_nom }}</div>
+    </td>
+    <td style="text-align:left; padding:10px 14px">
+      <div class="kb-label">Matricule</div>
+      <div style="font-size:12px; font-weight:bold; margin-top:4px">{{ eleve.matricule|default:"—" }}</div>
+    </td>
+    <td style="text-align:left; padding:10px 14px">
+      <div class="kb-label">Statut</div>
+      <div style="font-size:12px; font-weight:bold; margin-top:4px">{{ eleve.statut }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- KPIs financiers -->
+<table class="kpi-table">
+  <tr>
+    <td>
+      <div class="kb-label">Total Attendu</div>
+      <div class="kb-val kb-blue">{{ total_attendu|floatformat:0 }} FCFA</div>
+    </td>
+    <td>
+      <div class="kb-label">Total Payé</div>
+      <div class="kb-val kb-green">{{ total_paye|floatformat:0 }} FCFA</div>
+    </td>
+    <td>
+      <div class="kb-label">Reste à Payer</div>
+      <div class="kb-val {% if reste > 0 %}red{% else %}kb-green{% endif %}">{{ reste|floatformat:0 }} FCFA</div>
+    </td>
+    <td>
+      <div class="kb-label">Nb Paiements</div>
+      <div class="kb-val kb-teal">{{ nb_paiements }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- Tableau paiements -->
+<div class="section-title">Détail des paiements</div>
+
+{% if paiements %}
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>N° Reçu</th>
+      <th>Mode</th>
+      <th class="text-right">Inscription</th>
+      <th class="text-right">Mensualité</th>
+      <th class="text-right">Uniforme</th>
+      <th class="text-right">Fournitures</th>
+      <th class="text-right">Cantine</th>
+      <th class="text-right">Divers</th>
+      <th class="text-right">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in paiements %}
+    <tr>
+      <td>{{ p.date|date:"d/m/Y" }}</td>
+      <td>{{ p.no_recu }}</td>
+      <td>{{ p.mode }}</td>
+      <td class="text-right">{% if p.inscription %}{{ p.inscription|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right">{% if p.mensualite %}{{ p.mensualite|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right">{% if p.uniforme %}{{ p.uniforme|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right">{% if p.fournitures %}{{ p.fournitures|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right">{% if p.cantine %}{{ p.cantine|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right">{% if p.divers %}{{ p.divers|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="text-right bold">{{ p.total|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="9" class="bold">TOTAL</td>
+      <td class="text-right bold">{{ total_paye|floatformat:0 }} FCFA</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- Solde -->
+<table class="resultat-table {% if reste == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+  <tr>
+    <td class="rb-label">{% if reste == 0 %}Situation soldée ✓{% else %}Reste à payer{% endif %}</td>
+    <td class="rb-val {% if reste == 0 %}green{% else %}red{% endif %}">{{ reste|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+
+{% else %}
+<p style="padding:20px; text-align:center; color:#999;">Aucun paiement enregistré pour cet exercice.</p>
+{% endif %}
+
+{% endblock %}

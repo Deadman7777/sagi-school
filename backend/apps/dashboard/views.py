@@ -8,6 +8,7 @@ from django.core.cache import cache
 from apps.eleves.models import Eleve
 from apps.paiements.models import Paiement, Exercice
 from apps.comptabilite.models import JournalEntry
+from .models import AuditLog
 
 
 def get_tenant(request):
@@ -428,3 +429,22 @@ class DashboardTresorerieCanauView(APIView):
                 'solde':         round(total_initial + total_enc - total_dec, 2),
             },
         })
+
+
+class AuditLogView(APIView):
+    """Journal d'audit admin-only — 100 dernières entrées du tenant."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant = get_tenant(request)
+        qs = AuditLog.objects.filter(tenant=tenant).order_by('-created_at')[:100]
+        data = [{
+            'id':          str(e.id),
+            'action':      e.action,
+            'modele':      e.modele,
+            'objet_id':    e.objet_id,
+            'utilisateur': e.utilisateur,
+            'description': e.description,
+            'created_at':  e.created_at.isoformat(),
+        } for e in qs]
+        return Response(data)

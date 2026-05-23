@@ -950,31 +950,56 @@ class HistoriqueExercicesView(APIView):
 class ChargeView(APIView):
     permission_classes = [IsAuthenticated]
 
-    # Comptes de charge acceptés (6xx + immobilisations 2xx)
+    # Comptes de charge acceptés (6xx + immobilisations 2xx) — SYSCOHADA Révisé
     PLAN_CHARGES = {
+        # Classe 2 — Acquisitions immobilisées
         '221': 'Bâtiments (acquisition)',
         '231': 'Matériel et outillage (acquisition)',
-        '241': 'Mobilier (acquisition)',
-        '244': 'Matériel informatique (acquisition)',
+        '241': 'Matériel et mobilier (acquisition)',
+        '244': 'Matériel et mobilier',
         '245': 'Matériel de transport (acquisition)',
+        '248': 'Autres matériels et équipements',
+        # Classe 6 — Achats
         '601': 'Achats de marchandises',
-        '602': 'Achats de matières premières',
-        '604': 'Achats de fournitures',
-        '606': 'Eau, électricité, fournitures',
-        '611': 'Transports',
-        '612': 'Loyer',
-        '613': 'Locations diverses',
-        '621': 'Personnel extérieur',
-        '622': 'Rémunérations intermédiaires',
-        '623': 'Publicité',
-        '624': 'Transport du personnel',
-        '625': 'Déplacements et missions',
+        '604': 'Achats stockés — matières et fournitures',
+        '605': 'Autres achats',
+        '6051': 'Fournitures non stockables — Eau',
+        '6052': 'Fournitures non stockables — Électricité',
+        '6054': 'Matériel et fournitures non stockables',
+        # Transports
+        '614': 'Transports du personnel',
+        '618': 'Autres frais de transport',
+        # Services extérieurs A
+        '621': 'Sous-traitance générale',
+        '622': 'Locations et charges locatives',
+        '624': 'Entretien, réparations et maintenance',
+        '625': "Primes d'assurance",
+        '626': 'Études, recherches et documentation',
+        '627': 'Publicité, publications et relations publiques',
+        '628': 'Frais de télécommunications',
+        # Services extérieurs B
         '631': 'Frais bancaires',
-        '641': 'Impôts et taxes',
-        '651': 'Pertes sur créances',
-        '661': 'Salaires',
-        '662': 'Charges sociales (IPRES / CSS)',
-        '681': 'Dotations aux amortissements',
+        '633': 'Frais de formation du personnel',
+        '635': 'Frais de déplacements et de réception',
+        # Impôts et taxes
+        '641': 'Impôts directs',
+        '6413': 'Taxes sur la masse salariale (CFCE)',
+        '645': "Droits d'enregistrement et de timbre",
+        # Autres charges
+        '651': 'Pertes sur créances irrecouvrables',
+        '658': 'Charges diverses',
+        # Charges de personnel
+        '661': 'Appointements et salaires',
+        '662': 'Charges sociales salariales (IPRES)',
+        '663': 'Indemnités et avantages divers',
+        '664': 'Cotisations sociales de l\'employeur',
+        '6641': 'Cotisations patronales (IPRES/CSS/ATMP)',
+        # Frais financiers
+        '671': "Intérêts d'emprunts",
+        '675': 'Escomptes accordés',
+        # Dotations
+        '681': 'Dotations aux amortissements d\'exploitation',
+        '691': 'Dotations aux provisions d\'exploitation',
     }
 
     # Compte fournisseur par défaut selon la nature de la charge
@@ -1073,15 +1098,41 @@ class ChargeView(APIView):
                          'montant': montant, 'libelle': libelle}, status=201)
 
     def delete(self, request, pk):
-        tenant = get_tenant(request)
+        """Annulation par contre-écritures SYSCOHADA (pas de suppression physique)."""
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
         try:
-            entry = JournalEntry.objects.get(id=pk)
-            JournalEntry.objects.filter(
-                tenant=tenant, source='CHARGE', no_piece=entry.no_piece
-            ).delete()
+            entry   = JournalEntry.objects.get(id=pk)
+            entries = JournalEntry.objects.filter(tenant=tenant, source='CHARGE', no_piece=entry.no_piece)
         except JournalEntry.DoesNotExist:
-            pass
-        return Response({'success': True})
+            return Response({'success': True})
+
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        import re as _re2
+        from django.db.models import Max as _Max2
+        last = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(_Max2('no_piece'))['no_piece__max']
+        nums = _re2.findall(r'\d+', last or 'CHG-0000')
+        no_piece_annul = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
+
+        import datetime
+        for e in entries:
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
+                source='CHARGE', source_id=None,
+                no_compte=e.no_compte,
+                debit=e.credit,
+                credit=e.debit,
+                libelle=f"Annulation {e.no_piece} — {e.libelle}",
+                ordre=e.ordre,
+            )
+
+        from core.models import log_audit
+        log_audit(request, 'ANNULER', 'Charge', entry.no_piece,
+                  f"Contre-écriture {no_piece_annul} générée pour annuler {entry.no_piece}")
+        return Response({'success': True, 'no_piece_annulation': no_piece_annul})
 
 
 # ── Plan Comptable Paramétrable ───────────────────────────────────────────────
@@ -1565,9 +1616,41 @@ class ImmobilisationView(APIView):
         return Response(_immo_to_dict(immo))
 
     def delete(self, request, pk):
-        tenant = get_tenant(request)
-        Immobilisation.objects.filter(tenant=tenant, id=pk).delete()
-        return Response({'success': True})
+        """Annulation investissement : contre-écritures SYSCOHADA + suppression immobilisation."""
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        try:
+            immo = Immobilisation.objects.get(tenant=tenant, id=pk)
+        except Immobilisation.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        import re as _re3, datetime as _dt3
+        from django.db.models import Max as _Max3
+        entries = JournalEntry.objects.filter(tenant=tenant, source='INVEST', source_id=immo.id)
+        last = JournalEntry.objects.filter(tenant=tenant, source='INVEST').aggregate(_Max3('no_piece'))['no_piece__max']
+        nums3 = _re3.findall(r'\d+', last or 'INV-0000')
+        no_piece_annul = f"INV-{int(nums3[-1]) + 1:04d}" if nums3 else 'INV-0001'
+
+        for e in entries:
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece_annul, date_ecriture=_dt3.date.today(),
+                source='INVEST', source_id=None,
+                no_compte=e.no_compte,
+                debit=e.credit,
+                credit=e.debit,
+                libelle=f"Annulation {e.no_piece} — {e.libelle}",
+                ordre=e.ordre,
+            )
+
+        from core.models import log_audit
+        log_audit(request, 'ANNULER', 'Investissement', str(immo.id),
+                  f"Annulation {immo.libelle} ({float(immo.valeur_entree):,.0f} FCFA) — contre-écriture {no_piece_annul}")
+        immo.delete()
+        return Response({'success': True, 'no_piece_annulation': no_piece_annul})
 
 
 class AmortirView(APIView):

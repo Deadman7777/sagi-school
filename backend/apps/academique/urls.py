@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views import (BulletinPDFView, NiveauScolaireViewSet, ClasseViewSet, TypeEvaluationViewSet,
                     MatiereViewSet, EvaluationViewSet, NoteViewSet,
-                    MoteurCalculView, BulletinView)
+                    MoteurCalculView, BulletinView, AnalysePerformanceView)
 
 router = DefaultRouter()
 router.register('niveaux',     NiveauScolaireViewSet, basename='niveau')
@@ -16,4 +16,5 @@ urlpatterns = router.urls + [
     path('calculer/',                        MoteurCalculView.as_view()),
     path('bulletin/<str:eleve_id>/<str:trimestre>/', BulletinView.as_view()),
     path('bulletin-pdf/<str:eleve_id>/<str:trimestre>/', BulletinPDFView.as_view()),
+    path('analyse/',                         AnalysePerformanceView.as_view()),
 ]

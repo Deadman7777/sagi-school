@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views import (EleveViewSet, SectionViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
-                    ElevesListePDFView)
+                    ElevesListePDFView, SituationElevePDFView)
 
 router = DefaultRouter()
 router.register('sections', SectionViewSet, basename='section')
@@ -14,4 +14,5 @@ urlpatterns = [
     path('export-pdf/', ElevesListePDFView.as_view()),
     path('prises-en-charge/stats/', PriseEnChargeStatsView.as_view()),
     path('<str:eleve_id>/certificat/', CertificatScolariteView.as_view()),
+    path('<str:eleve_id>/situation-pdf/', SituationElevePDFView.as_view()),
 ] + router.urls

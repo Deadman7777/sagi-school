@@ -137,6 +137,8 @@ interface PecForm {
                             severity="info" pTooltip="Fiche complète" (onClick)="voirFiche(eleve)" />
                   <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                             severity="danger" pTooltip="Certificat de scolarité" (onClick)="genererCertificat(eleve)" />
+                  <p-button icon="pi pi-wallet" [rounded]="true" [text]="true"
+                            severity="success" pTooltip="Situation financière PDF" (onClick)="telechargerSituationPDF(eleve)" />
                   <p-button icon="pi pi-user-edit" [rounded]="true" [text]="true"
                             severity="warn" pTooltip="Changer statut" (onClick)="ouvrirChangerStatut(eleve)" />
                   <p-button icon="pi pi-heart" [rounded]="true" [text]="true"
@@ -360,6 +362,8 @@ interface PecForm {
       <ng-template pTemplate="footer">
         <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
                   (onClick)="genererCertificat(eleveSelectionne())" />
+        <p-button label="Situation financière" severity="success" icon="pi pi-wallet"
+                  (onClick)="telechargerSituationPDF(eleveSelectionne()!)" />
         <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
       </ng-template>
     </p-dialog>
@@ -802,6 +806,24 @@ export class ElevesListeComponent implements OnInit {
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le certificat.' }),
+    });
+  }
+
+  telechargerSituationPDF(eleve: Eleve) {
+    if (!eleve?.id) return;
+    this.elevesService.situationPDF(eleve.id).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `situation_${(eleve.nom_complet || 'eleve').replace(/ /g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer la situation.' }),
     });
   }
 

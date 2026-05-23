@@ -698,6 +698,84 @@ class ElevesListePDFView(APIView):
         return response
 
 
+class SituationElevePDFView(APIView):
+    """PDF de situation financière individuelle d'un élève (paiements + solde)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, eleve_id):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        from apps.paiements.models import Paiement, Exercice as _Exercice
+
+        tenant = get_tenant(request)
+        try:
+            eleve = Eleve.objects.select_related('section').get(id=eleve_id, tenant=tenant)
+        except Eleve.DoesNotExist:
+            return HttpResponse('Élève introuvable', status=404)
+
+        exercice = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+        paiements_qs = Paiement.objects.filter(
+            tenant=tenant, eleve=eleve, exercice=exercice
+        ).order_by('date_paiement') if exercice else Paiement.objects.none()
+
+        paiements_list = []
+        for p in paiements_qs:
+            total_p = float(
+                (p.montant_inscription or 0) + (p.montant_mensualite or 0) +
+                (p.montant_uniforme or 0) + (p.montant_fournitures or 0) +
+                (p.montant_cantine or 0) + (p.montant_divers or 0)
+            )
+            paiements_list.append({
+                'date':          p.date_paiement,
+                'no_recu':       p.no_recu or '—',
+                'mode':          p.get_mode_paiement_display() if hasattr(p, 'get_mode_paiement_display') else p.mode_paiement,
+                'inscription':   float(p.montant_inscription  or 0),
+                'mensualite':    float(p.montant_mensualite    or 0),
+                'uniforme':      float(p.montant_uniforme      or 0),
+                'fournitures':   float(p.montant_fournitures   or 0),
+                'cantine':       float(p.montant_cantine       or 0),
+                'divers':        float(p.montant_divers        or 0),
+                'total':         total_p,
+                'observations':  p.observations or '',
+            })
+
+        total_paye   = sum(p['total'] for p in paiements_list)
+        total_attendu = float(eleve.total_attendu)
+        reste        = round(max(0.0, total_attendu - total_paye), 0)
+
+        context = {
+            'tenant':         tenant,
+            'eleve':          eleve,
+            'section_nom':    eleve.section.nom if eleve.section else '—',
+            'exercice':       exercice,
+            'date_edition':   timezone.now(),
+            'paiements':      paiements_list,
+            'total_paye':     round(total_paye, 0),
+            'total_attendu':  round(total_attendu, 0),
+            'reste':          reste,
+            'nb_paiements':   len(paiements_list),
+        }
+
+        html_str = render_to_string('pdf/situation_eleve.html', context)
+        buf      = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération PDF', status=500)
+
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="situation_{safe_name}.pdf"'
+        return response
+
+
 class CertificatScolariteView(APIView):
     """Génère le certificat de scolarité PDF d'un élève."""
     permission_classes = [IsAuthenticated]

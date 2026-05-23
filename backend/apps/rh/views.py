@@ -227,6 +227,9 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         bulletin.date_validation = timezone.now()
         bulletin.save()
         generer_ecritures_paie(bulletin, bulletin.tenant)
+        from core.models import log_audit
+        log_audit(request, 'VALIDATE', 'BulletinPaie', str(bulletin.id),
+                  f"{bulletin.employe.nom_complet} — {bulletin.mois:02d}/{bulletin.annee} — {float(bulletin.net_a_payer):,.0f} FCFA")
         return Response(BulletinPaieSerializer(bulletin).data)
 
     @action(detail=True, methods=['post'])
@@ -242,6 +245,9 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         if mode := request.data.get('mode_paiement_effectif'):
             bulletin.mode_paiement_effectif = mode
         bulletin.save()
+        from core.models import log_audit
+        log_audit(request, 'CREATE', 'PaiementPaie', str(bulletin.id),
+                  f"Paiement salaire {bulletin.employe.nom_complet} — {bulletin.mois:02d}/{bulletin.annee} — {float(bulletin.net_a_payer):,.0f} FCFA")
         return Response(BulletinPaieSerializer(bulletin).data)
 
     @action(detail=True, methods=['get'])

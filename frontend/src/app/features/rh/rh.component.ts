@@ -69,6 +69,11 @@ const MOIS_OPTIONS = [
       <div class="kpi-label">{{ 'rh.administration' | translate }}</div>
       <div class="kpi-value" style="color:#a855f7">{{ stats()!.administration }}</div>
     </div>
+    <div class="kpi-card" style="--acc:#10b981">
+      <div class="kpi-icon">🔧</div>
+      <div class="kpi-label">{{ 'rh.appui' | translate }}</div>
+      <div class="kpi-value" style="color:#10b981">{{ stats()!.appui }}</div>
+    </div>
     <div class="kpi-card" style="--acc:#f59e0b">
       <div class="kpi-icon">💰</div>
       <div class="kpi-label">{{ 'rh.masse_salariale' | translate }}</div>

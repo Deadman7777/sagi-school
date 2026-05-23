@@ -122,6 +122,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
                 **e
             )
 
+        from core.models import log_audit
+        log_audit(self.request, 'CREATE', 'Paiement', str(paiement.id),
+                  f"{eleve_nom} — {no_piece} — {montant:,.0f} FCFA ({paiement.mode_paiement})")
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         tenant   = self.get_tenant()
