@@ -780,7 +780,7 @@ export class ElevesListeComponent implements OnInit {
     return ({ ORPHELIN:'danger', HANDICAP:'warn', FAMILLE_DEMUNIE:'info', AUTRE:'secondary' } as any)[c || ''] || 'secondary';
   }
   typePecLabel(t: TypePEC | null): string {
-    return { INSCRIPTION:'Inscription', MENSUALITES:'Mensualités', TOTALE:'Totale' }[t || ''] || (t || '—');
+    return ({ INSCRIPTION:'Inscription', MENSUALITES:'Mensualités', TOTALE:'Totale' } as any)[t || ''] || (t || '—');
   }
   typePecSeverity(t: TypePEC | null): 'info' | 'success' | 'warn' | 'secondary' {
     return ({ INSCRIPTION:'info', MENSUALITES:'success', TOTALE:'warn' } as any)[t || ''] || 'secondary';
