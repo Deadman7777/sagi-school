@@ -75,9 +75,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
-      "sign": false,
-      "signingHashAlgorithms": null
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
