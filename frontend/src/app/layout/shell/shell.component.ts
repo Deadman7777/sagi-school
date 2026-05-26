@@ -192,17 +192,27 @@ export class ShellComponent {
   });
 
   itemVisible(route: string, role?: string): boolean {
-      if (!role) return false;
-      const acces: Record<string, string[]> = {
-          'ADMIN_ECOLE':     ['*'],
-          'ADMIN_RH':        ['/dashboard', '/rh'],
-          'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal'],
-          'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
-          'LECTEUR':         ['/dashboard'],
-      };
-      const allowed = acces[role] || [];
-      return allowed.includes('*') || allowed.includes(route);
-  } 
+    if (!role) return false;
+    const acces: Record<string, string[]> = {
+      'ADMIN_ECOLE':     ['*'],
+      'ADMIN_RH':        ['/dashboard', '/rh'],
+      'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal'],
+      'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
+      'LECTEUR':         ['/dashboard'],
+    };
+    const roleAllowed = acces[role] || [];
+    const roleOk = roleAllowed.includes('*') || roleAllowed.includes(route);
+    if (!roleOk) return false;
+
+    // Routes toujours visibles quelle que soit la licence
+    const alwaysVisible = ['/ma-licence', '/parametres'];
+    if (alwaysVisible.includes(route)) return true;
+
+    // Filtrage par type de licence
+    const modules: string[] = this.auth.currentUser()?.modules || [];
+    if (modules.length === 0) return true; // SUPER_ADMIN ou pas encore chargé
+    return modules.includes(route);
+  }
 
   roleLabel(): string {
     const keys: Record<string, string> = {

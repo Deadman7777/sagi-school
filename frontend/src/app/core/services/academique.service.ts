@@ -19,6 +19,7 @@ export class AcademiqueService {
   creerEvaluation(data: any) { return this.api.post<any>('/academique/evaluations/', data); }
   creerNote(data: any)       { return this.api.post<any>('/academique/notes/', data); }
   modifierNote(id: string, data: any) { return this.api.patch<any>(`/academique/notes/${id}/`, data); }
+  bulkSaveNotes(notes: any[]) { return this.api.post<any>('/academique/notes/bulk_save/', { notes }); }
 
   calculerMoyennes(data: any){ return this.api.post<any>('/academique/calculer/', data); }
   getBulletin(eleveId: string, trimestre: string, annee: string) {
@@ -33,5 +34,9 @@ export class AcademiqueService {
 
   getAnalysePerformance() {
     return this.api.get<any>('/academique/analyse/');
+  }
+
+  getHistoriqueBulletins(params?: any) {
+    return this.api.get<any>('/academique/historique-bulletins/', params);
   }
 }

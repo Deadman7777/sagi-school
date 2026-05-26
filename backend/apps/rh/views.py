@@ -19,7 +19,7 @@ from .serializers import (
     EmployeSerializer, PaieSerializer, ParametresFiscauxSerializer,
     AvanceSalaireSerializer, BulletinPaieSerializer, BulletinPaieCreateSerializer,
 )
-from .services import PaieCalculateur, generer_ecriture_avance, generer_ecritures_paie
+from .services import PaieCalculateur, generer_ecriture_avance, generer_ecritures_paie, annuler_ecriture_avance, annuler_ecritures_paie
 
 NOMS_MOIS = {
     1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
@@ -155,6 +155,8 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
+        from django.db import IntegrityError
+
         serializer = BulletinPaieCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vd = serializer.validated_data
@@ -162,21 +164,29 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         tenant  = get_tenant(request)
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
-        kwargs_paie = {k: vd[k] for k in (
-            'indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
-            'avantages_nature', 'opposition_saisie', 'autres_retenues',
-            'avance_ids', 'inclure_avances',
-        )}
+        kwargs_paie = {}
+        for k in ('indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
+                  'avantages_nature', 'opposition_saisie', 'autres_retenues',
+                  'avance_ids', 'inclure_avances'):
+            kwargs_paie[k] = vd.get(k, [] if k == 'avance_ids' else 0)
         if 'mode_paiement_effectif' in vd:
             kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
 
         try:
             bulletin = PaieCalculateur.creer_bulletin(
                 employe, vd['mois'], vd['annee'],
-                float(vd['nb_heures_effectuees']), **kwargs_paie
+                float(vd.get('nb_heures_effectuees', 0)), **kwargs_paie
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            return Response(
+                {'error': f"Un bulletin existe déjà pour {employe.nom_complet} — "
+                          f"{vd['mois']:02d}/{vd['annee']}. Supprimez-le d'abord ou modifiez la période."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response({'error': f"Erreur interne : {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(BulletinPaieSerializer(bulletin).data, status=status.HTTP_201_CREATED)
 
@@ -190,29 +200,31 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         tenant  = get_tenant(request)
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
-        kwargs_paie = {k: vd[k] for k in (
-            'indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
-            'avantages_nature', 'opposition_saisie', 'autres_retenues',
-            'avance_ids', 'inclure_avances',
-        )}
+        kwargs_paie = {}
+        for k in ('indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
+                  'avantages_nature', 'opposition_saisie', 'autres_retenues',
+                  'avance_ids', 'inclure_avances'):
+            kwargs_paie[k] = vd.get(k, [] if k == 'avance_ids' else 0)
         if 'mode_paiement_effectif' in vd:
             kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
 
         try:
             data = PaieCalculateur.calculer_bulletin(
                 employe, vd['mois'], vd['annee'],
-                float(vd['nb_heures_effectuees']), **kwargs_paie
+                float(vd.get('nb_heures_effectuees', 0)), **kwargs_paie
             )
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f"Erreur calcul : {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         data.pop('_avances_qs', None)
         params = data.pop('parametres_fiscaux', None)
 
         result = {k: str(v) for k, v in data.items() if not k.startswith('_')}
-        result['employe_nom']     = employe.nom_complet
+        result['employe_nom']       = employe.nom_complet
         result['employe_matricule'] = employe.matricule
-        result['parametres_annee'] = params.annee if params else None
+        result['parametres_annee']  = params.annee if params else None
         return Response(result)
 
     @action(detail=True, methods=['post'])
@@ -248,6 +260,26 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         from core.models import log_audit
         log_audit(request, 'CREATE', 'PaiementPaie', str(bulletin.id),
                   f"Paiement salaire {bulletin.employe.nom_complet} — {bulletin.mois:02d}/{bulletin.annee} — {float(bulletin.net_a_payer):,.0f} FCFA")
+        return Response(BulletinPaieSerializer(bulletin).data)
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        """Annule un bulletin de paie : extourne toutes ses écritures SYSCOHADA."""
+        bulletin = self.get_object()
+        if bulletin.statut == 'ANNULE':
+            return Response({'error': 'Ce bulletin est déjà annulé.'}, status=status.HTTP_400_BAD_REQUEST)
+        if bulletin.statut == 'BROUILLON':
+            return Response(
+                {'error': 'Un bulletin BROUILLON n\'a pas d\'écritures comptables. Supprimez-le directement.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant = get_tenant(request)
+        annuler_ecritures_paie(bulletin, tenant)
+        bulletin.statut = 'ANNULE'
+        bulletin.save()
+        from core.models import log_audit
+        log_audit(request, 'ANNULER', 'BulletinPaie', str(bulletin.id),
+                  f"Annulation bulletin {bulletin.employe.nom_complet} — {bulletin.mois:02d}/{bulletin.annee} — {float(bulletin.net_a_payer):,.0f} FCFA")
         return Response(BulletinPaieSerializer(bulletin).data)
 
     @action(detail=True, methods=['get'])
@@ -295,6 +327,23 @@ class AvanceSalaireViewSet(viewsets.ModelViewSet):
         tenant = get_tenant(self.request)
         avance = serializer.save(tenant=tenant)
         generer_ecriture_avance(avance, tenant)
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        avance = self.get_object()
+        if avance.statut != 'EN_ATTENTE':
+            return Response(
+                {'error': 'Seule une avance EN_ATTENTE peut être annulée.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tenant = get_tenant(request)
+        annuler_ecriture_avance(avance, tenant)
+        avance.statut = 'ANNULE'
+        avance.save()
+        from core.models import log_audit
+        log_audit(request, 'CANCEL', 'AvanceSalaire', str(avance.id),
+                  f"Annulation avance {avance.employe.nom_complet} — {float(avance.montant):,.0f} FCFA")
+        return Response(AvanceSalaireSerializer(avance).data)
 
 
 class RHStatsView(APIView):

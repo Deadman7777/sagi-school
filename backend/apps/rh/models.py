@@ -182,6 +182,7 @@ class BulletinPaie(TenantModel):
         ('BROUILLON', 'Brouillon'),
         ('VALIDE',    'Validé'),
         ('PAYE',      'Payé'),
+        ('ANNULE',    'Annulé'),
     ]
     MODE_PAIEMENT_CHOICES = [
         ('BANQUE',       'Banque (virement)'),

@@ -146,6 +146,37 @@ class NoteViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
 
+    @action(detail=False, methods=['post'])
+    def bulk_save(self, request):
+        """Enregistre toutes les notes d'une évaluation en une seule transaction."""
+        from django.db import transaction
+        tenant = get_tenant(request)
+        notes_data = request.data.get('notes', [])
+        if not notes_data:
+            return Response({'error': 'Aucune note fournie.'}, status=400)
+
+        created = updated = errors = 0
+        with transaction.atomic():
+            for item in notes_data:
+                try:
+                    _, was_created = Note.objects.update_or_create(
+                        tenant=tenant,
+                        eleve_id=item['eleve'],
+                        evaluation_id=item['evaluation'],
+                        defaults={
+                            'valeur': item.get('valeur', 0),
+                            'absent': item.get('absent', False),
+                        },
+                    )
+                    if was_created:
+                        created += 1
+                    else:
+                        updated += 1
+                except Exception:
+                    errors += 1
+
+        return Response({'created': created, 'updated': updated, 'errors': errors})
+
 
 class MoteurCalculView(APIView):
     """Moteur de calcul des moyennes et rangs."""
@@ -179,6 +210,7 @@ class MoteurCalculView(APIView):
     def post(self, request):
         """Calculer les moyennes pour une classe et un trimestre."""
         import datetime as _dt
+        from django.db import transaction
         tenant    = get_tenant(request)
         classe_id = request.data.get('classe_id')
         trimestre = request.data.get('trimestre', 'T1')
@@ -190,21 +222,40 @@ class MoteurCalculView(APIView):
             annee = ex.annee_scolaire if ex else f"{_dt.date.today().year-1}-{_dt.date.today().year}"
 
         try:
-            classe = Classe.objects.get(id=classe_id, tenant=tenant)
+            classe = Classe.objects.select_related('niveau').get(id=classe_id, tenant=tenant)
         except Classe.DoesNotExist:
             return Response({'error': 'Classe introuvable'}, status=404)
 
-        matieres = Matiere.objects.filter(classe=classe, tenant=tenant, est_active=True)
+        matieres = list(Matiere.objects.filter(classe=classe, tenant=tenant, est_active=True))
         from apps.eleves.models import Eleve
         from apps.paiements.models import Exercice as _Exercice
         exercice_actif = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
         eleves_qs = Eleve.objects.filter(tenant=tenant, section__nom__iexact=classe.nom)
         if exercice_actif:
             eleves_qs = eleves_qs.filter(exercice=exercice_actif)
-        eleves = eleves_qs
+        eleves = list(eleves_qs)
+
+        # ── Prefetch toutes les évaluations en 1 requête ──────────────────
+        all_evaluations = list(Evaluation.objects.filter(
+            matiere__in=matieres, trimestre=trimestre, tenant=tenant
+        ).select_related('type_eval'))
+
+        evals_by_matiere: dict = {}
+        for ev in all_evaluations:
+            evals_by_matiere.setdefault(str(ev.matiere_id), []).append(ev)
+
+        # ── Prefetch toutes les notes en 1 requête ────────────────────────
+        all_notes = list(Note.objects.filter(
+            eleve__in=eleves, evaluation__in=all_evaluations, tenant=tenant
+        ))
+        notes_idx: dict = {}
+        for n in all_notes:
+            notes_idx[(str(n.eleve_id), str(n.evaluation_id))] = n
+        # ─────────────────────────────────────────────────────────────────
 
         resultats = []
         matieres_classement: dict = {str(m.id): [] for m in matieres}
+        cache_to_upsert = []
 
         for eleve in eleves:
             total_points = 0
@@ -212,15 +263,33 @@ class MoteurCalculView(APIView):
             detail_matieres = []
 
             for matiere in matieres:
-                evaluations = Evaluation.objects.filter(
-                    matiere=matiere, trimestre=trimestre, tenant=tenant
-                )
-                notes = Note.objects.filter(
-                    eleve=eleve, evaluation__in=evaluations,
-                    absent=False, tenant=tenant
-                ).select_related('evaluation__type_eval')
+                evaluations = evals_by_matiere.get(str(matiere.id), [])
 
-                if not notes.exists():
+                if not evaluations:
+                    detail_matieres.append({
+                        'matiere': matiere.nom,
+                        'coefficient': float(matiere.coefficient),
+                        'moyenne': None,
+                        'points': None,
+                        'appreciation': '—',
+                    })
+                    continue
+
+                # Moyenne pondérée sur TOUTES les évaluations définies
+                sum_note_poids = 0.0
+                sum_poids      = 0.0
+                has_any_note   = False
+                for ev in evaluations:
+                    poids = float(ev.type_eval.poids)
+                    sum_poids += poids
+                    note = notes_idx.get((str(eleve.id), str(ev.id)))
+                    if note:
+                        has_any_note = True
+                        if not note.absent:
+                            sum_note_poids += float(note.valeur) * poids
+
+                # Si aucune note saisie du tout → absent
+                if not has_any_note:
                     detail_matieres.append({
                         'matiere': matiere.nom,
                         'coefficient': float(matiere.coefficient),
@@ -230,31 +299,13 @@ class MoteurCalculView(APIView):
                     })
                     continue
 
-                # Moyenne pondérée : Σ(note × poids) ÷ Σ(poids)
-                sum_note_poids = sum(
-                    float(n.valeur) * float(n.evaluation.type_eval.poids)
-                    for n in notes
-                )
-                sum_poids = sum(float(n.evaluation.type_eval.poids) for n in notes)
                 moyenne = sum_note_poids / sum_poids if sum_poids > 0 else 0
-
-                points = moyenne * float(matiere.coefficient)
+                points  = moyenne * float(matiere.coefficient)
                 total_points += points
                 total_coef   += float(matiere.coefficient)
+                appreciation  = self.get_appreciation(moyenne, matiere.note_max)
 
-                appreciation = self.get_appreciation(moyenne, matiere.note_max)
-
-                # Sauvegarder dans cache
-                BulletinCache.objects.update_or_create(
-                    tenant=tenant, eleve=eleve, matiere=matiere,
-                    trimestre=trimestre, annee_scolaire=annee,
-                    defaults={
-                        'moyenne':      round(moyenne, 2),
-                        'points':       round(points, 2),
-                        'appreciation': appreciation,
-                    }
-                )
-
+                cache_to_upsert.append((eleve, matiere, round(moyenne, 2), round(points, 2), appreciation))
                 matieres_classement[str(matiere.id)].append((str(eleve.id), round(moyenne, 2)))
 
                 detail_matieres.append({
@@ -268,17 +319,30 @@ class MoteurCalculView(APIView):
                     'rang_matiere': None,  # rempli après
                 })
 
-            moy_generale = total_points / total_coef if total_coef > 0 else 0
+            moy_generale    = total_points / total_coef if total_coef > 0 else 0
+            note_max_niveau = float(classe.niveau.note_max) if classe.niveau else 20
+            appr_generale   = self.get_appreciation(moy_generale, note_max_niveau)
 
             resultats.append({
-                'eleve_id':      str(eleve.id),
-                'eleve_nom':     eleve.nom_complet,
-                'matieres':      detail_matieres,
-                'total_points':  round(total_points, 2),
-                'total_coef':    total_coef,
-                'moy_generale':  round(moy_generale, 2),
-                'rang':          0,  # calculé après
+                'eleve_id':              str(eleve.id),
+                'eleve_nom':             eleve.nom_complet,
+                'matieres':              detail_matieres,
+                'total_points':          round(total_points, 2),
+                'total_coef':            total_coef,
+                'moy_generale':          round(moy_generale, 2),
+                'appreciation_generale': appr_generale,
+                'rang':                  0,  # calculé après
             })
+
+        # ── Upsert BulletinCache en bloc atomique ─────────────────────────
+        with transaction.atomic():
+            for eleve, matiere, moyenne, points, appreciation in cache_to_upsert:
+                BulletinCache.objects.update_or_create(
+                    tenant=tenant, eleve=eleve, matiere=matiere,
+                    trimestre=trimestre, annee_scolaire=annee,
+                    defaults={'moyenne': moyenne, 'points': points, 'appreciation': appreciation}
+                )
+        # ─────────────────────────────────────────────────────────────────
 
         # Calcul des rangs
         resultats.sort(key=lambda x: x['moy_generale'], reverse=True)
@@ -375,7 +439,7 @@ class BulletinView(APIView):
         bulletins = BulletinCache.objects.filter(
             tenant=tenant, eleve=eleve,
             trimestre=trimestre, annee_scolaire=annee
-        ).select_related('matiere')
+        ).select_related('matiere', 'matiere__classe', 'matiere__classe__niveau')
 
         if not bulletins.exists():
             return Response({'error': 'Aucune note calculée. Lancez d\'abord le calcul.'}, status=404)
@@ -467,32 +531,34 @@ class BulletinPDFView(APIView):
         bulletins = BulletinCache.objects.filter(
             tenant=tenant, eleve=eleve,
             trimestre=trimestre, annee_scolaire=annee
-        ).select_related('matiere')
+        ).select_related('matiere', 'matiere__classe', 'matiere__classe__niveau')
 
         if not bulletins.exists():
             return HttpResponse('Aucune note calculée', status=404)
 
-        # Calcul moyenne générale
-        total_points = sum(float(b.points or 0) for b in bulletins)
-        total_coef   = sum(float(b.matiere.coefficient) for b in bulletins)
-        moy_generale = round(total_points / total_coef, 2) if total_coef > 0 else 0
-        note_max     = float(bulletins.first().matiere.note_max) if bulletins else 20
+        bulletins_list = list(bulletins.order_by('matiere__ordre'))
 
-        # Stats classe
-        from apps.eleves.models import Eleve as EleveModel
-        classe = bulletins.first().matiere.classe if bulletins else None
-        tous   = BulletinCache.objects.filter(
+        # Calcul moyenne générale
+        total_points = sum(float(b.points or 0) for b in bulletins_list)
+        total_coef   = sum(float(b.matiere.coefficient) for b in bulletins_list)
+        moy_generale = round(total_points / total_coef, 2) if total_coef > 0 else 0
+        note_max     = float(bulletins_list[0].matiere.classe.niveau.note_max) if bulletins_list else 20
+
+        # Stats classe — 1 seule requête
+        from collections import defaultdict
+        classe = bulletins_list[0].matiere.classe if bulletins_list else None
+        tous_bulletins_classe = list(BulletinCache.objects.filter(
             tenant=tenant, trimestre=trimestre,
             annee_scolaire=annee, matiere__classe=classe
-        ).values('eleve').distinct()
+        ).select_related('matiere'))
+
+        bulletins_par_eleve: dict = defaultdict(list)
+        for b in tous_bulletins_classe:
+            bulletins_par_eleve[str(b.eleve_id)].append(b)
 
         moyennes_classe = []
         rang_eleve = 1
-        for e_data in tous:
-            e_bulletins = BulletinCache.objects.filter(
-                tenant=tenant, eleve_id=e_data['eleve'],
-                trimestre=trimestre, annee_scolaire=annee
-            )
+        for e_bulletins in bulletins_par_eleve.values():
             e_pts  = sum(float(b.points or 0) for b in e_bulletins)
             e_coef = sum(float(b.matiere.coefficient) for b in e_bulletins)
             e_moy  = round(e_pts / e_coef, 2) if e_coef > 0 else 0
@@ -502,11 +568,69 @@ class BulletinPDFView(APIView):
 
         moy_classe = round(sum(moyennes_classe)/len(moyennes_classe), 2) if moyennes_classe else 0
 
+        # ── Détail des notes individuelles par matière ────────────────────
+        matiere_ids = [b.matiere_id for b in bulletins_list]
+        # Devoirs (poids faible) en premier, Composition (poids fort) en dernier
+        evals_for_pdf = list(Evaluation.objects.filter(
+            matiere_id__in=matiere_ids, trimestre=trimestre, tenant=tenant
+        ).select_related('type_eval').order_by('type_eval__poids', 'id'))
+
+        evals_par_matiere: dict = defaultdict(list)
+        for ev in evals_for_pdf:
+            evals_par_matiere[str(ev.matiere_id)].append(ev)
+
+        notes_eleve = list(Note.objects.filter(
+            eleve=eleve, evaluation__in=evals_for_pdf, tenant=tenant
+        ))
+        notes_par_eval: dict = {str(n.evaluation_id): n for n in notes_eleve}
+
+        def build_notes_detail(matiere_id):
+            evs = evals_par_matiere.get(str(matiere_id), [])
+            # Regrouper par type_eval pour numéroter D1, D2...
+            type_counts: dict = {}
+            result = []
+            for ev in evs:
+                tnom = ev.type_eval.nom
+                type_counts[tnom] = type_counts.get(tnom, 0) + 1
+                count = type_counts[tnom]
+                label = f"{tnom} {count}" if count > 1 else tnom
+                n = notes_par_eval.get(str(ev.id))
+                if n:
+                    valeur = 'Abs' if n.absent else f"{float(n.valeur):g}"
+                else:
+                    valeur = '—'
+                result.append({
+                    'label':    label,
+                    'valeur':   valeur,
+                    'note_max': int(ev.note_max) if float(ev.note_max) == int(ev.note_max) else float(ev.note_max),
+                })
+            return result
+
+        def _fmt(val):
+            if val is None:
+                return '—'
+            f = float(val)
+            return f"{f:g}"
+
+        matieres_ctx = []
+        for b in bulletins_list:
+            matieres_ctx.append({
+                'nom':          b.matiere.nom,
+                'coefficient':  float(b.matiere.coefficient),
+                'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
+                'moyenne':      _fmt(b.moyenne),
+                'points':       _fmt(b.points),
+                'rang':         b.rang_matiere,
+                'appreciation': b.appreciation,
+                'notes_detail': build_notes_detail(b.matiere_id),
+            })
+        # ─────────────────────────────────────────────────────────────────
+
         context = {
             'tenant':    tenant,
             'annee':     annee,
             'trimestre': trimestre,
-            'note_max':  note_max,
+            'note_max':  int(note_max) if note_max == int(note_max) else note_max,
             'eleve': {
                 'nom_complet':    eleve.nom_complet,
                 'matricule':      eleve.numero or '—',
@@ -514,15 +638,7 @@ class BulletinPDFView(APIView):
                 'classe':         eleve.section.nom if eleve.section else '—',
                 'rang':           rang_eleve,
             },
-            'matieres': [{
-                'nom':         b.matiere.nom,
-                'coefficient': float(b.matiere.coefficient),
-                'note_max':    float(b.matiere.note_max),
-                'moyenne':     float(b.moyenne) if b.moyenne else None,
-                'points':      float(b.points) if b.points else None,
-                'rang':        b.rang_matiere,
-                'appreciation':b.appreciation,
-            } for b in bulletins.order_by('matiere__ordre')],
+            'matieres':            matieres_ctx,
             'total_coef':          round(total_coef, 1),
             'total_points':        round(total_points, 2),
             'stats': {
@@ -623,3 +739,82 @@ class AnalysePerformanceView(APIView):
             'top_classes':    top_classes,
             'distribution':   distribution,
         })
+
+class BulletinsHistoriqueView(APIView):
+    """Liste de tous les bulletins déjà calculés, groupés par (élève, trimestre, année)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum, Count, DecimalField, Value
+        from django.db.models.functions import Coalesce
+        from decimal import Decimal
+        from apps.eleves.models import Eleve
+
+        tenant = get_tenant(request)
+
+        # Filtres optionnels
+        classe_nom  = request.query_params.get('classe')
+        trimestre   = request.query_params.get('trimestre')
+        annee       = request.query_params.get('annee')
+        search      = request.query_params.get('search', '').strip()
+
+        qs = BulletinCache.objects.filter(tenant=tenant)
+        if trimestre:
+            qs = qs.filter(trimestre=trimestre)
+        if annee:
+            qs = qs.filter(annee_scolaire=annee)
+        if classe_nom:
+            qs = qs.filter(eleve__section__nom__iexact=classe_nom)
+        if search:
+            qs = qs.filter(eleve__nom_complet__icontains=search)
+
+        zero = Value(Decimal('0'), output_field=DecimalField())
+        groupes = list(
+            qs.values('eleve_id', 'trimestre', 'annee_scolaire')
+            .annotate(
+                nb_matieres=Count('id'),
+                total_points=Coalesce(Sum('points'), zero),
+                total_coef=Coalesce(Sum('matiere__coefficient'), zero),
+            )
+            .order_by('-annee_scolaire', 'trimestre')
+        )
+
+        eleve_ids = list({str(g['eleve_id']) for g in groupes})
+        eleves_map = {
+            str(e.id): e
+            for e in Eleve.objects.filter(id__in=eleve_ids).select_related('section')
+        }
+
+        result = []
+        for g in groupes:
+            e = eleves_map.get(str(g['eleve_id']))
+            if not e:
+                continue
+            coef = float(g['total_coef'] or 0)
+            pts  = float(g['total_points'] or 0)
+            moy  = round(pts / coef, 2) if coef > 0 else 0
+            result.append({
+                'eleve_id':      str(g['eleve_id']),
+                'eleve_nom':     e.nom_complet,
+                'classe':        e.section.nom if e.section else '—',
+                'trimestre':     g['trimestre'],
+                'annee_scolaire':g['annee_scolaire'],
+                'moy_generale':  moy,
+                'nb_matieres':   g['nb_matieres'],
+            })
+
+        result.sort(key=lambda x: (
+            -(int(x['annee_scolaire'][:4]) if x['annee_scolaire'] and x['annee_scolaire'][:4].isdigit() else 0),
+            x['trimestre'],
+            x['eleve_nom'],
+        ))
+
+        # Années disponibles pour le filtre
+        annees = sorted(
+            BulletinCache.objects.filter(tenant=tenant)
+            .values_list('annee_scolaire', flat=True)
+            .distinct(),
+            reverse=True,
+        )
+
+        return Response({'bulletins': result, 'annees': annees})

@@ -126,12 +126,14 @@ export class RhService {
   calculerBulletin(data: unknown)               { return this.api.post<any>('/rh/bulletins/calculer/', data); }
   validerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/valider/`, {}); }
   payerBulletin(id: string, mode?: string)      { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/payer/`, mode ? { mode_paiement_effectif: mode } : {}); }
+  annulerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/annuler/`, {}); }
   telechargerPdf(id: string)                    { return this.api.getBlob(`/rh/bulletins/${id}/pdf/`); }
 
   // — Avances —
   getAvances(params?: Record<string, string>)              { return this.api.get<any>('/rh/avances/', params); }
+  getAvancesEmploye(employeId: string)                     { return this.api.get<any>('/rh/avances/', { employe: employeId, statut: 'EN_ATTENTE' }); }
   creerAvance(employeId: string, data: unknown)            { return this.api.post<AvanceSalaire>(`/rh/employes/${employeId}/avance/`, data); }
-  annulerAvance(id: string)                                { return this.api.patch<AvanceSalaire>(`/rh/avances/${id}/`, { statut: 'ANNULE' }); }
+  annulerAvance(id: string)                                { return this.api.post<AvanceSalaire>(`/rh/avances/${id}/annuler/`, {}); }
 
   // — Paramètres fiscaux —
   getParametresFiscaux()                                   { return this.api.get<ParametresFiscaux[]>('/rh/parametres-fiscaux/'); }

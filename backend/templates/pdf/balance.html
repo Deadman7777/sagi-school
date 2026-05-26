@@ -1,43 +1,85 @@
 {% extends "pdf/base.html" %}
+{% block page_style %}@page { size: A4 landscape; margin: 10mm; }{% endblock %}
 {% block doc_title %}Balance Générale{% endblock %}
 {% block content %}
+<style>
+  .bal-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8px;
+    margin-bottom: 12px;
+  }
+  .bal-table thead th {
+    background: #1a3c5e;
+    color: white;
+    padding: 4px 3px;
+    font-size: 8px;
+    white-space: nowrap;
+  }
+  .bal-table tbody td {
+    padding: 3px;
+    border-bottom: 1px solid #eee;
+    font-size: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .bal-table tfoot td {
+    background: #e8f0fe;
+    font-weight: bold;
+    padding: 4px 3px;
+    border-top: 2px solid #1a3c5e;
+    font-size: 8px;
+    white-space: nowrap;
+  }
+  .bal-table tbody tr:nth-child(even) { background: #f8f9fa; }
+  .bal-synth { background: #e8f5f0 !important; font-weight: bold; }
+</style>
 
-<div class="section-title">⚖️ BALANCE GÉNÉRALE À 6 COLONNES — SYSCOHADA RÉVISÉ</div>
-<table>
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:6px;font-size:13px">
+  Balance Générale — {{ exercice.annee_scolaire }}
+</h2>
+<p style="color:#666;font-size:10px;margin-bottom:10px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; Balance à 6 colonnes — Conforme SYSCOHADA Révisé
+</p>
+
+<table class="bal-table">
   <thead>
     <tr>
-      <th>N° Compte</th><th>Libellé</th>
-      <th class="text-right">Mvt Débit</th>
-      <th class="text-right">Mvt Crédit</th>
-      <th class="text-right">Solde Débiteur</th>
-      <th class="text-right">Solde Créditeur</th>
+      <th style="width:55px; text-align:left">N° Cpte</th>
+      <th style="width:190px; text-align:left">Libellé</th>
+      <th style="width:105px; text-align:right">SO Débit</th>
+      <th style="width:105px; text-align:right">SO Crédit</th>
+      <th style="width:105px; text-align:right">Mvt Débit</th>
+      <th style="width:105px; text-align:right">Mvt Crédit</th>
+      <th style="width:105px; text-align:right">SF Débiteur</th>
+      <th style="width:105px; text-align:right">SF Créditeur</th>
     </tr>
   </thead>
   <tbody>
-    {% for b in balance %}
-    <tr>
-      <td class="bold">{{ b.compte }}</td>
-      <td>{{ b.libelle }}</td>
-      <td class="text-right">{{ b.debit|floatformat:0 }}</td>
-      <td class="text-right">{{ b.credit|floatformat:0 }}</td>
-      <td class="text-right {% if b.solde_d > 0 %}teal{% endif %}">
-        {% if b.solde_d > 0 %}{{ b.solde_d|floatformat:0 }}{% else %}—{% endif %}
-      </td>
-      <td class="text-right {% if b.solde_c > 0 %}green{% endif %}">
-        {% if b.solde_c > 0 %}{{ b.solde_c|floatformat:0 }}{% else %}—{% endif %}
-      </td>
+    {% for l in balance %}
+    <tr{% if l.is_synthetic %} class="bal-synth"{% endif %}>
+      <td style="width:55px; text-align:left; font-weight:bold; font-family:monospace">{{ l.no_compte }}</td>
+      <td style="width:190px; text-align:left; word-wrap:break-word; white-space:normal">{{ l.libelle }}</td>
+      <td style="width:105px; text-align:right; font-family:monospace">{% if l.so_debiteur %}{{ l.so_debiteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right; font-family:monospace">{% if l.so_crediteur %}{{ l.so_crediteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right; font-family:monospace; color:#10b981">{% if l.mvt_debit %}{{ l.mvt_debit|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right; font-family:monospace; color:#1a6b9a">{% if l.mvt_credit %}{{ l.mvt_credit|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right; font-family:monospace; color:#00745a">{% if l.sf_debiteur %}{{ l.sf_debiteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right; font-family:monospace; color:#a855f7">{% if l.sf_crediteur %}{{ l.sf_crediteur|floatformat:0 }}{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
   <tfoot>
     <tr>
-      <td colspan="2" class="bold">TOTAUX</td>
-      <td class="text-right bold">{{ balance_totaux.debit|floatformat:0 }}</td>
-      <td class="text-right bold">{{ balance_totaux.credit|floatformat:0 }}</td>
-      <td class="text-right bold teal">{{ balance_totaux.solde_d|floatformat:0 }}</td>
-      <td class="text-right bold green">{{ balance_totaux.solde_c|floatformat:0 }}</td>
+      <td style="width:55px; text-align:left" colspan="2"><strong>TOTAUX</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.so_debiteur|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.so_crediteur|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right; color:#10b981"><strong>{{ balance_totaux.mvt_debit|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right; color:#1a6b9a"><strong>{{ balance_totaux.mvt_credit|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right; color:#00745a"><strong>{{ balance_totaux.sf_debiteur|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right; color:#a855f7"><strong>{{ balance_totaux.sf_crediteur|floatformat:0 }}</strong></td>
     </tr>
   </tfoot>
 </table>
-
 {% endblock %}

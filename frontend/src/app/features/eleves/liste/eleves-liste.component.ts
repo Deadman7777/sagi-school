@@ -14,6 +14,7 @@ import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { TooltipModule } from 'primeng/tooltip';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -27,7 +28,8 @@ interface PecForm {
   selector: 'app-eleves-liste',
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
-            InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule],
+            InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
+            TooltipModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -41,10 +43,14 @@ interface PecForm {
       <div style="display:flex;gap:8px">
         <p-button [label]="onglet() === 'liste' ? 'Prise en charge' : 'Liste élèves'"
                   severity="secondary" size="small"
+                  [pTooltip]="onglet() === 'liste' ? 'Voir les prises en charge sociales' : 'Revenir à la liste des élèves'"
                   (onClick)="basculerOnglet()" />
         <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
+                  pTooltip="Exporter la liste en PDF"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
-        <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success" (onClick)="ouvrirDialog()" />
+        <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success"
+                  pTooltip="Inscrire un nouvel élève"
+                  (onClick)="ouvrirDialog()" />
       </div>
     </div>
 
@@ -84,10 +90,10 @@ interface PecForm {
       <div class="filters-bar">
         <input pInputText [(ngModel)]="recherche" (input)="filtrer()"
                [placeholder]="'eleves.rechercher' | translate" class="search-input" />
-        <p-select [options]="filtresStatut" [(ngModel)]="filtreStatut"
+        <p-select appendTo="body" [options]="filtresStatut" [(ngModel)]="filtreStatut"
                   (onChange)="filtrer()" placeholder="Tous statuts"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
-        <p-select [options]="filtresAlerte" [(ngModel)]="filtreAlerte"
+        <p-select appendTo="body" [options]="filtresAlerte" [(ngModel)]="filtreAlerte"
                   (onChange)="filtrer()" [placeholder]="'eleves.toutes_alertes' | translate"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
       </div>
@@ -377,7 +383,7 @@ interface PecForm {
         </div>
         <div class="form-group">
           <label>Nouveau statut</label>
-          <p-select [options]="statutOptions" [(ngModel)]="formStatut"
+          <p-select appendTo="body" [options]="statutOptions" [(ngModel)]="formStatut"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       }
@@ -401,7 +407,7 @@ interface PecForm {
           <!-- Motif -->
           <div class="form-group full">
             <label>Motif / Catégorie</label>
-            <p-select [options]="categoriesPEC" [(ngModel)]="formPEC.prise_en_charge"
+            <p-select appendTo="body" [options]="categoriesPEC" [(ngModel)]="formPEC.prise_en_charge"
                       optionLabel="label" optionValue="value" styleClass="w-full"
                       placeholder="Aucune prise en charge" [showClear]="true" />
           </div>
@@ -409,7 +415,7 @@ interface PecForm {
           <!-- Type PEC -->
           <div class="form-group full">
             <label>Type de prise en charge</label>
-            <p-select [options]="typesPEC" [(ngModel)]="formPEC.type_pec"
+            <p-select appendTo="body" [options]="typesPEC" [(ngModel)]="formPEC.type_pec"
                       optionLabel="label" optionValue="value" styleClass="w-full"
                       placeholder="Sélectionner le type" [showClear]="true" />
           </div>
@@ -488,13 +494,13 @@ interface PecForm {
         </div>
         <div class="form-group">
           <label>{{ 'eleves.section' | translate }} *</label>
-          <p-select [options]="sections()" [(ngModel)]="nouvelEleve.section"
+          <p-select appendTo="body" [options]="sections()" [(ngModel)]="nouvelEleve.section"
                     optionLabel="nom" optionValue="id"
                     [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
         <div class="form-group">
           <label>{{ 'eleves.genre' | translate }}</label>
-          <p-select [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
+          <p-select appendTo="body" [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">

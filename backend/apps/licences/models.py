@@ -6,11 +6,20 @@ from core.models import TimeStampedModel
 
 class Licence(TimeStampedModel):
     TYPE_CHOICES = [
-        ('ESSAI',      'Essai 30 jours'),
-        ('BASIC',      'Basic'),
-        ('PRO',        'Pro'),
-        ('ENTERPRISE', 'Enterprise'),
+        ('ESSAI',        'Essai 30 jours'),
+        ('BASIC',        'Basic'),
+        ('PRO',          'Pro'),
+        ('AVANCE',       'Avancé'),
+        ('TAXAWU_DAARA', 'Taxawu Daara'),
     ]
+
+    MODULES_PAR_TYPE = {
+        'ESSAI':        ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel'],
+        'BASIC':        ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel'],
+        'PRO':          ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel'],
+        'AVANCE':       ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel', '/academique', '/rh', '/fiscal'],
+        'TAXAWU_DAARA': ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/academique', '/suivi-mensuel'],
+    }
     STATUT_CHOICES = [
         ('ACTIVE',    'Active'),
         ('EXPIREE',   'Expirée'),
@@ -31,6 +40,11 @@ class Licence(TimeStampedModel):
 
     def __str__(self):
         return f"{self.tenant} — {self.type} ({self.statut})"
+
+    @property
+    def modules(self):
+        always = ['/ma-licence', '/parametres']
+        return self.MODULES_PAR_TYPE.get(self.type, []) + always
 
     @property
     def est_active(self):

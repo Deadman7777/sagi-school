@@ -1,95 +1,283 @@
 {% extends "pdf/base.html" %}
 {% block doc_title %}Bilan Comptable{% endblock %}
 {% block content %}
+<style>
+  .bil-kpi td { width:25%; padding:8px; text-align:center; border:1px solid #e0e0e0; }
+  .bil-kpi .kb-label { font-size:9px; color:#999; text-transform:uppercase; }
+  .bil-kpi .kb-val   { font-size:13px; font-weight:bold; margin-top:3px; }
+  .bil-section { font-size:11px; font-weight:bold; border-left:4px solid #00745a; padding-left:8px; margin:12px 0 6px; color:#1a3c5e; }
+  .bil-table { width:100%; border-collapse:collapse; margin-bottom:8px; font-size:10px; }
+  .bil-table thead th { background:#1a3c5e; color:white; padding:5px 8px; font-size:10px; text-align:left; }
+  .bil-table thead th.r { text-align:right; }
+  .bil-table tbody td { padding:4px 8px; border-bottom:1px solid #eee; }
+  .bil-table tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 8px; border-top:2px solid #1a3c5e; }
+  .bil-cat { background:#e8f0fe; color:#185FA5; font-weight:bold; font-size:10px; }
+  .bil-cat-p { background:#e8fdf4; color:#0F6E56; font-weight:bold; font-size:10px; }
+  .bil-sub { padding-left:18px !important; color:#555; }
+  .mn { font-family:monospace; }
+  .tr { text-align:right; }
+  .w100 { width:100px; }
+</style>
 
-<table class="kpi-table">
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:6px">
+  Bilan Comptable — {{ exercice.annee_scolaire }}
+</h2>
+<p style="color:#666;font-size:11px;margin-bottom:10px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; Système {{ systeme }} &mdash; Conforme SYSCOHADA Révisé (AUDCIF Art. 7-11 &amp; 23)
+</p>
+
+<!-- KPIs -->
+<table class="bil-kpi" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:14px">
   <tr>
-    <td>
+    <td style="width:25%">
       <div class="kb-label">Total Actif</div>
-      <div class="kb-val kb-blue">{{ actif.total_actif|floatformat:0 }} FCFA</div>
+      <div class="kb-val" style="color:#0099ff">{{ actif.total_actif|floatformat:0 }} FCFA</div>
     </td>
-    <td>
+    <td style="width:25%">
       <div class="kb-label">Total Passif</div>
-      <div class="kb-val kb-teal">{{ passif.total_passif|floatformat:0 }} FCFA</div>
+      <div class="kb-val" style="color:#a855f7">{{ passif.total_passif|floatformat:0 }} FCFA</div>
     </td>
-    <td>
+    <td style="width:25%">
+      <div class="kb-label">Résultat Net</div>
+      <div class="kb-val {% if passif.capitaux_propres.resultat_net >= 0 %}kb-green{% else %}" style="color:#ef4444{% endif %}">
+        {% if passif.capitaux_propres.resultat_net >= 0 %}+{% endif %}{{ passif.capitaux_propres.resultat_net|floatformat:0 }} FCFA
+      </div>
+    </td>
+    <td style="width:25%">
       <div class="kb-label">Équilibre</div>
-      <div class="kb-val {% if equilibre %}kb-green{% else %}kb-orange{% endif %}">{% if equilibre %}Équilibré{% else %}Écart{% endif %}</div>
+      <div class="kb-val {% if equilibre %}kb-green{% else %}" style="color:#ef4444{% endif %}">
+        {% if equilibre %}Équilibré{% else %}Écart{% endif %}
+      </div>
     </td>
   </tr>
 </table>
 
-<table>
+<!-- ═══════════ ACTIF ═══════════ -->
+<div class="bil-section">ACTIF</div>
+<table class="bil-table">
   <thead>
     <tr>
-      <th style="width:50%">ACTIF</th>
-      <th style="width:20%; text-align:right">Montant (FCFA)</th>
-      <th style="width:10%">&nbsp;</th>
-      <th style="width:50%">PASSIF</th>
-      <th style="width:20%; text-align:right">Montant (FCFA)</th>
+      <th>Libellé</th>
+      <th class="r w100">Montant (FCFA)</th>
     </tr>
   </thead>
   <tbody>
-    <tr>
-      <td colspan="2" style="background:#f0f4ff;font-weight:bold;font-size:10px;text-transform:uppercase;color:#185FA5">Actif Circulant</td>
-      <td>&nbsp;</td>
-      <td colspan="2" style="background:#f0fdf4;font-weight:bold;font-size:10px;text-transform:uppercase;color:#0F6E56">Capitaux Propres</td>
-    </tr>
-    <tr>
-      <td>Créances clients (élèves)</td>
-      <td class="text-right">{{ actif.creances_clients|floatformat:0 }}</td>
-      <td>&nbsp;</td>
-      <td>Capital (Trésorerie initiale)</td>
-      <td class="text-right">{{ passif.capital|floatformat:0 }}</td>
-    </tr>
-    <tr>
-      <td colspan="2" style="background:#f0f4ff;font-weight:bold;font-size:10px;text-transform:uppercase;color:#185FA5">Trésorerie &amp; Équivalents</td>
-      <td>&nbsp;</td>
-      <td>Résultat de l'exercice</td>
-      <td class="text-right {% if passif.resultat_net >= 0 %}green{% else %}red{% endif %}">
-        {% if passif.resultat_net >= 0 %}+{% endif %}{{ passif.resultat_net|floatformat:0 }}
-      </td>
-    </tr>
-    {% for t in actif.tresorerie %}
-    <tr>
-      <td>{{ t.libelle }}</td>
-      <td class="text-right">{{ t.montant|floatformat:0 }}</td>
-      <td>&nbsp;</td>
-      {% if forloop.first %}
-      <td style="font-weight:bold">Total Capitaux Propres</td>
-      <td class="text-right bold green">{{ passif.total_capitaux|floatformat:0 }}</td>
-      {% else %}
-      <td colspan="2">&nbsp;</td>
-      {% endif %}
+    <!-- A — Actif Immobilisé -->
+    <tr><td colspan="2" class="bil-cat">A — Actif Immobilisé</td></tr>
+    {% if actif.immobilise.incorporel %}
+    <tr><td colspan="2" style="padding:2px 8px;font-size:9px;color:#888;font-style:italic">Immobilisations incorporelles (20x-21x)</td></tr>
+    {% for i in actif.immobilise.incorporel %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ i.libelle }} <span style="color:#aaa;font-size:9px">({{ i.compte }})</span></td>
+      <td class="tr mn">{{ i.montant|floatformat:0 }}</td>
     </tr>
     {% endfor %}
-    <tr>
-      <td colspan="2">&nbsp;</td>
-      <td>&nbsp;</td>
-      <td colspan="2" style="background:#f0fdf4;font-weight:bold;font-size:10px;text-transform:uppercase;color:#0F6E56">Dettes</td>
+    {% endif %}
+    {% if actif.immobilise.corporel %}
+    <tr><td colspan="2" style="padding:2px 8px;font-size:9px;color:#888;font-style:italic">Immobilisations corporelles — net amort. (22x-25x)</td></tr>
+    {% for i in actif.immobilise.corporel %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ i.libelle }} <span style="color:#aaa;font-size:9px">({{ i.compte }})</span></td>
+      <td class="tr mn">{{ i.montant|floatformat:0 }}</td>
     </tr>
-    <tr>
-      <td colspan="2">&nbsp;</td>
-      <td>&nbsp;</td>
-      <td>Dettes fournisseurs (estimées)</td>
-      <td class="text-right red">{{ passif.dettes|floatformat:0 }}</td>
+    {% endfor %}
+    {% if actif.immobilise.amort %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub" style="color:#999;font-style:italic">— Amortissements cumulés (28x)</td>
+      <td class="tr mn" style="color:#ef4444">-{{ actif.immobilise.amort|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% endif %}
+    {% if actif.immobilise.financier %}
+    <tr><td colspan="2" style="padding:2px 8px;font-size:9px;color:#888;font-style:italic">Immobilisations financières (26x-27x)</td></tr>
+    {% for i in actif.immobilise.financier %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ i.libelle }} <span style="color:#aaa;font-size:9px">({{ i.compte }})</span></td>
+      <td class="tr mn">{{ i.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% if not actif.immobilise.incorporel and not actif.immobilise.corporel and not actif.immobilise.financier %}
+    <tr><td colspan="2" class="bil-sub" style="color:#999;font-style:italic">Aucune immobilisation</td></tr>
+    {% endif %}
+    <tr style="background:#dbeafe">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL A — Actif Immobilisé</td>
+      <td class="tr mn" style="font-weight:bold;color:#185FA5">{{ actif.immobilise.total|floatformat:0 }}</td>
+    </tr>
+
+    <!-- B — Actif Circulant AO -->
+    <tr><td colspan="2" class="bil-cat">B — Actif Circulant AO</td></tr>
+    {% if actif.circulant_ao.stocks %}
+    <tr><td colspan="2" style="padding:2px 8px;font-size:9px;color:#888;font-style:italic">Stocks (3x)</td></tr>
+    {% for s in actif.circulant_ao.stocks %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ s.libelle }} <span style="color:#aaa;font-size:9px">({{ s.compte }})</span></td>
+      <td class="tr mn" style="color:#0066cc">{{ s.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% if actif.circulant_ao.creances %}
+    <tr><td colspan="2" style="padding:2px 8px;font-size:9px;color:#888;font-style:italic">Créances tiers — SF débiteur (40x-47x)</td></tr>
+    {% for c in actif.circulant_ao.creances %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ c.libelle }} <span style="color:#aaa;font-size:9px">({{ c.compte }})</span></td>
+      <td class="tr mn" style="color:#0066cc">{{ c.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+    {% if not actif.circulant_ao.stocks and not actif.circulant_ao.creances %}
+    <tr><td colspan="2" class="bil-sub" style="color:#999;font-style:italic">Aucune créance ni stock</td></tr>
+    {% endif %}
+    <tr style="background:#dbeafe">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL B — Actif Circulant AO</td>
+      <td class="tr mn" style="font-weight:bold;color:#185FA5">{{ actif.circulant_ao.total|floatformat:0 }}</td>
+    </tr>
+
+    <!-- C — Actif Circulant HAO -->
+    {% if actif.circulant_hao.total %}
+    <tr><td colspan="2" class="bil-cat">C — Actif Circulant HAO</td></tr>
+    {% for h in actif.circulant_hao.detail %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ h.libelle }} <span style="color:#aaa;font-size:9px">({{ h.compte }})</span></td>
+      <td class="tr mn" style="color:#0066cc">{{ h.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    <tr style="background:#dbeafe">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL C — Actif Circulant HAO</td>
+      <td class="tr mn" style="font-weight:bold;color:#185FA5">{{ actif.circulant_hao.total|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+
+    <!-- D — Trésorerie-Actif -->
+    <tr><td colspan="2" class="bil-cat">D — Trésorerie-Actif</td></tr>
+    {% for t in actif.tresorerie_actif.detail %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ t.libelle }} ({{ t.compte }})</td>
+      <td class="tr mn" style="color:#00745a">{{ t.montant|floatformat:0 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="2" class="bil-sub" style="color:#999;font-style:italic">Aucun solde de trésorerie</td></tr>
+    {% endfor %}
+    <tr style="background:#dbeafe">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL D — Trésorerie-Actif</td>
+      <td class="tr mn" style="font-weight:bold;color:#185FA5">{{ actif.tresorerie_actif.total|floatformat:0 }}</td>
     </tr>
   </tbody>
   <tfoot>
-    <tr>
-      <td class="bold blue">TOTAL ACTIF</td>
-      <td class="text-right bold blue">{{ actif.total_actif|floatformat:0 }}</td>
-      <td>&nbsp;</td>
-      <td class="bold teal">TOTAL PASSIF</td>
-      <td class="text-right bold teal">{{ passif.total_passif|floatformat:0 }}</td>
+    <tr style="background:#1a3c5e;color:white">
+      <td style="padding:6px 8px;font-weight:bold">TOTAL ACTIF (A + B + C + D)</td>
+      <td class="tr mn" style="padding:6px 8px;font-weight:bold">{{ actif.total_actif|floatformat:0 }}</td>
     </tr>
   </tfoot>
 </table>
 
-<table class="resultat-table {% if equilibre %}resultat-bene{% else %}resultat-def{% endif %}">
+<!-- ═══════════ PASSIF ═══════════ -->
+<div class="bil-section">PASSIF</div>
+<table class="bil-table">
+  <thead>
+    <tr style="background:#0F6E56;color:white">
+      <th>Libellé</th>
+      <th class="r w100">Montant (FCFA)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- F — Capitaux Propres -->
+    <tr><td colspan="2" class="bil-cat-p">F — Capitaux Propres</td></tr>
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">Capital — trésorerie initiale</td>
+      <td class="tr mn" style="color:#a855f7">{{ passif.capitaux_propres.capital|floatformat:0 }}</td>
+    </tr>
+    <tr>
+      <td class="bil-sub">Résultat net {% if passif.capitaux_propres.resultat_net >= 0 %}(bénéfice){% else %}(perte){% endif %}</td>
+      <td class="tr mn" style="{% if passif.capitaux_propres.resultat_net >= 0 %}color:#10b981{% else %}color:#ef4444{% endif %}">
+        {% if passif.capitaux_propres.resultat_net >= 0 %}+{% endif %}{{ passif.capitaux_propres.resultat_net|floatformat:0 }}
+      </td>
+    </tr>
+    <tr style="background:#d1fae5">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL F — Capitaux Propres</td>
+      <td class="tr mn" style="font-weight:bold;color:#0F6E56">{{ passif.capitaux_propres.total|floatformat:0 }}</td>
+    </tr>
+
+    <!-- G — Dettes Financières -->
+    <tr><td colspan="2" class="bil-cat-p">G — Dettes Financières (16x-19x)</td></tr>
+    {% if passif.dettes_financieres.detail %}
+    {% for d in passif.dettes_financieres.detail %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ d.libelle }} ({{ d.compte }})</td>
+      <td class="tr mn" style="color:#ef4444">{{ d.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% else %}
+    <tr><td colspan="2" class="bil-sub" style="color:#999;font-style:italic">Aucune dette financière</td></tr>
+    {% endif %}
+    <tr style="background:#d1fae5">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL G — Dettes Financières</td>
+      <td class="tr mn" style="font-weight:bold;color:#0F6E56">{{ passif.dettes_financieres.total|floatformat:0 }}</td>
+    </tr>
+
+    <!-- H — Passif Circulant AO -->
+    <tr><td colspan="2" class="bil-cat-p">H — Passif Circulant AO</td></tr>
+    {% if passif.passif_circulant_ao.detail %}
+    {% for d in passif.passif_circulant_ao.detail %}
+    <tr style="background:#f9f9f9">
+      <td class="bil-sub">{{ d.libelle }} <span style="color:#aaa;font-size:9px">({{ d.compte }})</span></td>
+      <td class="tr mn" style="color:#ef4444">{{ d.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% else %}
+    <tr><td colspan="2" class="bil-sub" style="color:#999;font-style:italic">Aucune dette tiers</td></tr>
+    {% endif %}
+    <tr style="background:#d1fae5">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL H — Passif Circulant AO</td>
+      <td class="tr mn" style="font-weight:bold;color:#0F6E56">{{ passif.passif_circulant_ao.total|floatformat:0 }}</td>
+    </tr>
+
+    <!-- I — Passif Circulant HAO -->
+    {% if passif.passif_circulant_hao.total %}
+    <tr><td colspan="2" class="bil-cat-p">I — Passif Circulant HAO (48x)</td></tr>
+    {% for d in passif.passif_circulant_hao.detail %}
+    <tr style="background:#fff3f3">
+      <td class="bil-sub">{{ d.libelle }} <span style="color:#aaa;font-size:9px">({{ d.compte }})</span></td>
+      <td class="tr mn" style="color:#ef4444">{{ d.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    <tr style="background:#d1fae5">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL I — Passif Circulant HAO</td>
+      <td class="tr mn" style="font-weight:bold;color:#0F6E56">{{ passif.passif_circulant_hao.total|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+
+    <!-- J — Trésorerie-Passif -->
+    {% if passif.tresorerie_passif.detail %}
+    <tr><td colspan="2" class="bil-cat-p">J — Trésorerie-Passif (Découverts)</td></tr>
+    {% for t in passif.tresorerie_passif.detail %}
+    <tr style="background:#fff3f3">
+      <td class="bil-sub">{{ t.libelle }} ({{ t.compte }})</td>
+      <td class="tr mn" style="color:#ef4444">{{ t.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    <tr style="background:#d1fae5">
+      <td style="font-weight:bold;padding:4px 8px">TOTAL J — Trésorerie-Passif</td>
+      <td class="tr mn" style="font-weight:bold;color:#ef4444">{{ passif.tresorerie_passif.total|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+  <tfoot>
+    <tr style="background:#0F6E56;color:white">
+      <td style="padding:6px 8px;font-weight:bold">TOTAL PASSIF (F + G + H + I + J)</td>
+      <td class="tr mn" style="padding:6px 8px;font-weight:bold">{{ passif.total_passif|floatformat:0 }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- Équilibre -->
+<table class="resultat-table {% if equilibre %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:10px">
   <tr>
-    <td class="rb-label">BILAN — Exercice {{ exercice }}</td>
-    <td class="rb-val {% if equilibre %}green{% else %}red{% endif %}">{% if equilibre %}Bilan Equilibré{% else %}Vérifier les écritures{% endif %}</td>
+    <td class="rb-label">BILAN {{ exercice.annee_scolaire }} — SYSCOHADA Révisé — Actif = {{ actif.total_actif|floatformat:0 }} / Passif = {{ passif.total_passif|floatformat:0 }}</td>
+    <td class="rb-val {% if equilibre %}green{% else %}red{% endif %}">
+      {% if equilibre %}Équilibré ✓{% else %}Écart : {{ actif.total_actif|floatformat:0 }} ≠ {{ passif.total_passif|floatformat:0 }}{% endif %}
+    </td>
   </tr>
 </table>
 

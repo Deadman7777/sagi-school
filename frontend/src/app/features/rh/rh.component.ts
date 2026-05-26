@@ -12,6 +12,7 @@ import { SelectModule }      from 'primeng/select';
 import { TableModule }       from 'primeng/table';
 import { TagModule }         from 'primeng/tag';
 import { ToastModule }       from 'primeng/toast';
+import { TooltipModule }     from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from '../../core/services/auth.service';
 import {
@@ -36,7 +37,7 @@ const MOIS_OPTIONS = [
     DecimalPipe,
     FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, SelectModule, TagModule, InputNumberModule,
-    ToastModule, TranslateModule,
+    ToastModule, TooltipModule, TranslateModule,
   ],
   providers: [MessageService],
   template: `
@@ -140,9 +141,9 @@ const MOIS_OPTIONS = [
           </td>
           <td>
             <div class="btn-row">
-              <p-button icon="pi pi-pencil"     [rounded]="true" [text]="true" severity="info"    (onClick)="ouvrirDialogEmploye(e)" pTooltip="Modifier" />
-              <p-button icon="pi pi-file-edit"  [rounded]="true" [text]="true" severity="success" (onClick)="ouvrirDialogBulletin(e)" pTooltip="Générer Bulletin" />
-              <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" />
+              <p-button icon="pi pi-pencil"     [rounded]="true" [text]="true" severity="info"    (onClick)="ouvrirDialogEmploye(e)" pTooltip="Modifier l'employé" tooltipPosition="top" />
+              <p-button icon="pi pi-file-edit"  [rounded]="true" [text]="true" severity="success" (onClick)="ouvrirDialogBulletin(e)" pTooltip="Générer un bulletin de paie" tooltipPosition="top" />
+              <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" tooltipPosition="top" />
             </div>
           </td>
         </tr>
@@ -203,19 +204,24 @@ const MOIS_OPTIONS = [
           <td>
             <div class="btn-row">
               <p-button icon="pi pi-eye" [rounded]="true" [text]="true" severity="info"
-                        (onClick)="ouvrirDetailBulletin(b)" pTooltip="Voir détail" />
+                        (onClick)="ouvrirDetailBulletin(b)" pTooltip="Voir le détail" tooltipPosition="top" />
               @if (b.statut === 'BROUILLON') {
                 <p-button icon="pi pi-check" [rounded]="true" [text]="true" severity="success"
-                          (onClick)="demanderValidation(b)" pTooltip="Valider" />
+                          (onClick)="demanderValidation(b)" pTooltip="Valider le bulletin" tooltipPosition="top" />
               }
               @if (b.statut === 'VALIDE') {
                 <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="warn"
-                          (onClick)="demanderPaiement(b)" pTooltip="Marquer Payé" />
+                          (onClick)="demanderPaiement(b)" pTooltip="Marquer comme Payé" tooltipPosition="top" />
               }
               @if (b.statut !== 'BROUILLON') {
                 <p-button icon="pi pi-download" [rounded]="true" [text]="true" severity="secondary"
-                          (onClick)="telechargerPdf(b)" pTooltip="Télécharger PDF"
-                          [loading]="downloadingId() === b.id" />
+                          (onClick)="telechargerPdf(b)" pTooltip="Télécharger le PDF du bulletin"
+                          tooltipPosition="top" [loading]="downloadingId() === b.id" />
+              }
+              @if (b.statut === 'VALIDE' || b.statut === 'PAYE') {
+                <p-button icon="pi pi-ban" [rounded]="true" [text]="true" severity="danger"
+                          (onClick)="demanderAnnulationBulletin(b)"
+                          pTooltip="Annuler ce bulletin (contre-écritures SYSCOHADA)" tooltipPosition="top" />
               }
             </div>
           </td>
@@ -226,6 +232,37 @@ const MOIS_OPTIONS = [
       </ng-template>
     </p-table>
   </div>
+
+  <!-- Confirmation annulation bulletin -->
+  <p-dialog header="⚠️ Annuler ce bulletin de paie" [(visible)]="confirmAnnulBulletinVisible"
+            [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+    @if (bulletinAnnuler !== null) {
+    <div style="padding:8px 0">
+      <div style="background:#1a1a2e;border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
+        <div style="font-size:13px;color:#e8f0fe;font-weight:600">
+          {{ bulletinAnnuler!.employe_nom }} — {{ bulletinAnnuler!.periode }}
+        </div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+          Net à payer : {{ bulletinAnnuler!.net_a_payer | number:'1.0-0' }} FCFA
+        </div>
+      </div>
+      <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0">
+        Cette opération va générer des <strong style="color:#f59e0b">contre-écritures SYSCOHADA</strong>
+        pour annuler toutes les écritures de paie (661, 422, IPRES, IR, net à payer).
+        <br><br>
+        Les avances imputées sur ce bulletin seront <strong style="color:#10b981">restituées</strong>
+        en statut EN_ATTENTE.
+        <br><br>
+        ⚠️ Cette action est <strong style="color:#ef4444">irréversible</strong>.
+      </p>
+    </div>
+    }
+    <ng-template pTemplate="footer">
+      <p-button label="Non, conserver" severity="secondary" (onClick)="confirmAnnulBulletinVisible=false" />
+      <p-button label="Oui, annuler le bulletin" severity="danger"
+                [loading]="savingAnnulBulletin()" (onClick)="confirmerAnnulationBulletin()" />
+    </ng-template>
+  </p-dialog>
 }
 
 <!-- ══════════════════════ AVANCES ══════════════════════ -->
@@ -261,7 +298,7 @@ const MOIS_OPTIONS = [
           <td>
             @if (a.statut === 'EN_ATTENTE') {
               <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
-                        (onClick)="annulerAvance(a)" pTooltip="Annuler" />
+                        (onClick)="annulerAvance(a)" pTooltip="Annuler cette avance" tooltipPosition="top" />
             }
           </td>
         </tr>
@@ -910,6 +947,9 @@ export class RhComponent implements OnInit {
   previewBulletin = signal<any | null>(null);
   bulletinDetail  = signal<BulletinPaie | null>(null);
   bulletinAValider = signal<BulletinPaie | null>(null);
+  savingAnnulBulletin = signal(false);
+  confirmAnnulBulletinVisible = false;
+  bulletinAnnuler: BulletinPaie | null = null;
 
   // — Dialog visibility —
   dialogEmployeVisible    = false;
@@ -1259,6 +1299,34 @@ export class RhComponent implements OnInit {
     });
   }
 
+  demanderAnnulationBulletin(b: BulletinPaie) {
+    this.bulletinAnnuler = b;
+    this.confirmAnnulBulletinVisible = true;
+  }
+
+  confirmerAnnulationBulletin() {
+    if (!this.bulletinAnnuler?.id) return;
+    this.savingAnnulBulletin.set(true);
+    this.rh.annulerBulletin(this.bulletinAnnuler.id).subscribe({
+      next: (updated: BulletinPaie) => {
+        this.msg.add({
+          severity: 'info',
+          summary: 'Bulletin annulé',
+          detail: `Contre-écritures SYSCOHADA générées pour ${updated.employe_nom} — ${updated.periode}`,
+        });
+        this.confirmAnnulBulletinVisible = false;
+        this.bulletinAnnuler = null;
+        this.savingAnnulBulletin.set(false);
+        this.chargerBulletins();
+      },
+      error: (err: any) => {
+        const detail = err?.error?.error || 'Erreur lors de l\'annulation.';
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail });
+        this.savingAnnulBulletin.set(false);
+      },
+    });
+  }
+
   // ── Paramètres Fiscaux ───────────────────────────────────────
   annulerEditParams() {
     this.editingParams.set(false);
@@ -1282,11 +1350,18 @@ export class RhComponent implements OnInit {
 
   // ── Helpers ─────────────────────────────────────────────────
   statutLabel(s: string) {
-    return s === 'BROUILLON' ? 'Brouillon' : s === 'VALIDE' ? 'Validé' : 'Payé';
+    const map: Record<string, string> = {
+      BROUILLON: 'Brouillon', VALIDE: 'Validé', PAYE: 'Payé', ANNULE: 'Annulé',
+    };
+    return map[s] ?? s;
   }
 
-  statutSeverity(s: string): 'warn' | 'success' | 'info' {
-    return s === 'BROUILLON' ? 'warn' : s === 'VALIDE' ? 'info' : 'success';
+  statutSeverity(s: string): 'warn' | 'success' | 'info' | 'danger' | 'secondary' {
+    if (s === 'BROUILLON') return 'warn';
+    if (s === 'VALIDE')    return 'info';
+    if (s === 'PAYE')      return 'success';
+    if (s === 'ANNULE')    return 'danger';
+    return 'secondary';
   }
 
   avanceStatutLabel(s: string) {

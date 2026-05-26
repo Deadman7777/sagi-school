@@ -352,7 +352,7 @@ export class LicencesComponent implements OnInit {
   ];
 
   TARIFS: Record<string, number> = {
-    ESSAI: 0, BASIC: 75000, PRO: 150000, ENTERPRISE: 300000
+    ESSAI: 0, BASIC: 75000, PRO: 150000, AVANCE: 250000, TAXAWU_DAARA: 200000
   };
 
   constructor(
@@ -363,10 +363,11 @@ export class LicencesComponent implements OnInit {
 
   ngOnInit() {
     this.typesLicence = [
-      { label: this.translate.instant('licences.essai'),      value: 'ESSAI' },
-      { label: this.translate.instant('licences.basic'),      value: 'BASIC' },
-      { label: this.translate.instant('licences.pro'),        value: 'PRO' },
-      { label: this.translate.instant('licences.enterprise'), value: 'ENTERPRISE' },
+      { label: '⏳ Essai (30 jours)',      value: 'ESSAI' },
+      { label: '🔵 Basic',                 value: 'BASIC' },
+      { label: '🟢 Pro',                   value: 'PRO' },
+      { label: '🟣 Avancé',               value: 'AVANCE' },
+      { label: '🌟 Taxawu Daara',          value: 'TAXAWU_DAARA' },
     ];
     this.charger();
   }
@@ -381,9 +382,12 @@ export class LicencesComponent implements OnInit {
     });
   }
 
-  typeSeverity(type: string) {
-    return type === 'PRO' ? 'success' : type === 'ENTERPRISE' ? 'warn' :
-           type === 'BASIC' ? 'info' : 'secondary';
+  typeSeverity(type: string): 'success' | 'warn' | 'contrast' | 'info' | 'secondary' {
+    const map: Record<string, 'success' | 'warn' | 'contrast' | 'info' | 'secondary'> = {
+      PRO: 'success', AVANCE: 'warn', TAXAWU_DAARA: 'contrast',
+      BASIC: 'info', ESSAI: 'secondary',
+    };
+    return map[type] || 'secondary';
   }
 
   statutSeverity(statut: string) {

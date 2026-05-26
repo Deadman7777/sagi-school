@@ -1,0 +1,83 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Notes Annexes{% endblock %}
+{% block content %}
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
+  Notes Annexes aux États Financiers — {{ exercice.annee_scolaire }}
+</h2>
+<p style="color:#666;font-size:11px;margin-bottom:14px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
+</p>
+
+<!-- Note 1 -->
+<div class="section-title">Note 1 — Présentation de l'entité et de l'exercice</div>
+<table cellspacing="0" cellpadding="5">
+  <tbody>
+    <tr><td style="width:50%;color:#555">Secteur d'activité</td><td><strong>{{ note1.secteur }}</strong></td></tr>
+    <tr><td style="color:#555">Référentiel comptable</td><td>{{ note1.referentiel }}</td></tr>
+    <tr><td style="color:#555">Exercice</td><td>{{ exercice.date_debut|date:"d/m/Y" }} → {{ exercice.date_fin|date:"d/m/Y" }}</td></tr>
+    <tr><td style="color:#555">Élèves inscrits</td><td><strong>{{ note1.nb_eleves }}</strong></td></tr>
+    <tr><td style="color:#555">Paiements enregistrés</td><td><strong>{{ note1.nb_paiements }}</strong></td></tr>
+    <tr><td style="color:#555">Chiffre d'Affaires HT (CAHT)</td><td class="teal"><strong>{{ caht|floatformat:0 }} FCFA</strong></td></tr>
+    <tr><td style="color:#555">Seuil SMT (services)</td><td>{{ seuil_smt|floatformat:0 }} FCFA</td></tr>
+  </tbody>
+</table>
+{% if note1.sections %}
+<div style="margin-top:8px;font-size:10px;color:#64748b">Répartition par section :</div>
+<table cellspacing="0" cellpadding="4" style="width:50%">
+  <thead><tr><th>Section</th><th class="text-right">Effectif</th></tr></thead>
+  <tbody>
+    {% for s in note1.sections %}
+    <tr><td style="padding-left:14px">{{ s.nom }}</td><td class="text-right">{{ s.nb }} élèves</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Note 2 -->
+<div class="section-title">Note 2 — Méthodes et principes comptables</div>
+<table cellspacing="0" cellpadding="5">
+  <tbody>
+    <tr><td style="width:40%;color:#555">Base d'évaluation</td><td>{{ note2.base_evaluation }}</td></tr>
+    <tr><td style="color:#555">Amortissements</td><td>{{ note2.amortissement }}</td></tr>
+    <tr><td style="color:#555">Créances clients</td><td>{{ note2.creances }}</td></tr>
+    <tr><td style="color:#555">Trésorerie</td><td>{{ note2.tresorerie }}</td></tr>
+    <tr><td style="color:#555">Méthode de comptabilisation</td><td>{{ note2.comptabilite }}</td></tr>
+  </tbody>
+</table>
+
+<!-- Note 3 -->
+<div class="section-title">Note 3 — Charges de personnel</div>
+<table cellspacing="0" cellpadding="5">
+  <tbody>
+    <tr><td style="width:50%;color:#555">Masse salariale brute (661+662)</td><td class="red"><strong>{{ note3.masse_salariale|floatformat:0 }} FCFA</strong></td></tr>
+    <tr><td style="color:#555">Total charges de l'exercice</td><td class="red"><strong>{{ note3.total_charges|floatformat:0 }} FCFA</strong></td></tr>
+  </tbody>
+</table>
+
+<!-- Note 4 -->
+<div class="section-title">Note 4 — Trésorerie de clôture</div>
+<table cellspacing="0" cellpadding="5">
+  <tbody>
+    {% for t in note4.comptes %}
+    <tr>
+      <td style="width:50%;color:#555">{{ t.libelle }} ({{ t.compte }})</td>
+      <td class="{% if t.solde >= 0 %}teal{% else %}red{% endif %}"><strong>{{ t.solde|floatformat:0 }} FCFA</strong></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="2" style="color:#999;font-style:italic">Aucun solde de trésorerie enregistré</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Note 5 — Résultat -->
+<div class="section-title">Note 5 — Résultat de l'exercice</div>
+<table class="resultat-table {% if resultat_net >= 0 %}resultat-bene{% else %}resultat-def{% endif %}">
+  <tr>
+    <td class="rb-label">Résultat Net de l'Exercice {{ exercice.annee_scolaire }}</td>
+    <td class="rb-val {% if resultat_net >= 0 %}green{% else %}red{% endif %}">
+      {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} FCFA
+    </td>
+  </tr>
+</table>
+{% endblock %}

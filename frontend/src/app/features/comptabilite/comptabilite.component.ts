@@ -11,11 +11,12 @@ import { DialogModule } from 'primeng/dialog';
 import { SelectModule } from 'primeng/select';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { TooltipModule } from 'primeng/tooltip';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -24,36 +25,70 @@ import { MessageService } from 'primeng/api';
         <h2 class="page-title">📒 {{ 'comptabilite.title' | translate }}</h2>
         <span class="page-sub">{{ 'comptabilite.subtitle' | translate }}</span>
       </div>
-      <button class="btn-export" (click)="exporter()">📤 {{ 'comptabilite.exporter_pdf' | translate }}</button>
+      <button class="btn-export" (click)="exporter()" [title]="'Exporter ' + labelOngletCourant() + ' en PDF'">
+        📤 Exporter PDF — {{ labelOngletCourant() }}
+      </button>
     </div>
 
-    <!-- Onglets -->
+    <!-- Onglets primaires -->
     <div class="tabs-bar">
       <button class="tab-btn" [class.active]="onglet() === 'journal'"
-              (click)="chargerJournal(); onglet.set('journal')">📒 {{ 'comptabilite.journal'     | translate }}</button>
+              (click)="chargerJournal(); onglet.set('journal')">
+        📒 {{ 'comptabilite.journal' | translate }}
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'grand-livre'"
-              (click)="chargerGrandLivre(); onglet.set('grand-livre')">📖 {{ 'comptabilite.grand_livre' | translate }}</button>
+              (click)="chargerGrandLivre(); onglet.set('grand-livre')">
+        📖 {{ 'comptabilite.grand_livre' | translate }}
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'balance'"
-              (click)="chargerBalance(); onglet.set('balance')">⚖️ {{ 'comptabilite.balance'     | translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'resultat'"
-              (click)="chargerResultat(); onglet.set('resultat')">📈 {{ 'comptabilite.resultat'   | translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'bilan'"
-              (click)="chargerEtatsSynthese(); onglet.set('bilan')">🏦 {{ 'comptabilite.bilan'         | translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'flux'"
-              *ngIf="systeme() === 'SN'"
-              (click)="chargerEtatsSynthese(); onglet.set('flux')">💧 {{ 'comptabilite.flux'           | translate }}</button>
+              (click)="chargerBalance(); onglet.set('balance')">
+        ⚖️ {{ 'comptabilite.balance' | translate }}
+      </button>
+      <button class="tab-btn tab-etafi" [class.active]="isEtafiActif()"
+              (click)="ouvrirEtafi()">
+        📊 ETAFI <span class="etafi-count">4</span>
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'historique'"
-              (click)="chargerEtatsSynthese(); onglet.set('historique')">📚 {{ 'comptabilite.historique'| translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'notes'"
-              (click)="chargerEtatsSynthese(); onglet.set('notes')">📎 {{ 'comptabilite.notes_annexes' | translate }}</button>
-      <button class="tab-btn" [class.active]="onglet() === 'charges'"
-        (click)="onglet.set('charges')">💸 {{ 'comptabilite.charges_tab'       | translate }}</button>
+              (click)="chargerEtatsSynthese(); onglet.set('historique')">
+        📚 {{ 'comptabilite.historique' | translate }}
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'plan'"
-        (click)="chargerPlan(); onglet.set('plan')">📋 Plan Comptable</button>
+              (click)="chargerPlan(); onglet.set('plan')">
+        📋 Plan Comptable
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'budget'"
-        (click)="chargerBudget(); onglet.set('budget')">🎯 Budget</button>
+              (click)="chargerBudget(); onglet.set('budget')">
+        🎯 Budget
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'investissement'"
-        (click)="chargerImmobilisations(); onglet.set('investissement')">🏗️ Investissement</button>
+              (click)="chargerImmobilisations(); onglet.set('investissement')">
+        🏗️ Investissement
+      </button>
+    </div>
+
+    <!-- Sous-onglets ETAFI (États Financiers de Synthèse) -->
+    <div class="etafi-bar" *ngIf="isEtafiActif()">
+      <span class="etafi-bar-label">
+        📊 ÉTATS FINANCIERS DE SYNTHÈSE
+      </span>
+      <div class="etafi-sub-tabs">
+        <button class="etafi-btn" [class.active]="onglet() === 'bilan'"
+                (click)="chargerEtatsSynthese(); onglet.set('bilan')">
+          🏦 Bilan
+        </button>
+        <button class="etafi-btn" [class.active]="onglet() === 'resultat'"
+                (click)="chargerResultat(); onglet.set('resultat')">
+          📈 Compte de Résultat
+        </button>
+        <button class="etafi-btn" [class.active]="onglet() === 'flux'"
+                (click)="chargerEtatsSynthese(); onglet.set('flux')">
+          💧 Flux de Trésorerie
+        </button>
+        <button class="etafi-btn" [class.active]="onglet() === 'notes'"
+                (click)="chargerEtatsSynthese(); onglet.set('notes')">
+          📎 Notes Annexes
+        </button>
+      </div>
     </div>
 
     <!-- JOURNAL -->
@@ -192,7 +227,7 @@ import { MessageService } from 'primeng/api';
     <!-- COMPTE DE RÉSULTAT — SIG SYSCOHADA Révisé -->
     <div *ngIf="onglet() === 'resultat' && resultat() !== null">
       <div class="systeme-badge" [class.sn]="resultat().systeme === 'SN'">
-        {{ resultat().systeme === 'SN' ? '📊 Système Normal' : '📋 Système Minimal de Trésorerie' }}
+        {{ resultat().systeme === 'SN' ? 'Système Normal' : 'Système Minimal de Trésorerie' }}
         — CAHT : {{ resultat().caht | number:'1.0-0' }} FCFA
       </div>
 
@@ -362,10 +397,12 @@ import { MessageService } from 'primeng/api';
 
             <!-- B — Actif Circulant AO -->
             <div class="bilan-section">B — {{ 'comptabilite.actif_circulant' | translate }}</div>
-            <div class="cr-row italic-row"><span>Stocks (marchandises, fournitures)</span><span class="mono">—</span></div>
-            <div class="cr-row">
-              <span>{{ 'comptabilite.creances_clients' | translate }}</span>
-              <span class="mono info">{{ bilan().actif.circulant_ao.creances_clients | number:'1.0-0' }}</span>
+            <div *ngIf="!bilan().actif.circulant_ao.stocks?.length && !bilan().actif.circulant_ao.creances?.length" class="cr-row italic-row">
+              <span>Aucune créance ni stock</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let c of bilan().actif.circulant_ao.creances">
+              <span>{{ c.libelle }} ({{ c.compte }})</span>
+              <span class="mono info">{{ c.montant | number:'1.0-0' }}</span>
             </div>
             <div class="bilan-total-masse">
               <span>TOTAL B — Actif Circulant AO</span>
@@ -374,8 +411,17 @@ import { MessageService } from 'primeng/api';
 
             <!-- C — Actif Circulant HAO -->
             <div class="bilan-section">C — {{ 'comptabilite.actif_circulant_hao' | translate }}</div>
-            <div class="cr-row italic-row"><span>Créances HAO</span><span class="mono">—</span></div>
-            <div class="bilan-total-masse"><span>TOTAL C</span><span class="mono">0</span></div>
+            <div *ngIf="!bilan().actif.circulant_hao?.total" class="cr-row italic-row">
+              <span>Aucune créance HAO</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let h of bilan().actif.circulant_hao?.detail">
+              <span>{{ h.libelle }} ({{ h.compte }})</span>
+              <span class="mono info">{{ h.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL C — Actif Circulant HAO</span>
+              <span class="mono" style="color:#0099ff">{{ bilan().actif.circulant_hao?.total || 0 | number:'1.0-0' }}</span>
+            </div>
 
             <!-- D — Trésorerie-Actif -->
             <div class="bilan-section">D — {{ 'comptabilite.tresorerie_actif' | translate }}</div>
@@ -440,17 +486,12 @@ import { MessageService } from 'primeng/api';
 
             <!-- H — Passif Circulant AO -->
             <div class="bilan-section">H — {{ 'comptabilite.passif_circulant' | translate }}</div>
-            <div class="cr-row">
-              <span>{{ 'comptabilite.dettes_fournisseurs' | translate }}</span>
-              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.fournisseurs | number:'1.0-0' }}</span>
+            <div *ngIf="!bilan().passif.passif_circulant_ao.detail?.length" class="cr-row italic-row">
+              <span>Aucune dette tiers</span><span class="mono">—</span>
             </div>
-            <div class="cr-row" *ngIf="bilan().passif.passif_circulant_ao.dettes_fiscales > 0">
-              <span>Dettes fiscales (44x)</span>
-              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.dettes_fiscales | number:'1.0-0' }}</span>
-            </div>
-            <div class="cr-row" *ngIf="bilan().passif.passif_circulant_ao.dettes_sociales > 0">
-              <span>Dettes sociales (43x)</span>
-              <span class="mono danger">{{ bilan().passif.passif_circulant_ao.dettes_sociales | number:'1.0-0' }}</span>
+            <div class="cr-row" *ngFor="let d of bilan().passif.passif_circulant_ao.detail">
+              <span>{{ d.libelle }} ({{ d.compte }})</span>
+              <span class="mono danger">{{ d.montant | number:'1.0-0' }}</span>
             </div>
             <div class="bilan-total-masse">
               <span>TOTAL H — Passif Circulant AO</span>
@@ -459,8 +500,17 @@ import { MessageService } from 'primeng/api';
 
             <!-- I — Passif Circulant HAO -->
             <div class="bilan-section">I — {{ 'comptabilite.passif_circulant_hao' | translate }}</div>
-            <div class="cr-row italic-row"><span>Dettes HAO</span><span class="mono">—</span></div>
-            <div class="bilan-total-masse"><span>TOTAL I</span><span class="mono">0</span></div>
+            <div *ngIf="!bilan().passif.passif_circulant_hao?.total" class="cr-row italic-row">
+              <span>Aucune dette HAO</span><span class="mono">—</span>
+            </div>
+            <div class="cr-row" *ngFor="let d of bilan().passif.passif_circulant_hao?.detail">
+              <span>{{ d.libelle }} ({{ d.compte }})</span>
+              <span class="mono danger">{{ d.montant | number:'1.0-0' }}</span>
+            </div>
+            <div class="bilan-total-masse">
+              <span>TOTAL I — Passif Circulant HAO</span>
+              <span class="mono" style="color:#ef4444">{{ bilan().passif.passif_circulant_hao?.total || 0 | number:'1.0-0' }}</span>
+            </div>
 
             <!-- J — Trésorerie-Passif -->
             <div class="bilan-section">J — {{ 'comptabilite.tresorerie_passif' | translate }}</div>
@@ -495,48 +545,79 @@ import { MessageService } from 'primeng/api';
         💧 Tableau des Flux de Trésorerie — Méthode {{ flux().methode }} — {{ flux().exercice }}
       </div>
 
-      <!-- Flux exploitation -->
+      <!-- A — Flux opérationnels (méthode indirecte) -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header">⚙️ {{ 'comptabilite.flux_exploitation' | translate }}</div>
+        <div class="card-header">⚙️ {{ 'comptabilite.flux_exploitation' | translate }} (A)</div>
         <div class="card-body">
           <div class="cr-row">
-            <span>{{ 'comptabilite.encaissements' | translate }}</span>
-            <span class="mono success">+{{ flux().flux_exploitation.encaissements_clients | number:'1.0-0' }}</span>
+            <span>Résultat net de l'exercice</span>
+            <span class="mono" [style.color]="flux().flux_a.resultat_net >= 0 ? '#10b981' : '#ef4444'">
+              {{ flux().flux_a.resultat_net >= 0 ? '+' : '' }}{{ flux().flux_a.resultat_net | number:'1.0-0' }}
+            </span>
           </div>
+          @if (flux().flux_a.amort) {
           <div class="cr-row">
-            <span>{{ 'comptabilite.decaissements' | translate }}</span>
-            <span class="mono danger">-{{ flux().flux_exploitation.decaissements_charges | number:'1.0-0' }}</span>
+            <span>+ Dotations amortissements (non décaissées)</span>
+            <span class="mono success">+{{ flux().flux_a.amort | number:'1.0-0' }}</span>
           </div>
-          <div class="flux-total" [style.color]="flux().flux_exploitation.flux_net >= 0 ? '#10b981' : '#ef4444'">
+          }
+          @if (flux().flux_a.var_actif_b) {
+          <div class="cr-row">
+            <span>+/− Variation créances et stocks (B)</span>
+            <span class="mono" [style.color]="flux().flux_a.var_actif_b >= 0 ? '#10b981' : '#ef4444'">
+              {{ flux().flux_a.var_actif_b >= 0 ? '+' : '' }}{{ flux().flux_a.var_actif_b | number:'1.0-0' }}
+            </span>
+          </div>
+          }
+          @if (flux().flux_a.var_passif_h) {
+          <div class="cr-row">
+            <span>+/− Variation dettes tiers (H)</span>
+            <span class="mono" [style.color]="flux().flux_a.var_passif_h >= 0 ? '#10b981' : '#ef4444'">
+              {{ flux().flux_a.var_passif_h >= 0 ? '+' : '' }}{{ flux().flux_a.var_passif_h | number:'1.0-0' }}
+            </span>
+          </div>
+          }
+          <div class="flux-total" [style.color]="flux().flux_a.flux_net >= 0 ? '#10b981' : '#ef4444'">
             <span>{{ 'comptabilite.flux_net_exploit' | translate }}</span>
-            <span class="mono">{{ flux().flux_exploitation.flux_net >= 0 ? '+' : '' }}{{ flux().flux_exploitation.flux_net | number:'1.0-0' }} FCFA</span>
+            <span class="mono">{{ flux().flux_a.flux_net >= 0 ? '+' : '' }}{{ flux().flux_a.flux_net | number:'1.0-0' }} FCFA</span>
           </div>
         </div>
       </div>
 
-      <!-- Flux investissement -->
+      <!-- B — Flux investissement -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-header">🏗️ {{ 'comptabilite.flux_investissement' | translate }}</div>
-        <div class="card-body">
-          <div class="cr-row"><span>{{ 'comptabilite.acquisitions' | translate }}</span><span class="mono">0</span></div>
-          <div class="cr-row"><span>{{ 'comptabilite.cessions'     | translate }}</span><span class="mono">0</span></div>
-          <div class="flux-total" style="color:#64748b">
-            <span>{{ 'comptabilite.flux_net_invest' | translate }}</span><span class="mono">0 FCFA</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Flux financement -->
-      <div class="card" style="margin-bottom:14px">
-        <div class="card-header">💼 {{ 'comptabilite.flux_financement' | translate }}</div>
+        <div class="card-header">🏗️ {{ 'comptabilite.flux_investissement' | translate }} (B)</div>
         <div class="card-body">
           <div class="cr-row">
-            <span>{{ 'comptabilite.apports_capital' | translate }}</span>
-            <span class="mono success">+{{ flux().flux_financement.apports_capital | number:'1.0-0' }}</span>
+            <span>{{ 'comptabilite.acquisitions' | translate }}</span>
+            <span class="mono danger">{{ flux().flux_b.acquisitions ? '-' : '' }}{{ flux().flux_b.acquisitions | number:'1.0-0' }}</span>
           </div>
-          <div class="flux-total" style="color:#10b981">
+          <div class="cr-row">
+            <span>{{ 'comptabilite.cessions' | translate }}</span>
+            <span class="mono success">{{ flux().flux_b.cessions ? '+' : '' }}{{ flux().flux_b.cessions | number:'1.0-0' }}</span>
+          </div>
+          <div class="flux-total" [style.color]="flux().flux_b.flux_net >= 0 ? '#10b981' : '#ef4444'">
+            <span>{{ 'comptabilite.flux_net_invest' | translate }}</span>
+            <span class="mono">{{ flux().flux_b.flux_net >= 0 ? '+' : '' }}{{ flux().flux_b.flux_net | number:'1.0-0' }} FCFA</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- C — Flux financement -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">💼 {{ 'comptabilite.flux_financement' | translate }} (C)</div>
+        <div class="card-body">
+          <div class="cr-row">
+            <span>Nouveaux emprunts</span>
+            <span class="mono success">{{ flux().flux_c.emprunts ? '+' : '' }}{{ flux().flux_c.emprunts | number:'1.0-0' }}</span>
+          </div>
+          <div class="cr-row">
+            <span>Remboursements d'emprunts</span>
+            <span class="mono danger">{{ flux().flux_c.remboursements ? '-' : '' }}{{ flux().flux_c.remboursements | number:'1.0-0' }}</span>
+          </div>
+          <div class="flux-total" [style.color]="flux().flux_c.flux_net >= 0 ? '#10b981' : '#ef4444'">
             <span>{{ 'comptabilite.flux_net_finance' | translate }}</span>
-            <span class="mono">+{{ flux().flux_financement.flux_net | number:'1.0-0' }} FCFA</span>
+            <span class="mono">{{ flux().flux_c.flux_net >= 0 ? '+' : '' }}{{ flux().flux_c.flux_net | number:'1.0-0' }} FCFA</span>
           </div>
         </div>
       </div>
@@ -545,7 +626,7 @@ import { MessageService } from 'primeng/api';
       <div class="tresorerie-box">
         <div class="tb-row">
           <span>{{ 'comptabilite.treso_ouverture' | translate }}</span>
-          <span class="mono">{{ flux().tresorerie.solde_initial | number:'1.0-0' }} FCFA</span>
+          <span class="mono">{{ flux().tresorerie.tn_debut | number:'1.0-0' }} FCFA</span>
         </div>
         <div class="tb-row">
           <span>{{ 'comptabilite.variation_nette' | translate }}</span>
@@ -555,7 +636,7 @@ import { MessageService } from 'primeng/api';
         </div>
         <div class="tb-final">
           <span>{{ 'comptabilite.treso_cloture' | translate }}</span>
-          <span class="mono" style="color:#00d4aa">{{ flux().tresorerie.solde_final | number:'1.0-0' }} FCFA</span>
+          <span class="mono" style="color:#00d4aa">{{ flux().tresorerie.tn_fin | number:'1.0-0' }} FCFA</span>
         </div>
       </div>
 
@@ -651,43 +732,6 @@ import { MessageService } from 'primeng/api';
       
     </div>
           <!-- Charges -->
-      <div class="table-card" *ngIf="onglet() === 'charges'">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <div>
-            <h3 style="margin:0;color:#e8f0fe">💸 {{ 'comptabilite.charges_exercice' | translate }}</h3>
-            <span style="color:#64748b;font-size:12px">
-              {{ 'comptabilite.total_label' | translate }} {{ totalCharges() | number:'1.0-0' }} FCFA
-            </span>
-          </div>
-          <p-button [label]="'comptabilite.nouvelle_charge' | translate" severity="danger" (onClick)="ouvrirDialogCharge()" />
-        </div>
-
-        <p-table [value]="charges()" [loading]="loadingCharges()"
-                [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
-          <ng-template pTemplate="header">
-            <tr>
-              <th>{{ 'comptabilite.date'     | translate }}</th>
-              <th>{{ 'comptabilite.no_piece' | translate }}</th>
-              <th>{{ 'comptabilite.no_compte'| translate }}</th>
-              <th>{{ 'comptabilite.libelle'  | translate }}</th>
-              <th align="right">{{ 'common.total' | translate }}</th>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="body" let-c>
-            <tr>
-              <td>{{ c.date | date:'dd/MM/yyyy' }}</td>
-              <td class="mono">{{ c.no_piece }}</td>
-              <td class="mono">{{ c.no_compte }}</td>
-              <td>{{ c.libelle }}</td>
-              <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="emptymessage">
-            <tr><td colspan="5" class="empty-msg">{{ 'comptabilite.aucune_charge' | translate }}</td></tr>
-          </ng-template>
-        </p-table>
-      </div>
-
   <!-- NOTES ANNEXES -->
   <div *ngIf="onglet() === 'notes' && notesAnnexes()">
     <div class="systeme-badge" [class.sn]="notesAnnexes().systeme === 'SN'" style="margin-bottom:16px">
@@ -751,48 +795,6 @@ import { MessageService } from 'primeng/api';
     </div>
   </div>
 
-  <!-- Dialog Nouvelle Charge -->
-  <p-dialog [header]="'💸 ' + ('comptabilite.nouvelle_charge' | translate)" [(visible)]="dialogChargeVisible"
-            [modal]="true" [style]="{width:'460px'}" [draggable]="false">
-    <div class="form-grid">
-      <div class="form-group full">
-        <label>{{ 'comptabilite.compte_charge' | translate }} *</label>
-        <p-select [options]="planCharges" [(ngModel)]="nouvelleCharge.no_compte"
-                  optionLabel="label" optionValue="value" styleClass="w-full"
-                  (onChange)="onCompteChargeChange()" />
-      </div>
-      <div class="form-group full">
-        <label>{{ 'comptabilite.libelle' | translate }} *</label>
-        <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
-              [placeholder]="'comptabilite.ex_libelle' | translate" />
-      </div>
-      <div class="form-group">
-        <label>{{ 'comptabilite.montant_fcfa' | translate }} *</label>
-        <p-inputNumber [(ngModel)]="nouvelleCharge.montant" [min]="0"
-                      mode="decimal" styleClass="w-full" />
-      </div>
-      <div class="form-group">
-        <label>{{ 'comptabilite.date' | translate }}</label>
-        <input pInputText type="date" [(ngModel)]="nouvelleCharge.date" class="w-full" />
-      </div>
-      <div class="form-group full">
-        <label>{{ 'comptabilite.compte_fournisseur' | translate }}</label>
-        <p-select [options]="planFournisseurs" [(ngModel)]="nouvelleCharge.compte_fournisseur"
-                  optionLabel="label" optionValue="value" styleClass="w-full" />
-      </div>
-      <div class="form-group full">
-        <label>{{ 'comptabilite.regle_via' | translate }}</label>
-        <p-select [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
-                  optionLabel="label" optionValue="value" styleClass="w-full" />
-      </div>
-    </div>
-    <ng-template pTemplate="footer">
-      <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogChargeVisible=false" />
-      <p-button [label]="'common.enregistrer'| translate" severity="danger"
-                [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
-    </ng-template>
-  </p-dialog>
-
   <!-- ════════════════ PLAN COMPTABLE ════════════════ -->
   <div class="table-card" *ngIf="onglet() === 'plan'">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px">
@@ -801,10 +803,10 @@ import { MessageService } from 'primeng/api';
         <span style="font-size:11px;color:#64748b">({{ planComptable().length }} comptes)</span>
       </div>
       <div style="display:flex;gap:8px">
-        <p-select [options]="classesFiltres" [(ngModel)]="filtreClasse"
+        <p-select appendTo="body" [options]="classesFiltres" [(ngModel)]="filtreClasse"
                   (onChange)="filtrerPlan()" [showClear]="true"
                   placeholder="Classe" styleClass="filter-sel" />
-        <p-select [options]="typesFiltres" [(ngModel)]="filtreType"
+        <p-select appendTo="body" [options]="typesFiltres" [(ngModel)]="filtreType"
                   (onChange)="filtrerPlan()" [showClear]="true"
                   placeholder="Type" styleClass="filter-sel" />
         <p-button label="+ Compte" severity="success" size="small" (onClick)="ouvrirDialogCompte()" />
@@ -957,7 +959,7 @@ import { MessageService } from 'primeng/api';
       </div>
       <div class="form-group">
         <label>Classe (1-9)</label>
-        <p-select [options]="classeOptions" [(ngModel)]="formCompte.classe"
+        <p-select appendTo="body" [options]="classeOptions" [(ngModel)]="formCompte.classe"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
       <div class="form-group" style="grid-column:1/-1">
@@ -966,7 +968,7 @@ import { MessageService } from 'primeng/api';
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <label>Type de compte</label>
-        <p-select [options]="typesCompte" [(ngModel)]="formCompte.type"
+        <p-select appendTo="body" [options]="typesCompte" [(ngModel)]="formCompte.type"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
     </div>
@@ -1064,7 +1066,7 @@ import { MessageService } from 'primeng/api';
   </div>
 
   <!-- Dialog Immobilisation -->
-  <p-dialog [header]="editImmoMode ? '✏️ Modifier un bien' : '🏗️ Ajouter une immobilisation'"
+  <p-dialog [header]="editImmoMode ? 'Modifier un bien' : 'Ajouter une immobilisation'"
             [(visible)]="dialogImmoVisible" [modal]="true" [style]="{width:'560px'}" [draggable]="false">
     <div class="form-grid">
       <div class="form-group full">
@@ -1073,13 +1075,13 @@ import { MessageService } from 'primeng/api';
       </div>
       <div class="form-group">
         <label>Compte immobilisation *</label>
-        <p-select [options]="comptesImmo" optionLabel="label" optionValue="value"
+        <p-select appendTo="body" [options]="comptesImmoPC()" [filter]="true" [virtualScroll]="true" [virtualScrollItemSize]="38" optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.no_compte_immobilisation"
                   (onChange)="onImmoCompteChange()" styleClass="w-full" />
       </div>
       <div class="form-group">
         <label>Compte amortissement</label>
-        <p-select [options]="comptesAmort" optionLabel="label" optionValue="value"
+        <p-select appendTo="body" [options]="comptesAmortPC()" [filter]="true" [virtualScroll]="true" [virtualScrollItemSize]="38" optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.no_compte_amortissement" styleClass="w-full" />
       </div>
       <div class="form-group">
@@ -1096,14 +1098,38 @@ import { MessageService } from 'primeng/api';
       </div>
       <div class="form-group">
         <label>Mode d'amortissement</label>
-        <p-select [options]="[{label:'Linéaire',value:'LINEAIRE'},{label:'Dégressif',value:'DEGRESSIF'}]"
+        <p-select appendTo="body" [options]="[{label:'Linéaire',value:'LINEAIRE'},{label:'Dégressif',value:'DEGRESSIF'}]"
                   optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.mode_amortissement" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Compte fournisseur *</label>
+        <p-select appendTo="body" [options]="comptesFournisseursPC()" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.compte_fournisseur" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Mode de règlement</label>
+        <p-select appendTo="body" [options]="modesReglementImmo" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.mode_reglement" styleClass="w-full" />
+      </div>
+      <div class="form-group" *ngIf="formImmo.mode_reglement">
+        <label>Compte de trésorerie</label>
+        <p-select appendTo="body" [options]="comptesCreditPC()" optionLabel="label" optionValue="value"
+                  [(ngModel)]="formImmo.compte_tresorerie" styleClass="w-full" />
       </div>
       <div class="form-group full" *ngIf="formImmo.valeur_entree && formImmo.duree_utilisation">
         <div style="background:#111827;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8">
           Taux : <strong style="color:#00d4aa">{{ (100 / formImmo.duree_utilisation) | number:'1.2-2' }} %</strong> &nbsp;|&nbsp;
           Annuité : <strong style="color:#00d4aa">{{ (formImmo.valeur_entree / formImmo.duree_utilisation) | number:'1.0-0' }} FCFA</strong>
+        </div>
+      </div>
+      <div class="form-group full" *ngIf="formImmo.compte_fournisseur">
+        <div style="background:#0f2027;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8;border-left:3px solid #00745a">
+          <strong style="color:#00d4aa">Écritures générées :</strong><br>
+          <span>Débit {{ formImmo.no_compte_immobilisation }} / Crédit {{ formImmo.compte_fournisseur }} (constatation)</span>
+          <span *ngIf="formImmo.mode_reglement">
+            <br>Débit {{ formImmo.compte_fournisseur }} / Crédit {{ formImmo.compte_tresorerie }} (règlement {{ formImmo.mode_reglement }})
+          </span>
         </div>
       </div>
     </div>
@@ -1115,7 +1141,7 @@ import { MessageService } from 'primeng/api';
   </p-dialog>
 
   <!-- Dialog Amortissement -->
-  <p-dialog header="📉 Enregistrer une dotation aux amortissements"
+  <p-dialog header="Enregistrer une dotation aux amortissements"
             [(visible)]="dialogAmortirVisible" [modal]="true" [style]="{width:'440px'}" [draggable]="false">
     @if (immoAAmortir()) {
       <div class="employe-banner" style="margin-bottom:14px">
@@ -1144,7 +1170,7 @@ import { MessageService } from 'primeng/api';
   </p-dialog>
 
   <!-- Dialog Comptabiliser Budget -->
-  <p-dialog header="✅ Comptabiliser une charge budgétée"
+  <p-dialog header="Comptabiliser une charge budgétée"
             [(visible)]="dialogComptaVisible" [modal]="true" [style]="{width:'440px'}" [draggable]="false">
     @if (ligneAComptabiliser()) {
       @let lb = ligneAComptabiliser()!;
@@ -1170,7 +1196,7 @@ import { MessageService } from 'primeng/api';
         </div>
         <div class="form-group">
           <label>Compte trésorerie (crédit)</label>
-          <p-select [options]="comptesCredit" [(ngModel)]="formCompta.compte_credit"
+          <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="formCompta.compte_credit"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       </div>
@@ -1186,19 +1212,19 @@ import { MessageService } from 'primeng/api';
   </p-dialog>
 
   <!-- Dialog Ligne Budget -->
-  <p-dialog [header]="editBudgetMode ? '✏️ Modifier Ligne Budget' : '🎯 Nouvelle Ligne Budget'"
+  <p-dialog [header]="editBudgetMode ? 'Modifier Ligne Budget' : 'Nouvelle Ligne Budget'"
             [(visible)]="dialogBudgetVisible" [modal]="true" [style]="{width:'700px'}" [draggable]="false">
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
       <div class="form-group">
         <label>N° Compte *</label>
-        <p-select [options]="planComptableCharges()" optionLabel="label" optionValue="value"
+        <p-select appendTo="body" [options]="planComptableCharges()" optionLabel="label" optionValue="value"
                   [(ngModel)]="formBudget.no_compte" (onChange)="onBudgetCompteChange($event)"
                   [filter]="true" filterBy="label" styleClass="w-full"
                   placeholder="Sélectionner un compte" />
       </div>
       <div class="form-group">
         <label>Type</label>
-        <p-select [options]="[{label:'Charge fixe',value:'FIXE'},{label:'Charge variable',value:'VARIABLE'}]"
+        <p-select appendTo="body" [options]="[{label:'Charge fixe',value:'FIXE'},{label:'Charge variable',value:'VARIABLE'}]"
                   [(ngModel)]="formBudget.type_charge" optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
       <div class="form-group" style="grid-column:1/-1">
@@ -1233,15 +1259,25 @@ import { MessageService } from 'primeng/api';
     .btn-export  { background:transparent; border:1px solid #2a3f5f; color:#94a3b8; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
     .btn-export:hover { border-color:#00d4aa; color:#00d4aa; }
 
-    .tabs-bar { display:flex; gap:3px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; flex-wrap:wrap; }
-    .tab-btn { flex:1; min-width:80px; padding:7px 8px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; }
+    /* ── Onglets primaires ── */
+    .tabs-bar { display:flex; gap:3px; margin-bottom:8px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; scrollbar-color:#2a3f5f transparent; }
+    .tabs-bar::-webkit-scrollbar { height:3px; }
+    .tabs-bar::-webkit-scrollbar-thumb { background:#2a3f5f; border-radius:2px; }
+    .tab-btn { flex-shrink:0; padding:7px 13px; border:1px solid transparent; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
     .tab-btn:hover  { background:#1a2235; color:#e8f0fe; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
+    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border-color:#2a3f5f; }
+    .tab-etafi .etafi-count { display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; min-width:16px; height:16px; padding:0 4px; background:#2a3f5f; color:#94a3b8; border-radius:8px; transition:all 0.15s; }
+    .tab-etafi.active .etafi-count { background:#00d4aa; color:#0b0f1a; }
+
+    /* ── Sous-barre ETAFI ── */
+    .etafi-bar { display:flex; align-items:center; gap:14px; background:linear-gradient(135deg,#0d1829,#12233d); border:1px solid rgba(0,212,170,0.25); border-radius:10px; padding:9px 16px; margin-bottom:16px; flex-wrap:wrap; }
+    .etafi-bar-label { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:1.5px; white-space:nowrap; flex-shrink:0; border-right:1px solid rgba(0,212,170,0.2); padding-right:14px; }
+    .etafi-sub-tabs { display:flex; gap:5px; flex-wrap:wrap; }
+    .etafi-btn { padding:5px 13px; border:1px solid #2a3f5f; border-radius:6px; background:transparent; color:#94a3b8; font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+    .etafi-btn:hover  { background:rgba(0,212,170,0.05); color:#e8f0fe; border-color:rgba(0,212,170,0.3); }
+    .etafi-btn.active { background:rgba(0,212,170,0.12); color:#00d4aa; border-color:#00d4aa; font-weight:600; }
 
     .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
     .totaux-row td { background:#111827 !important; color:#e8f0fe !important; border-top:2px solid #2a3f5f !important; }
 
     .mono    { font-family:monospace; font-size:12px; }
@@ -1349,11 +1385,23 @@ import { MessageService } from 'primeng/api';
 export class ComptabiliteComponent implements OnInit {
   onglet         = signal('journal');
   filtreSource   = '';
+
+  readonly etafiOnglets = ['bilan', 'resultat', 'flux', 'notes'];
+  isEtafiActif  = computed(() => this.etafiOnglets.includes(this.onglet()));
+
+  ouvrirEtafi() {
+    if (!this.isEtafiActif()) {
+      this.chargerEtatsSynthese();
+      this.chargerResultat();
+      this.onglet.set('bilan');
+    }
+  }
   journal        = signal<any[]>([]);
   grandLivre     = signal<any[]>([]);
   balance        = signal<any>(null);
   // Plan comptable
-  planComptable     = signal<any[]>([]);
+  planComptable        = signal<any[]>([]);  // vue filtrée (onglet Plan)
+  planComptableComplet = signal<any[]>([]);  // plan complet sans filtre (dialogs)
   loadingPlan       = signal(false);
   savingCompte      = signal(false);
   dialogCompteVisible = false;
@@ -1383,24 +1431,65 @@ export class ComptabiliteComponent implements OnInit {
   formImmo: any      = {};
   formAmortir: any   = {};
 
-  comptesImmo = [
-    { label: '211 — Terrains',                     value: '211'  },
-    { label: '221 — Bâtiments',                    value: '221'  },
-    { label: '231 — Matériel et outillage',        value: '231'  },
-    { label: '241 — Mobilier',                     value: '241'  },
-    { label: '244 — Matériel informatique',        value: '244'  },
-    { label: '245 — Matériel de transport',        value: '245'  },
-    { label: '248 — Autres immobilisations',       value: '248'  },
+  // Comptes dynamiques dérivés du plan comptable — avec fallback SYSCOHADA si plan non chargé
+  private readonly FALLBACK_IMMO = [
+    { label: '211 — Frais de développement capitalisés',   value: '211' },
+    { label: '212 — Brevets, licences, logiciels',         value: '212' },
+    { label: '221 — Terrains naturels',                    value: '221' },
+    { label: '222 — Terrains bâtis',                      value: '222' },
+    { label: '231 — Bâtiments sur sol propre',             value: '231' },
+    { label: '232 — Bâtiments sur sol d\'autrui',         value: '232' },
+    { label: '233 — Installations techniques',             value: '233' },
+    { label: '234 — Aménagements et agencements',          value: '234' },
+    { label: '241 — Matériel et outillage',                value: '241' },
+    { label: '244 — Matériel et mobilier',                 value: '244' },
+    { label: '245 — Matériel de transport',                value: '245' },
+    { label: '248 — Autres matériels et équipements',      value: '248' },
   ];
-  comptesAmort = [
-    { label: '2811 — Amort. Terrains',             value: '2811' },
-    { label: '2821 — Amort. Bâtiments',            value: '2821' },
-    { label: '2831 — Amort. Matériel/outillage',   value: '2831' },
-    { label: '2841 — Amort. Mobilier',             value: '2841' },
-    { label: '2844 — Amort. Matériel informatique',value: '2844' },
-    { label: '2845 — Amort. Matériel transport',   value: '2845' },
-    { label: '2848 — Amort. Autres immo.',         value: '2848' },
+  private readonly FALLBACK_AMORT = [
+    { label: '2811 — Amort. frais de développement',       value: '2811' },
+    { label: '2812 — Amort. brevets, licences, logiciels', value: '2812' },
+    { label: '2821 — Amort. terrains naturels',            value: '2821' },
+    { label: '2822 — Amort. terrains bâtis',               value: '2822' },
+    { label: '2831 — Amort. bâtiments sur sol propre',     value: '2831' },
+    { label: '2832 — Amort. bâtiments sur sol d\'autrui', value: '2832' },
+    { label: '2833 — Amort. installations techniques',     value: '2833' },
+    { label: '2834 — Amort. aménagements et agencements',  value: '2834' },
+    { label: '2841 — Amort. matériel et outillage',        value: '2841' },
+    { label: '2844 — Amort. matériel et mobilier',         value: '2844' },
+    { label: '2845 — Amort. matériel de transport',        value: '2845' },
+    { label: '2848 — Amort. autres matériels',             value: '2848' },
   ];
+  comptesImmoPC = computed(() => {
+    const r = this.planComptableComplet()
+      .filter(c => c.row_type !== 'CLASSE' && c.est_actif && c.classe === 2
+                   && c.no_compte && !c.no_compte.startsWith('28') && !c.no_compte.startsWith('29'))
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte }));
+    return r.length > 0 ? r : this.FALLBACK_IMMO;
+  });
+  comptesAmortPC = computed(() => {
+    const r = this.planComptableComplet()
+      .filter(c => c.row_type !== 'CLASSE' && c.est_actif && c.classe === 2
+                   && c.no_compte?.startsWith('28'))
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte }));
+    return r.length > 0 ? r : this.FALLBACK_AMORT;
+  });
+  comptesCreditPC = computed(() => {
+    const r = this.planComptableComplet()
+      .filter(c => c.row_type !== 'CLASSE' && c.est_actif && c.classe === 5 && c.no_compte)
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte }));
+    return r.length > 0 ? r : this.comptesCredit;
+  });
+  comptesFournisseursPC = computed(() => {
+    const r = this.planComptableComplet()
+      .filter(c => c.row_type !== 'CLASSE' && c.est_actif && c.no_compte && (
+        c.no_compte.startsWith('40') ||
+        c.no_compte.startsWith('481') ||
+        c.no_compte === '484'
+      ))
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte }));
+    return r.length > 0 ? r : this.planFournisseurs;
+  });
   private immoAmortMap: Record<string, string> = {
     '211': '2811', '221': '2821', '231': '2831',
     '241': '2841', '244': '2844', '245': '2845', '248': '2848',
@@ -1424,47 +1513,18 @@ export class ComptabiliteComponent implements OnInit {
   loadingJournal = signal(true);
   loadingGL      = signal(true);
   loadingBalance = signal(true);
-  charges        = signal<any[]>([]);
-loadingCharges = signal(false);
-savingCharge   = signal(false);
-dialogChargeVisible = false;
-nouvelleCharge = {
-    no_compte:          '661',
-    libelle:            '',
-    montant:            0,
-    date:               new Date().toISOString().split('T')[0],
-    compte_credit:      '571',
-    compte_fournisseur: '401',
-};
-planCharges = [
-    { label: '601 — Achats de marchandises',          value: '601' },
-    { label: '604 — Achats de fournitures',           value: '604' },
-    { label: '606 — Eau, électricité, fournitures',   value: '606' },
-    { label: '611 — Transports',                      value: '611' },
-    { label: '612 — Loyer',                           value: '612' },
-    { label: '613 — Locations diverses',              value: '613' },
-    { label: '621 — Personnel extérieur',             value: '621' },
-    { label: '622 — Rémunérations intermédiaires',    value: '622' },
-    { label: '623 — Publicité',                       value: '623' },
-    { label: '624 — Transport du personnel',          value: '624' },
-    { label: '625 — Déplacements et missions',        value: '625' },
-    { label: '631 — Frais bancaires',                 value: '631' },
-    { label: '641 — Impôts et taxes',                 value: '641' },
-    { label: '651 — Pertes sur créances',             value: '651' },
-    { label: '658 — Charges diverses',                value: '658' },
-    { label: '661 — Salaires',                        value: '661' },
-    { label: '662 — Charges sociales (IPRES/CSS)',    value: '662' },
-    { label: '681 — Dotations aux amortissements',    value: '681' },
-    { label: '221 — Bâtiments (acquisition)',         value: '221' },
-    { label: '231 — Matériel et outillage (acq.)',    value: '231' },
-    { label: '241 — Mobilier (acquisition)',          value: '241' },
-    { label: '244 — Matériel informatique (acq.)',    value: '244' },
-    { label: '245 — Matériel de transport (acq.)',    value: '245' },
-];
 planFournisseurs = [
     { label: '401 — Fournisseurs (dettes en compte)',           value: '401' },
     { label: '404 — Fournisseurs, acquisitions immobilisations', value: '404' },
     { label: '481 — Fournisseurs d\'immobilisations',           value: '481' },
+];
+modesReglementImmo = [
+    { label: 'À crédit (règlement ultérieur)', value: '' },
+    { label: 'Espèces',      value: 'Espèces' },
+    { label: 'Banque',       value: 'Banque' },
+    { label: 'Wave',         value: 'Wave' },
+    { label: 'Orange Money', value: 'Orange Money' },
+    { label: 'Free Money',   value: 'Free Money' },
 ];
 comptesCredit = [
     { label: '571  — Caisse',        value: '571' },
@@ -1509,13 +1569,25 @@ comptesCredit = [
   constructor(private compta: ComptabiliteService) {}
 
   // ── Plan comptable ─────────────────────────────────────────────────────────
+  chargerPlanComplet() {
+    this.compta.getPlanComptable().subscribe({
+      next: r => this.planComptableComplet.set(r),
+      error: () => {},
+    });
+  }
+
   chargerPlan() {
     this.loadingPlan.set(true);
     const p: Record<string, string> = {};
     if (this.filtreClasse) p['classe'] = this.filtreClasse;
     if (this.filtreType)   p['type']   = this.filtreType;
     this.compta.getPlanComptable(p).subscribe({
-      next: r => { this.planComptable.set(r); this.loadingPlan.set(false); },
+      next: r => {
+        this.planComptable.set(r);
+        // Si aucun filtre, mettre aussi à jour le plan complet
+        if (!this.filtreClasse && !this.filtreType) this.planComptableComplet.set(r);
+        this.loadingPlan.set(false);
+      },
       error: () => this.loadingPlan.set(false),
     });
   }
@@ -1655,6 +1727,7 @@ comptesCredit = [
     this.chargerJournal();
     this.chargerBalance();
     this.chargerResultat();
+    this.chargerPlanComplet();
     this.compta.getGrandLivre().subscribe({
       next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
       error: ()  => this.loadingGL.set(false),
@@ -1666,7 +1739,6 @@ comptesCredit = [
     this.compta.getNotesAnnexes().subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
     this.compta.getTableauFlux().subscribe({  next: res => this.flux.set(res),          error: () => {} });
     this.compta.getHistorique().subscribe({   next: res => this.historique.set(res),    error: () => {} });
-    this.chargerCharges();
   }
 
   // ── Investissement ──────────────────────────────────────────────────────────
@@ -1685,13 +1757,19 @@ comptesCredit = [
       libelle: '', valeur_entree: 0, duree_utilisation: 5,
       date_entree: today, mode_amortissement: 'LINEAIRE',
       no_compte_immobilisation: '231', no_compte_amortissement: '2831',
+      compte_fournisseur: '404', mode_reglement: '', compte_tresorerie: '571',
     };
     this.dialogImmoVisible = true;
   }
 
   onImmoCompteChange() {
-    const mapped = this.immoAmortMap[this.formImmo.no_compte_immobilisation];
-    if (mapped) this.formImmo.no_compte_amortissement = mapped;
+    const no = this.formImmo.no_compte_immobilisation || '';
+    if (no.length >= 3) {
+      // SYSCOHADA : compte amortissement = '28' + chiffres après le premier (ex: 211 → 2811)
+      const candidat = '28' + no.slice(1);
+      const existe = this.comptesAmortPC().find(c => c.value === candidat);
+      if (existe) this.formImmo.no_compte_amortissement = candidat;
+    }
   }
 
   sauvegarderImmo() {
@@ -1792,98 +1870,48 @@ comptesCredit = [
     );
   }
 
-    exporter() {
-    const type = this.onglet() === 'bilan'    ? 'bilan'
-              : this.onglet() === 'flux'     ? 'tableau_flux'
-              : this.onglet() === 'resultat' ? 'compte_resultat'
-              : this.onglet() === 'balance'  ? 'balance'
-              : 'eleves';
+  private readonly ONGLET_PDF: Record<string, { type: string; label: string }> = {
+    'journal':       { type: 'journal',        label: 'Journal Comptable' },
+    'grand-livre':   { type: 'grand_livre',    label: 'Grand Livre' },
+    'balance':       { type: 'balance',        label: 'Balance Générale' },
+    'resultat':      { type: 'compte_resultat',label: 'Compte de Résultat' },
+    'bilan':         { type: 'bilan',          label: 'Bilan' },
+    'flux':          { type: 'tableau_flux',   label: 'Tableau des Flux' },
+    'notes':         { type: 'notes_annexes',  label: 'Notes Annexes' },
+    'charges':       { type: 'charges',        label: 'État des Charges' },
+    'budget':        { type: 'budget',         label: 'Budget Prévisionnel' },
+    'investissement':{ type: 'investissement', label: 'Tableau des Immobilisations' },
+  };
 
-    if (!['bilan','tableau_flux','compte_resultat','balance','eleves'].includes(type)) {
+  labelOngletCourant(): string {
+    return this.ONGLET_PDF[this.onglet()]?.label ?? 'Document';
+  }
+
+  exporter() {
+    const entry = this.ONGLET_PDF[this.onglet()];
+    if (!entry) {
       this.msg.add({ severity: 'warn', summary: 'Export non disponible',
-                     detail: 'Naviguez vers un onglet exportable.' });
+                     detail: 'Cet onglet ne dispose pas d\'export PDF.' });
       return;
     }
-
-    this.compta.exportPDF(type).subscribe({
+    this.msg.add({ severity: 'info', summary: 'Génération en cours…',
+                   detail: `Export ${entry.label}` });
+    this.compta.exportPDF(entry.type).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = `${type}_sagi_school.pdf`;
+        link.download = `${entry.type}_sagi_school.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        this.msg.add({ severity: 'success', summary: 'PDF généré',
+                       detail: `${entry.label} téléchargé.` });
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer l\'export.' }),
     });
   }
 
-  chargerCharges() {
-    this.loadingCharges.set(true);
-    this.compta.getCharges().subscribe({
-        next: res => { this.charges.set(Array.isArray(res) ? res : []); this.loadingCharges.set(false); },
-        error: () => this.loadingCharges.set(false)
-    });
-}
-
-  ouvrirDialogCharge() {
-      this.nouvelleCharge = {
-          no_compte: '661', libelle: '', montant: 0,
-          date: new Date().toISOString().split('T')[0],
-          compte_credit: '571', compte_fournisseur: '401',
-      };
-      this.dialogChargeVisible = true;
-  }
-
-  onCompteChargeChange() {
-      const no = this.nouvelleCharge.no_compte || '';
-      // Auto-sélection du compte fournisseur selon la nature de la charge
-      if (no.startsWith('2')) {
-          // Acquisition immobilisation → 404
-          this.nouvelleCharge.compte_fournisseur = '404';
-      } else if (no === '681') {
-          // Dotation amortissement → 481 (provision interne)
-          this.nouvelleCharge.compte_fournisseur = '481';
-      } else {
-          // Charge d'exploitation → 401
-          this.nouvelleCharge.compte_fournisseur = '401';
-      }
-  }
-
-  sauvegarderCharge() {
-    if (!this.nouvelleCharge.no_compte) {
-      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Sélectionnez un compte de charge.' });
-      return;
-    }
-    if (!this.nouvelleCharge.libelle) {
-      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Saisissez un libellé.' });
-      return;
-    }
-    if (!this.nouvelleCharge.montant || this.nouvelleCharge.montant <= 0) {
-      this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être supérieur à 0.' });
-      return;
-    }
-    this.savingCharge.set(true);
-    this.compta.creerCharge(this.nouvelleCharge).subscribe({
-      next: () => {
-        this.dialogChargeVisible = false;
-        this.savingCharge.set(false);
-        this.msg.add({ severity: 'success', summary: 'Charge enregistrée',
-                       detail: `${this.nouvelleCharge.no_compte} — ${this.nouvelleCharge.libelle}` });
-        this.chargerCharges();
-        this.rafraichirComptabilite();
-      },
-      error: (err) => {
-        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Impossible d\'enregistrer la charge.' });
-        this.savingCharge.set(false);
-      },
-    });
-  }
-
-  totalCharges(): number {
-      return this.charges().reduce((s, c) => s + (c.montant || 0), 0);
-  }
 }

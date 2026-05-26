@@ -75,7 +75,7 @@ class LicenceViewSet(viewsets.ModelViewSet):
     def changer_type(self, request, pk=None):
         licence = self.get_object()
         nouveau_type = request.data.get('type')
-        if nouveau_type not in ['ESSAI', 'BASIC', 'PRO', 'ENTERPRISE']:
+        if nouveau_type not in ['ESSAI', 'BASIC', 'PRO', 'AVANCE', 'TAXAWU_DAARA']:
             return Response({'error': 'Type invalide'}, status=400)
         licence.type = nouveau_type
         licence.save()
@@ -89,7 +89,7 @@ class LicenceViewSet(viewsets.ModelViewSet):
         essai         = Licence.objects.filter(statut='ESSAI').count()
         total_eleves  = Eleve.objects.count()
 
-        TARIFS  = {'PRO': 150000, 'BASIC': 75000, 'ESSAI': 0, 'ENTERPRISE': 300000}
+        TARIFS  = {'ESSAI': 0, 'BASIC': 75000, 'PRO': 150000, 'AVANCE': 250000, 'TAXAWU_DAARA': 200000}
         revenus = sum(
             TARIFS.get(l.type, 0)
             for l in Licence.objects.filter(statut='ACTIVE')

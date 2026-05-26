@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Value, DecimalField
+from django.db.models import Sum, Count, Value, DecimalField, Q
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 from django.core.cache import cache
@@ -124,11 +124,14 @@ class DashboardKPIView(APIView):
                 'message': 'Aucun exercice actif'
             })
 
-        paiements      = Paiement.objects.filter(tenant=tenant, exercice=exercice)
+        paiements      = Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF')
         total_recettes = sum_paiements(paiements)
-        total_charges  = float(JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice, source='CHARGE'
-        ).aggregate(t=Sum('debit'))['t'] or 0)
+        charges_agg    = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice, source='CHARGE',
+        ).filter(
+            Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
+        ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))
+        total_charges  = max(0.0, float(charges_agg['t_debit'] or 0) - float(charges_agg['t_credit'] or 0))
         solde_initial  = float(exercice.solde_initial_caisse +
                                exercice.solde_initial_banque +
                                exercice.solde_initial_mobile)
@@ -139,20 +142,21 @@ class DashboardKPIView(APIView):
             (today.year - debut.year) * 12 + (today.month - debut.month), 10
         ))
 
+        _pf = Q(paiements__statut='ACTIF')
         eleves = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         ).annotate(
             total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription') +
-                Sum('paiements__montant_mensualite')  +
-                Sum('paiements__montant_uniforme')    +
-                Sum('paiements__montant_fournitures') +
-                Sum('paiements__montant_cantine')     +
-                Sum('paiements__montant_divers'),
+                Sum('paiements__montant_inscription', filter=_pf) +
+                Sum('paiements__montant_mensualite',  filter=_pf) +
+                Sum('paiements__montant_uniforme',    filter=_pf) +
+                Sum('paiements__montant_fournitures', filter=_pf) +
+                Sum('paiements__montant_cantine',     filter=_pf) +
+                Sum('paiements__montant_divers',      filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
             mensualites_payees_sql=Coalesce(
-                Sum('paiements__montant_mensualite'),
+                Sum('paiements__montant_mensualite', filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
         ).select_related('section')
@@ -207,6 +211,17 @@ class DashboardKPIView(APIView):
         pec_nb = pec_qs.count()
         pec_categories = list(pec_qs.values('prise_en_charge').annotate(nb=Count('id')))
 
+        tresorerie_mvt = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            no_compte__in=('571', '5521', '5522', '5523', '521')
+        ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))
+        tresorerie = round(
+            solde_initial +
+            float(tresorerie_mvt['t_debit']  or 0) -
+            float(tresorerie_mvt['t_credit'] or 0),
+            2
+        )
+
         result = {
             'exercice': {
                 'annee_scolaire': exercice.annee_scolaire,
@@ -217,7 +232,7 @@ class DashboardKPIView(APIView):
                 'total_recettes':      total_recettes,
                 'total_charges':       total_charges,
                 'resultat_net':        total_recettes - total_charges,
-                'tresorerie':          solde_initial + total_recettes - total_charges,
+                'tresorerie':          tresorerie,
                 'total_attendu':       round(total_attendu, 2),
                 'total_impayes':       round(total_impayes, 2),
                 'taux_recouvrement':   taux_recouvrement,
@@ -271,20 +286,21 @@ class DashboardAlerteView(APIView):
             (today.year - debut.year) * 12 + (today.month - debut.month), 10
         ))
 
+        _pf = Q(paiements__statut='ACTIF')
         eleves = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         ).annotate(
             total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription') +
-                Sum('paiements__montant_mensualite')  +
-                Sum('paiements__montant_uniforme')    +
-                Sum('paiements__montant_fournitures') +
-                Sum('paiements__montant_cantine')     +
-                Sum('paiements__montant_divers'),
+                Sum('paiements__montant_inscription', filter=_pf) +
+                Sum('paiements__montant_mensualite',  filter=_pf) +
+                Sum('paiements__montant_uniforme',    filter=_pf) +
+                Sum('paiements__montant_fournitures', filter=_pf) +
+                Sum('paiements__montant_cantine',     filter=_pf) +
+                Sum('paiements__montant_divers',      filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
             mensualites_payees_sql=Coalesce(
-                Sum('paiements__montant_mensualite'),
+                Sum('paiements__montant_mensualite', filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
         ).select_related('section')
@@ -362,9 +378,24 @@ class DashboardTresorerieCanauView(APIView):
             'mobile': float(exercice.solde_initial_mobile),
         }
 
-        # Encaissements par canal (source: table Paiement — mode_paiement fiable)
+        # Mouvements nets sur comptes de trésorerie — arithmétique pure journal (toutes sources)
+        # Toute annulation (ANNUL_PAIEMENT, ANNUL_PAIE, ANNUL_AVANCE, contre-écriture charge) est
+        # automatiquement prise en compte : debit/crédit se compensent.
+        balance_qs = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            no_compte__in=('571', '5521', '5522', '5523', '521')
+        ).values('no_compte').annotate(
+            total_debit=Sum('debit'),
+            total_credit=Sum('credit')
+        )
+        balance_by_compte = {
+            b['no_compte']: float(b['total_debit'] or 0) - float(b['total_credit'] or 0)
+            for b in balance_qs
+        }
+
+        # Encaissements actifs par canal (pour affichage nb + montant perçu)
         enc_qs = Paiement.objects.filter(
-            tenant=tenant, exercice=exercice
+            tenant=tenant, exercice=exercice, statut='ACTIF'
         ).values('mode_paiement').annotate(
             nb=Count('id'),
             montant=Sum('montant_inscription') + Sum('montant_mensualite') +
@@ -376,34 +407,38 @@ class DashboardTresorerieCanauView(APIView):
             for e in enc_qs
         }
 
-        # Décaissements par compte tréso (crédits sur comptes de trésorerie = sorties)
-        # Les débits sur comptes tréso = encaissements paiements (source PAIEMENT) → exclus ici
+        # Décaissements (charges/paie/invest) — crédits trésorerie hors scolarité
         dec_qs = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
             no_compte__in=('571', '5521', '5522', '5523', '521'),
             credit__gt=0
-        ).exclude(source='PAIEMENT').values('no_compte').annotate(montant=Sum('credit'))
+        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT')).values('no_compte').annotate(
+            montant=Sum('credit')
+        )
         dec_by_compte = {d['no_compte']: float(d['montant'] or 0) for d in dec_qs}
 
         canaux_result = []
-        dec_521_attribue = False  # évite double-comptage VIREMENT + CHEQUE sur même compte 521
+        compte521_attribue = False
 
         for mode, libelle, compte, initial_key in self.CANAUX:
-            enc          = enc_by_canal.get(mode, {'nb': 0, 'montant': 0.0})
+            enc           = enc_by_canal.get(mode, {'nb': 0, 'montant': 0.0})
             solde_initial = soldes_initiaux.get(initial_key, 0.0) if initial_key else 0.0
 
             if compte == '521':
-                if not dec_521_attribue:
+                if not compte521_attribue:
+                    net_journal   = balance_by_compte.get('521', 0.0)
                     decaissements = dec_by_compte.get('521', 0.0)
-                    dec_521_attribue = True
+                    compte521_attribue = True
                 else:
+                    net_journal   = 0.0
                     decaissements = 0.0
             else:
+                net_journal   = balance_by_compte.get(compte, 0.0)
                 decaissements = dec_by_compte.get(compte, 0.0)
 
-            solde = round(solde_initial + enc['montant'] - decaissements, 2)
+            solde = round(solde_initial + net_journal, 2)
 
-            if enc['nb'] > 0 or solde_initial > 0 or decaissements > 0:
+            if enc['nb'] > 0 or solde_initial > 0 or decaissements > 0 or net_journal != 0:
                 canaux_result.append({
                     'canal':         mode,
                     'libelle':       libelle,
@@ -418,6 +453,7 @@ class DashboardTresorerieCanauView(APIView):
         total_initial = sum(soldes_initiaux.values())
         total_enc     = sum(c['encaissements'] for c in canaux_result)
         total_dec     = sum(c['decaissements'] for c in canaux_result)
+        total_solde   = round(sum(c['solde'] for c in canaux_result), 2)
 
         return Response({
             'exercice': exercice.annee_scolaire,
@@ -426,7 +462,7 @@ class DashboardTresorerieCanauView(APIView):
                 'solde_initial': round(total_initial, 2),
                 'encaissements': round(total_enc, 2),
                 'decaissements': round(total_dec, 2),
-                'solde':         round(total_initial + total_enc - total_dec, 2),
+                'solde':         total_solde,
             },
         })
 

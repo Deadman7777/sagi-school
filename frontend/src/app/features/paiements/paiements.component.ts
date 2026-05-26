@@ -1,8 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PaiementsService } from '../../core/services/paiements.service';
 import { ElevesService } from '../../core/services/eleves.service';
+import { ComptabiliteService } from '../../core/services/comptabilite.service';
 import { Eleve } from '../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -13,6 +14,7 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
+import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
@@ -20,7 +22,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule],
+            InputNumberModule, TooltipModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -33,6 +35,21 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
       <p-button label="{{ 'paiements.nouveau' | translate }}" severity="success" (onClick)="ouvrirDialog()" />
     </div>
+
+    <!-- Barre d'onglets -->
+    <div class="tabs-bar">
+      <button class="tab-btn" [class.active]="onglet() === 'paiements'"
+              (click)="onglet.set('paiements')">
+        💰 {{ 'paiements.title' | translate }}
+      </button>
+      <button class="tab-btn" [class.active]="onglet() === 'charges'"
+              (click)="onglet.set('charges'); chargerCharges()">
+        💸 Charges
+      </button>
+    </div>
+
+    <!-- === ONGLET PAIEMENTS === -->
+    <ng-container *ngIf="onglet() === 'paiements'">
 
     <!-- Stats modes -->
     <div class="modes-grid" *ngIf="stats()?.par_mode?.length">
@@ -59,11 +76,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <th>{{ 'paiements.cantine'     | translate }}</th>
             <th>{{ 'paiements.total'       | translate }}</th>
             <th>{{ 'paiements.mode'        | translate }}</th>
-            <th>{{ 'paiements.recu_col'    | translate }}</th>
+            <th>Statut</th>
+            <th>Actions</th>
           </tr>
         </ng-template>
         <ng-template pTemplate="body" let-p>
-          <tr>
+          <tr [class.ligne-annulee]="p.statut === 'ANNULE'">
             <td class="mono">{{ p.no_piece }}</td>
             <td>{{ p.date_paiement | date:'dd/MM/yyyy' }}</td>
             <td class="bold">{{ p.eleve_nom }}</td>
@@ -72,19 +90,132 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <td class="mono">{{ p.montant_uniforme    | number:'1.0-0' }}</td>
             <td class="mono">{{ p.montant_fournitures | number:'1.0-0' }}</td>
             <td class="mono">{{ p.montant_cantine     | number:'1.0-0' }}</td>
-            <td class="mono success">{{ p.total | number:'1.0-0' }} FCFA</td>
+            <td class="mono" [class.success]="p.statut !== 'ANNULE'"
+                             [class.annule-val]="p.statut === 'ANNULE'">
+              {{ p.total | number:'1.0-0' }} FCFA
+            </td>
             <td><p-tag [value]="p.mode_paiement" severity="info" /></td>
             <td>
-              <p-button icon="pi pi-print" [rounded]="true" [text]="true"
-                        severity="secondary" (onClick)="imprimerRecu(p)" />
+              <p-tag *ngIf="p.statut === 'ANNULE'" value="ANNULÉ" severity="danger" />
+              <p-tag *ngIf="p.statut !== 'ANNULE'" value="Actif"  severity="success" />
+            </td>
+            <td>
+              <div class="btn-row">
+                <p-button icon="pi pi-print" [rounded]="true" [text]="true"
+                          severity="secondary" (onClick)="imprimerRecu(p)"
+                          pTooltip="Imprimer le reçu" tooltipPosition="top"
+                          [disabled]="p.statut === 'ANNULE'" />
+                <p-button *ngIf="p.statut !== 'ANNULE'"
+                          icon="pi pi-pencil" [rounded]="true" [text]="true"
+                          severity="warn" pTooltip="Modifier ce paiement" tooltipPosition="top"
+                          (onClick)="demanderModificationPaiement(p)" />
+                <p-button *ngIf="p.statut !== 'ANNULE'"
+                          icon="pi pi-ban" [rounded]="true" [text]="true"
+                          severity="danger" pTooltip="Annuler ce paiement (contre-écritures)"
+                          tooltipPosition="top" (onClick)="demanderAnnulationPaiement(p)" />
+              </div>
             </td>
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="11" class="empty-msg">{{ 'paiements.aucun' | translate }}</td></tr>
+          <tr><td colspan="12" class="empty-msg">{{ 'paiements.aucun' | translate }}</td></tr>
         </ng-template>
       </p-table>
     </div>
+
+    <!-- Confirmation annulation paiement -->
+    <p-dialog header="⚠️ Confirmer l'annulation" [(visible)]="confirmAnnulVisible"
+              [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+      <div *ngIf="paiementAnnuler" style="padding:8px 0">
+        <div style="background:#1a1a2e;border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
+          <div style="font-size:13px;color:#e8f0fe;font-weight:600">{{ paiementAnnuler.no_piece }}</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+            {{ paiementAnnuler.eleve_nom }} · {{ paiementAnnuler.total | number:'1.0-0' }} FCFA
+          </div>
+        </div>
+        <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0">
+          Cette opération va générer des <strong style="color:#f59e0b">contre-écritures SYSCOHADA</strong>
+          pour neutraliser toutes les écritures comptables liées à ce paiement.
+          <br><br>
+          Le paiement sera marqué <strong style="color:#ef4444">ANNULÉ</strong> et
+          n'affectera plus les calculs financiers.
+          <br><br>
+          ⚠️ Cette action est <strong style="color:#ef4444">irréversible</strong>.
+        </p>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Non, conserver" severity="secondary" (onClick)="confirmAnnulVisible=false" />
+        <p-button label="Oui, annuler le paiement" severity="danger"
+                  [loading]="savingAnnul()" (onClick)="confirmerAnnulationPaiement()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog modification paiement -->
+    <p-dialog header="✏️ Modifier le paiement" [(visible)]="modifVisible"
+              [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+      <div *ngIf="paiementModifier" style="padding:4px 0">
+        <!-- Info paiement original -->
+        <div style="background:#1a1a2e;border-radius:8px;padding:12px;margin-bottom:16px;border-left:4px solid #f59e0b">
+          <div style="font-size:12px;color:#f59e0b;font-weight:600;margin-bottom:4px">
+            Original : {{ paiementModifier.no_piece }}
+          </div>
+          <div style="font-size:11px;color:#94a3b8">
+            {{ paiementModifier.eleve_nom }} · {{ paiementModifier.total | number:'1.0-0' }} FCFA · {{ paiementModifier.mode_paiement }}
+          </div>
+        </div>
+
+        <!-- Montants -->
+        <div class="montants-grid" style="margin-bottom:12px">
+          <div class="form-group">
+            <label>Inscription</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Mensualité</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Uniforme</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Fournitures</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Cantine</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Divers</label>
+            <p-inputNumber [(ngModel)]="modifForm.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+        </div>
+
+        <div class="total-bar" style="margin-bottom:12px">
+          <span>Nouveau total</span>
+          <span class="total-val">{{ totalModifForm() | number:'1.0-0' }} FCFA</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom:10px">
+          <label>Mode de paiement</label>
+          <p-select [options]="modesPaiement" [(ngModel)]="modifForm.mode_paiement"
+                    optionLabel="label" optionValue="value"
+                    placeholder="Choisir le mode..." styleClass="w-full" />
+        </div>
+
+        <div class="form-group">
+          <label>Observations</label>
+          <input pInputText [(ngModel)]="modifForm.observations" class="w-full" />
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Annuler" severity="secondary" (onClick)="modifVisible=false" />
+        <p-button label="✏️ Enregistrer la modification" severity="warn"
+                  [loading]="savingModif()" [disabled]="totalModifForm() <= 0"
+                  (onClick)="confirmerModificationPaiement()" />
+      </ng-template>
+    </p-dialog>
 
     <!-- Dialog saisie paiement -->
     <p-dialog header="💰 Saisie de Paiement" [(visible)]="dialogVisible"
@@ -356,6 +487,141 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
       </ng-template>
     </p-dialog>
+
+    </ng-container>
+    <!-- === FIN ONGLET PAIEMENTS === -->
+
+    <!-- === ONGLET CHARGES === -->
+    <div *ngIf="onglet() === 'charges'">
+      <div class="table-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:16px 16px 0">
+          <div>
+            <h3 style="margin:0;color:#e8f0fe">💸 Charges de l'exercice</h3>
+            <span style="color:#64748b;font-size:12px">
+              Total : {{ totalCharges() | number:'1.0-0' }} FCFA
+            </span>
+          </div>
+          <p-button label="+ Nouvelle charge" severity="danger" (onClick)="ouvrirDialogCharge()" />
+        </div>
+
+        <p-table [value]="charges()" [loading]="loadingCharges()"
+                [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>Date</th>
+              <th>N° Pièce</th>
+              <th>Compte</th>
+              <th>Libellé</th>
+              <th align="right">Montant</th>
+              <th></th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-c>
+            <tr>
+              <td>{{ c.date | date:'dd/MM/yyyy' }}</td>
+              <td class="mono">{{ c.no_piece }}</td>
+              <td class="mono">{{ c.no_compte }}</td>
+              <td>{{ c.libelle }}</td>
+              <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                            pTooltip="Modifier (contre-écritures + nouvelle charge)" (onClick)="demanderModificationCharge(c)" />
+                  <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
+                            pTooltip="Annuler (contre-écritures SYSCOHADA)" (onClick)="supprimerCharge(c)" />
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="6" class="empty-msg">Aucune charge enregistrée.</td></tr>
+          </ng-template>
+        </p-table>
+      </div>
+
+      <!-- Dialog Nouvelle Charge -->
+      <p-dialog header="💸 Nouvelle Charge" [(visible)]="dialogChargeVisible"
+                [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Compte de charge *</label>
+            <p-select appendTo="body" [options]="planChargesPC()" [(ngModel)]="nouvelleCharge.no_compte"
+                      optionLabel="label" optionValue="value" styleClass="w-full" [filter]="true"
+                      (onChange)="onCompteChargeChange()" />
+          </div>
+          <div class="form-group full">
+            <label>Libellé *</label>
+            <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
+                  placeholder="Ex : Facture eau juillet..." />
+          </div>
+          <div class="form-group">
+            <label>Montant (FCFA) *</label>
+            <p-inputNumber [(ngModel)]="nouvelleCharge.montant" [min]="0"
+                          mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input pInputText type="date" [(ngModel)]="nouvelleCharge.date" class="w-full" />
+          </div>
+          <div class="form-group full">
+            <label>Compte fournisseur</label>
+            <p-select appendTo="body" [options]="planFournisseurs" [(ngModel)]="nouvelleCharge.compte_fournisseur"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+          <div class="form-group full">
+            <label>Réglé via</label>
+            <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+        </div>
+        <ng-template pTemplate="footer">
+          <p-button label="Annuler"       severity="secondary" (onClick)="dialogChargeVisible=false" />
+          <p-button label="Enregistrer"   severity="danger"
+                    [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
+        </ng-template>
+      </p-dialog>
+
+      <!-- Dialog modification charge -->
+      <p-dialog header="✏️ Modifier la charge" [(visible)]="dialogModifChargeVisible"
+                [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+        <div *ngIf="chargeModifier" class="form-grid">
+          <div class="form-group full">
+            <div style="background:#1a1a2e;border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:#94a3b8">
+              Original : <strong style="color:#f59e0b">{{ chargeModifier.no_piece }}</strong> —
+              {{ chargeModifier.libelle }} · {{ chargeModifier.montant | number:'1.0-0' }} FCFA
+            </div>
+          </div>
+          <div class="form-group full">
+            <label>Compte de charge *</label>
+            <p-select appendTo="body" [options]="planChargesPC()" [(ngModel)]="modifChargeForm.no_compte"
+                      optionLabel="label" optionValue="value" styleClass="w-full" [filter]="true" />
+          </div>
+          <div class="form-group full">
+            <label>Libellé *</label>
+            <input pInputText [(ngModel)]="modifChargeForm.libelle" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Montant (FCFA) *</label>
+            <p-inputNumber [(ngModel)]="modifChargeForm.montant" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Date</label>
+            <input pInputText type="date" [(ngModel)]="modifChargeForm.date" class="w-full" />
+          </div>
+          <div class="form-group full">
+            <label>Réglé via</label>
+            <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="modifChargeForm.compte_credit"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+        </div>
+        <ng-template pTemplate="footer">
+          <p-button label="Annuler" severity="secondary" (onClick)="dialogModifChargeVisible=false" />
+          <p-button label="✏️ Enregistrer la modification" severity="warn"
+                    [loading]="savingModifCharge()" (onClick)="confirmerModificationCharge()" />
+        </ng-template>
+      </p-dialog>
+    </div>
+    <!-- === FIN ONGLET CHARGES === -->
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
@@ -374,10 +640,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
 
-    .mono    { font-family:monospace; font-size:12px; }
-    .bold    { font-weight:600; color:#e8f0fe; }
-    .success { color:#10b981; }
-    .empty-msg { text-align:center; padding:40px; color:#64748b; }
+    .mono        { font-family:monospace; font-size:12px; }
+    .bold        { font-weight:600; color:#e8f0fe; }
+    .success     { color:#10b981; }
+    .annule-val  { color:#ef4444; text-decoration:line-through; opacity:0.7; }
+    .btn-row     { display:flex; gap:4px; align-items:center; }
+    .empty-msg   { text-align:center; padding:40px; color:#64748b; }
+    ::ng-deep .ligne-annulee td { opacity:0.55 !important; background:rgba(239,68,68,0.04) !important; }
 
     .eleve-info { background:#0f2010; border:1px solid #2a5c2a; border-radius:8px; padding:12px; margin-bottom:14px; }
     .ei-row { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid rgba(42,95,42,0.3); }
@@ -432,16 +701,91 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
     .active-mens  { background:rgba(0,212,170,0.15);  border-color:#00d4aa; color:#00d4aa; font-weight:600; }
+    .tabs-bar { display:flex; gap:4px; margin-bottom:16px; }
+    .tab-btn  { padding:8px 18px; border:1px solid #2a3f5f; border-radius:8px; background:transparent; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.15s; }
+    .tab-btn:hover  { border-color:#00d4aa; color:#e8f0fe; }
+    .tab-btn.active { background:rgba(0,212,170,0.1); border-color:#00d4aa; color:#00d4aa; font-weight:600; }
+    .danger { color:#ef4444; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .full { grid-column:1/-1; }
   `]
 })
 export class PaiementsComponent implements OnInit {
+  onglet = signal('paiements');
+
+  // ── Paiements scolarité ─────────────────────────────────────────────────────
   paiements         = signal<any[]>([]);
   stats             = signal<any>(null);
   elevesSuggestions = signal<any[]>([]);
   loading           = signal(true);
   saving            = signal(false);
+  savingAnnul       = signal(false);
+  savingModif       = signal(false);
   loadingSaisie     = signal(false);
   loadingRecherche  = signal(false);
+
+  // ── Charges ─────────────────────────────────────────────────────────────────
+  charges              = signal<any[]>([]);
+  loadingCharges       = signal(false);
+  savingCharge         = signal(false);
+  savingModifCharge    = signal(false);
+  dialogChargeVisible  = false;
+  dialogModifChargeVisible = false;
+  chargeModifier: any  = null;
+  modifChargeForm      = { no_compte: '', libelle: '', montant: 0, date: '', compte_credit: '571' };
+  nouvelleCharge       = { no_compte: '661', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401' };
+
+  planCharges = [
+    { label: '601 — Achats de marchandises',          value: '601' },
+    { label: '604 — Achats de fournitures',           value: '604' },
+    { label: '606 — Eau, électricité, fournitures',   value: '606' },
+    { label: '611 — Transports',                      value: '611' },
+    { label: '612 — Loyer',                           value: '612' },
+    { label: '613 — Locations diverses',              value: '613' },
+    { label: '621 — Personnel extérieur',             value: '621' },
+    { label: '622 — Rémunérations intermédiaires',    value: '622' },
+    { label: '623 — Publicité',                       value: '623' },
+    { label: '624 — Transport du personnel',          value: '624' },
+    { label: '625 — Déplacements et missions',        value: '625' },
+    { label: '631 — Frais bancaires',                 value: '631' },
+    { label: '641 — Impôts et taxes',                 value: '641' },
+    { label: '651 — Pertes sur créances',             value: '651' },
+    { label: '658 — Charges diverses',                value: '658' },
+    { label: '661 — Salaires',                        value: '661' },
+    { label: '662 — Charges sociales (IPRES/CSS)',    value: '662' },
+    { label: '681 — Dotations aux amortissements',    value: '681' },
+    { label: '221 — Bâtiments (acquisition)',         value: '221' },
+    { label: '231 — Matériel et outillage (acq.)',    value: '231' },
+    { label: '241 — Mobilier (acquisition)',          value: '241' },
+    { label: '244 — Matériel informatique (acq.)',    value: '244' },
+    { label: '245 — Matériel de transport (acq.)',    value: '245' },
+  ];
+  planFournisseurs = [
+    { label: '401 — Fournisseurs (dettes en compte)',            value: '401' },
+    { label: '404 — Fournisseurs, acquisitions immobilisations', value: '404' },
+    { label: '481 — Fournisseurs d\'immobilisations',            value: '481' },
+  ];
+  comptesCredit = [
+    { label: '571  — Caisse',       value: '571' },
+    { label: '521  — Banque',       value: '521' },
+    { label: '5521 — WAVE',         value: '5521' },
+    { label: '5522 — Orange Money', value: '5522' },
+    { label: '5523 — Free Money',   value: '5523' },
+  ];
+
+  planChargesPC = computed(() => this.planCharges);
+  comptesFournisseursPC = computed(() => this.planFournisseurs);
+  comptesCreditPC = computed(() => this.comptesCredit);
+  confirmAnnulVisible = false;
+  paiementAnnuler: any = null;
+  modifVisible      = false;
+  paiementModifier: any = null;
+
+  modifForm = {
+    montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
+    montant_fournitures: 0, montant_cantine: 0,    montant_divers: 0,
+    mode_paiement: '', observations: '',
+  };
   dialogVisible     = false;
   recuVisible       = false;
   recuData          = signal<any>(null);
@@ -470,6 +814,7 @@ export class PaiementsComponent implements OnInit {
   constructor(
     private paiementsService: PaiementsService,
     private elevesService: ElevesService,
+    private compta: ComptabiliteService,
     private msg: MessageService
   ) {}
 
@@ -591,6 +936,12 @@ export class PaiementsComponent implements OnInit {
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
   }
 
+  totalModifForm(): number {
+    return Object.entries(this.modifForm)
+      .filter(([k]) => k.startsWith('montant_'))
+      .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+  }
+
   ouvrirDialog() {
     this.eleveSelectionne = null;
     this.rechercheInput   = '';
@@ -636,6 +987,74 @@ export class PaiementsComponent implements OnInit {
     });
   }
 
+  demanderAnnulationPaiement(p: any) {
+    this.paiementAnnuler = p;
+    this.confirmAnnulVisible = true;
+  }
+
+  demanderModificationPaiement(p: any) {
+    this.paiementModifier = p;
+    this.modifForm = {
+      montant_inscription: p.montant_inscription || 0,
+      montant_mensualite:  p.montant_mensualite  || 0,
+      montant_uniforme:    p.montant_uniforme    || 0,
+      montant_fournitures: p.montant_fournitures || 0,
+      montant_cantine:     p.montant_cantine     || 0,
+      montant_divers:      p.montant_divers      || 0,
+      mode_paiement:       p.mode_paiement       || '',
+      observations:        p.observations        || '',
+    };
+    this.modifVisible = true;
+  }
+
+  confirmerModificationPaiement() {
+    if (!this.paiementModifier?.id) return;
+    this.savingModif.set(true);
+    this.paiementsService.modifierPaiement(this.paiementModifier.id, this.modifForm).subscribe({
+      next: (res: any) => {
+        this.msg.add({
+          severity: 'success',
+          summary: 'Paiement modifié',
+          detail: `${res.ancien_no_piece} → ${res.nouveau_no_piece} · ${res.nouveau_total?.toLocaleString()} FCFA`,
+        });
+        this.modifVisible = false;
+        this.paiementModifier = null;
+        this.savingModif.set(false);
+        this.chargerPaiements();
+        this.chargerStats();
+      },
+      error: (err: any) => {
+        const msg = err?.error?.error || 'Erreur lors de la modification.';
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: msg });
+        this.savingModif.set(false);
+      },
+    });
+  }
+
+  confirmerAnnulationPaiement() {
+    if (!this.paiementAnnuler?.id) return;
+    this.savingAnnul.set(true);
+    this.paiementsService.annulerPaiement(this.paiementAnnuler.id).subscribe({
+      next: (res: any) => {
+        this.msg.add({
+          severity: 'info',
+          summary: 'Paiement annulé',
+          detail: `Contre-écritures générées : ${res.no_piece_annulation}`,
+        });
+        this.confirmAnnulVisible = false;
+        this.paiementAnnuler = null;
+        this.savingAnnul.set(false);
+        this.chargerPaiements();
+        this.chargerStats();
+      },
+      error: (err: any) => {
+        const msg = err?.error?.error || 'Erreur lors de l\'annulation.';
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: msg });
+        this.savingAnnul.set(false);
+      },
+    });
+  }
+
   imprimerRecu(paiement: any) {
     if (!paiement?.id) return;
     this.paiementsService.getRecu(paiement.id).subscribe({
@@ -667,11 +1086,122 @@ export class PaiementsComponent implements OnInit {
 
   setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {
     this.typePaiement = type;
-    // Auto-remplissage si les données de saisie sont déjà chargées
     const data = this.saisieDonnees();
-    if (data) {
-      this.appliquerAutoRemplissage(data);
+    if (data) this.appliquerAutoRemplissage(data);
+  }
+
+  // ── Charges ─────────────────────────────────────────────────────────────────
+
+  chargerCharges() {
+    this.loadingCharges.set(true);
+    this.compta.getCharges().subscribe({
+      next: res => { this.charges.set(Array.isArray(res) ? res : []); this.loadingCharges.set(false); },
+      error: () => this.loadingCharges.set(false),
+    });
+  }
+
+  totalCharges(): number {
+    return this.charges().reduce((s, c) => s + (c.montant || 0), 0);
+  }
+
+  ouvrirDialogCharge() {
+    this.nouvelleCharge = {
+      no_compte: '661', libelle: '', montant: 0,
+      date: new Date().toISOString().split('T')[0],
+      compte_credit: '571', compte_fournisseur: '401',
+    };
+    this.dialogChargeVisible = true;
+  }
+
+  onCompteChargeChange() {
+    const no = this.nouvelleCharge.no_compte || '';
+    if (no.startsWith('2')) {
+      this.nouvelleCharge.compte_fournisseur = '404';
+    } else if (no === '681') {
+      this.nouvelleCharge.compte_fournisseur = '481';
+    } else {
+      this.nouvelleCharge.compte_fournisseur = '401';
     }
   }
 
+  sauvegarderCharge() {
+    if (!this.nouvelleCharge.no_compte) {
+      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Sélectionnez un compte de charge.' });
+      return;
+    }
+    if (!this.nouvelleCharge.libelle) {
+      this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Saisissez un libellé.' });
+      return;
+    }
+    if (!this.nouvelleCharge.montant || this.nouvelleCharge.montant <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être > 0.' });
+      return;
+    }
+    this.savingCharge.set(true);
+    this.compta.creerCharge(this.nouvelleCharge).subscribe({
+      next: () => {
+        this.dialogChargeVisible = false;
+        this.savingCharge.set(false);
+        this.msg.add({ severity: 'success', summary: 'Charge enregistrée',
+                       detail: `${this.nouvelleCharge.no_compte} — ${this.nouvelleCharge.libelle}` });
+        this.chargerCharges();
+      },
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Impossible d\'enregistrer la charge.' });
+        this.savingCharge.set(false);
+      },
+    });
+  }
+
+  demanderModificationCharge(c: any) {
+    this.chargeModifier = c;
+    this.modifChargeForm = {
+      no_compte:     c.no_compte  || '',
+      libelle:       c.libelle    || '',
+      montant:       c.montant    || 0,
+      date:          c.date       || '',
+      compte_credit: '571',
+    };
+    this.dialogModifChargeVisible = true;
+  }
+
+  confirmerModificationCharge() {
+    if (!this.chargeModifier?.id) return;
+    if (!this.modifChargeForm.no_compte || !this.modifChargeForm.libelle) {
+      this.msg.add({ severity: 'warn', summary: 'Champs requis', detail: 'Compte et libellé obligatoires.' });
+      return;
+    }
+    if (!this.modifChargeForm.montant || this.modifChargeForm.montant <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être > 0.' });
+      return;
+    }
+    this.savingModifCharge.set(true);
+    this.compta.modifierCharge(this.chargeModifier.id, this.modifChargeForm).subscribe({
+      next: (res: any) => {
+        this.msg.add({ severity: 'success', summary: 'Charge modifiée',
+                       detail: `${res.ancien_no_piece} → ${res.no_piece_new} · ${res.montant?.toLocaleString()} FCFA` });
+        this.dialogModifChargeVisible = false;
+        this.chargeModifier = null;
+        this.savingModifCharge.set(false);
+        this.chargerCharges();
+      },
+      error: (err: any) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Impossible de modifier cette charge.' });
+        this.savingModifCharge.set(false);
+      },
+    });
+  }
+
+  supprimerCharge(c: any) {
+    if (!confirm(`Annuler la charge ${c.no_piece} — ${c.libelle} ?\nDes contre-écritures SYSCOHADA seront générées automatiquement.`)) return;
+    this.compta.supprimerCharge(c.id).subscribe({
+      next: (res: any) => {
+        this.msg.add({ severity: 'success', summary: 'Charge annulée',
+                       detail: `Contre-écritures ${res.no_piece_annulation || ''} générées.` });
+        this.chargerCharges();
+      },
+      error: (err: any) => this.msg.add({ severity: 'error', summary: 'Erreur',
+                                           detail: err?.error?.error || 'Impossible d\'annuler cette charge.' }),
+    });
+  }
 }

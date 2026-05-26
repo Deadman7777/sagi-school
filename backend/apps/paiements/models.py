@@ -32,10 +32,13 @@ MODE_CHOICES = [
 
 
 class Paiement(TenantModel):
+    STATUT_CHOICES = [('ACTIF', 'Actif'), ('ANNULE', 'Annulé')]
+
     eleve               = models.ForeignKey('eleves.Eleve', on_delete=models.CASCADE, related_name='paiements')
     exercice            = models.ForeignKey(Exercice, on_delete=models.CASCADE, related_name='paiements')
     no_piece            = models.CharField(max_length=30, unique=True)
     date_paiement       = models.DateField(auto_now_add=True)
+    statut              = models.CharField(max_length=10, choices=STATUT_CHOICES, default='ACTIF')
     montant_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_mensualite  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_uniforme    = models.DecimalField(max_digits=12, decimal_places=2, default=0)

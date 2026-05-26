@@ -21,7 +21,12 @@ export class AuthService {
         localStorage.setItem('refresh_token', res.refresh);
         // Décode le JWT pour récupérer les infos user
         const payload = JSON.parse(atob(res.access.split('.')[1]));
-        const user: User = { id: payload.user_id, nom: payload.nom, email, role: payload.role, tenant: payload.tenant_id };
+        const user: User = {
+          id: payload.user_id, nom: payload.nom, email,
+          role: payload.role, tenant: payload.tenant_id,
+          type_licence: payload.type_licence || null,
+          modules: payload.modules || [],
+        };
         localStorage.setItem('user',      JSON.stringify(user));
         localStorage.setItem('tenant_id', payload.tenant_id || '');
         this.currentUser.set(user);

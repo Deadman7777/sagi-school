@@ -1,0 +1,75 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Budget Prévisionnel{% endblock %}
+{% block content %}
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
+  Budget Prévisionnel des Charges — {{ exercice.annee_scolaire }}
+</h2>
+<p style="color:#666;font-size:11px;margin-bottom:14px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+</p>
+
+<!-- KPIs -->
+<table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
+  <tr>
+    <td>
+      <div class="kb-label">Charges Fixes Prévues</div>
+      <div class="kb-val kb-blue">{{ totaux.fixe.prevu|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+    </td>
+    <td>
+      <div class="kb-label">Charges Variables Prévues</div>
+      <div class="kb-val kb-orange">{{ totaux.variable.prevu|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+    </td>
+    <td>
+      <div class="kb-label">Total Prévu</div>
+      <div class="kb-val kb-teal">{{ totaux.total.prevu|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+    </td>
+    <td>
+      <div class="kb-label">Total Réalisé</div>
+      <div class="kb-val {% if totaux.total.realise > totaux.total.prevu %}" style="color:#ef4444{% else %}kb-green{% endif %}">
+        {{ totaux.total.realise|floatformat:0 }} <span style="font-size:11px">FCFA</span>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<table cellspacing="0" cellpadding="5">
+  <thead>
+    <tr>
+      <th style="width:70px">Compte</th>
+      <th>Libellé</th>
+      <th style="width:65px">Type</th>
+      <th class="text-right" style="width:100px">Prévu Total</th>
+      <th class="text-right" style="width:100px">Réalisé</th>
+      <th class="text-right" style="width:60px">Taux %</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in lignes %}
+    <tr{% if l.total_realise > l.total_prevu %} style="background:#fff0f0"{% endif %}>
+      <td style="font-family:monospace;font-weight:bold">{{ l.no_compte }}</td>
+      <td>{{ l.libelle }}</td>
+      <td style="font-size:9px;text-align:center">
+        <span style="background:{% if l.type_charge == 'FIXE' %}#dbeafe{% else %}#fef3c7{% endif %};padding:2px 5px;border-radius:3px">
+          {{ l.type_charge }}
+        </span>
+      </td>
+      <td class="text-right bold">{{ l.total_prevu|floatformat:0 }}</td>
+      <td class="text-right {% if l.total_realise > l.total_prevu %}red{% else %}green{% endif %}">{{ l.total_realise|floatformat:0 }}</td>
+      <td class="text-right {% if l.taux_realisation > 100 %}red bold{% endif %}">{{ l.taux_realisation }} %</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Aucune ligne de budget définie</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3"><strong>TOTAL BUDGET</strong></td>
+      <td class="text-right"><strong>{{ totaux.total.prevu|floatformat:0 }}</strong></td>
+      <td class="text-right {% if totaux.total.realise > totaux.total.prevu %}red{% else %}green{% endif %}">
+        <strong>{{ totaux.total.realise|floatformat:0 }}</strong>
+      </td>
+      <td></td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

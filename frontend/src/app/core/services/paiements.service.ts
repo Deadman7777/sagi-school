@@ -17,6 +17,7 @@ export interface Paiement {
   mode_paiement: string;
   observations?: string;
   total?: number;
+  statut?: 'ACTIF' | 'ANNULE';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -42,6 +43,14 @@ export class PaiementsService {
   /** Téléchargement PDF via Angular HttpClient (intercepteur auth inclus). */
   telechargerRecuPdf(id: string) {
     return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`);
+  }
+
+  annulerPaiement(id: string) {
+    return this.api.post<any>(`/paiements/paiements/${id}/annuler/`, {});
+  }
+
+  modifierPaiement(id: string, data: Partial<Paiement>) {
+    return this.api.post<any>(`/paiements/paiements/${id}/modifier/`, data);
   }
 
   getExerciceActif() {

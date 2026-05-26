@@ -16,6 +16,7 @@ export class ComptabiliteService {
   getCharges()        { return this.api.get<any[]>('/comptabilite/charges/'); }
   creerCharge(data: any)      { return this.api.post<any>('/comptabilite/charges/', data); }
   supprimerCharge(id: string) { return this.api.delete(`/comptabilite/charges/${id}/`); }
+  modifierCharge(id: string, data: any) { return this.api.put<any>(`/comptabilite/charges/${id}/`, data); }
   exportPDF(type: string)     { return this.api.getBlob(`/comptabilite/export-pdf/${type}/`); }
 
   // Plan comptable paramétrable

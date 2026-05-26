@@ -1,67 +1,170 @@
 {% extends "pdf/base.html" %}
 {% block doc_title %}Compte de Résultat{% endblock %}
 {% block content %}
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
+  Compte de Résultat — {{ exercice.annee_scolaire }}
+</h2>
+<p style="color:#666;font-size:11px;margin-bottom:14px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; Système {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
+</p>
 
-<div class="kpi-row">
-  <div class="kpi-box teal">
-    <div class="kb-label">Total Produits</div>
-    <div class="kb-val teal">{{ total_recettes|floatformat:0 }} FCFA</div>
-  </div>
-  <div class="kpi-box blue">
-    <div class="kb-label">Total Charges</div>
-    <div class="kb-val blue">{{ total_charges|floatformat:0 }} FCFA</div>
-  </div>
-  <div class="kpi-box {% if resultat_net >= 0 %}green{% else %}orange{% endif %}">
-    <div class="kb-label">Résultat Net</div>
-    <div class="kb-val">{{ resultat_net|floatformat:0 }} FCFA</div>
-  </div>
-</div>
+<!-- KPIs -->
+<table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
+  <tr>
+    <td>
+      <div class="kb-label">Total Produits</div>
+      <div class="kb-val kb-teal">{{ total_produits|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+    </td>
+    <td>
+      <div class="kb-label">Total Charges</div>
+      <div class="kb-val" style="color:#ef4444">{{ total_charges|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+    </td>
+    <td>
+      <div class="kb-label">Résultat Net</div>
+      <div class="kb-val {% if resultat_net >= 0 %}kb-green{% else %}" style="color:#ef4444{% endif %}">
+        {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} <span style="font-size:11px">FCFA</span>
+      </div>
+    </td>
+  </tr>
+</table>
 
-<div class="section-title">💰 PRODUITS D'EXPLOITATION</div>
-<table>
-  <thead><tr><th>Réf.</th><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+<!-- Produits -->
+<div class="section-title">Produits d'Exploitation</div>
+<table cellspacing="0" cellpadding="5">
+  <thead>
+    <tr>
+      <th style="width:70px">Compte</th>
+      <th>Libellé</th>
+      <th class="text-right" style="width:120px">Montant (FCFA)</th>
+    </tr>
+  </thead>
   <tbody>
     {% for p in detail_produits %}
     <tr>
-      <td class="bold">{{ p.compte }}</td>
+      <td style="font-family:monospace;font-weight:bold">{{ p.compte }}</td>
       <td>{{ p.libelle }}</td>
       <td class="text-right teal bold">{{ p.montant|floatformat:0 }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="3" class="text-center">Aucun produit enregistré</td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Aucun produit enregistré</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
-    <tr><td colspan="2" class="bold">TOTAL PRODUITS</td>
-        <td class="text-right bold teal">{{ total_recettes|floatformat:0 }}</td></tr>
+    <tr>
+      <td colspan="2" class="bold">TOTAL PRODUITS</td>
+      <td class="text-right bold teal">{{ total_produits|floatformat:0 }}</td>
+    </tr>
   </tfoot>
 </table>
 
-<div class="section-title">💸 CHARGES D'EXPLOITATION</div>
-<table>
-  <thead><tr><th>Réf.</th><th>Libellé</th><th class="text-right">Montant (FCFA)</th></tr></thead>
+<!-- Charges -->
+<div class="section-title">Charges d'Exploitation</div>
+<table cellspacing="0" cellpadding="5">
+  <thead>
+    <tr>
+      <th style="width:70px">Compte</th>
+      <th>Libellé</th>
+      <th class="text-right" style="width:120px">Montant (FCFA)</th>
+    </tr>
+  </thead>
   <tbody>
     {% for c in detail_charges %}
     <tr>
-      <td class="bold">{{ c.compte }}</td>
+      <td style="font-family:monospace;font-weight:bold">{{ c.compte }}</td>
       <td>{{ c.libelle }}</td>
       <td class="text-right red bold">{{ c.montant|floatformat:0 }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="3" class="text-center">Aucune charge enregistrée</td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Aucune charge enregistrée</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
-    <tr><td colspan="2" class="bold">TOTAL CHARGES</td>
-        <td class="text-right bold red">{{ total_charges|floatformat:0 }}</td></tr>
+    <tr>
+      <td colspan="2" class="bold">TOTAL CHARGES</td>
+      <td class="text-right bold red">{{ total_charges|floatformat:0 }}</td>
+    </tr>
   </tfoot>
 </table>
 
-<div class="resultat-box {% if resultat_net >= 0 %}bene{% else %}def{% endif %}">
-  <span class="rb-label">RÉSULTAT NET — Exercice {{ exercice.annee_scolaire }}</span>
-  <span class="rb-val {% if resultat_net >= 0 %}green{% else %}red{% endif %}">
-    {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} FCFA
-  </span>
-</div>
+<!-- SIG en cascade -->
+<div class="section-title">Soldes Intermédiaires de Gestion (SIG)</div>
+<table cellspacing="0" cellpadding="5">
+  <tbody>
+    {% if sig.ventes_marchandises > 0 %}
+    <tr><td style="padding-left:14px;color:#555">Ventes de marchandises</td>
+        <td class="text-right green bold" style="width:120px">{{ sig.ventes_marchandises|floatformat:0 }}</td></tr>
+    {% endif %}
+    {% if sig.achats_marchandises > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Achats de marchandises</td>
+        <td class="text-right red" style="width:120px">{{ sig.achats_marchandises|floatformat:0 }}</td></tr>
+    {% endif %}
+    <tr style="background:#e8f0fe">
+      <td class="bold">= Marge Commerciale (MC)</td>
+      <td class="text-right bold {% if sig.mc >= 0 %}teal{% else %}red{% endif %}">{{ sig.mc|floatformat:0 }}</td>
+    </tr>
+    {% if sig.production_exercice > 0 %}
+    <tr><td style="padding-left:14px;color:#555">+ Production de l'exercice (services)</td>
+        <td class="text-right green">{{ sig.production_exercice|floatformat:0 }}</td></tr>
+    {% endif %}
+    {% if sig.consommations_interm > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Consommations intermédiaires</td>
+        <td class="text-right red">{{ sig.consommations_interm|floatformat:0 }}</td></tr>
+    {% endif %}
+    <tr style="background:#e8f0fe">
+      <td class="bold">= Valeur Ajoutée Brute (VAB)</td>
+      <td class="text-right bold {% if sig.vab >= 0 %}teal{% else %}red{% endif %}">{{ sig.vab|floatformat:0 }}</td>
+    </tr>
+    {% if sig.charges_personnel > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Charges de personnel (661+662)</td>
+        <td class="text-right red">{{ sig.charges_personnel|floatformat:0 }}</td></tr>
+    {% endif %}
+    {% if sig.impots_taxes > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Impôts et taxes (64x)</td>
+        <td class="text-right red">{{ sig.impots_taxes|floatformat:0 }}</td></tr>
+    {% endif %}
+    <tr style="background:#e8f0fe">
+      <td class="bold">= Excédent Brut d'Exploitation (EBE)</td>
+      <td class="text-right bold {% if sig.ebe >= 0 %}teal{% else %}red{% endif %}">{{ sig.ebe|floatformat:0 }}</td>
+    </tr>
+    {% if sig.dotations_amort > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Dotations aux amortissements (681)</td>
+        <td class="text-right red">{{ sig.dotations_amort|floatformat:0 }}</td></tr>
+    {% endif %}
+    {% if sig.autres_charges > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Autres charges d'exploitation</td>
+        <td class="text-right red">{{ sig.autres_charges|floatformat:0 }}</td></tr>
+    {% endif %}
+    <tr style="background:#e8f0fe">
+      <td class="bold">= Résultat d'Exploitation (RE)</td>
+      <td class="text-right bold {% if sig.re >= 0 %}teal{% else %}red{% endif %}">{{ sig.re|floatformat:0 }}</td>
+    </tr>
+    {% if sig.rf != 0 %}
+    <tr><td style="padding-left:14px;color:#555">± Résultat Financier (RF)</td>
+        <td class="text-right">{{ sig.rf|floatformat:0 }}</td></tr>
+    {% endif %}
+    <tr style="background:#d1fae5;border-top:2px solid #10b981">
+      <td class="bold">= Résultat des Activités Ordinaires (RAO)</td>
+      <td class="text-right bold {% if sig.rao >= 0 %}teal{% else %}red{% endif %}">{{ sig.rao|floatformat:0 }}</td>
+    </tr>
+    {% if sig.resultat_hao != 0 %}
+    <tr><td style="padding-left:14px;color:#555">± Résultat HAO</td>
+        <td class="text-right">{{ sig.resultat_hao|floatformat:0 }}</td></tr>
+    {% endif %}
+    {% if sig.impot > 0 %}
+    <tr><td style="padding-left:14px;color:#555">— Impôt sur le résultat (89x)</td>
+        <td class="text-right red">{{ sig.impot|floatformat:0 }}</td></tr>
+    {% endif %}
+  </tbody>
+</table>
 
+<!-- Résultat final -->
+<table class="resultat-table {% if resultat_net >= 0 %}resultat-bene{% else %}resultat-def{% endif %}">
+  <tr>
+    <td class="rb-label">RÉSULTAT NET — Exercice {{ exercice.annee_scolaire }} — SYSCOHADA Révisé</td>
+    <td class="rb-val {% if resultat_net >= 0 %}green{% else %}red{% endif %}">
+      {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} FCFA
+    </td>
+  </tr>
+</table>
 {% endblock %}

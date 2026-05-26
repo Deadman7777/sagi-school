@@ -5,6 +5,7 @@ from .models import Licence
 class LicenceSerializer(serializers.ModelSerializer):
     est_active     = serializers.ReadOnlyField()
     jours_restants = serializers.ReadOnlyField()
+    modules        = serializers.ReadOnlyField()
     tenant_nom     = serializers.CharField(source='tenant.nom', read_only=True)
 
     class Meta:

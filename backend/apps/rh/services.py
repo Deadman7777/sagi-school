@@ -293,6 +293,39 @@ def generer_ecriture_avance(avance, tenant):
     ])
 
 
+def annuler_ecriture_avance(avance, tenant):
+    """Extourne les écritures d'une avance annulée : D compte_paiement / C 421."""
+    from apps.comptabilite.models import JournalEntry
+    from apps.paiements.models import Exercice
+
+    if JournalEntry.objects.filter(tenant=tenant, source='ANNUL_AVANCE', source_id=avance.id).exists():
+        return
+
+    exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+    if not exercice:
+        return
+
+    ref   = f"ANN-{avance.no_piece or avance.id.hex[:8].upper()}"
+    date  = datetime.date.today()
+    label = f"Annulation avance {avance.employe.nom_complet}"
+    cpt   = _compte_paiement(avance.mode_paiement)
+
+    JournalEntry.objects.bulk_create([
+        JournalEntry(
+            tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
+            no_compte=cpt, libelle=label,
+            debit=avance.montant, credit=0,
+            source='ANNUL_AVANCE', source_id=avance.id, ordre=1,
+        ),
+        JournalEntry(
+            tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
+            no_compte='421', libelle=label,
+            debit=0, credit=avance.montant,
+            source='ANNUL_AVANCE', source_id=avance.id, ordre=2,
+        ),
+    ])
+
+
 def generer_ecritures_paie(bulletin, tenant):
     """Génère les écritures SYSCOHADA complètes lors de la validation du bulletin."""
     from apps.comptabilite.models import JournalEntry
@@ -389,3 +422,53 @@ def generer_ecritures_paie(bulletin, tenant):
 
     # Marquer les avances comme imputées
     bulletin.avances.filter(statut='EN_ATTENTE').update(statut='IMPUTE')
+
+
+def annuler_ecritures_paie(bulletin, tenant):
+    """Extourne toutes les écritures SYSCOHADA d'un bulletin de paie annulé."""
+    import datetime
+    import re
+    from apps.comptabilite.models import JournalEntry
+    from apps.paiements.models import Exercice
+
+    if JournalEntry.objects.filter(tenant=tenant, source='ANNUL_PAIE', source_id=bulletin.id).exists():
+        return
+
+    exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+    if not exercice:
+        return
+
+    ecritures_orig = JournalEntry.objects.filter(
+        tenant=tenant, source='PAIE', source_id=bulletin.id
+    ).order_by('ordre')
+
+    if not ecritures_orig.exists():
+        return
+
+    last_ann = JournalEntry.objects.filter(
+        tenant=tenant, source='ANNUL_PAIE'
+    ).values_list('no_piece', flat=True).order_by('-no_piece')
+    nums = [re.findall(r'\d+', p) for p in last_ann if re.findall(r'\d+', p)]
+    next_n = int(nums[0][-1]) + 1 if nums else 1
+    no_piece_annul = f"ANN-PAIE-{next_n:04d}"
+    ref_orig = f"PAIE-{bulletin.employe.matricule}-{bulletin.mois:02d}/{bulletin.annee}"
+
+    contre_ecritures = []
+    for i, e in enumerate(ecritures_orig, start=1):
+        contre_ecritures.append(JournalEntry(
+            tenant=tenant,
+            exercice=exercice,
+            no_piece=no_piece_annul,
+            date_ecriture=datetime.date.today(),
+            no_compte=e.no_compte,
+            libelle=f"ANNUL — {e.libelle}",
+            debit=e.credit,
+            credit=e.debit,
+            source='ANNUL_PAIE',
+            source_id=bulletin.id,
+            ordre=i,
+        ))
+    JournalEntry.objects.bulk_create(contre_ecritures)
+
+    # Ré-ouvrir les avances imputées dans ce bulletin
+    bulletin.avances.filter(statut='IMPUTE').update(statut='EN_ATTENTE')

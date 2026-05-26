@@ -133,7 +133,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         if not exercice:
             return Response({'total': 0, 'nb_transactions': 0, 'par_mode': []})
 
-        paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
+        paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF')
 
         def total(qs):
             a = qs.aggregate(
@@ -252,6 +252,201 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'tenant_rccm':       getattr(p.tenant, 'rccm', '') or '',
             'tenant_telephone':  getattr(p.tenant, 'telephone', '') or '',
         }
+
+    @action(detail=True, methods=['post'])
+    def annuler(self, request, pk=None):
+        """Annule un paiement scolarité : crée des contre-écritures SYSCOHADA et marque ANNULE."""
+        import datetime
+        import re
+        from apps.comptabilite.models import JournalEntry
+        from core.models import log_audit
+
+        paiement = self.get_object()
+        if paiement.statut == 'ANNULE':
+            return Response({'error': 'Ce paiement est déjà annulé.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = self.get_tenant()
+
+        # Vérifier qu'il n'y a pas déjà des contre-écritures pour ce paiement
+        if JournalEntry.objects.filter(tenant=tenant, source='ANNUL_PAIEMENT', source_id=paiement.id).exists():
+            paiement.statut = 'ANNULE'
+            paiement.save()
+            return Response({'success': True, 'message': 'Paiement marqué annulé (contre-écritures déjà existantes).'})
+
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif pour enregistrer les contre-écritures.'}, status=400)
+
+        # Récupérer les écritures originales liées à ce paiement
+        ecritures_orig = JournalEntry.objects.filter(
+            tenant=tenant, source='PAIEMENT', source_id=paiement.id
+        ).order_by('ordre')
+
+        if not ecritures_orig.exists():
+            return Response({'error': 'Aucune écriture comptable trouvée pour ce paiement.'}, status=400)
+
+        # Numéro de pièce de l'annulation
+        last_ann = JournalEntry.objects.filter(
+            tenant=tenant, source='ANNUL_PAIEMENT'
+        ).values_list('no_piece', flat=True).order_by('-no_piece')
+        nums = [re.findall(r'\d+', p) for p in last_ann if re.findall(r'\d+', p)]
+        next_n = int(nums[0][-1]) + 1 if nums else 1
+        no_piece_annul = f"ANN-REC-{next_n:04d}"
+        date_annul = datetime.date.today()
+
+        # Créer les contre-écritures (extourne : inverser débit/crédit)
+        contre_ecritures = []
+        for i, e in enumerate(ecritures_orig, start=1):
+            contre_ecritures.append(JournalEntry(
+                tenant=tenant,
+                exercice=exercice,
+                no_piece=no_piece_annul,
+                date_ecriture=date_annul,
+                no_compte=e.no_compte,
+                libelle=f"ANNUL — {e.libelle}",
+                debit=e.credit,
+                credit=e.debit,
+                source='ANNUL_PAIEMENT',
+                source_id=paiement.id,
+                ordre=i,
+            ))
+        JournalEntry.objects.bulk_create(contre_ecritures)
+
+        paiement.statut = 'ANNULE'
+        paiement.save()
+
+        log_audit(request, 'ANNULER', 'Paiement', str(paiement.id),
+                  f"Annulation {paiement.no_piece} — {float(paiement.total):,.0f} FCFA — contre-écriture {no_piece_annul}")
+
+        return Response({'success': True, 'no_piece_annulation': no_piece_annul})
+
+    @action(detail=True, methods=['post'])
+    def modifier(self, request, pk=None):
+        """Modifie un paiement : annule l'original (contre-écritures) puis crée un nouveau."""
+        import datetime
+        import re
+        from apps.comptabilite.models import JournalEntry
+        from core.models import log_audit
+
+        paiement = self.get_object()
+        if paiement.statut == 'ANNULE':
+            return Response({'error': 'Ce paiement est déjà annulé, il ne peut pas être modifié.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = self.get_tenant()
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif.'}, status=400)
+
+        # Valider les données de modification
+        data = request.data
+        montant_inscription = float(data.get('montant_inscription', paiement.montant_inscription))
+        montant_mensualite  = float(data.get('montant_mensualite',  paiement.montant_mensualite))
+        montant_uniforme    = float(data.get('montant_uniforme',    paiement.montant_uniforme))
+        montant_fournitures = float(data.get('montant_fournitures', paiement.montant_fournitures))
+        montant_cantine     = float(data.get('montant_cantine',     paiement.montant_cantine))
+        montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
+        mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
+        observations        = data.get('observations',  paiement.observations or '')
+
+        nouveau_total = (montant_inscription + montant_mensualite + montant_uniforme +
+                         montant_fournitures + montant_cantine + montant_divers)
+        if nouveau_total <= 0:
+            return Response({'error': 'Le total du paiement modifié doit être > 0.'}, status=400)
+
+        # 1 — Annuler l'original (contre-écritures)
+        ecritures_orig = JournalEntry.objects.filter(
+            tenant=tenant, source='PAIEMENT', source_id=paiement.id
+        ).order_by('ordre')
+
+        if ecritures_orig.exists():
+            last_ann = JournalEntry.objects.filter(
+                tenant=tenant, source='ANNUL_PAIEMENT'
+            ).values_list('no_piece', flat=True).order_by('-no_piece')
+            nums = [re.findall(r'\d+', p) for p in last_ann if re.findall(r'\d+', p)]
+            next_n = int(nums[0][-1]) + 1 if nums else 1
+            no_piece_annul = f"ANN-REC-{next_n:04d}"
+
+            contre_ecritures = [
+                JournalEntry(
+                    tenant=tenant, exercice=exercice,
+                    no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
+                    no_compte=e.no_compte, libelle=f"MODIF — {e.libelle}",
+                    debit=e.credit, credit=e.debit,
+                    source='ANNUL_PAIEMENT', source_id=paiement.id, ordre=i,
+                )
+                for i, e in enumerate(ecritures_orig, start=1)
+            ]
+            JournalEntry.objects.bulk_create(contre_ecritures)
+
+        paiement.statut = 'ANNULE'
+        paiement.save()
+
+        # 2 — Créer le nouveau paiement
+        from django.db.models import Max
+        last_piece = Paiement.objects.filter(tenant=tenant).aggregate(Max('no_piece'))['no_piece__max']
+        if last_piece:
+            nums2 = re.findall(r'\d+', last_piece)
+            next_num2 = int(nums2[-1]) + 1 if nums2 else 1
+        else:
+            next_num2 = 1
+        no_piece_new = f"REC-{next_num2:04d}"
+
+        nouveau = Paiement.objects.create(
+            tenant=tenant, exercice=exercice,
+            eleve=paiement.eleve, no_piece=no_piece_new,
+            date_paiement=paiement.date_paiement,
+            montant_inscription=montant_inscription,
+            montant_mensualite=montant_mensualite,
+            montant_uniforme=montant_uniforme,
+            montant_fournitures=montant_fournitures,
+            montant_cantine=montant_cantine,
+            montant_divers=montant_divers,
+            mode_paiement=mode_paiement,
+            observations=observations,
+            statut='ACTIF',
+            saisi_par=request.user,
+        )
+
+        # 3 — Nouvelles écritures SYSCOHADA pour le nouveau paiement
+        compte_reglement, libelle_compte = {
+            'ESPECE':       ('571',  'Caisse'),
+            'WAVE':         ('5521', 'WAVE'),
+            'ORANGE_MONEY': ('5522', 'Orange Money'),
+            'FREE_MONEY':   ('5523', 'Free Money'),
+            'VIREMENT':     ('521',  'Banque'),
+            'CHEQUE':       ('521',  'Banque'),
+        }.get(mode_paiement, ('571', 'Caisse'))
+
+        libelle_new = f"{paiement.eleve.nom_complet} - {no_piece_new}"
+        ecritures_new = [
+            dict(ordre=1, no_compte='411',            debit=nouveau_total, credit=0,
+                 libelle=f"Créance scolarité — {libelle_new}"),
+            dict(ordre=2, no_compte='706',            debit=0, credit=nouveau_total,
+                 libelle=f"Créance scolarité — {libelle_new}"),
+            dict(ordre=3, no_compte=compte_reglement, debit=nouveau_total, credit=0,
+                 libelle=f"Règlement {libelle_compte} — {libelle_new}"),
+            dict(ordre=4, no_compte='411',            debit=0, credit=nouveau_total,
+                 libelle=f"Règlement {libelle_compte} — {libelle_new}"),
+        ]
+        for e in ecritures_new:
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece_new, date_ecriture=nouveau.date_paiement,
+                source='PAIEMENT', source_id=nouveau.id, **e
+            )
+
+        log_audit(request, 'MODIFIER', 'Paiement', str(paiement.id),
+                  f"Modification {paiement.no_piece} → {no_piece_new} — "
+                  f"{float(paiement.total):,.0f} → {nouveau_total:,.0f} FCFA")
+
+        return Response({
+            'success': True,
+            'ancien_no_piece': paiement.no_piece,
+            'nouveau_no_piece': no_piece_new,
+            'nouveau_total': nouveau_total,
+            'paiement': PaiementSerializer(nouveau).data,
+        })
 
     @action(detail=True, methods=['get'])
     def recu(self, request, pk=None):

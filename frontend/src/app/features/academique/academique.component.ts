@@ -1,5 +1,4 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { lastValueFrom } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
@@ -36,6 +35,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <button class="tab-btn" [class.active]="onglet()==='notes'" (click)="onglet.set('notes')">📝 {{ 'academique.onglet_notes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 {{ 'academique.onglet_resultats' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='analyse'" (click)="onglet.set('analyse'); chargerAnalyse()">📈 Analyse</button>
+      <button class="tab-btn" [class.active]="onglet()==='historique'" (click)="onglet.set('historique'); chargerHistorique()">📋 Historique</button>
     </div>
 
     <!-- PARAMÉTRAGE -->
@@ -179,7 +179,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                                [min]="0" [max]="evalSelectionnee.note_max"
                                [disabled]="e.absent_saisie"
                                mode="decimal" [maxFractionDigits]="2"
-                               styleClass="note-input" />
+                               [inputStyle]="{width:'100px'}" />
               </td>
               <td style="text-align:center">
                 <input type="checkbox" [(ngModel)]="e.absent_saisie"
@@ -242,7 +242,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 <div *ngIf="m.rang_matiere" style="font-size:10px;color:#64748b">{{ m.rang_matiere }}e</div>
               </td>
               <td class="mono bold" style="color:#00d4aa">{{ r.moy_generale }}</td>
-              <td>{{ getAppreciation(r.moy_generale, 20) }}</td>
+              <td>{{ r.appreciation_generale }}</td>
               <td>
                 <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                           severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
@@ -355,6 +355,83 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       } @else {
         <div style="text-align:center; padding:60px; color:#64748b">Aucune donnée disponible. Calculez d'abord les moyennes.</div>
       }
+    </div>
+
+    <!-- HISTORIQUE BULLETINS -->
+    <div *ngIf="onglet()==='historique'">
+      <!-- Filtres -->
+      <div class="filters-bar" style="margin-bottom:14px;flex-wrap:wrap">
+        <input pInputText [(ngModel)]="histSearch" placeholder="🔍 Rechercher un élève..."
+               style="min-width:200px" (ngModelChange)="appliquerFiltreHistorique()" />
+        <p-select [options]="histClasseOptions()" [(ngModel)]="histClasse"
+                  optionLabel="label" optionValue="value"
+                  placeholder="Toutes les classes" styleClass="filter-drop"
+                  (onChange)="appliquerFiltreHistorique()" />
+        <p-select [options]="trimestres" [(ngModel)]="histTrimestre"
+                  optionLabel="label" optionValue="value"
+                  placeholder="Tous les trimestres" styleClass="filter-drop"
+                  (onChange)="appliquerFiltreHistorique()" />
+        <p-select [options]="histAnneeOptions()" [(ngModel)]="histAnnee"
+                  optionLabel="label" optionValue="value"
+                  placeholder="Toutes les années" styleClass="filter-drop"
+                  (onChange)="appliquerFiltreHistorique()" />
+        <p-button icon="pi pi-refresh" severity="secondary" [text]="true"
+                  [loading]="loadingHistorique()" (onClick)="chargerHistorique(true)" title="Rafraîchir" />
+      </div>
+
+      <!-- Compteur -->
+      <div style="font-size:11px;color:#64748b;margin-bottom:10px" *ngIf="!loadingHistorique()">
+        {{ historiqueFiltres().length }} bulletin(s) trouvé(s)
+      </div>
+
+      <!-- Chargement -->
+      <div *ngIf="loadingHistorique()" class="empty-msg" style="padding:40px">Chargement...</div>
+
+      <!-- Table -->
+      <div class="table-card" *ngIf="!loadingHistorique()">
+        @if (historiqueFiltres().length === 0) {
+          <div class="empty-msg" style="padding:40px">
+            Aucun bulletin calculé. Lancez d'abord le calcul des moyennes dans l'onglet Résultats.
+          </div>
+        } @else {
+          <p-table [value]="historiqueFiltres()" styleClass="p-datatable-sm"
+                   [paginator]="true" [rows]="25" [rowsPerPageOptions]="[25,50,100]">
+            <ng-template pTemplate="header">
+              <tr>
+                <th style="width:32%">Élève</th>
+                <th style="width:18%">Classe</th>
+                <th style="width:10%">Trimestre</th>
+                <th style="width:14%">Année scolaire</th>
+                <th style="width:10%;text-align:center">Moyenne</th>
+                <th style="width:8%;text-align:center">Matières</th>
+                <th style="width:8%;text-align:center">PDF</th>
+              </tr>
+            </ng-template>
+            <ng-template pTemplate="body" let-b>
+              <tr>
+                <td class="bold">{{ b.eleve_nom }}</td>
+                <td style="color:#94a3b8">{{ b.classe }}</td>
+                <td>
+                  <p-tag [value]="b.trimestre"
+                         [severity]="b.trimestre==='T1' ? 'info' : b.trimestre==='T2' ? 'warn' : 'success'" />
+                </td>
+                <td class="mono" style="color:#64748b">{{ b.annee_scolaire }}</td>
+                <td style="text-align:center">
+                  <span class="mono bold" [style.color]="b.moy_generale >= 10 ? '#10b981' : '#ef4444'">
+                    {{ b.moy_generale }}
+                  </span>
+                </td>
+                <td style="text-align:center;color:#64748b">{{ b.nb_matieres }}</td>
+                <td style="text-align:center">
+                  <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="danger"
+                            (onClick)="telechargerBulletinHistorique(b)"
+                            title="Télécharger le bulletin PDF" />
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </div>
     </div>
 
     <!-- Dialog Classe -->
@@ -489,7 +566,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .note-input { width:100px !important; }
     .mono  { font-family:monospace; font-size:12px; }
     .bold  { font-weight:600; color:#e8f0fe; }
     .empty-msg { text-align:center; padding:20px; color:#64748b; font-size:12px; }
@@ -516,11 +592,16 @@ export class AcademiqueComponent implements OnInit {
   resultats     = signal<any[]>([]);
   statsClasse   = signal<any>(null);
   colonnesMatieres = signal<string[]>([]);
-  loading       = signal(false);
-  saving        = signal(false);
-  calculant     = signal(false);
-  loadingAnalyse= signal(false);
-  analyse       = signal<any>(null);
+  loading          = signal(false);
+  saving           = signal(false);
+  calculant        = signal(false);
+  loadingAnalyse   = signal(false);
+  analyse          = signal<any>(null);
+  loadingHistorique= signal(false);
+  historiqueAll    = signal<any[]>([]);
+  historiqueFiltres= signal<any[]>([]);
+  histAnneeOptions = signal<any[]>([]);
+  histClasseOptions= signal<any[]>([]);
 
   classeFiltre    = '';
   classeNotes     = '';
@@ -529,6 +610,12 @@ export class AcademiqueComponent implements OnInit {
   classeResultats = '';
   trimestreResultats = 'T1';
   evalSelectionnee: any = null;
+  private _elevesClasseCache: { classeId: string; eleves: any[] } | null = null;
+
+  histSearch    = '';
+  histClasse    = '';
+  histTrimestre = '';
+  histAnnee     = '';
 
   dialogClasseVisible   = false;
   dialogMatiereVisible  = false;
@@ -583,6 +670,7 @@ export class AcademiqueComponent implements OnInit {
   }
 
   onClasseNotesChange() {
+    this._elevesClasseCache = null;
     this.acad.getMatieres({ classe: this.classeNotes }).subscribe({
       next: r => this.matieresNotes.set(r.results || [])
     });
@@ -621,67 +709,72 @@ export class AcademiqueComponent implements OnInit {
 
   selectionnerEvaluation(eval_: any) {
     this.evalSelectionnee = eval_;
-    this.acad.getElevesPourClasse(this.classeNotes).subscribe({
-      next: (eleves: any[]) => {
-        const mapped = eleves.map((e: any) => ({
-          ...e,
-          note_saisie: 0,
-          absent_saisie: false,
-          note_id: null,
-        }));
-        this.acad.getNotes({ evaluation: eval_.id }).subscribe({
-          next: rn => {
-            const notes = rn.results || [];
-            mapped.forEach((e: any) => {
-              const n = notes.find((n: any) => n.eleve === e.id);
-              if (n) { e.note_saisie = parseFloat(n.valeur); e.absent_saisie = n.absent; e.note_id = n.id; }
-            });
-            this.elevesNotes.set(mapped);
-          },
-          error: () => this.elevesNotes.set(mapped),
-        });
-      },
-      error: () => this.elevesNotes.set([]),
-    });
+    const chargerNotes = (eleves: any[]) => {
+      const mapped = eleves.map((e: any) => ({
+        ...e,
+        note_saisie: 0,
+        absent_saisie: false,
+        note_id: null,
+      }));
+      this.acad.getNotes({ evaluation: eval_.id }).subscribe({
+        next: rn => {
+          const notes = rn.results || [];
+          mapped.forEach((e: any) => {
+            const n = notes.find((n: any) => n.eleve === e.id);
+            if (n) { e.note_saisie = parseFloat(n.valeur); e.absent_saisie = n.absent; e.note_id = n.id; }
+          });
+          this.elevesNotes.set(mapped);
+        },
+        error: () => this.elevesNotes.set(mapped),
+      });
+    };
+
+    // Utiliser le cache élèves si la classe n'a pas changé
+    if (this._elevesClasseCache?.classeId === this.classeNotes) {
+      chargerNotes(this._elevesClasseCache.eleves);
+    } else {
+      this.acad.getElevesPourClasse(this.classeNotes).subscribe({
+        next: (eleves: any[]) => {
+          this._elevesClasseCache = { classeId: this.classeNotes, eleves };
+          chargerNotes(eleves);
+        },
+        error: () => this.elevesNotes.set([]),
+      });
+    }
   }
 
-  async sauvegarderNotes() {
+  sauvegarderNotes() {
     if (!this.evalSelectionnee) return;
     const eleves = this.elevesNotes().filter(e => e.id);
     if (!eleves.length) {
       this.msg.add({ severity: 'warn', summary: 'Aucun élève', detail: 'Aucune note à enregistrer.' });
       return;
     }
+    const notes = eleves.map(e => ({
+      eleve:      e.id,
+      evaluation: this.evalSelectionnee.id,
+      valeur:     e.note_saisie  ?? 0,
+      absent:     e.absent_saisie ?? false,
+    }));
     this.saving.set(true);
-    let nbOk = 0; let nbErr = 0;
-    for (const e of eleves) {
-      const data = {
-        eleve:      e.id,
-        evaluation: this.evalSelectionnee.id,
-        valeur:     e.note_saisie  ?? 0,
-        absent:     e.absent_saisie ?? false,
-      };
-      try {
-        if (e.note_id) {
-          await lastValueFrom(this.acad.modifierNote(e.note_id, data));
+    this.acad.bulkSaveNotes(notes).subscribe({
+      next: (res: any) => {
+        this.saving.set(false);
+        const total = (res.created || 0) + (res.updated || 0);
+        if (!res.errors) {
+          this.msg.add({ severity: 'success', summary: 'Notes enregistrées',
+                         detail: `${total} note(s) sauvegardée(s).` });
         } else {
-          const res: any = await lastValueFrom(this.acad.creerNote(data));
-          e.note_id = res.id;
+          this.msg.add({ severity: 'warn', summary: `${total} OK / ${res.errors} erreur(s)`,
+                         detail: 'Certaines notes n\'ont pas pu être enregistrées.' });
         }
-        nbOk++;
-      } catch {
-        nbErr++;
-      }
-    }
-    this.saving.set(false);
-    if (nbErr === 0) {
-      this.msg.add({ severity: 'success', summary: 'Notes enregistrées',
-                     detail: `${nbOk} note(s) sauvegardée(s).` });
-    } else {
-      this.msg.add({ severity: 'warn', summary: `${nbOk} OK / ${nbErr} erreur(s)`,
-                     detail: 'Certaines notes n\'ont pas pu être enregistrées.' });
-    }
-    this.selectionnerEvaluation(this.evalSelectionnee);
+        this.selectionnerEvaluation(this.evalSelectionnee);
+      },
+      error: () => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: 'Impossible d\'enregistrer les notes.' });
+      },
+    });
   }
 
   private _getAnneeScolaire(): string {
@@ -731,12 +824,13 @@ export class AcademiqueComponent implements OnInit {
 
   getAppreciation(moy: number, noteMax: number): string {
     const ratio = moy / noteMax * 20;
-    if (ratio >= 18) return this.translate.instant('academique.appr_excellent');
-    if (ratio >= 16) return this.translate.instant('academique.appr_tres_bien');
-    if (ratio >= 14) return this.translate.instant('academique.appr_bien');
-    if (ratio >= 12) return this.translate.instant('academique.appr_assez_bien');
-    if (ratio >= 10) return this.translate.instant('academique.appr_passable');
-    return this.translate.instant('academique.appr_insuffisant');
+    if (ratio >= 18) return 'Excellent';
+    if (ratio >= 16) return 'Très Bien';
+    if (ratio >= 14) return 'Bien';
+    if (ratio >= 12) return 'Assez Bien';
+    if (ratio >= 10) return 'Passable';
+    if (ratio >= 8)  return 'Insuffisant';
+    return 'Très Insuffisant';
   }
 
   ouvrirDialogClasse()   {
@@ -849,6 +943,57 @@ export class AcademiqueComponent implements OnInit {
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
+    });
+  }
+
+  chargerHistorique(forceRefresh = false) {
+    if (!forceRefresh && this.historiqueAll().length > 0) return;
+    this.loadingHistorique.set(true);
+    this.acad.getHistoriqueBulletins().subscribe({
+      next: (res: any) => {
+        const bulletins = res.bulletins || [];
+        this.historiqueAll.set(bulletins);
+        this.historiqueFiltres.set(bulletins);
+
+        // Options années
+        const annees = (res.annees || []).map((a: string) => ({ label: a, value: a }));
+        this.histAnneeOptions.set([{ label: 'Toutes les années', value: '' }, ...annees]);
+
+        // Options classes (déduites des bulletins)
+        const classesSet = new Set<string>(bulletins.map((b: any) => b.classe).filter((c: string) => c !== '—'));
+        const classesOpts = Array.from(classesSet).sort().map((c: string) => ({ label: c, value: c }));
+        this.histClasseOptions.set([{ label: 'Toutes les classes', value: '' }, ...classesOpts]);
+
+        this.loadingHistorique.set(false);
+      },
+      error: () => this.loadingHistorique.set(false),
+    });
+  }
+
+  appliquerFiltreHistorique() {
+    let liste = this.historiqueAll();
+    const search = this.histSearch.toLowerCase().trim();
+    if (search)                liste = liste.filter(b => b.eleve_nom.toLowerCase().includes(search));
+    if (this.histClasse)       liste = liste.filter(b => b.classe === this.histClasse);
+    if (this.histTrimestre)    liste = liste.filter(b => b.trimestre === this.histTrimestre);
+    if (this.histAnnee)        liste = liste.filter(b => b.annee_scolaire === this.histAnnee);
+    this.historiqueFiltres.set(liste);
+  }
+
+  telechargerBulletinHistorique(b: any) {
+    this.acad.getBulletinPdf(b.eleve_id, b.trimestre, b.annee_scolaire).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `bulletin_${b.eleve_nom.replace(/ /g, '_')}_${b.trimestre}_${b.annee_scolaire}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                                   detail: 'Impossible de générer le bulletin.' }),
     });
   }
 }

@@ -253,7 +253,6 @@ class SuiviMensuelView(APIView):
     def get(self, request):
         import datetime
         from dateutil.relativedelta import relativedelta
-        from django.db.models import Sum as DSum
         from apps.paiements.models import Exercice, Paiement
 
         tenant   = get_tenant(request)
@@ -268,6 +267,56 @@ class SuiviMensuelView(APIView):
             })
 
         eleve_id = request.query_params.get('eleve_id')
+
+        # ── Raccourci rapide : détail individuel seulement ───────────────────
+        if eleve_id:
+            try:
+                eleve = Eleve.objects.select_related('section').get(
+                    id=eleve_id, tenant=tenant
+                )
+            except (Eleve.DoesNotExist, Exception):
+                return Response({'eleve': None})
+
+            paiements_eleve = Paiement.objects.filter(
+                tenant=tenant, exercice=exercice, eleve=eleve
+            ).order_by('date_paiement').only(
+                'no_piece', 'date_paiement', 'mode_paiement',
+                'montant_inscription', 'montant_mensualite', 'montant_uniforme',
+                'montant_fournitures', 'montant_cantine', 'montant_divers',
+            )
+
+            items = []
+            cumul = 0.0
+            for p in paiements_eleve:
+                t = float(p.total)
+                cumul += t
+                items.append({
+                    'no_piece':    p.no_piece,
+                    'date':        str(p.date_paiement),
+                    'inscription': float(p.montant_inscription),
+                    'mensualite':  float(p.montant_mensualite),
+                    'uniforme':    float(p.montant_uniforme),
+                    'fournitures': float(p.montant_fournitures),
+                    'cantine':     float(p.montant_cantine),
+                    'divers':      float(p.montant_divers),
+                    'total':       t,
+                    'cumul':       round(cumul, 2),
+                    'mode':        p.mode_paiement,
+                })
+
+            attendu = float(eleve.total_attendu)
+            return Response({
+                'eleve': {
+                    'id':         str(eleve.id),
+                    'nom':        eleve.nom_complet,
+                    'section':    eleve.section.nom if eleve.section else '',
+                    'attendu':    attendu,
+                    'total_paye': round(cumul, 2),
+                    'reste':      round(attendu - cumul, 2),
+                    'taux':       round(cumul / attendu * 100, 1) if attendu else 0,
+                    'paiements':  items,
+                }
+            })
 
         # ── 1. Paiements mensuels agrégés ───────────────────────────────────
         mensuel_qs = Paiement.objects.filter(
@@ -346,21 +395,72 @@ class SuiviMensuelView(APIView):
             })
             cur += relativedelta(months=1)
 
-        # ── 2. Synthèse globale ──────────────────────────────────────────────
+        # ── 2. Synthèse + sections + créances (itération unique sur les élèves) ─
+        # Charger toutes les sections en une seule requête pour éviter les N+1
         eleves_qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
         ).select_related('section')
 
-        total_attendu  = sum(float(e.total_attendu) for e in eleves_qs)
-        total_paiements = sum(float(m.get('total') or 0) for m in pmt_par_mois.values())
-        reste_global   = total_attendu - total_paiements
-        taux_global    = round(total_paiements / total_attendu * 100, 1) if total_attendu else 0
+        # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
+        _pmt_sum = (
+            Sum('montant_inscription') + Sum('montant_mensualite') +
+            Sum('montant_uniforme')    + Sum('montant_fournitures') +
+            Sum('montant_cantine')     + Sum('montant_divers')
+        )
+        pmt_eleve = {
+            r['eleve_id']: float(r['paye'] or 0)
+            for r in Paiement.objects.filter(
+                tenant=tenant, exercice=exercice
+            ).values('eleve_id').annotate(paye=_pmt_sum)
+        }
+        pmt_section_raw = {
+            r['eleve__section__nom']: float(r['paye'] or 0)
+            for r in Paiement.objects.filter(
+                tenant=tenant, exercice=exercice
+            ).values('eleve__section__nom').annotate(paye=_pmt_sum)
+        }
 
-        total_charges = sum(charges_par_mois.values())
-        total_invest  = sum(invest_par_mois.values())
+        # Itération unique sur les élèves pour synthèse + sections + créances
+        total_attendu = 0.0
+        nb_eleves     = 0
+        sections_dict: dict = {}
+        creances      = []
+
+        for e in eleves_qs:
+            att  = float(e.total_attendu)
+            paye = pmt_eleve.get(e.id, 0.0)
+            snom = e.section.nom if e.section else '—'
+
+            total_attendu += att
+            nb_eleves     += 1
+
+            if snom not in sections_dict:
+                sections_dict[snom] = {'nb': 0, 'attendu': 0.0}
+            sections_dict[snom]['nb']      += 1
+            sections_dict[snom]['attendu'] += att
+
+            reste = att - paye
+            if reste > 0:
+                creances.append({
+                    'id':      str(e.id),
+                    'nom':     e.nom_complet,
+                    'section': snom,
+                    'attendu': round(att, 2),
+                    'paye':    round(paye, 2),
+                    'reste':   round(reste, 2),
+                    'taux':    round(paye / att * 100, 1) if att else 0,
+                })
+
+        creances.sort(key=lambda x: x['reste'], reverse=True)
+
+        total_paiements = sum(float(m.get('total') or 0) for m in pmt_par_mois.values())
+        reste_global    = total_attendu - total_paiements
+        taux_global     = round(total_paiements / total_attendu * 100, 1) if total_attendu else 0
+        total_charges   = sum(charges_par_mois.values())
+        total_invest    = sum(invest_par_mois.values())
 
         synthese = {
-            'nb_eleves':              eleves_qs.count(),
+            'nb_eleves':              nb_eleves,
             'total_attendu':          round(total_attendu, 2),
             'total_paye':             round(total_paiements, 2),
             'reste':                  round(reste_global, 2),
@@ -371,28 +471,9 @@ class SuiviMensuelView(APIView):
             'marge_globale':          round(total_paiements - total_charges - total_invest, 2),
         }
 
-        # ── 3. Par section ──────────────────────────────────────────────────
-        sections_dict = {}
-        for e in eleves_qs:
-            snom = e.section.nom if e.section else '—'
-            if snom not in sections_dict:
-                sections_dict[snom] = {'nb': 0, 'attendu': 0.0}
-            sections_dict[snom]['nb']      += 1
-            sections_dict[snom]['attendu'] += float(e.total_attendu)
-
-        # Paiements par section
-        pmt_section = Paiement.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).values('eleve__section__nom').annotate(
-            paye=Sum('montant_inscription') + Sum('montant_mensualite') +
-                 Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                 Sum('montant_cantine')     + Sum('montant_divers')
-        )
-        paye_par_section = {r['eleve__section__nom']: float(r['paye'] or 0) for r in pmt_section}
-
         sections_data = []
         for snom, info in sorted(sections_dict.items()):
-            paye = paye_par_section.get(snom, 0.0)
+            paye = pmt_section_raw.get(snom, 0.0)
             att  = info['attendu']
             sections_data.append({
                 'nom':           snom,
@@ -403,84 +484,12 @@ class SuiviMensuelView(APIView):
                 'taux':          round(paye / att * 100, 1) if att else 0,
             })
 
-        # ── 4. Top débiteurs ────────────────────────────────────────────────
-        # Paiements par élève
-        pmt_eleve = {
-            r['eleve_id']: float(r['paye'] or 0)
-            for r in Paiement.objects.filter(
-                tenant=tenant, exercice=exercice
-            ).values('eleve_id').annotate(
-                paye=Sum('montant_inscription') + Sum('montant_mensualite') +
-                     Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                     Sum('montant_cantine')     + Sum('montant_divers')
-            )
-        }
-
-        creances = []
-        for e in eleves_qs:
-            att  = float(e.total_attendu)
-            paye = pmt_eleve.get(e.id, 0.0)
-            reste = att - paye
-            if reste > 0:
-                creances.append({
-                    'id':      str(e.id),
-                    'nom':     e.nom_complet,
-                    'section': e.section.nom if e.section else '—',
-                    'attendu': round(att, 2),
-                    'paye':    round(paye, 2),
-                    'reste':   round(reste, 2),
-                    'taux':    round(paye / att * 100, 1) if att else 0,
-                })
-        creances.sort(key=lambda x: x['reste'], reverse=True)
-
-        # ── 5. Détail élève ────────────────────────────────────────────────
-        eleve_data = None
-        if eleve_id:
-            try:
-                eleve = Eleve.objects.get(id=eleve_id, tenant=tenant)
-                paiements_eleve = Paiement.objects.filter(
-                    tenant=tenant, exercice=exercice, eleve=eleve
-                ).order_by('date_paiement')
-
-                items = []
-                cumul = 0.0
-                for p in paiements_eleve:
-                    t = float(p.total)
-                    cumul += t
-                    items.append({
-                        'no_piece':    p.no_piece,
-                        'date':        str(p.date_paiement),
-                        'inscription': float(p.montant_inscription),
-                        'mensualite':  float(p.montant_mensualite),
-                        'uniforme':    float(p.montant_uniforme),
-                        'fournitures': float(p.montant_fournitures),
-                        'cantine':     float(p.montant_cantine),
-                        'divers':      float(p.montant_divers),
-                        'total':       t,
-                        'cumul':       round(cumul, 2),
-                        'mode':        p.mode_paiement,
-                    })
-
-                attendu = float(eleve.total_attendu)
-                eleve_data = {
-                    'id':         str(eleve.id),
-                    'nom':        eleve.nom_complet,
-                    'section':    eleve.section.nom if eleve.section else '',
-                    'attendu':    attendu,
-                    'total_paye': round(cumul, 2),
-                    'reste':      round(attendu - cumul, 2),
-                    'taux':       round(cumul / attendu * 100, 1) if attendu else 0,
-                    'paiements':  items,
-                }
-            except Eleve.DoesNotExist:
-                pass
-
         return Response({
             'global':   global_data,
             'synthese': synthese,
             'sections': sections_data,
             'creances': creances[:20],
-            'eleve':    eleve_data,
+            'eleve':    None,
         })
 
 
@@ -735,7 +744,7 @@ class SituationElevePDFView(APIView):
             )
             paiements_list.append({
                 'date':          p.date_paiement,
-                'no_recu':       p.no_recu or '—',
+                'no_recu':       p.no_piece or '—',
                 'mode':          p.get_mode_paiement_display() if hasattr(p, 'get_mode_paiement_display') else p.mode_paiement,
                 'inscription':   float(p.montant_inscription  or 0),
                 'mensualite':    float(p.montant_mensualite    or 0),

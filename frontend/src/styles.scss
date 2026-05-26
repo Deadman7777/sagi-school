@@ -1,11 +1,98 @@
+/* PrimeIcons — classes .pi et .pi-* (obligatoire) */
 @import "primeicons/primeicons.css";
 @import "primeflex/primeflex.css";
+
+@font-face {
+  font-family: 'NotoColorEmoji';
+  src: url('/assets/fonts/NotoColorEmoji.ttf') format('truetype');
+  unicode-range: U+1F000-1FFFF, U+2600-27FF, U+FE00-FE0F;
+}
+
+* {
+  font-family: Arial, 'NotoColorEmoji', sans-serif;
+}
+/* Remplacement du @font-face de primeicons : chemin résolu par esbuild (compatible Electron) */
+@font-face {
+  font-family: 'primeicons';
+  font-display: block;
+  src: url('../node_modules/primeicons/fonts/primeicons.woff2') format('woff2'),
+       url('../node_modules/primeicons/fonts/primeicons.woff')  format('woff'),
+       url('../node_modules/primeicons/fonts/primeicons.ttf')   format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Segoe UI', sans-serif; background: #0b0f1a; color: #e8f0fe; font-size: 14px; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #2a3f5f; border-radius: 3px; }
 .w-full { width: 100% !important; }
+
+/* ── PrimeNG dark theme — global overrides (robustes après build Electron) ── */
+.p-datatable .p-datatable-thead > tr > th {
+  background: #111827 !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  border-color: #2a3f5f !important;
+  font-weight: 600 !important;
+}
+.p-datatable .p-datatable-tbody > tr {
+  background: #1e2d45 !important;
+  color: #94a3b8 !important;
+}
+.p-datatable .p-datatable-tbody > tr > td {
+  border-color: rgba(42,63,95,0.4) !important;
+}
+.p-datatable .p-datatable-tbody > tr:hover > td {
+  background: #1a2235 !important;
+}
+.p-datatable .p-paginator {
+  background: #111827 !important;
+  border-color: #2a3f5f !important;
+  color: #64748b !important;
+}
+.p-dialog .p-dialog-header {
+  background: #1e2d45 !important;
+  color: #e8f0fe !important;
+  border-bottom: 1px solid #2a3f5f !important;
+}
+.p-dialog .p-dialog-content {
+  background: #1e2d45 !important;
+  color: #94a3b8 !important;
+}
+.p-dialog .p-dialog-footer {
+  background: #1e2d45 !important;
+  border-top: 1px solid #2a3f5f !important;
+}
+.p-select .p-select-label,
+.p-select-panel .p-select-item { color: #e8f0fe !important; }
+.p-select { background: #111827 !important; border-color: #2a3f5f !important; }
+.p-select-panel { background: #1e2d45 !important; border-color: #2a3f5f !important; }
+.p-select-panel .p-select-item:hover { background: #1a2235 !important; }
+.p-toast .p-toast-message { border-radius: 10px !important; }
+.p-toast .p-toast-message.p-toast-message-success { background: #0f2d1e !important; border-color: #10b981 !important; color: #10b981 !important; }
+.p-toast .p-toast-message.p-toast-message-error   { background: #2d0f0f !important; border-color: #ef4444 !important; color: #ef4444 !important; }
+.p-toast .p-toast-message.p-toast-message-info    { background: #0f1e2d !important; border-color: #0099ff !important; color: #0099ff !important; }
+.p-toast .p-toast-message.p-toast-message-warn    { background: #2d1e0f !important; border-color: #f59e0b !important; color: #f59e0b !important; }
+.p-tag { font-size: 10px !important; font-weight: 600 !important; }
+.p-inputnumber-input, .p-inputtext {
+  background: #111827 !important;
+  border-color: #2a3f5f !important;
+  color: #e8f0fe !important;
+}
+.p-inputnumber-input:focus, .p-inputtext:focus {
+  border-color: #00d4aa !important;
+  box-shadow: 0 0 0 2px rgba(0,212,170,0.15) !important;
+}
+/* Paginator buttons */
+.p-paginator .p-paginator-page.p-highlight {
+  background: rgba(0,212,170,0.15) !important;
+  color: #00d4aa !important;
+  border-color: transparent !important;
+}
+.p-paginator .p-paginator-element { color: #64748b !important; }
+.p-paginator .p-paginator-element:hover { background: #1a2235 !important; color: #e8f0fe !important; }
 
 /* ── RTL Support (Arabe) ── */
 [dir="rtl"] .sidebar {
@@ -18,5 +105,5 @@ body { font-family: 'Segoe UI', sans-serif; background: #0b0f1a; color: #e8f0fe;
 [dir="rtl"] .nav-item.active { border-right-color: #00d4aa; }
 [dir="rtl"] .text-right { text-align: left; }
 [dir="rtl"] .text-left  { text-align: right; }
-[dir="rtl"] * { font-family: 'Amiri', 'Scheherazade New', 'Segoe UI', sans-serif; }
-[dir="ltr"] * { font-family: 'Outfit', 'Segoe UI', sans-serif; }
+[dir="rtl"] * { font-family: 'Amiri', 'Scheherazade New', 'NotoColorEmoji', 'Segoe UI', sans-serif; }
+[dir="ltr"] * { font-family: 'Outfit', 'NotoColorEmoji', 'Segoe UI', sans-serif; }

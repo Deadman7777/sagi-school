@@ -47,34 +47,84 @@ PLAN_COMPTABLE = {
     '272':   'Dépôts et cautionnements versés',
     '28':    'Amortissements',
     '281':   'Amort. immobilisations incorporelles',
+    '2811':  'Amort. frais de développement capitalisés',
+    '2812':  'Amort. brevets, licences, logiciels',
     '282':   'Amort. terrains',
+    '2821':  'Amort. terrains naturels',
+    '2822':  'Amort. terrains bâtis',
     '283':   'Amort. bâtiments et installations',
+    '2831':  'Amort. bâtiments sur sol propre',
+    '2832':  'Amort. bâtiments sur sol d\'autrui',
+    '2833':  'Amort. installations techniques et agencements',
+    '2834':  'Amort. aménagements et agencements divers',
     '284':   'Amort. matériel et mobilier',
+    '2841':  'Amort. matériel et outillage',
+    '2844':  'Amort. matériel et mobilier',
+    '2845':  'Amort. matériel de transport',
+    '2848':  'Amort. autres matériels et équipements',
     '285':   'Amort. matériel de transport',
     # ── Classe 3 — Stocks ──
     '32':    'Fournitures consommables',
     # ── Classe 4 — Créances et dettes ──
     '40':    'Fournisseurs et comptes rattachés',
-    '401':   'Fournisseurs',
+    '401':   'Fournisseurs (dettes en compte)',
+    '402':   'Fournisseurs — effets à payer',
+    '404':   'Fournisseurs, acquisitions d\'immobilisations',
+    '405':   'Fournisseurs de prestations de services',
     '408':   'Fournisseurs — factures non parvenues',
+    '409':   'Fournisseurs débiteurs (avances et acomptes versés)',
     '41':    'Clients et comptes rattachés',
     '411':   'Clients (Parents / Élèves)',
+    '412':   'Clients — effets à recevoir',
+    '413':   'Clients — avances et acomptes reçus sur commandes',
+    '416':   'Clients douteux ou litigieux',
+    '417':   'Clients — retenues de garantie',
+    '419':   'Clients créditeurs (avances reçues)',
     '42':    'Personnel',
-    '421':   'Avances et acomptes sur salaires',
+    '421':   'Personnel — avances et acomptes sur salaires',
     '422':   'Personnel — rémunérations dues',
-    '423':   'Oppositions et saisies-arrêts',
+    '423':   'Personnel — oppositions et saisies-arrêts',
+    '424':   'Personnel — participation aux bénéfices',
+    '425':   'Personnel — charges sociales à payer',
     '43':    'Organismes sociaux',
-    '431':   'CSS / ATMP',
+    '431':   'Organismes de sécurité sociale (CSS / ATMP)',
     '4311':  'CSS — Prestations familiales',
     '4312':  'ATMP — Accidents du travail',
     '4313':  'IPRES — Cotisations retraite',
+    '432':   'Organismes de prévoyance sociale',
+    '433':   'Autres organismes sociaux',
+    '434':   'Caisse nationale de sécurité sociale',
     '44':    'État et organismes internationaux',
     '441':   'État — impôts sur bénéfices',
-    '4421':  'CFCE — Contribution patronale',
-    '447':   'État — autres impôts et taxes',
+    '4421':  'CFCE — Contribution forfaitaire à la charge de l\'employeur',
+    '443':   'État — TVA et taxes assimilées',
+    '4431':  'TVA collectée (facturée)',
+    '4432':  'TVA déductible sur achats',
+    '4434':  'TVA — crédit de taxe à reporter',
+    '444':   'État — autres impôts et taxes',
     '4472':  'État — IR retenu à la source',
+    '445':   'État — subventions à recevoir',
+    '447':   'État — autres impôts et taxes divers',
+    '449':   'État — autres opérations',
     '46':    'Débiteurs divers',
+    '461':   'Créances sur cessions d\'actifs immobilisés',
+    '462':   'Créances sur cessions de titres de placement',
+    '467':   'Autres débiteurs divers',
     '47':    'Créditeurs divers',
+    '471':   'Comptes transitoires ou d\'attente (débit)',
+    '472':   'Comptes transitoires ou d\'attente (crédit)',
+    '473':   'Autres créditeurs divers',
+    '48':    'Créances et dettes hors exploitation',
+    '481':   'Fournisseurs d\'immobilisations',
+    '482':   'Clients — achats d\'immobilisations',
+    '484':   'Charges à payer (comptes de régularisation)',
+    '485':   'Produits à recevoir',
+    '486':   'Charges constatées d\'avance',
+    '487':   'Produits constatés d\'avance',
+    '488':   'Intérêts courus (à payer ou à recevoir)',
+    '49':    'Dépréciations des comptes de tiers',
+    '491':   'Dépréciation des comptes clients',
+    '499':   'Dépréciation des autres créances',
     # ── Classe 5 — Trésorerie ──
     '52':    'Banques',
     '521':   'Banque — compte courant',
@@ -447,7 +497,7 @@ class CompteResultatView(APIView):
         # Achats de marchandises
         achats_marchandises   = self._sum(entries, ['601'], 'debit')
         # Autres achats & consommations
-        autres_achats         = self._sum(entries, ['602', '604', '605', '606', '607', '608'], 'debit')
+        autres_achats         = self._sum(entries, ['602', '604', '605', '607', '608'], 'debit')
         transports            = self._sum(entries, ['61'], 'debit')
         services_ext_a        = self._sum(entries, ['621', '622', '623', '624', '625'], 'debit')
         services_ext_b        = self._sum(entries, ['626', '627', '628'], 'debit')
@@ -492,9 +542,24 @@ class CompteResultatView(APIView):
         # 10. Résultat net de l'exercice
         resultat_net = resultat_avant_impot - impot
 
-        # Totaux globaux pour affichage simplifié
-        total_produits = production_exercice + ventes_marchandises
-        total_charges  = achats_marchandises + consommations_interm + impots_taxes + autres_charges + charges_personnel + dotations_amort
+        # Totaux COMPLETS : 7x + HAO produits (82,84,86,88) vs 6x + HAO charges (81,83,87,89)
+        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
+        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
+        _haop_agg = entries.filter(
+            Q(no_compte__startswith='82') | Q(no_compte__startswith='84') |
+            Q(no_compte__startswith='86') | Q(no_compte__startswith='88')
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        _haoc_agg = entries.filter(
+            Q(no_compte__startswith='81') | Q(no_compte__startswith='83') |
+            Q(no_compte__startswith='87') | Q(no_compte__startswith='89')
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        total_produits = round(
+            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) +
+            max(float(_haop_agg['c'] or 0) - float(_haop_agg['d'] or 0), 0), 2)
+        total_charges = round(
+            float(_6agg['d'] or 0) - float(_6agg['c'] or 0) +
+            max(float(_haoc_agg['d'] or 0) - float(_haoc_agg['c'] or 0), 0), 2)
+        resultat_net  = round(total_produits - total_charges, 2)
 
         return Response({
             'exercice':       exercice.annee_scolaire,
@@ -522,156 +587,113 @@ class CompteResultatView(APIView):
                 'impot':                    round(impot, 2),
                 'resultat_net':             round(resultat_net, 2),
             },
-            'detail_produits': self._detail(entries, ['706', '707', '708', '701', '74', '75', '781'], 'credit', plan),
-            'detail_charges':  self._detail(entries, ['601', '602', '604', '606', '61', '621', '622', '623', '624', '625', '641', '6413', '651', '661', '662', '6641', '681'], 'debit', plan),
-            'total_produits':  round(total_produits, 2),
-            'total_charges':   round(total_charges, 2),
-            'resultat_net':    round(resultat_net, 2),
+            'detail_produits': self._detail(entries, ['7', '82', '84', '86', '88'], 'credit', plan),
+            'detail_charges':  self._detail(entries, ['6', '81', '83', '85', '87', '89'], 'debit', plan),
+            'total_produits':  total_produits,
+            'total_charges':   total_charges,
+            'resultat_net':    resultat_net,
         })
+
+
+# ── Helpers Bilan / TFT SYSCOHADA ────────────────────────────────────────────
+def _compute_account_sfs(entries, exercice, tenant):
+    """SF_D / SF_C par compte, soldes initiaux tréso inclus."""
+    MOBILE_SUBS = ('5521', '5522', '5523')
+    raw = {}
+    for r in entries.exclude(no_compte__in=MOBILE_SUBS).values('no_compte').annotate(
+        d=Sum('debit'), c=Sum('credit')
+    ):
+        raw[r['no_compte']] = [float(r['d'] or 0), float(r['c'] or 0)]
+    for no, init in [('521', float(exercice.solde_initial_banque)),
+                     ('571', float(exercice.solde_initial_caisse))]:
+        if no in raw:
+            raw[no][0] += init
+        elif init:
+            raw[no] = [init, 0.0]
+    mob_d, mob_c = _mobile_aggregate(tenant, exercice)
+    raw['552'] = [float(exercice.solde_initial_mobile) + mob_d, mob_c]
+    return {no: {'sf_d': round(max(d - c, 0), 2), 'sf_c': round(max(c - d, 0), 2)}
+            for no, (d, c) in raw.items()}
+
+
+def _sum_sf_side(sfs, side, prefixes, plan):
+    """Somme sf_d ou sf_c pour les comptes dont le numéro commence par l'un des préfixes."""
+    total = 0.0
+    detail = []
+    for no in sorted(sfs):
+        amt = sfs[no][side]
+        if amt > 0 and any(no.startswith(p) for p in prefixes):
+            total += amt
+            detail.append({'compte': no, 'libelle': plan.get(no, no), 'montant': round(amt, 2)})
+    return round(total, 2), detail
 
 
 # ── Bilan SYSCOHADA Révisé (Articles 7-11 et 23 AUDCIF) ─────────────────────
 class BilanView(APIView):
     permission_classes = [IsAuthenticated]
 
-    IMMO_INCORPOREL  = ['211', '212', '213', '214', '215', '216', '217', '218']
-    IMMO_CORPOREL    = ['221', '222', '231', '232', '241', '244', '245']
-    IMMO_FINANCIER   = ['261', '262', '271', '272', '274', '275', '276', '277']
-    DETTES_FIN       = ['16', '17', '18', '19']
-    DETTES_FISCALES  = ['441', '442', '443', '444', '445', '447']
-    DETTES_SOCIALES  = ['421', '422', '423', '424', '431', '432', '433']
-
-    def _solde_comptes(self, entries, prefixes):
-        q = Q()
-        for p in prefixes:
-            q |= Q(no_compte__startswith=p) if len(p) <= 3 else Q(no_compte=p)
-        agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
-        return float(agg['d'] or 0), float(agg['c'] or 0)
-
-    def _detail_comptes(self, entries, prefixes, plan_dict=None):
-        _plan = plan_dict or PLAN_COMPTABLE
-        q = Q()
-        for p in prefixes:
-            q |= Q(no_compte__startswith=p) if len(p) <= 3 else Q(no_compte=p)
-        rows = entries.filter(q).values('no_compte').annotate(
-            d=Sum('debit'), c=Sum('credit')
-        )
-        result = []
-        for r in rows:
-            net = float(r['d'] or 0) - float(r['c'] or 0)
-            if net > 0:
-                result.append({
-                    'compte':  r['no_compte'],
-                    'libelle': _plan.get(r['no_compte'], r['no_compte']),
-                    'montant': round(net, 2),
-                })
-        return result
-
     def get(self, request):
-        tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        tenant    = get_tenant(request)
+        exercice  = get_exercice(tenant)
         if not exercice:
             return Response({})
 
-        plan       = get_plan_dict(tenant)
-        entries    = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
-        paiements  = Paiement.objects.filter(tenant=tenant, exercice=exercice)
-        caht       = _sum_paiements(paiements)
-        systeme    = _detecter_systeme(caht)
+        plan      = get_plan_dict(tenant)
+        entries   = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
+        paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
+        caht      = _sum_paiements(paiements)
+        systeme   = _detecter_systeme(caht)
 
-        # ── ACTIF IMMOBILISÉ ─────────────────────────────────────────────
-        immo_incorporel = self._detail_comptes(entries, self.IMMO_INCORPOREL, plan)
-        immo_corporel   = self._detail_comptes(entries, self.IMMO_CORPOREL, plan)
-        immo_financier  = self._detail_comptes(entries, self.IMMO_FINANCIER, plan)
-        # Déduire dotations aux amortissements (681) des immobilisations corporelles
-        amort_d, amort_c = self._solde_comptes(entries, ['681'])
-        amort_net = float(amort_d)
+        sfs = _compute_account_sfs(entries, exercice, tenant)
 
-        total_incorporel = sum(x['montant'] for x in immo_incorporel)
-        total_corporel   = max(sum(x['montant'] for x in immo_corporel) - amort_net, 0)
-        total_financier  = sum(x['montant'] for x in immo_financier)
-        total_immobilise = round(total_incorporel + total_corporel + total_financier, 2)
+        # ── A — Actif Immobilisé ─────────────────────────────────────────
+        incorporel_t, incorporel_d = _sum_sf_side(sfs, 'sf_d', ['20', '21'], plan)
+        corporel_t,   corporel_d   = _sum_sf_side(sfs, 'sf_d', ['22', '23', '24', '25'], plan)
+        financier_t,  financier_d  = _sum_sf_side(sfs, 'sf_d', ['26', '27'], plan)
+        amort_t, _                 = _sum_sf_side(sfs, 'sf_c', ['28'], plan)
+        total_corporel_net = round(max(corporel_t - amort_t, 0), 2)
+        total_immobilise   = round(incorporel_t + total_corporel_net + financier_t, 2)
 
-        # ── ACTIF CIRCULANT AO ────────────────────────────────────────────
-        # Créances clients : reste à payer par élève (solde réel)
-        from django.db.models import Value, DecimalField
-        from django.db.models.functions import Coalesce
-        from django.db.models import Sum as DSum
+        # ── B — Actif Circulant AO (stocks + créances tiers 40-47 SF_D) ─
+        stocks_t,   stocks_d   = _sum_sf_side(sfs, 'sf_d', ['31','32','33','34','35','36','37','38'], plan)
+        creances_t, creances_d = _sum_sf_side(sfs, 'sf_d', ['40','41','42','43','44','45','46','47'], plan)
+        prov_b_t,   _          = _sum_sf_side(sfs, 'sf_c', ['49'], plan)
+        total_circulant_ao = round(stocks_t + creances_t - prov_b_t, 2)
 
-        eleves = Eleve.objects.filter(tenant=tenant, exercice=exercice).annotate(
-            paye=Coalesce(
-                DSum('paiements__montant_inscription') +
-                DSum('paiements__montant_mensualite')  +
-                DSum('paiements__montant_uniforme')    +
-                DSum('paiements__montant_fournitures') +
-                DSum('paiements__montant_cantine')     +
-                DSum('paiements__montant_divers'),
-                Value(0), output_field=DecimalField()
-            )
-        ).select_related('section')
+        # ── C — Actif Circulant HAO (48x SF_D) ───────────────────────────
+        hao_actif_t, hao_actif_d = _sum_sf_side(sfs, 'sf_d', ['48'], plan)
 
-        creances_clients = round(sum(
-            max(float(e.total_attendu) - float(e.paye or 0), 0) for e in eleves
-        ), 2)
-        total_circulant_ao = creances_clients
+        # ── D — Trésorerie-Actif ─────────────────────────────────────────
+        treso_actif_t, treso_actif_d = _sum_sf_side(sfs, 'sf_d', ['51','52','53','54','55','57','58'], plan)
 
-        # ── TRÉSORERIE-ACTIF & TRÉSORERIE-PASSIF ─────────────────────────
-        so = {
-            '521': float(exercice.solde_initial_banque),
-            '571': float(exercice.solde_initial_caisse),
-            '552': float(exercice.solde_initial_mobile),
-        }
-        TRESO_PLAN = {'521': 'Banque — compte courant', '552': 'Mobile Money (WAVE / Orange / Free)', '571': 'Caisse'}
-        tresorerie_actif  = []
-        tresorerie_passif = []
-        total_treso_actif = total_treso_passif = 0
+        total_actif = round(total_immobilise + total_circulant_ao + hao_actif_t + treso_actif_t, 2)
 
-        for no, libelle in TRESO_PLAN.items():
-            if no == '552':
-                mob_d, mob_c = _mobile_aggregate(tenant, exercice)
-                solde = so['552'] + mob_d - mob_c
-            else:
-                agg = entries.filter(no_compte=no).aggregate(d=Sum('debit'), c=Sum('credit'))
-                solde = so.get(no, 0) + float(agg['d'] or 0) - float(agg['c'] or 0)
-
-            if solde > 0:
-                tresorerie_actif.append({'compte': no, 'libelle': libelle, 'montant': round(solde, 2)})
-                total_treso_actif += solde
-            elif solde < 0:
-                tresorerie_passif.append({'compte': no, 'libelle': f"Découvert — {libelle}", 'montant': round(abs(solde), 2)})
-                total_treso_passif += abs(solde)
-
-        total_actif = round(total_immobilise + total_circulant_ao + total_treso_actif, 2)
-
-        # ── CAPITAUX PROPRES & RESSOURCES ASSIMILÉES ──────────────────────
-        capital = float(exercice.solde_initial_caisse +
-                        exercice.solde_initial_banque +
+        # ── F — Capitaux Propres ─────────────────────────────────────────
+        capital = float(exercice.solde_initial_banque + exercice.solde_initial_caisse +
                         exercice.solde_initial_mobile)
-        # Résultat net SYSCOHADA Révisé : net crédit des produits - net débit des charges
         _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
         _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
-        produits_net = float(_7agg['c'] or 0) - float(_7agg['d'] or 0)
-        charges_net  = float(_6agg['d'] or 0) - float(_6agg['c'] or 0)
-        resultat_net = round(produits_net - charges_net, 2)
+        resultat_net = round(
+            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) -
+            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)), 2)
         total_capitaux = round(capital + resultat_net, 2)
 
-        # ── DETTES FINANCIÈRES & RESSOURCES ASSIMILÉES (classe 16, 17, 18, 19) ──
-        dettes_fin_d, dettes_fin_c = self._solde_comptes(entries, self.DETTES_FIN)
-        total_dettes_fin = round(max(dettes_fin_c - dettes_fin_d, 0), 2)
+        # ── G — Dettes Financières (16x-19x SF_C) ───────────────────────
+        dettes_fin_t, dettes_fin_d = _sum_sf_side(sfs, 'sf_c', ['16', '17', '18', '19'], plan)
 
-        # ── PASSIF CIRCULANT AO ───────────────────────────────────────────
-        agg_401 = entries.filter(no_compte='401').aggregate(d=Sum('debit'), c=Sum('credit'))
-        dettes_fournisseurs = round(max(float(agg_401['c'] or 0) - float(agg_401['d'] or 0), 0), 2)
+        # ── H — Passif Circulant AO (40x-47x SF_C) ──────────────────────
+        dettes_ao_t, dettes_ao_d = _sum_sf_side(sfs, 'sf_c', ['40','41','42','43','44','45','46','47'], plan)
 
-        agg_fisc = entries.filter(no_compte__in=self.DETTES_FISCALES).aggregate(d=Sum('debit'), c=Sum('credit'))
-        dettes_fiscales = round(max(float(agg_fisc['c'] or 0) - float(agg_fisc['d'] or 0), 0), 2)
+        # ── I — Passif Circulant HAO (48x SF_C) ─────────────────────────
+        hao_passif_t, hao_passif_d = _sum_sf_side(sfs, 'sf_c', ['48'], plan)
 
-        agg_soc = entries.filter(no_compte__in=self.DETTES_SOCIALES).aggregate(d=Sum('debit'), c=Sum('credit'))
-        dettes_sociales = round(max(float(agg_soc['c'] or 0) - float(agg_soc['d'] or 0), 0), 2)
+        # ── J — Trésorerie-Passif (découverts 5x SF_C) ──────────────────
+        treso_passif_t, treso_passif_d = _sum_sf_side(sfs, 'sf_c', ['51','52','53','54','55','57','58'], plan)
 
-        total_passif_circ_ao = round(dettes_fournisseurs + dettes_fiscales + dettes_sociales, 2)
+        total_passif = round(total_capitaux + dettes_fin_t + dettes_ao_t + hao_passif_t + treso_passif_t, 2)
 
-        total_passif = round(total_capitaux + total_dettes_fin + total_passif_circ_ao + total_treso_passif, 2)
+        def _sub(detail, prefixes):
+            return round(sum(x['montant'] for x in detail if any(x['compte'].startswith(p) for p in prefixes)), 2)
 
         return Response({
             'exercice':   exercice.annee_scolaire,
@@ -681,58 +703,64 @@ class BilanView(APIView):
             'seuil_smt':  SEUIL_SMT_SERVICES,
             'actif': {
                 'immobilise': {
-                    'incorporel':    immo_incorporel,
-                    'corporel':      immo_corporel,
-                    'financier':     immo_financier,
-                    'total':         total_immobilise,
+                    'incorporel': incorporel_d,
+                    'corporel':   corporel_d,
+                    'financier':  financier_d,
+                    'amort':      round(amort_t, 2),
+                    'total':      total_immobilise,
                 },
                 'circulant_ao': {
-                    'stocks':          0,
-                    'creances_clients': creances_clients,
-                    'total':           total_circulant_ao,
+                    'stocks':   stocks_d,
+                    'creances': creances_d,
+                    'total':    total_circulant_ao,
                 },
-                'circulant_hao': 0,
+                'circulant_hao': {
+                    'detail': hao_actif_d,
+                    'total':  hao_actif_t,
+                },
                 'tresorerie_actif': {
-                    'detail': tresorerie_actif,
-                    'total':  round(total_treso_actif, 2),
+                    'detail': treso_actif_d,
+                    'total':  treso_actif_t,
                 },
-                'ecart_conversion': 0,
                 'total_actif': total_actif,
             },
             'passif': {
                 'capitaux_propres': {
                     'capital':      round(capital, 2),
-                    'resultat_net': round(resultat_net, 2),
+                    'resultat_net': resultat_net,
                     'total':        total_capitaux,
                 },
                 'dettes_financieres': {
-                    'emprunts': total_dettes_fin,
-                    'total':    total_dettes_fin,
+                    'detail': dettes_fin_d,
+                    'total':  dettes_fin_t,
                 },
                 'passif_circulant_ao': {
-                    'fournisseurs':     dettes_fournisseurs,
-                    'dettes_fiscales':  dettes_fiscales,
-                    'dettes_sociales':  dettes_sociales,
-                    'total':            total_passif_circ_ao,
+                    'detail':           dettes_ao_d,
+                    'fournisseurs':     _sub(dettes_ao_d, ['40', '401', '404']),
+                    'dettes_fiscales':  _sub(dettes_ao_d, ['44']),
+                    'dettes_personnel': _sub(dettes_ao_d, ['42']),
+                    'dettes_sociales':  _sub(dettes_ao_d, ['43']),
+                    'total':            dettes_ao_t,
                 },
-                'passif_circulant_hao': 0,
+                'passif_circulant_hao': {
+                    'detail': hao_passif_d,
+                    'total':  hao_passif_t,
+                },
                 'tresorerie_passif': {
-                    'detail': tresorerie_passif,
-                    'total':  round(total_treso_passif, 2),
+                    'detail': treso_passif_d,
+                    'total':  treso_passif_t,
                 },
-                'ecart_conversion': 0,
                 'total_passif': total_passif,
             },
             'equilibre': abs(total_actif - total_passif) < 1,
         })
 
 
-# ── Tableau des Flux de Trésorerie ────────────────────────────────────────────
+# ── Tableau des Flux de Trésorerie — Méthode Indirecte (AUDCIF Art. 32) ──────
 class TableauFluxView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from django.db.models.functions import TruncMonth
         from django.db.models import Count
 
         tenant   = get_tenant(request)
@@ -742,40 +770,60 @@ class TableauFluxView(APIView):
 
         paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
         entries   = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
+        plan      = get_plan_dict(tenant)
         systeme   = _detecter_systeme(_sum_paiements(paiements))
 
-        # SYSCOHADA : encaissements = débits sur comptes de trésorerie (5xx) source PAIEMENT
+        sfs = _compute_account_sfs(entries, exercice, tenant)
+
+        # ── A — Flux opérationnels (méthode indirecte) ───────────────────
+        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
+        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
+        resultat_net = round(
+            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) -
+            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)), 2)
+
+        amort = round(float(entries.filter(
+            Q(no_compte__startswith='681') | Q(no_compte__startswith='691')
+        ).aggregate(t=Sum('debit'))['t'] or 0), 2)
+
+        actif_b_t, _ = _sum_sf_side(sfs, 'sf_d',
+            ['31','32','33','34','35','36','37','38','40','41','42','43','44','45','46','47'], plan)
+        passif_h_t, _ = _sum_sf_side(sfs, 'sf_c',
+            ['40','41','42','43','44','45','46','47'], plan)
+        var_actif_b  = round(-actif_b_t, 2)
+        var_passif_h = round(passif_h_t, 2)
+        flux_a = round(resultat_net + amort + var_actif_b + var_passif_h, 2)
+
+        # ── B — Flux d'investissement ────────────────────────────────────
         TRESO_COMPTES = list(MOBILE_ACCOUNTS) + ['521', '522', '571']
-        agg_enc = entries.filter(
-            source='PAIEMENT',
-            no_compte__in=TRESO_COMPTES,
-            debit__gt=0,
-        ).aggregate(t=Sum('debit'))
-        encaissements_clients = float(agg_enc['t'] or 0) or _sum_paiements(paiements)
-
-        # SYSCOHADA : décaissements = crédits sur comptes de trésorerie source CHARGE/PAIE/BUDGET/INVEST
-        agg_dec = entries.filter(
-            source__in=('CHARGE', 'PAIE', 'BUDGET', 'INVEST'),
-            no_compte__in=TRESO_COMPTES,
-            credit__gt=0,
+        agg_inv_out = entries.filter(
+            source='INVEST', no_compte__in=TRESO_COMPTES, credit__gt=0,
         ).aggregate(t=Sum('credit'))
-        decaissements_charges = float(agg_dec['t'] or 0)
+        acquisitions = round(float(agg_inv_out['t'] or 0), 2)
 
-        # Décaissements investissements (flux investissements SYSCOHADA)
-        agg_inv = entries.filter(
-            source='INVEST',
-            no_compte__startswith='2',
-            debit__gt=0,
+        agg_inv_in = entries.filter(
+            source__in=('INVEST', 'CESSION'), no_compte__in=TRESO_COMPTES, debit__gt=0,
         ).aggregate(t=Sum('debit'))
-        flux_investissement = -float(agg_inv['t'] or 0)
+        cessions = round(float(agg_inv_in['t'] or 0), 2)
 
-        plan           = get_plan_dict(tenant)
-        flux_exploitation = encaissements_clients - decaissements_charges
+        flux_b = round(cessions - acquisitions, 2)
 
-        solde_initial = float(exercice.solde_initial_caisse +
-                              exercice.solde_initial_banque +
-                              exercice.solde_initial_mobile)
-        solde_final   = round(solde_initial + flux_exploitation + flux_investissement, 2)
+        # ── C — Flux de financement ──────────────────────────────────────
+        agg_empr = entries.filter(
+            Q(no_compte__startswith='16') | Q(no_compte__startswith='17') |
+            Q(no_compte__startswith='18') | Q(no_compte__startswith='19')
+        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        nouveaux_emprunts = round(float(agg_empr['c'] or 0), 2)
+        remboursements    = round(float(agg_empr['d'] or 0), 2)
+        flux_c = round(nouveaux_emprunts - remboursements, 2)
+
+        # ── TRÉSORERIE ────────────────────────────────────────────────────
+        treso_actif_t,  _ = _sum_sf_side(sfs, 'sf_d', ['51','52','53','54','55','57','58'], plan)
+        treso_passif_t, _ = _sum_sf_side(sfs, 'sf_c', ['51','52','53','54','55','57','58'], plan)
+        tn_fin   = round(treso_actif_t - treso_passif_t, 2)
+        tn_debut = round(float(exercice.solde_initial_banque + exercice.solde_initial_caisse +
+                               exercice.solde_initial_mobile), 2)
+        variation = round(flux_a + flux_b + flux_c, 2)
 
         par_mode = paiements.values('mode_paiement').annotate(
             nb=Count('id'),
@@ -784,44 +832,34 @@ class TableauFluxView(APIView):
                   Sum('montant_cantine')     + Sum('montant_divers')
         ).order_by('-total')
 
-        mensuel = paiements.annotate(mois=TruncMonth('date_paiement')).values('mois').annotate(
-            encaisse=Sum('montant_inscription') + Sum('montant_mensualite') +
-                     Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                     Sum('montant_cantine')     + Sum('montant_divers')
-        ).order_by('mois')
-
-        charges_detail = entries.filter(
-            source='CHARGE', no_compte__startswith='6'
-        ).values('no_compte').annotate(total=Sum('debit')).order_by('-total')
-
         return Response({
-            'exercice':  exercice.annee_scolaire,
-            'methode':   'Directe',
-            'systeme':   systeme,
-            'flux_exploitation': {
-                'encaissements_clients': round(encaissements_clients, 2),
-                'decaissements_charges': round(decaissements_charges, 2),
-                'flux_net':              round(flux_exploitation, 2),
+            'exercice': exercice.annee_scolaire,
+            'methode':  'Indirecte',
+            'systeme':  systeme,
+            'flux_a': {
+                'resultat_net':  resultat_net,
+                'amort':         amort,
+                'var_actif_b':   var_actif_b,
+                'var_passif_h':  var_passif_h,
+                'flux_net':      flux_a,
             },
-            'flux_investissement': {'acquisitions': round(abs(flux_investissement), 2), 'cessions': 0, 'flux_net': round(flux_investissement, 2)},
-            'flux_financement': {
-                'apports_capital': round(solde_initial, 2),
-                'flux_net':        round(solde_initial, 2),
+            'flux_b': {
+                'acquisitions': acquisitions,
+                'cessions':     cessions,
+                'flux_net':     flux_b,
+            },
+            'flux_c': {
+                'emprunts':       nouveaux_emprunts,
+                'remboursements': remboursements,
+                'flux_net':       flux_c,
             },
             'tresorerie': {
-                'solde_initial': round(solde_initial, 2),
-                'variation':     round(flux_exploitation, 2),
-                'solde_final':   round(solde_final, 2),
+                'tn_debut':  tn_debut,
+                'variation': variation,
+                'tn_fin':    tn_fin,
             },
             'par_mode': [{'mode': m['mode_paiement'], 'nb': m['nb'],
                           'total': float(m['total'] or 0)} for m in par_mode],
-            'flux_mensuels': [{'mois': m['mois'].strftime('%b %Y') if m['mois'] else '',
-                               'encaisse': float(m['encaisse'] or 0)}
-                              for m in mensuel if m['mois']],
-            'charges_detail': [{'compte': c['no_compte'],
-                                 'libelle': plan.get(c['no_compte'], c['no_compte']),
-                                 'montant': float(c['total'] or 0)}
-                                for c in charges_detail],
         })
 
 
@@ -1045,7 +1083,7 @@ class ChargeView(APIView):
             return Response({'error': 'Aucun exercice actif'}, status=400)
 
         data      = request.data
-        no_compte = data.get('no_compte', '606')
+        no_compte = data.get('no_compte', '658')  # 658 Charges diverses — 606 n'existe pas en SYSCOHADA
         montant   = float(data.get('montant', 0))
         libelle   = data.get('libelle', '')
         date      = data.get('date', str(timezone.now().date()))
@@ -1096,6 +1134,93 @@ class ChargeView(APIView):
 
         return Response({'success': True, 'no_piece': no_piece,
                          'montant': montant, 'libelle': libelle}, status=201)
+
+    def put(self, request, pk):
+        """Modification SYSCOHADA : contre-écritures sur l'original + nouvelle charge."""
+        import datetime
+        import re as _re
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+        try:
+            entry = JournalEntry.objects.get(id=pk)
+        except JournalEntry.DoesNotExist:
+            return Response({'error': 'Écriture introuvable'}, status=404)
+
+        entries_orig = JournalEntry.objects.filter(
+            tenant=tenant, source='CHARGE', no_piece=entry.no_piece
+        )
+
+        # 1 — Contre-écritures (annulation de l'original)
+        from django.db.models import Max as _Max
+        last = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+            _Max('no_piece')
+        )['no_piece__max']
+        nums = _re.findall(r'\d+', last or 'CHG-0000')
+        no_piece_annul = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
+
+        for e in entries_orig:
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
+                source='CHARGE', source_id=None,
+                no_compte=e.no_compte, debit=e.credit, credit=e.debit,
+                libelle=f"MODIF — {e.libelle}", ordre=e.ordre,
+            )
+
+        # 2 — Nouvelle charge avec les données modifiées
+        data_new      = request.data
+        no_compte_new = data_new.get('no_compte', entry.no_compte)
+        montant_new   = float(data_new.get('montant', 0))
+        libelle_new   = data_new.get('libelle', entry.libelle)
+        date_new      = data_new.get('date', str(entry.date_ecriture))
+        compte_tresorerie_new = data_new.get('compte_credit', '571')
+
+        if montant_new <= 0:
+            return Response({'error': 'Montant invalide'}, status=400)
+
+        last2 = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+            _Max('no_piece')
+        )['no_piece__max']
+        nums2 = _re.findall(r'\d+', last2 or 'CHG-0000')
+        no_piece_new = f"CHG-{int(nums2[-1]) + 1:04d}" if nums2 else 'CHG-0001'
+
+        compte_fournisseur = self.COMPTE_FOURN_MAP.get(
+            no_compte_new[0] if no_compte_new else '6', '401'
+        )
+        libelle_compte = self.PLAN_CHARGES.get(no_compte_new, no_compte_new)
+        libelle_fourn  = self.PLAN_FOURNISSEURS.get(compte_fournisseur,
+                                                      f"Fournisseur ({compte_fournisseur})")
+
+        ecritures_new = [
+            dict(ordre=1, no_compte=no_compte_new,      debit=montant_new, credit=0,
+                 libelle=f"{libelle_compte} — {libelle_new}"),
+            dict(ordre=2, no_compte=compte_fournisseur,  debit=0, credit=montant_new,
+                 libelle=f"{libelle_fourn} — {libelle_new}"),
+            dict(ordre=3, no_compte=compte_fournisseur,  debit=montant_new, credit=0,
+                 libelle=f"Règlement {libelle_fourn} — {libelle_new}"),
+            dict(ordre=4, no_compte=compte_tresorerie_new, debit=0, credit=montant_new,
+                 libelle=f"Règlement {libelle_fourn} — {libelle_new}"),
+        ]
+        for e in ecritures_new:
+            JournalEntry.objects.create(
+                tenant=tenant, exercice=exercice,
+                no_piece=no_piece_new, date_ecriture=date_new,
+                source='CHARGE', source_id=None, **e
+            )
+
+        from core.models import log_audit
+        log_audit(request, 'MODIFIER', 'Charge', entry.no_piece,
+                  f"Modification {entry.no_piece} → {no_piece_new} — {montant_new:,.0f} FCFA")
+
+        return Response({
+            'success':       True,
+            'ancien_no_piece': entry.no_piece,
+            'no_piece_annul':  no_piece_annul,
+            'no_piece_new':    no_piece_new,
+            'montant':         montant_new,
+        })
 
     def delete(self, request, pk):
         """Annulation par contre-écritures SYSCOHADA (pas de suppression physique)."""
@@ -1444,22 +1569,32 @@ class BudgetComptabiliserView(APIView):
 
 # ── Investissements / Immobilisations ─────────────────────────────────────────
 PLAN_IMMO = {
-    '211': 'Terrains',
-    '221': 'Bâtiments',
-    '231': 'Matériel et outillage',
-    '241': 'Mobilier',
-    '244': 'Matériel informatique',
+    '211': 'Frais de développement capitalisés',
+    '212': 'Brevets, licences, logiciels',
+    '221': 'Terrains naturels',
+    '222': 'Terrains bâtis',
+    '231': 'Bâtiments sur sol propre',
+    '232': 'Bâtiments sur sol d\'autrui',
+    '233': 'Installations techniques et agencements',
+    '234': 'Aménagements et agencements divers',
+    '241': 'Matériel et outillage',
+    '244': 'Matériel et mobilier',
     '245': 'Matériel de transport',
-    '248': 'Autres immobilisations corporelles',
+    '248': 'Autres matériels et équipements',
 }
 PLAN_AMORT = {
-    '2811': 'Amort. Terrains',
-    '2821': 'Amort. Bâtiments',
-    '2831': 'Amort. Matériel et outillage',
-    '2841': 'Amort. Mobilier',
-    '2844': 'Amort. Matériel informatique',
-    '2845': 'Amort. Matériel de transport',
-    '2848': 'Amort. Autres immo. corporelles',
+    '2811': 'Amort. frais de développement',
+    '2812': 'Amort. brevets, licences, logiciels',
+    '2821': 'Amort. terrains naturels',
+    '2822': 'Amort. terrains bâtis',
+    '2831': 'Amort. bâtiments sur sol propre',
+    '2832': 'Amort. bâtiments sur sol d\'autrui',
+    '2833': 'Amort. installations techniques',
+    '2834': 'Amort. aménagements et agencements',
+    '2841': 'Amort. matériel et outillage',
+    '2844': 'Amort. matériel et mobilier',
+    '2845': 'Amort. matériel de transport',
+    '2848': 'Amort. autres matériels et équipements',
 }
 
 
@@ -1478,7 +1613,8 @@ def _immo_to_dict(immo):
         'valeur_nette_comptable': immo.valeur_nette_comptable,
         'no_compte_immobilisation': immo.no_compte_immobilisation,
         'no_compte_amortissement':  immo.no_compte_amortissement,
-        'libelle_compte_immo':   PLAN_IMMO.get(immo.no_compte_immobilisation, immo.no_compte_immobilisation),
+        'libelle_compte_immo':   PLAN_IMMO.get(immo.no_compte_immobilisation)
+                                 or PLAN_COMPTABLE.get(immo.no_compte_immobilisation, immo.no_compte_immobilisation),
         'compte_fournisseur':    immo.compte_fournisseur,
         'mode_reglement':        immo.mode_reglement,
         'compte_tresorerie':     immo.compte_tresorerie,
@@ -1551,7 +1687,9 @@ class ImmobilisationView(APIView):
         mode_reglement     = data.get('mode_reglement', '')
         compte_tresorerie  = data.get('compte_tresorerie', '571') if mode_reglement else ''
 
-        if compte_fournisseur not in ('404', '481'):
+        # Comptes fournisseurs valides pour acquisition d'immobilisation (SYSCOHADA)
+        COMPTES_FOURN_IMMO_VALIDES = {'401', '402', '404', '405', '408', '481', '484'}
+        if compte_fournisseur not in COMPTES_FOURN_IMMO_VALIDES:
             compte_fournisseur = '404'
 
         immo = Immobilisation.objects.create(
