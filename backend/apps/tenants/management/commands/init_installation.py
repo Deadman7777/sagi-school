@@ -1,14 +1,17 @@
 """
-Initialise une nouvelle installation SAGI SCHOOL :
+Initialise une nouvelle installation SAGI SCHOOL chez une école cliente :
 - Tenant (école)
 - Licence ESSAI 30 jours
 - Exercice scolaire courant
-- User SUPER_ADMIN
+- User ADMIN_ECOLE (le directeur / admin principal de cette école)
+
+Le SUPER_ADMIN (propriétaire du produit HADY GESMAN) n'est PAS créé ici :
+il est géré séparément via `manage.py createsuperuser`.
 
 Données passées via un fichier JSON (--payload chemin.json) pour éviter les
 problèmes d'échappement shell avec les caractères spéciaux du mot de passe.
 
-Idempotent : si un super_admin existe déjà, la commande quitte sans rien
+Idempotent : si une école existe déjà, la commande quitte sans rien
 faire (réinstallation / lancement répété ne casse rien).
 """
 import json
@@ -32,7 +35,7 @@ REQUIRED_FIELDS = [
 
 
 class Command(BaseCommand):
-    help = "Crée Tenant + Licence ESSAI + Exercice + super_admin (1ère installation)"
+    help = "Crée Tenant + Licence ESSAI + Exercice + admin_ecole (1ère installation école cliente)"
 
     def add_arguments(self, parser):
         parser.add_argument('--payload', required=True,
@@ -49,9 +52,9 @@ class Command(BaseCommand):
         if missing:
             raise CommandError(f"Champs manquants : {', '.join(missing)}")
 
-        if User.objects.filter(role='SUPER_ADMIN').exists():
+        if Tenant.objects.exists():
             self.stdout.write(self.style.WARNING(
-                "Un super_admin existe déjà — installation déjà initialisée."
+                "Une école existe déjà — installation déjà initialisée."
             ))
             return
 
@@ -85,11 +88,13 @@ class Command(BaseCommand):
                 devise='FCFA',
             )
 
-            User.objects.create_superuser(
+            User.objects.create_user(
                 email=data['admin_email'],
                 password=data['admin_password'],
                 nom=data['admin_nom'],
                 prenom=data.get('admin_prenom', ''),
+                role='ADMIN_ECOLE',
+                tenant=tenant,
                 actif=True,
             )
 
