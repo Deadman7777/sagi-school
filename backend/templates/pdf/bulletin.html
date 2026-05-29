@@ -3,52 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; }
+  /* ── PAGE A4 + marges réduites ── */
+  @page { size: A4; margin: 8mm 10mm; }
+
+  body { font-family: Arial, sans-serif; font-size: 7.5pt; color: #1a1a1a; margin: 0; }
+
+  /* Le bulletin ne se coupe jamais entre 2 pages.
+     Pour l'impression "2 pages par feuille", 2 bulletins courts tiennent sur 1 A4. */
+  .bulletin { page-break-inside: avoid; }
 
   /* ── EN-TÊTE ── */
-  .rep-line  { text-align: center; font-size: 8pt; color: #555; margin-bottom: 2pt; }
-  .school-name { text-align: center; font-size: 13pt; font-weight: bold; color: #1a3c5e; margin-bottom: 2pt; }
-  .school-sub  { text-align: center; font-size: 8pt; color: #555; margin-bottom: 4pt; }
-  .titre-bul   { text-align: center; font-size: 14pt; font-weight: bold; color: #1a3c5e; margin-bottom: 8pt; }
-  .sep-line    { border-bottom: 2pt solid #1a3c5e; margin-bottom: 8pt; }
+  .rep-line  { text-align: center; font-size: 6.5pt; color: #555; margin-bottom: 1pt; }
+  .school-name { text-align: center; font-size: 10pt; font-weight: bold; color: #1a3c5e; margin-bottom: 1pt; }
+  .school-sub  { text-align: center; font-size: 6.5pt; color: #555; margin-bottom: 2pt; }
+  .titre-bul   { text-align: center; font-size: 10pt; font-weight: bold; color: #1a3c5e; margin-bottom: 4pt; }
+  .sep-line    { border-bottom: 1.5pt solid #1a3c5e; margin-bottom: 4pt; }
 
   /* ── TABLEAUX GÉNÉRAUX ── */
-  table { border-collapse: collapse; width: 100%; }
-  .mb8  { margin-bottom: 8pt; }
-  .mb6  { margin-bottom: 6pt; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .mb4 { margin-bottom: 4pt; }
 
   /* ── INFO ÉLÈVE ── */
-  .tbl-info td { border: 1pt solid #b0bec5; padding: 4pt 6pt; font-size: 9pt; }
-  .lbl { color: #666; font-size: 8pt; }
+  .tbl-info td { border: 0.75pt solid #b0bec5; padding: 2pt 4pt; font-size: 7pt; }
+  .lbl { color: #666; font-size: 6pt; }
   .val { font-weight: bold; color: #1a1a1a; }
 
   /* ── STATS CLASSE ── */
-  .tbl-stats td { border: 1pt solid #90a4ae; padding: 5pt; text-align: center; background-color: #e8f0fe; }
-  .stat-val { font-size: 14pt; font-weight: bold; color: #1a3c5e; }
-  .stat-lbl { font-size: 7pt; color: #546e7a; }
+  .tbl-stats td { border: 0.75pt solid #90a4ae; padding: 3pt; text-align: center; background-color: #e8f0fe; }
+  .stat-val { font-size: 11pt; font-weight: bold; color: #1a3c5e; }
+  .stat-lbl { font-size: 5.5pt; color: #546e7a; }
 
   /* ── TABLEAU NOTES ── */
-  .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 4pt 5pt;
-                        font-size: 8pt; font-weight: bold; text-align: center; }
+  .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 2pt 4pt;
+                        font-size: 6.5pt; font-weight: bold; text-align: center; }
   .tbl-notes thead td.left { text-align: left; }
-  .tbl-notes tbody td { padding: 3pt 5pt; border-bottom: 1pt solid #dee2e6; font-size: 9pt;
-                         vertical-align: top; }
+  .tbl-notes tbody td { padding: 2pt 4pt; border-bottom: 0.5pt solid #dee2e6; font-size: 7pt;
+                         vertical-align: middle; }
   .tbl-notes tbody tr.pair td { background-color: #f8f9fa; }
-  .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 4pt 5pt;
-                        border-top: 2pt solid #1a3c5e; font-size: 9pt; }
+  .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 2pt 4pt;
+                        border-top: 1.5pt solid #1a3c5e; font-size: 7pt; }
 
   .tc { text-align: center; }
   .tr { text-align: right; }
   .moy-val { font-weight: bold; color: #1a3c5e; }
-  .rang-txt { font-weight: bold; color: #7b3a00; font-size: 8pt; }
-  .mat-nom  { font-weight: bold; font-size: 9pt; }
+  .rang-txt { font-weight: bold; color: #7b3a00; font-size: 6.5pt; }
+  .mat-nom  { font-weight: bold; font-size: 7pt; }
 
-  /* ── NOTES DETAIL — texte simple ── */
-  .det-line { font-size: 8pt; margin-bottom: 1pt; }
-  .det-lbl  { color: #546e7a; }
-  .det-val  { font-weight: bold; color: #1a3c5e; }
-  .det-abs  { font-weight: bold; color: #c62828; }
-  .det-nd   { color: #aaa; }
+  /* Colonne notes : wrap interne propre. Appréciation : jamais coupée. */
+  .col-notes { font-size: 6.5pt; line-height: 1.4; }
+  .col-app   { font-size: 6.5pt; white-space: nowrap; }
 
   /* ── APPRÉCIATIONS ── */
   .ap-ex  { color: #1b5e20; font-weight: bold; }
@@ -59,188 +62,158 @@
   .ap-in  { color: #b71c1c; }
 
   /* ── MENTION ── */
-  .mention-pos { border: 2pt solid #1565c0; padding: 6pt 8pt; margin-bottom: 8pt; background-color: #e3f2fd; }
-  .mention-neg { border: 2pt solid #e65100; padding: 6pt 8pt; margin-bottom: 8pt; background-color: #fff3e0; }
-  .final-pos   { border: 2pt solid #2e7d32; padding: 6pt 8pt; margin-bottom: 8pt; background-color: #e8f5e9; }
-  .final-neg   { border: 2pt solid #c62828; padding: 6pt 8pt; margin-bottom: 8pt; background-color: #ffebee; }
-  .mention-title { font-size: 8pt; font-weight: bold; text-transform: uppercase;
-                   letter-spacing: 0.3pt; margin-bottom: 3pt; }
-  .mention-text  { font-size: 10pt; font-weight: bold; color: #1a1a1a; }
+  .mention-pos { border: 1.5pt solid #1565c0; padding: 4pt 6pt; margin-bottom: 4pt; background-color: #e3f2fd; }
+  .mention-neg { border: 1.5pt solid #e65100; padding: 4pt 6pt; margin-bottom: 4pt; background-color: #fff3e0; }
+  .final-pos   { border: 1.5pt solid #2e7d32; padding: 4pt 6pt; margin-bottom: 4pt; background-color: #e8f5e9; }
+  .final-neg   { border: 1.5pt solid #c62828; padding: 4pt 6pt; margin-bottom: 4pt; background-color: #ffebee; }
+  .mention-title { font-size: 6.5pt; font-weight: bold; text-transform: uppercase;
+                   letter-spacing: 0.3pt; margin-bottom: 2pt; }
+  .mention-text  { font-size: 8pt; font-weight: bold; color: #1a1a1a; }
 
-  /* ── SIGNATURES ── */
-  .tbl-sig td { width: 33%; text-align: center; padding: 4pt 8pt; font-size: 9pt; }
-  .sig-line { border-top: 1pt solid #999; padding-top: 4pt; color: #444; }
+  /* ── SIGNATURES (compactes) ── */
+  .tbl-sig td { width: 33%; text-align: center; padding: 8pt 6pt 2pt; font-size: 7pt; }
+  .sig-line { border-top: 0.75pt solid #999; padding-top: 3pt; color: #444; }
 
   /* ── PIED ── */
-  .footer { font-size: 7pt; color: #aaa; text-align: center; margin-top: 10pt;
-            border-top: 1pt solid #ddd; padding-top: 4pt; }
+  .footer { font-size: 5.5pt; color: #aaa; text-align: center; margin-top: 4pt;
+            border-top: 0.5pt solid #ddd; padding-top: 2pt; }
 </style>
 </head>
 <body>
 
-<!-- ── EN-TÊTE ────────────────────────────────────────────────── -->
-<div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
-<div class="school-name">{{ tenant.nom|upper }}</div>
-<div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
-<div class="sep-line"></div>
-<div class="titre-bul">BULLETIN DE NOTES — {{ trimestre }}</div>
+<div class="bulletin">
 
-<!-- ── INFOS ÉLÈVE ─────────────────────────────────────────────── -->
-<table class="tbl-info mb6">
-  <tr>
-    <td style="width:28%">
-      <div class="lbl">Nom &amp; Prénom</div>
-      <div class="val">{{ eleve.nom_complet|upper }}</div>
-    </td>
-    <td style="width:22%">
-      <div class="lbl">Classe</div>
-      <div class="val">{{ eleve.classe }}</div>
-    </td>
-    <td style="width:15%">
-      <div class="lbl">Matricule</div>
-      <div class="val">{{ eleve.matricule }}</div>
-    </td>
-    <td style="width:20%">
-      <div class="lbl">Date de naissance</div>
-      <div class="val">{{ eleve.date_naissance }}</div>
-    </td>
-    <td style="width:15%">
-      <div class="lbl">Rang</div>
-      <div class="val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div>
-    </td>
-  </tr>
-</table>
+  <!-- ── EN-TÊTE ── -->
+  <div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
+  <div class="school-name">{{ tenant.nom|upper }}</div>
+  <div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
+  <div class="sep-line"></div>
+  <div class="titre-bul">BULLETIN DE NOTES — {{ trimestre }}</div>
 
-<!-- ── STATS CLASSE ────────────────────────────────────────────── -->
-<table class="tbl-stats mb6">
-  <tr>
-    <td style="width:25%">
-      <div class="stat-val">{{ stats.moy_generale }}</div>
-      <div class="stat-lbl">MOYENNE GÉNÉRALE</div>
-    </td>
-    <td style="width:25%">
-      <div class="stat-val">{{ stats.moy_classe }}</div>
-      <div class="stat-lbl">MOYENNE DE LA CLASSE</div>
-    </td>
-    <td style="width:25%">
-      <div class="stat-val" style="color:#2e7d32">{{ stats.moy_max }}</div>
-      <div class="stat-lbl">PLUS HAUTE</div>
-    </td>
-    <td style="width:25%">
-      <div class="stat-val" style="color:#c62828">{{ stats.moy_min }}</div>
-      <div class="stat-lbl">PLUS BASSE</div>
-    </td>
-  </tr>
-</table>
-
-<!-- ── TABLEAU DES NOTES ───────────────────────────────────────── -->
-<table class="tbl-notes mb8">
-  <thead>
+  <!-- ── INFOS ÉLÈVE ── -->
+  <table class="tbl-info mb4">
+    <colgroup>
+      <col style="width:30%"><col style="width:22%"><col style="width:13%"><col style="width:20%"><col style="width:15%">
+    </colgroup>
     <tr>
-      <td class="left" style="width:20%">MATIÈRE</td>
-      <td style="width:6%">COEF</td>
-      <td class="left" style="width:34%">DEVOIRS &amp; COMPOSITION</td>
-      <td style="width:12%">MOYENNE</td>
-      <td style="width:8%">POINTS</td>
-      <td style="width:7%">RANG</td>
-      <td class="left" style="width:13%">APPRÉCIATION</td>
+      <td><div class="lbl">Nom &amp; Prénom</div><div class="val">{{ eleve.nom_complet|upper }}</div></td>
+      <td><div class="lbl">Classe</div><div class="val">{{ eleve.classe }}</div></td>
+      <td><div class="lbl">Matricule</div><div class="val">{{ eleve.matricule }}</div></td>
+      <td><div class="lbl">Date de naissance</div><div class="val">{{ eleve.date_naissance }}</div></td>
+      <td><div class="lbl">Rang</div><div class="val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div></td>
     </tr>
-  </thead>
-  <tbody>
-    {% for m in matieres %}
-    <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
-      <td class="mat-nom">{{ m.nom }}</td>
-      <td class="tc">{{ m.coefficient }}</td>
-      <td>
-        {% if m.notes_detail %}
-          {% for nd in m.notes_detail %}
-          <div class="det-line">
-            <span class="det-lbl">{{ nd.label }} :</span>
-            {% if nd.valeur == 'Abs' %}
-              <span class="det-abs">ABS</span>
-            {% elif nd.valeur == '—' %}
-              <span class="det-nd">ND</span>
-            {% else %}
-              <span class="det-val">{{ nd.valeur }}/{{ nd.note_max }}</span>
-            {% endif %}
-          </div>
-          {% endfor %}
-        {% else %}
-          <span style="color:#aaa;font-size:8pt">—</span>
-        {% endif %}
-      </td>
-      <td class="tc moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
-      <td class="tc">{{ m.points }}</td>
-      <td class="tc rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
-      <td class="
-        {% if m.appreciation == 'Excellent' %}ap-ex
-        {% elif m.appreciation == 'Très Bien' %}ap-tb
-        {% elif m.appreciation == 'Bien' %}ap-bi
-        {% elif m.appreciation == 'Assez Bien' %}ap-ab
-        {% elif m.appreciation == 'Passable' %}ap-pa
-        {% elif m.appreciation %}ap-in
-        {% endif %}">{{ m.appreciation|default:"—" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
+  </table>
+
+  <!-- ── STATS CLASSE ── -->
+  <table class="tbl-stats mb4">
+    <colgroup>
+      <col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%">
+    </colgroup>
     <tr>
-      <td>TOTAL / RÉSULTAT</td>
-      <td class="tc">{{ total_coef }}</td>
-      <td></td>
-      <td class="tc" style="font-size:11pt;color:#1a3c5e">{{ stats.moy_generale }}/{{ note_max }}</td>
-      <td class="tc">{{ total_points }}</td>
-      <td></td>
-      <td class="
-        {% if appreciation_generale == 'Excellent' %}ap-ex
-        {% elif appreciation_generale == 'Très Bien' %}ap-tb
-        {% elif appreciation_generale == 'Bien' %}ap-bi
-        {% elif appreciation_generale == 'Assez Bien' %}ap-ab
-        {% elif appreciation_generale == 'Passable' %}ap-pa
-        {% elif appreciation_generale %}ap-in
-        {% endif %}">{{ appreciation_generale }}</td>
+      <td><div class="stat-val">{{ stats.moy_generale }}</div><div class="stat-lbl">MOYENNE GÉNÉRALE</div></td>
+      <td><div class="stat-val">{{ stats.moy_classe }}</div><div class="stat-lbl">MOYENNE DE LA CLASSE</div></td>
+      <td><div class="stat-val" style="color:#2e7d32">{{ stats.moy_max }}</div><div class="stat-lbl">PLUS HAUTE</div></td>
+      <td><div class="stat-val" style="color:#c62828">{{ stats.moy_min }}</div><div class="stat-lbl">PLUS BASSE</div></td>
     </tr>
-  </tfoot>
-</table>
+  </table>
 
-<!-- ── MENTION / DÉCISION ─────────────────────────────────────── -->
-{% if is_final %}
-  {% if decision_positive %}
-  <div class="final-pos">
-    <div class="mention-title" style="color:#1b5e20">Décision du Conseil de Classe — {{ trimestre }}</div>
-    <div class="mention-text">{{ decision }}</div>
-  </div>
+  <!-- ── TABLEAU DES NOTES ── -->
+  <table class="tbl-notes mb4">
+    <colgroup>
+      <col style="width:15%"><col style="width:5%"><col style="width:37%">
+      <col style="width:11%"><col style="width:7%"><col style="width:7%"><col style="width:18%">
+    </colgroup>
+    <thead>
+      <tr>
+        <td class="left">MATIÈRE</td>
+        <td>COEF</td>
+        <td class="left">DEVOIRS &amp; COMPOSITION</td>
+        <td>MOYENNE</td>
+        <td>POINTS</td>
+        <td>RANG</td>
+        <td class="left">APPRÉCIATION</td>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in matieres %}
+      <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
+        <td class="mat-nom">{{ m.nom }}</td>
+        <td class="tc">{{ m.coefficient }}</td>
+        <td class="col-notes">{{ m.notes_detail|default:"—" }}</td>
+        <td class="tc moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
+        <td class="tc">{{ m.points }}</td>
+        <td class="tc rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
+        <td class="col-app
+          {% if m.appreciation == 'Excellent' %}ap-ex
+          {% elif m.appreciation == 'Très Bien' %}ap-tb
+          {% elif m.appreciation == 'Bien' %}ap-bi
+          {% elif m.appreciation == 'Assez Bien' %}ap-ab
+          {% elif m.appreciation == 'Passable' %}ap-pa
+          {% elif m.appreciation %}ap-in
+          {% endif %}">{{ m.appreciation|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>TOTAL / RÉSULTAT</td>
+        <td class="tc">{{ total_coef }}</td>
+        <td></td>
+        <td class="tc" style="font-size:10pt;color:#1a3c5e">{{ stats.moy_generale }}/{{ note_max }}</td>
+        <td class="tc">{{ total_points }}</td>
+        <td></td>
+        <td class="col-app
+          {% if appreciation_generale == 'Excellent' %}ap-ex
+          {% elif appreciation_generale == 'Très Bien' %}ap-tb
+          {% elif appreciation_generale == 'Bien' %}ap-bi
+          {% elif appreciation_generale == 'Assez Bien' %}ap-ab
+          {% elif appreciation_generale == 'Passable' %}ap-pa
+          {% elif appreciation_generale %}ap-in
+          {% endif %}">{{ appreciation_generale }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- ── MENTION / DÉCISION ── -->
+  {% if is_final %}
+    {% if decision_positive %}
+    <div class="final-pos">
+      <div class="mention-title" style="color:#1b5e20">Décision du Conseil de Classe — {{ trimestre }}</div>
+      <div class="mention-text">{{ decision }}</div>
+    </div>
+    {% else %}
+    <div class="final-neg">
+      <div class="mention-title" style="color:#b71c1c">Décision du Conseil de Classe — {{ trimestre }}</div>
+      <div class="mention-text">{{ decision }}</div>
+    </div>
+    {% endif %}
   {% else %}
-  <div class="final-neg">
-    <div class="mention-title" style="color:#b71c1c">Décision du Conseil de Classe — {{ trimestre }}</div>
-    <div class="mention-text">{{ decision }}</div>
-  </div>
+    {% if decision_positive %}
+    <div class="mention-pos">
+      <div class="mention-title" style="color:#0d47a1">Mention du Conseil de Classe — {{ trimestre }}</div>
+      <div class="mention-text">{{ decision }}</div>
+    </div>
+    {% else %}
+    <div class="mention-neg">
+      <div class="mention-title" style="color:#e65100">Mention du Conseil de Classe — {{ trimestre }}</div>
+      <div class="mention-text">{{ decision }}</div>
+    </div>
+    {% endif %}
   {% endif %}
-{% else %}
-  {% if decision_positive %}
-  <div class="mention-pos">
-    <div class="mention-title" style="color:#0d47a1">Mention du Conseil de Classe — {{ trimestre }}</div>
-    <div class="mention-text">{{ decision }}</div>
-  </div>
-  {% else %}
-  <div class="mention-neg">
-    <div class="mention-title" style="color:#e65100">Mention du Conseil de Classe — {{ trimestre }}</div>
-    <div class="mention-text">{{ decision }}</div>
-  </div>
-  {% endif %}
-{% endif %}
 
-<!-- ── SIGNATURES ─────────────────────────────────────────────── -->
-<table class="tbl-sig" style="margin-top:20pt">
-  <tr>
-    <td><div class="sig-line">Le Professeur Principal<br><br><br>_____________________</div></td>
-    <td><div class="sig-line">Le Directeur<br><br><br>_____________________</div></td>
-    <td><div class="sig-line">Cachet de l'établissement<br><br><br>_____________________</div></td>
-  </tr>
-</table>
+  <!-- ── SIGNATURES ── -->
+  <table class="tbl-sig">
+    <tr>
+      <td><div class="sig-line">Le Professeur Principal _______________</div></td>
+      <td><div class="sig-line">Le Directeur _______________</div></td>
+      <td><div class="sig-line">Cachet _______________</div></td>
+    </tr>
+  </table>
 
-<div class="footer">
-  {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Conforme SYSCOHADA Révisé &middot; {{ annee }}
+  <div class="footer">
+    {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Conforme SYSCOHADA Révisé &middot; {{ annee }}
+  </div>
+
 </div>
 
 </body>

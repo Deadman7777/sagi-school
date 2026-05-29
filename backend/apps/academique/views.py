@@ -253,6 +253,9 @@ class MoteurCalculView(APIView):
             notes_idx[(str(n.eleve_id), str(n.evaluation_id))] = n
         # ─────────────────────────────────────────────────────────────────
 
+        note_max_niveau = float(classe.niveau.note_max) if classe.niveau else 20
+        seuil_reussite  = note_max_niveau / 2
+
         resultats = []
         matieres_classement: dict = {str(m.id): [] for m in matieres}
         cache_to_upsert = []
@@ -319,9 +322,8 @@ class MoteurCalculView(APIView):
                     'rang_matiere': None,  # rempli après
                 })
 
-            moy_generale    = total_points / total_coef if total_coef > 0 else 0
-            note_max_niveau = float(classe.niveau.note_max) if classe.niveau else 20
-            appr_generale   = self.get_appreciation(moy_generale, note_max_niveau)
+            moy_generale  = total_points / total_coef if total_coef > 0 else 0
+            appr_generale = self.get_appreciation(moy_generale, note_max_niveau)
 
             resultats.append({
                 'eleve_id':              str(eleve.id),
@@ -396,7 +398,7 @@ class MoteurCalculView(APIView):
             'moy_max':      max(moyennes) if moyennes else 0,
             'moy_min':      min(moyennes) if moyennes else 0,
             'nb_eleves':    len(resultats),
-            'taux_reussite': round(len([m for m in moyennes if m >= 10])/len(moyennes)*100, 1) if moyennes else 0,
+            'taux_reussite': round(len([m for m in moyennes if m >= seuil_reussite])/len(moyennes)*100, 1) if moyennes else 0,
         }
 
         return Response({
@@ -515,10 +517,6 @@ class BulletinPDFView(APIView):
 
     def get(self, request, eleve_id, trimestre):
         from io import BytesIO
-        try:
-            from xhtml2pdf import pisa
-        except ImportError:
-            return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant = get_tenant(request)
         annee = request.query_params.get('annee') or self._get_annee(request)
@@ -586,9 +584,8 @@ class BulletinPDFView(APIView):
 
         def build_notes_detail(matiere_id):
             evs = evals_par_matiere.get(str(matiere_id), [])
-            # Regrouper par type_eval pour numéroter D1, D2...
             type_counts: dict = {}
-            result = []
+            parts = []
             for ev in evs:
                 tnom = ev.type_eval.nom
                 type_counts[tnom] = type_counts.get(tnom, 0) + 1
@@ -599,12 +596,14 @@ class BulletinPDFView(APIView):
                     valeur = 'Abs' if n.absent else f"{float(n.valeur):g}"
                 else:
                     valeur = '—'
-                result.append({
-                    'label':    label,
-                    'valeur':   valeur,
-                    'note_max': int(ev.note_max) if float(ev.note_max) == int(ev.note_max) else float(ev.note_max),
-                })
-            return result
+                note_max = int(ev.note_max) if float(ev.note_max) == int(ev.note_max) else float(ev.note_max)
+                if valeur == 'Abs':
+                    parts.append(f"{label}: ABS")
+                elif valeur == '—':
+                    parts.append(f"{label}: ND")
+                else:
+                    parts.append(f"{label}: {valeur}/{note_max}")
+            return " | ".join(parts) if parts else ""
 
         def _fmt(val):
             if val is None:
@@ -656,9 +655,18 @@ class BulletinPDFView(APIView):
 
         html_str = render_to_string('pdf/bulletin.html', context)
         buffer   = BytesIO()
-        result   = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
-        if result.err:
-            return HttpResponse('Erreur génération bulletin PDF.', status=500)
+        try:
+            import weasyprint
+            weasyprint.HTML(string=html_str).write_pdf(buffer)
+        except Exception:
+            try:
+                from xhtml2pdf import pisa
+                buffer = BytesIO()
+                result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
+                if result.err:
+                    return HttpResponse('Erreur génération bulletin PDF.', status=500)
+            except Exception as e:
+                return HttpResponse(f'Erreur PDF : {e}', status=500)
 
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="bulletin_{eleve.nom_complet}_{trimestre}.pdf"'
