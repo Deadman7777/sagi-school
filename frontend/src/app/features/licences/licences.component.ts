@@ -11,6 +11,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ToastModule } from 'primeng/toast';
+import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -18,7 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   selector: 'app-licences',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
-            DialogModule, InputTextModule, SelectModule, InputNumberModule, ToastModule, TranslateModule],
+            DialogModule, InputTextModule, SelectModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -119,22 +120,25 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <td>
               <p-button icon="pi pi-refresh" [rounded]="true" [text]="true"
                         severity="success" (onClick)="ouvrirRenouvellement(l)"
-                        pTooltip="Renouveler" />
+                        pTooltip="Renouveler la licence" tooltipPosition="top" />
               <p-button icon="pi pi-copy" [rounded]="true" [text]="true"
                         severity="info" (onClick)="copierCle(l.cle_licence)"
-                        pTooltip="Copier la clé" />
+                        pTooltip="Copier la clé de licence" tooltipPosition="top" />
               <p-button *ngIf="l.statut !== 'SUSPENDUE'" icon="pi pi-ban" [rounded]="true" [text]="true"
                         severity="danger" (onClick)="suspendre(l)"
-                        pTooltip="Suspendre" />
+                        pTooltip="Suspendre la licence" tooltipPosition="top" />
               <p-button *ngIf="l.statut === 'SUSPENDUE'" icon="pi pi-check" [rounded]="true" [text]="true"
                         severity="success" (onClick)="activer(l)"
-                        pTooltip="Activer" />
+                        pTooltip="Réactiver la licence" tooltipPosition="top" />
               <p-button icon="pi pi-arrow-up" [rounded]="true" [text]="true"
                         severity="warn" (onClick)="ouvrirChangementType(l)"
-                        pTooltip="Changer le type" />
+                        pTooltip="Changer le type de licence" tooltipPosition="top" />
+              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
+                        severity="info" (onClick)="ouvrirEditionEcole(l)"
+                        pTooltip="Modifier infos école et exercice" tooltipPosition="top" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true"
                         severity="danger" (onClick)="supprimer(l)"
-                        pTooltip="Supprimer" />
+                        pTooltip="Supprimer définitivement l'école" tooltipPosition="top" />
             </td>
           </tr>
         </ng-template>
@@ -265,6 +269,93 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   [loading]="saving()" (onClick)="changerType()" />
       </ng-template>
     </p-dialog>
+
+    <!-- Dialog édition école + exercice -->
+    <p-dialog header="🏫 Modifier l'école et l'exercice" [(visible)]="editionDialogVisible"
+              [modal]="true" [style]="{width:'640px'}" [draggable]="false">
+      <div *ngIf="editionData() as d">
+        <div class="separator full" style="margin-top:0">🏫 Infos école</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Nom de l'école *</label>
+            <input pInputText [(ngModel)]="d.tenant.nom" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Ville</label>
+            <input pInputText [(ngModel)]="d.tenant.ville" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Code établissement</label>
+            <input pInputText [(ngModel)]="d.tenant.code_etablissement" class="w-full"
+                   maxlength="10" style="text-transform:uppercase" />
+          </div>
+          <div class="form-group full">
+            <label>Adresse</label>
+            <input pInputText [(ngModel)]="d.tenant.adresse" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Téléphone</label>
+            <input pInputText [(ngModel)]="d.tenant.telephone" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input pInputText [(ngModel)]="d.tenant.email" class="w-full" type="email" />
+          </div>
+          <div class="form-group">
+            <label>RCCM</label>
+            <input pInputText [(ngModel)]="d.tenant.rccm" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>NINEA</label>
+            <input pInputText [(ngModel)]="d.tenant.ninea" class="w-full" />
+          </div>
+        </div>
+
+        <ng-container *ngIf="d.exercice">
+          <div class="separator full">📅 Exercice en cours</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Année scolaire</label>
+              <input pInputText [(ngModel)]="d.exercice.annee_scolaire" class="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Date début</label>
+              <input pInputText [(ngModel)]="d.exercice.date_debut" class="w-full" type="date" />
+            </div>
+            <div class="form-group">
+              <label>Date fin</label>
+              <input pInputText [(ngModel)]="d.exercice.date_fin" class="w-full" type="date" />
+            </div>
+            <div class="form-group">
+              <label>Solde initial caisse</label>
+              <p-inputNumber [(ngModel)]="d.exercice.solde_initial_caisse"
+                             [min]="0" suffix=" FCFA" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Solde initial banque</label>
+              <p-inputNumber [(ngModel)]="d.exercice.solde_initial_banque"
+                             [min]="0" suffix=" FCFA" styleClass="w-full" />
+            </div>
+            <div class="form-group full">
+              <label>Solde initial mobile money</label>
+              <p-inputNumber [(ngModel)]="d.exercice.solde_initial_mobile"
+                             [min]="0" suffix=" FCFA" styleClass="w-full" />
+            </div>
+          </div>
+        </ng-container>
+
+        <div *ngIf="!d.exercice" class="empty-msg" style="padding:20px">
+          Aucun exercice ouvert pour cette école.
+        </div>
+      </div>
+
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="editionDialogVisible=false" />
+        <p-button label="Enregistrer" severity="success"
+                  [loading]="saving()" (onClick)="enregistrerEdition()" />
+      </ng-template>
+    </p-dialog>
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
@@ -339,6 +430,12 @@ export class LicencesComponent implements OnInit {
   // Dialog changement type
   changementTypeDialogVisible = false;
   nouveauType = 'PRO';
+
+  // Dialog édition école + exercice
+  editionDialogVisible = false;
+  editionData          = signal<{ tenant: any; exercice: any } | null>(null);
+  private editionTenantId: string | null = null;
+
   private translate = inject(TranslateService);
 
   typesLicence: any[] = [];
@@ -510,6 +607,37 @@ supprimer(l: any) {
     next: () => {
       this.msg.add({ severity:'info', summary:'Supprimée', detail:l.tenant_nom });
       this.charger();
+    }
+  });
+}
+
+ouvrirEditionEcole(l: any) {
+  this.editionTenantId = l.tenant;
+  this.editionData.set(null);
+  this.editionDialogVisible = true;
+  this.licencesService.getDetailsEcole(l.tenant).subscribe({
+    next: res => this.editionData.set(res),
+    error: () => {
+      this.msg.add({ severity:'error', summary:'Erreur', detail:'Impossible de charger les détails' });
+      this.editionDialogVisible = false;
+    }
+  });
+}
+
+enregistrerEdition() {
+  const d = this.editionData();
+  if (!d || !this.editionTenantId) return;
+  this.saving.set(true);
+  this.licencesService.updateDetailsEcole(this.editionTenantId, d).subscribe({
+    next: () => {
+      this.msg.add({ severity:'success', summary:'École mise à jour ✅', detail:d.tenant.nom });
+      this.editionDialogVisible = false;
+      this.saving.set(false);
+      this.charger();
+    },
+    error: () => {
+      this.msg.add({ severity:'error', summary:'Erreur', detail:'Sauvegarde échouée' });
+      this.saving.set(false);
     }
   });
 }

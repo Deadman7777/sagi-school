@@ -45,7 +45,7 @@ function getPython() {
 function showSetupWindow() {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
-      width: 480, height: 510,
+      width: 500, height: 720,
       resizable: false,
       title: 'Configuration — SAGI SCHOOL',
       webPreferences: {
@@ -58,14 +58,21 @@ function showSetupWindow() {
     win.loadFile(path.join(__dirname, 'setup.html'));
 
     let settled = false;
-    ipcMain.once('setup-submit', (event, creds) => {
+    ipcMain.once('setup-submit', (event, payload) => {
       settled = true;
-      resolve({ win, creds });
+      resolve({ win, payload });
     });
     win.once('closed', () => {
       if (!settled) reject(new Error('Configuration annulée par l\'utilisateur'));
     });
   });
+}
+
+function runInitInstallation(backendDir, installData) {
+  const tmpFile = path.join(app.getPath('userData'), `install-${Date.now()}.json`);
+  fs.writeFileSync(tmpFile, JSON.stringify(installData), 'utf8');
+  return runManageCommand(backendDir, ['init_installation', '--payload', tmpFile], 'init_installation')
+    .finally(() => { try { fs.unlinkSync(tmpFile); } catch (_) {} });
 }
 
 function runManageCommand(backendDir, args, errorLabel) {
@@ -207,7 +214,8 @@ async function ensureProductionConfig() {
 
   if (fs.existsSync(prodFile)) return;
 
-  const { win, creds } = await showSetupWindow();
+  const { win, payload } = await showSetupWindow();
+  const { db: creds, install } = payload;
 
   // Échapper les apostrophes pour les chaînes Python single-quoted
   const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -235,6 +243,15 @@ async function ensureProductionConfig() {
 
   // Initialiser les paramètres fiscaux RH (Sénégal) si pas encore fait
   await initParametresFiscaux(backendDir);
+
+  // Créer école + licence essai + exercice + super_admin
+  try {
+    await runInitInstallation(backendDir, install);
+  } catch (err) {
+    if (fs.existsSync(prodFile)) fs.unlinkSync(prodFile);
+    if (!win.isDestroyed()) win.close();
+    throw new Error(`Erreur init_installation : ${err.message}`);
+  }
 
   try {
     await runCollectstatic(backendDir);

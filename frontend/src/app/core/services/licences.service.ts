@@ -39,4 +39,9 @@ export class LicencesService {
   activer(id: number)                { return this.api.post<any>(`/licences/${id}/activer/`, {}); }
   changerType(id: number, type: string) { return this.api.post<any>(`/licences/${id}/changer_type/`, { type }); }
   supprimer(id: number)              { return this.api.delete<any>(`/licences/${id}/`); }
+
+  getDetailsEcole(tenantId: string)  { return this.api.get<any>(`/tenants/${tenantId}/details/`); }
+  updateDetailsEcole(tenantId: string, data: { tenant: any; exercice: any }) {
+    return this.api.patch<any>(`/tenants/${tenantId}/details/`, data);
+  }
 }

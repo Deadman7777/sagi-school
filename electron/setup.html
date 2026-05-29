@@ -20,12 +20,22 @@
       border-radius: 10px;
       padding: 30px;
       width: 100%;
-      max-width: 420px;
+      max-width: 460px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
     h1 { font-size: 1.25rem; color: #4fc3f7; margin-bottom: 4px; }
-    .subtitle { font-size: 0.8rem; color: #7a8fa8; margin-bottom: 22px; }
-    label { display: block; font-size: 0.8rem; color: #8a9bb5; margin: 12px 0 4px; }
+    .subtitle { font-size: 0.8rem; color: #7a8fa8; margin-bottom: 18px; }
+    .stepper { display: flex; gap: 6px; margin-bottom: 20px; }
+    .step-dot {
+      flex: 1; height: 4px; border-radius: 2px;
+      background: #3a4f6a; transition: background 0.2s;
+    }
+    .step-dot.active { background: #4fc3f7; }
+    .section-title {
+      font-size: 0.78rem; color: #4fc3f7; text-transform: uppercase;
+      letter-spacing: 1px; margin: 14px 0 6px; font-weight: 600;
+    }
+    label { display: block; font-size: 0.78rem; color: #8a9bb5; margin: 10px 0 4px; }
     input {
       width: 100%; padding: 9px 12px;
       background: #1a2535; border: 1px solid #3a4f6a;
@@ -35,15 +45,21 @@
     }
     input:focus { border-color: #4fc3f7; }
     input.error { border-color: #e57373; }
+    .hint { font-size: 0.72rem; color: #7a8fa8; margin-top: 4px; }
+    .hint.bad { color: #e57373; }
     .row { display: flex; gap: 12px; }
     .row > div { flex: 1; }
+    .actions { display: flex; gap: 10px; margin-top: 22px; }
     button {
-      width: 100%; margin-top: 22px; padding: 11px;
+      flex: 1; padding: 11px;
       background: #1565c0; border: none; border-radius: 6px;
       color: #fff; font-size: 0.95rem; cursor: pointer;
       transition: background 0.2s;
     }
     button:hover { background: #1976d2; }
+    button.secondary { background: #3a4f6a; }
+    button.secondary:hover { background: #4a5f7a; }
+    button:disabled { background: #3a4f6a; cursor: not-allowed; opacity: 0.6; }
     #loading { display: none; text-align: center; padding: 16px 0; }
     .spinner {
       border: 3px solid #3a4f6a;
@@ -55,14 +71,22 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { color: #8a9bb5; font-size: 0.88rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>Configuration initiale</h1>
-    <p class="subtitle">Première installation — Connexion à PostgreSQL</p>
+    <p class="subtitle" id="subtitle">Étape 1/2 — Connexion à PostgreSQL</p>
 
-    <div id="form-panel">
+    <div class="stepper">
+      <div class="step-dot active" id="dot-1"></div>
+      <div class="step-dot" id="dot-2"></div>
+    </div>
+
+    <!-- Étape 1 : PostgreSQL -->
+    <div class="panel active" id="panel-1">
       <div>
         <label>Nom de la base de données</label>
         <input id="db-name" type="text" value="hady_gesman">
@@ -85,34 +109,148 @@
           <input id="db-port" type="text" value="5432">
         </div>
       </div>
-      <button id="btn-submit">Configurer et démarrer</button>
+      <div class="actions">
+        <button id="btn-next">Suivant →</button>
+      </div>
+    </div>
+
+    <!-- Étape 2 : École + Admin + Exercice -->
+    <div class="panel" id="panel-2">
+      <div class="section-title">🏫 École</div>
+      <div class="row">
+        <div>
+          <label>Nom de l'école *</label>
+          <input id="ecole-nom" type="text" placeholder="Ex: École Les Pédagogues">
+        </div>
+        <div>
+          <label>Code étab.</label>
+          <input id="ecole-code" type="text" value="ETB" maxlength="10" style="text-transform:uppercase">
+        </div>
+      </div>
+
+      <div class="section-title">👤 Super administrateur</div>
+      <div class="row">
+        <div>
+          <label>Prénom</label>
+          <input id="admin-prenom" type="text" placeholder="Ex: Aïssatou">
+        </div>
+        <div>
+          <label>Nom *</label>
+          <input id="admin-nom" type="text" placeholder="Ex: Diallo">
+        </div>
+      </div>
+      <div>
+        <label>Email *</label>
+        <input id="admin-email" type="email" placeholder="admin@ecole.sn">
+      </div>
+      <div>
+        <label>Mot de passe *</label>
+        <input id="admin-pass" type="password" placeholder="8+ caractères, 1 majuscule, 1 chiffre">
+        <div class="hint" id="pass-hint">8 caractères min, dont 1 majuscule et 1 chiffre.</div>
+      </div>
+
+      <div class="section-title">📅 Exercice scolaire</div>
+      <div>
+        <label>Année scolaire</label>
+        <input id="ex-annee" type="text" value="2025-2026" placeholder="2025-2026">
+      </div>
+      <div class="row">
+        <div>
+          <label>Date début</label>
+          <input id="ex-debut" type="date" value="2025-10-01">
+        </div>
+        <div>
+          <label>Date fin</label>
+          <input id="ex-fin" type="date" value="2026-09-30">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="secondary" id="btn-back">← Retour</button>
+        <button id="btn-submit">Terminer l'installation</button>
+      </div>
     </div>
 
     <div id="loading">
       <div class="spinner"></div>
-      <p class="loading-text">Configuration en cours, veuillez patienter…</p>
+      <p class="loading-text">Installation en cours, veuillez patienter…</p>
     </div>
   </div>
 
   <script>
-    document.getElementById('btn-submit').addEventListener('click', () => {
-      const passInput = document.getElementById('db-pass');
-      if (!passInput.value) {
-        passInput.classList.add('error');
-        passInput.focus();
-        passInput.addEventListener('input', () => passInput.classList.remove('error'), { once: true });
-        return;
+    const $ = id => document.getElementById(id);
+
+    function markError(el) {
+      el.classList.add('error');
+      el.focus();
+      el.addEventListener('input', () => el.classList.remove('error'), { once: true });
+    }
+
+    function passwordOk(pwd) {
+      return pwd.length >= 8 && /[A-Z]/.test(pwd) && /[0-9]/.test(pwd);
+    }
+
+    function goToStep(n) {
+      $('panel-1').classList.toggle('active', n === 1);
+      $('panel-2').classList.toggle('active', n === 2);
+      $('dot-1').classList.toggle('active', n >= 1);
+      $('dot-2').classList.toggle('active', n >= 2);
+      $('subtitle').textContent = n === 1
+        ? 'Étape 1/2 — Connexion à PostgreSQL'
+        : 'Étape 2/2 — École, administrateur et exercice';
+    }
+
+    $('btn-next').addEventListener('click', () => {
+      if (!$('db-pass').value) { markError($('db-pass')); return; }
+      goToStep(2);
+    });
+
+    $('btn-back').addEventListener('click', () => goToStep(1));
+
+    $('admin-pass').addEventListener('input', () => {
+      const v = $('admin-pass').value;
+      const hint = $('pass-hint');
+      if (!v) { hint.textContent = '8 caractères min, dont 1 majuscule et 1 chiffre.'; hint.classList.remove('bad'); return; }
+      if (passwordOk(v)) { hint.textContent = '✓ Mot de passe valide'; hint.classList.remove('bad'); }
+      else { hint.textContent = '8 caractères min, dont 1 majuscule et 1 chiffre.'; hint.classList.add('bad'); }
+    });
+
+    $('btn-submit').addEventListener('click', () => {
+      const required = [
+        ['ecole-nom',   'École'],
+        ['admin-nom',   'Nom admin'],
+        ['admin-email', 'Email'],
+        ['admin-pass',  'Mot de passe'],
+      ];
+      for (const [id] of required) {
+        if (!$(id).value.trim()) { markError($(id)); return; }
       }
-      const creds = {
-        name:     document.getElementById('db-name').value.trim() || 'hady_gesman',
-        user:     document.getElementById('db-user').value.trim() || 'postgres',
-        password: passInput.value,
-        host:     document.getElementById('db-host').value.trim() || 'localhost',
-        port:     document.getElementById('db-port').value.trim() || '5432',
+      if (!passwordOk($('admin-pass').value)) { markError($('admin-pass')); return; }
+
+      const payload = {
+        db: {
+          name:     $('db-name').value.trim() || 'hady_gesman',
+          user:     $('db-user').value.trim() || 'postgres',
+          password: $('db-pass').value,
+          host:     $('db-host').value.trim() || 'localhost',
+          port:     $('db-port').value.trim() || '5432',
+        },
+        install: {
+          ecole_nom:       $('ecole-nom').value.trim(),
+          ecole_code:      ($('ecole-code').value.trim() || 'ETB').toUpperCase(),
+          admin_email:     $('admin-email').value.trim(),
+          admin_password:  $('admin-pass').value,
+          admin_nom:       $('admin-nom').value.trim(),
+          admin_prenom:    $('admin-prenom').value.trim(),
+          annee_scolaire:  $('ex-annee').value.trim() || '2025-2026',
+          date_debut:      $('ex-debut').value || '2025-10-01',
+          date_fin:        $('ex-fin').value || '2026-09-30',
+        },
       };
-      document.getElementById('form-panel').style.display = 'none';
-      document.getElementById('loading').style.display = 'block';
-      window.setupAPI.submit(creds);
+
+      $('panel-2').classList.remove('active');
+      $('loading').style.display = 'block';
+      window.setupAPI.submit(payload);
     });
   </script>
 </body>
