@@ -8,15 +8,8 @@ from django.core.cache import cache
 from apps.eleves.models import Eleve
 from apps.paiements.models import Paiement, Exercice
 from apps.comptabilite.models import JournalEntry
+from core.tenant import get_tenant
 from .models import AuditLog
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if hasattr(request.user, 'tenant') and request.user.tenant:
-        return request.user.tenant
-    return None
 
 
 def sum_paiements(qs):

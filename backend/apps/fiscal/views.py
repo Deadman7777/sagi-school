@@ -2,6 +2,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum
+from core.tenant import get_tenant
 import datetime
 
 
@@ -10,15 +11,6 @@ MOIS_FR = {
     5:'Mai',     6:'Juin',    7:'Juillet', 8:'Août',
     9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre',
 }
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if request.user.role == 'SUPER_ADMIN':
-        from apps.tenants.models import Tenant
-        return Tenant.objects.first()
-    return None
 
 
 # ── Taux fiscaux Sénégal (Convention Collective Enseignement Privé 2018) ──────

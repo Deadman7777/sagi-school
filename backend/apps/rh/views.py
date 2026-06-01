@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from django.db.models import Sum
 
 from core.permissions import IsSuperAdmin, CanAccessRH
+from core.tenant import get_tenant
 from .models import Employe, Paie, ParametresFiscaux, AvanceSalaire, BulletinPaie
 from .serializers import (
     EmployeSerializer, PaieSerializer, ParametresFiscauxSerializer,
@@ -26,15 +27,6 @@ NOMS_MOIS = {
     5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
     9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre',
 }
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if request.user.role == 'SUPER_ADMIN':
-        from apps.tenants.models import Tenant
-        return Tenant.objects.first()
-    return None
 
 
 class EmployeViewSet(viewsets.ModelViewSet):

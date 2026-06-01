@@ -1,0 +1,48 @@
+; ════════════════════════════════════════════════════════════════════
+;  SAGI SCHOOL — systemd unit pour gunicorn (cloud)
+;
+;  Installation :
+;    sudo cp gunicorn.service /etc/systemd/system/sagi-school.service
+;    sudo systemctl daemon-reload
+;    sudo systemctl enable --now sagi-school
+;
+;  Commandes :
+;    sudo systemctl status sagi-school
+;    sudo systemctl restart sagi-school
+;    sudo journalctl -u sagi-school -f
+; ════════════════════════════════════════════════════════════════════
+[Unit]
+Description=SAGI SCHOOL API (gunicorn)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=sagi
+Group=sagi
+WorkingDirectory=/opt/sagi-school/backend
+EnvironmentFile=/opt/sagi-school/backend/.env
+Environment="DJANGO_SETTINGS_MODULE=config.settings.cloud"
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/opt/sagi-school/backend/venv/bin/gunicorn \
+    --workers 3 \
+    --bind unix:/run/sagi-school/gunicorn.sock \
+    --access-logfile /var/log/sagi-school/access.log \
+    --error-logfile  /var/log/sagi-school/error.log \
+    --timeout 60 \
+    config.wsgi:application
+
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=sagi-school
+RuntimeDirectoryMode=0755
+
+; Sécurité
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

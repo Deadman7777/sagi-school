@@ -4,17 +4,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from core.permissions import IsSuperAdmin
+from core.tenant import get_tenant
 from .models import Tenant
 from .serializers import TenantSerializer
 from apps.paiements.models import Exercice
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if hasattr(request.user, 'tenant') and request.user.tenant:
-        return request.user.tenant
-    return None
 
 
 def _exercice_to_dict(ex):

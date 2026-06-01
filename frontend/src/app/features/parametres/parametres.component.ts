@@ -223,7 +223,9 @@ import { MessageService } from 'primeng/api';
               <td>
                 <p-tag [value]="u.role"
                        [severity]="u.role === 'ADMIN_ECOLE' ? 'success' :
-                                   u.role === 'COMPTABLE' ? 'info' : 'warn'" />
+                                   u.role === 'ADMIN_COMPTABLE' ? 'info' :
+                                   u.role === 'ADMIN_RH' ? 'warn' :
+                                   u.role === 'ADMIN_SCOLARITE' ? 'warn' : 'secondary'" />
               </td>
               <td>
                 <p-tag [value]="u.actif ? ('parametres.actif' | translate) : ('parametres.inactif' | translate)"
@@ -370,7 +372,9 @@ import { MessageService } from 'primeng/api';
         <div class="form-group full">
           <label>{{ 'parametres.role' | translate }} *</label>
           <p-select [options]="rolesDisponibles" [(ngModel)]="newUser.role"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+                    optionLabel="label" optionValue="value"
+                    appendTo="body" [scrollHeight]="'260px'"
+                    styleClass="w-full" />
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -488,7 +492,7 @@ export class ParametresComponent implements OnInit {
   userSelectionne: any = null;
   nouveauMdp           = '';
 
-  newUser    = { nom:'', prenom:'', email:'', password:'', role:'CAISSIER' };
+  newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
   newSection = { nom:'' };
 
   rolesDisponibles: any[] = [];
@@ -503,10 +507,11 @@ export class ParametresComponent implements OnInit {
 
   ngOnInit() {
     this.rolesDisponibles = [
-      { label: this.translate.instant('parametres.admin_ecole'),   value: 'ADMIN_ECOLE' },
-      { label: this.translate.instant('parametres.comptable'),     value: 'COMPTABLE' },
-      { label: this.translate.instant('parametres.caissier'),      value: 'CAISSIER' },
-      { label: this.translate.instant('parametres.lecture_seule'), value: 'LECTURE' },
+      { label: this.translate.instant('parametres.admin_ecole'),       value: 'ADMIN_ECOLE' },
+      { label: this.translate.instant('parametres.admin_comptable'),   value: 'ADMIN_COMPTABLE' },
+      { label: this.translate.instant('parametres.admin_rh'),          value: 'ADMIN_RH' },
+      { label: this.translate.instant('parametres.admin_scolarite'),   value: 'ADMIN_SCOLARITE' },
+      { label: this.translate.instant('parametres.lecteur'),           value: 'LECTEUR' },
     ];
     this.chargerEcole();
     this.chargerExercice();
@@ -661,7 +666,7 @@ chargerExercice() {
   }
 
   ouvrirDialogUser() {
-    this.newUser = { nom:'', prenom:'', email:'', password:'', role:'CAISSIER' };
+    this.newUser = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
     this.userDialogVisible = true;
   }
 

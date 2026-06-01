@@ -11,15 +11,7 @@ from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if request.user.role == 'SUPER_ADMIN':
-        from apps.tenants.models import Tenant
-        return Tenant.objects.first()
-    return None
+from core.tenant import get_tenant
 
 
 class NiveauScolaireViewSet(viewsets.ModelViewSet):

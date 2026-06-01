@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count
 from apps.eleves.models import Eleve
 from core.permissions import IsTenantMember
+from core.tenant import get_tenant
 from .models import Paiement, Exercice
 from .serializers import PaiementSerializer, ExerciceSerializer
 
@@ -15,17 +16,15 @@ class ExerciceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsTenantMember]
 
     def get_queryset(self):
-        tenant = self.request.tenant
-        if not tenant and self.request.user.role == 'SUPER_ADMIN':
-            from apps.tenants.models import Tenant
-            tenant = Tenant.objects.first()
+        tenant = get_tenant(self.request)
+        if not tenant:
+            return Exercice.objects.none()
         return Exercice.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
-        tenant = self.request.tenant
-        if not tenant and self.request.user.role == 'SUPER_ADMIN':
-            from apps.tenants.models import Tenant
-            tenant = Tenant.objects.first()
+        tenant = get_tenant(self.request)
+        if not tenant:
+            raise PermissionError("Tenant requis pour créer un exercice.")
         serializer.save(tenant=tenant)
 
 
@@ -34,12 +33,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_tenant(self):
-        if self.request.tenant:
-            return self.request.tenant
-        if self.request.user.role == 'SUPER_ADMIN':
-            from apps.tenants.models import Tenant
-            return Tenant.objects.first()
-        return None
+        return get_tenant(self.request)
 
     def get_queryset(self):
         tenant = self.get_tenant()
@@ -484,11 +478,7 @@ class CloturerExerciceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_tenant(self):
-        if self.request.tenant:
-            return self.request.tenant
-        if hasattr(self.request.user, 'tenant') and self.request.user.tenant:
-            return self.request.user.tenant
-        return None
+        return get_tenant(self.request)
 
     def get(self, request):
         """Vérifie si l'exercice peut être clôturé."""

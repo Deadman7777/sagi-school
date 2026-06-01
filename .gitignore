@@ -17,4 +17,8 @@ frontend/dist/
 # Secrets
 *.env
 .env.*
+!.env.*.example
 backend/config/settings/production.py
+
+# Runtime logs
+backend/logs/

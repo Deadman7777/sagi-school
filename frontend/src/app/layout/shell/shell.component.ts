@@ -1,5 +1,5 @@
 import { Component, inject, signal, computed } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { LangueService } from '../../core/services/langue.service';
@@ -95,6 +95,19 @@ interface NavItem {
             <span class="badge-blue" *ngIf="!isSuperAdmin()">📅 2025-2026</span>
           </div>
         </header>
+
+        <!-- Bandeau : super_admin est en train de gérer une école -->
+        <div class="impersonation-bar" *ngIf="estEnImpersonation()">
+          <span class="ib-icon">📍</span>
+          <span class="ib-text">
+            {{ 'shell.vous_gerez' | translate }}
+            <strong>{{ auth.impersonatedTenantNom() }}</strong>
+          </span>
+          <button class="ib-exit" (click)="quitterEcole()">
+            ← {{ 'shell.retour_gestion' | translate }}
+          </button>
+        </div>
+
         <main class="content">
           <router-outlet />
         </main>
@@ -138,6 +151,12 @@ interface NavItem {
     .langue-btn { background:transparent; border:1px solid #1e2d45; border-radius:6px; padding:3px 7px; cursor:pointer; font-size:14px; transition:all 0.15s; }
     .langue-btn:hover  { border-color:#2a3f5f; }
     .langue-btn.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
+    .impersonation-bar { display:flex; align-items:center; gap:12px; padding:8px 24px; background:linear-gradient(90deg,rgba(240,192,64,0.15),rgba(240,192,64,0.05)); border-bottom:1px solid rgba(240,192,64,0.3); color:#f0c040; font-size:13px; }
+    .ib-icon { font-size:16px; }
+    .ib-text { flex:1; }
+    .ib-text strong { color:#e8f0fe; }
+    .ib-exit { background:rgba(240,192,64,0.15); border:1px solid rgba(240,192,64,0.4); color:#f0c040; border-radius:6px; padding:4px 12px; cursor:pointer; font-size:12px; font-family:inherit; transition:all 0.15s; }
+    .ib-exit:hover { background:rgba(240,192,64,0.3); }
     .content { flex:1; overflow-y:auto; padding:24px; }
     [dir="rtl"] .sidebar { border-right:none; border-left:1px solid #1e2d45; }
     [dir="rtl"] .nav-item { border-left:none; border-right:3px solid transparent; }
@@ -174,15 +193,29 @@ export class ShellComponent {
   ];
 
   private translate = inject(TranslateService);
+  private router    = inject(Router);
 
   constructor(public auth: AuthService, public langue: LangueService) {}
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
 
+  estEnImpersonation = computed(() =>
+    this.isSuperAdmin() && !!this.auth.impersonatedTenantId()
+  );
+
+  quitterEcole() {
+    this.auth.exitTenant();
+    this.router.navigate(['/licences']);
+  }
+
   navSectionsFiltrees = computed(() => {
     const user = this.auth.currentUser();
-    if (user?.role === 'SUPER_ADMIN') return this.navSuperAdmin;
-    const role = user?.role;
+    // Super_admin en impersonation : on lui montre la nav école pour qu'il
+    // puisse naviguer dans l'établissement comme s'il était son admin.
+    if (user?.role === 'SUPER_ADMIN' && !this.auth.impersonatedTenantId()) {
+      return this.navSuperAdmin;
+    }
+    const role = user?.role === 'SUPER_ADMIN' ? 'ADMIN_ECOLE' : user?.role;
     return this.navEcole
       .map(section => ({
         ...section,

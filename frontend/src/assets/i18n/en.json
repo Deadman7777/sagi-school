@@ -216,9 +216,10 @@
     "nouveau_mdp": "New password *",
     "mdp_min": "Min. 6 characters",
     "admin_ecole": "School Admin",
-    "comptable": "Accountant",
-    "caissier": "Cashier",
-    "lecture_seule": "Read only",
+    "admin_comptable": "Accounting Manager",
+    "admin_rh": "HR Manager",
+    "admin_scolarite": "Scholarship Manager",
+    "lecteur": "Reader (read only)",
     "chargement_verif": "Loading verification...",
     "creer_auto": "Automatically create the new school year after closing",
     "utilisateur_label": "User",
@@ -476,6 +477,8 @@
     "title": "Licences & Clients",
     "subtitle": "Multi-school management — HADY GESMAN",
     "nouvelle_ecole": "+ New School",
+    "acceder_ecole": "Access this school",
+    "acces_actif": "You are now managing",
     "total_ecoles": "Total Schools",
     "licences_actives": "Active Licences",
     "en_essai": "Trial",
@@ -709,6 +712,8 @@
     "responsable_rh": "HR Manager",
     "responsable_comptable": "Accounting Manager",
     "responsable_scolarite": "Academic Manager",
-    "lecture_seule": "Read only"
+    "lecture_seule": "Read only",
+    "vous_gerez": "Managing:",
+    "retour_gestion": "Back to admin"
   }
 }

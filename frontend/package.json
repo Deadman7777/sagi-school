@@ -4,7 +4,9 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:cloud": "ng serve --configuration cloud",
     "build": "ng build",
+    "build:cloud": "ng build --configuration cloud",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },

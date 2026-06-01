@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from core.permissions import IsSuperAdmin
+from core.tenant import get_tenant
 from apps.tenants.models import Tenant
 from apps.eleves.models import Eleve
 from apps.paiements.models import Exercice
@@ -25,10 +26,9 @@ class LicenceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'SUPER_ADMIN':
             return Licence.objects.select_related('tenant').all()
-        if self.request.tenant:
-            return Licence.objects.filter(
-                tenant=self.request.tenant
-            ).select_related('tenant')
+        tenant = get_tenant(self.request)
+        if tenant:
+            return Licence.objects.filter(tenant=tenant).select_related('tenant')
         return Licence.objects.none()
 
     @action(detail=False, methods=['post'], permission_classes=[])

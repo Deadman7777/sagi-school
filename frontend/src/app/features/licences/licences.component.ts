@@ -1,8 +1,10 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { LicencesService, NouvelleEcole } from '../../core/services/licences.service';
 import { AuthService } from '../../core/services/auth.service';
+import { AppModeService } from '../../core/services/app-mode.service';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
@@ -118,6 +120,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               </span>
             </td>
             <td>
+              <p-button *ngIf="appMode.isCloud()"
+                        icon="pi pi-sign-in" [rounded]="true" [text]="true"
+                        severity="help" (onClick)="accederEcole(l)"
+                        [pTooltip]="'licences.acceder_ecole' | translate" tooltipPosition="top" />
               <p-button icon="pi pi-refresh" [rounded]="true" [text]="true"
                         severity="success" (onClick)="ouvrirRenouvellement(l)"
                         pTooltip="Renouveler la licence" tooltipPosition="top" />
@@ -455,8 +461,21 @@ export class LicencesComponent implements OnInit {
   constructor(
     private licencesService: LicencesService,
     public auth: AuthService,
+    public appMode: AppModeService,
+    private router: Router,
     private msg: MessageService
   ) {}
+
+  accederEcole(l: any) {
+    if (!l?.tenant) return;
+    this.auth.switchTenant(l.tenant, l.tenant_nom);
+    this.msg.add({
+      severity: 'info',
+      summary:  this.translate.instant('licences.acces_actif'),
+      detail:   l.tenant_nom,
+    });
+    this.router.navigate(['/dashboard']);
+  }
 
   ngOnInit() {
     this.typesLicence = [

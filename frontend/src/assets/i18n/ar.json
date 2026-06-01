@@ -216,9 +216,10 @@
     "nouveau_mdp": "كلمة المرور الجديدة *",
     "mdp_min": "6 أحرف على الأقل",
     "admin_ecole": "مسؤول المدرسة",
-    "comptable": "محاسب",
-    "caissier": "أمين الصندوق",
-    "lecture_seule": "قراءة فقط",
+    "admin_comptable": "مسؤول المحاسبة",
+    "admin_rh": "مسؤول الموارد البشرية",
+    "admin_scolarite": "مسؤول الشؤون المدرسية",
+    "lecteur": "قارئ (قراءة فقط)",
     "chargement_verif": "جاري التحقق...",
     "creer_auto": "إنشاء السنة الدراسية الجديدة تلقائياً بعد الإغلاق",
     "utilisateur_label": "المستخدم",
@@ -476,6 +477,8 @@
     "title": "التراخيص والعملاء",
     "subtitle": "إدارة متعددة المدارس — هادي جيسمان",
     "nouvelle_ecole": "+ مدرسة جديدة",
+    "acceder_ecole": "الدخول إلى هذه المدرسة",
+    "acces_actif": "تدير الآن",
     "total_ecoles": "إجمالي المدارس",
     "licences_actives": "التراخيص النشطة",
     "en_essai": "تجريبي",
@@ -709,6 +712,8 @@
     "responsable_rh": "مسؤول الموارد البشرية",
     "responsable_comptable": "مسؤول المحاسبة",
     "responsable_scolarite": "مسؤول الشؤون التعليمية",
-    "lecture_seule": "قراءة فقط"
+    "lecture_seule": "قراءة فقط",
+    "vous_gerez": "تدير:",
+    "retour_gestion": "العودة إلى الإدارة"
   }
 }

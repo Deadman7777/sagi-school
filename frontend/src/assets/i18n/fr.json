@@ -216,9 +216,10 @@
     "nouveau_mdp": "Nouveau mot de passe *",
     "mdp_min": "Min. 6 caractères",
     "admin_ecole": "Admin École",
-    "comptable": "Comptable",
-    "caissier": "Caissier",
-    "lecture_seule": "Lecture seule",
+    "admin_comptable": "Responsable Comptable",
+    "admin_rh": "Responsable RH",
+    "admin_scolarite": "Responsable Scolarité",
+    "lecteur": "Lecteur (lecture seule)",
     "chargement_verif": "Chargement de la vérification...",
     "creer_auto": "Créer automatiquement le nouvel exercice après clôture",
     "utilisateur_label": "Utilisateur",
@@ -491,6 +492,8 @@
     "title": "Licences & Clients",
     "subtitle": "Gestion multi-écoles — HADY GESMAN",
     "nouvelle_ecole": "+ Nouvelle École",
+    "acceder_ecole": "Accéder à cette école",
+    "acces_actif": "Vous gérez maintenant",
     "total_ecoles": "Total Écoles",
     "licences_actives": "Licences Actives",
     "en_essai": "En Essai",
@@ -724,6 +727,8 @@
     "responsable_rh": "Responsable RH",
     "responsable_comptable": "Responsable Comptable",
     "responsable_scolarite": "Responsable Scolarité",
-    "lecture_seule": "Lecture seule"
+    "lecture_seule": "Lecture seule",
+    "vous_gerez": "Vous gérez :",
+    "retour_gestion": "Retour à la gestion"
   }
 }

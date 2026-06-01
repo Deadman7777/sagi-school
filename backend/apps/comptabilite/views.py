@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status as drf_status
 from apps.paiements.models import Exercice, Paiement
 from apps.eleves.models import Eleve
+from core.tenant import get_tenant
 from .models import JournalEntry, CompteComptable, BudgetLigne, Immobilisation
 from django.utils import timezone
 
@@ -209,15 +210,6 @@ MOBILE_ACCOUNTS = ('552', '5521', '5522', '5523')
 
 # Article 11 AUDCIF — seuil SMT pour le secteur des services (dont éducation)
 SEUIL_SMT_SERVICES = 30_000_000
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if request.user.role == 'SUPER_ADMIN':
-        from apps.tenants.models import Tenant
-        return Tenant.objects.first()
-    return None
 
 
 def get_exercice(tenant):

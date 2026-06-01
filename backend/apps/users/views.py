@@ -4,16 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from core.permissions import IsSuperAdmin, IsAdminEcole
+from core.tenant import get_tenant
 from .models import User
 from .serializers import UserSerializer, CustomTokenSerializer
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if hasattr(request.user, 'tenant') and request.user.tenant:
-        return request.user.tenant
-    return None
 
 
 class LoginView(TokenObtainPairView):

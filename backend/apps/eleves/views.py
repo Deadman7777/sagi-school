@@ -7,22 +7,12 @@ from django.db.models import Sum, Count, Value, DecimalField
 from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
+from core.tenant import get_tenant
 from .models import Eleve, Section
 from apps.paiements.models import Exercice
 from .serializers import EleveSerializer, SectionSerializer
 from django.db.models import Max
 from django.utils import timezone
-
-
-def get_tenant(request):
-    if request.tenant:
-        return request.tenant
-    if hasattr(request.user, 'tenant') and request.user.tenant:
-        return request.user.tenant
-    if request.user.role == 'SUPER_ADMIN':
-        from apps.tenants.models import Tenant
-        return Tenant.objects.first()
-    return None
 
 
 class SectionViewSet(viewsets.ModelViewSet):
