@@ -4,9 +4,9 @@ Guide d'installation de SAGI SCHOOL en mode cloud (programme Taxawu Daara, ~100 
 
 ## Cible
 
-- **Hébergeur** : OVHcloud
-- **Offre** : VPS-2 (6 vCore, 12 GB RAM, 100 GB SSD NVMe, 1 Gbit/s) — ~8.49 €HT/mois
-- **Datacenter** : GRA (Gravelines, France) — meilleure connectivité vers l'Afrique de l'Ouest
+- **Hébergeur** : Hetzner Cloud (bascule depuis OVH suite à la rupture de stock VPS de juin 2026, liée à la pénurie RAM mondiale)
+- **Offre** : CX32 (4 vCPU Intel, 8 GB RAM, 80 GB SSD NVMe, 20 TB trafic inclus) — 6.80 €/mois
+- **Datacenter** : FSN1 (Falkenstein, Allemagne) — DC historique Hetzner, capacité large
 - **OS** : Ubuntu 22.04 LTS (ou plus récent)
 - **Domaines** : `api.sagi-school.com` (Django) + `app.sagi-school.com` (Angular)
 
@@ -20,30 +20,37 @@ Architecture :
                           │
                           ▼
             ┌──────────────────────────────┐
-            │  Backup hors-site quotidien  │  ← Backblaze B2 / OVH Object Storage
+            │  Backup hors-site quotidien  │  ← Backblaze B2 (chiffré GPG)
             └──────────────────────────────┘
 ```
 
 ---
 
-## 0. Provisionnement OVH & DNS
+## 0. Provisionnement Hetzner & DNS
 
-### 0.1 Commander le VPS
-Sur le manager OVH → **Bare Metal Cloud > VPS > Commander un VPS** :
-- Gamme : **VPS-2**
-- Datacenter : **Gravelines (GRA)**
-- OS : **Ubuntu 22.04 LTS Server**
-- Authentification : **clé SSH** (coller `~/.ssh/id_ed25519.pub` de ta machine, pas de mot de passe root)
-- Backups automatiques : **inclus** (rétention 7 jours, déjà activés par défaut)
-- Anti-DDoS : **inclus** (rien à activer)
+### 0.1 Commander le serveur
+Depuis la **Hetzner Cloud Console** (https://console.hetzner.cloud) :
+1. **New Project** → ex. `sagi-school-prod`
+2. **Security > SSH Keys > Add SSH Key** → coller `~/.ssh/id_ed25519.pub`
+3. **Servers > Add Server** :
+   - **Location** : **Falkenstein (FSN1)**
+   - **Image** : **Ubuntu 22.04**
+   - **Type** : **Shared vCPU > CX32** (Intel, 4 vCPU / 8 GB / 80 GB)
+   - **Networking** : IPv4 + IPv6 (par défaut)
+   - **SSH Keys** : cocher la clé ajoutée au §0.1.2
+   - **Backups** : **activer** (Hetzner facture +20% du prix serveur, soit ~1.36€/mois pour 7 snapshots auto rotatifs)
+   - **Name** : `sagi-prod-fsn1`
+4. **Create & Buy now**
+
+Le serveur est provisionné en ~30 secondes. L'IPv4 publique apparaît dans le dashboard.
 
 ### 0.2 DNS (registrar du domaine)
-Créer deux enregistrements **A** pointant vers l'IPv4 du VPS :
+Créer deux enregistrements **A** pointant vers l'IPv4 du serveur :
 ```
-api.sagi-school.com    A    <IP_DU_VPS>    300
-app.sagi-school.com    A    <IP_DU_VPS>    300
+api.sagi-school.com    A    <IP_DU_SERVEUR>    300
+app.sagi-school.com    A    <IP_DU_SERVEUR>    300
 ```
-Et les **AAAA** correspondants si OVH attribue une IPv6.
+Et les **AAAA** correspondants avec l'IPv6 attribuée par Hetzner.
 
 Vérifier la propagation : `dig api.sagi-school.com +short`.
 
@@ -97,6 +104,8 @@ ufw allow 443/tcp
 ufw enable
 ufw status verbose
 ```
+
+💡 **Bonus Hetzner** : tu peux aussi configurer un **Firewall** depuis la Cloud Console (Networking > Firewalls) en amont du serveur. Mêmes règles (22/80/443 in, all out). C'est une 2ᵉ couche défensive — UFW reste utile en cas de souci côté Hetzner. Anti-DDoS basique inclus par défaut chez Hetzner (rien à activer).
 
 ### 1.5 fail2ban
 ```bash
@@ -155,13 +164,13 @@ ALTER DATABASE sagi_school_cloud OWNER TO sagi_cloud;
 EOF
 ```
 
-### 3.2 Tuning minimal pour VPS-2 (12 GB RAM)
+### 3.2 Tuning minimal pour CX32 (8 GB RAM)
 Éditer `/etc/postgresql/14/main/postgresql.conf` (adapter le numéro de version) :
 ```conf
-shared_buffers = 3GB
-effective_cache_size = 8GB
-work_mem = 32MB
-maintenance_work_mem = 512MB
+shared_buffers = 2GB
+effective_cache_size = 5GB
+work_mem = 24MB
+maintenance_work_mem = 384MB
 max_connections = 100
 wal_buffers = 16MB
 checkpoint_completion_target = 0.9
@@ -401,11 +410,11 @@ SSL mode : **Full (Strict)** pour préserver le certif Let's Encrypt en bout de 
 ## 15. Snapshot avant chaque mise à jour
 
 Avant toute migration importante (Django) ou changement de schéma :
-1. Manager OVH → VPS → **Snapshot** (1-clic, ~5 min)
+1. Hetzner Console → ton serveur → **Snapshots > Create Snapshot** (1-clic, ~2 min)
 2. Déployer
-3. Si KO : restaurer le snapshot
+3. Si KO : **Rebuild from snapshot** (le serveur est restauré en ~1 min)
 
-Coût snapshot OVH : ~0.01 €/Go/mois, donc négligeable. Garder le dernier snapshot stable jusqu'au déploiement suivant validé.
+Coût snapshot Hetzner : 0.0119 €/Go/mois (~1€/mois pour un snapshot de 80 GB), donc négligeable. Garder le dernier snapshot stable jusqu'au déploiement suivant validé, supprimer les anciens.
 
 ---
 
@@ -471,8 +480,8 @@ Alerte UptimeRobot configurable sur un endpoint Django qui expose `df`.
 | Incident | Action |
 |---|---|
 | Corruption DB | Restaurer dernier backup local (§12) |
-| VPS perdu (incendie, etc.) | Recommander VPS-2 GRA (ou autre DC OVH), redéployer depuis git + restaurer backup hors-site B2 |
-| Compte OVH compromis | Backup B2 intact (clés API séparées) → recommander chez un autre hébergeur, restaurer |
+| Serveur perdu (incendie, panne, etc.) | Recréer un CX32 FSN1 (ou autre DC Hetzner / autre hébergeur), redéployer depuis git + restaurer backup hors-site B2 |
+| Compte Hetzner compromis | Backup B2 intact (clés API séparées) → recommander chez un autre hébergeur, restaurer |
 | Clé GPG privée perdue | **Backups B2 illisibles**. → Sauvegarder la clé privée sur 2 USB chiffrées, dans 2 lieux physiques différents |
 
 RTO cible (Recovery Time Objective) : ~2h.
