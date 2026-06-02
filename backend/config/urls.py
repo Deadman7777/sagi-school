@@ -19,7 +19,7 @@ urlpatterns = [
     path('api/academique/', include('apps.academique.urls')),
 ]
 
-if not settings.DEBUG:
+if getattr(settings, 'FRONTEND_DIR', None):
     import os
     from django.http import HttpResponse
     from django.views.static import serve
@@ -40,6 +40,6 @@ if not settings.DEBUG:
                 serve, {'document_root': FRONTEND}),
         re_path(r'^(?!api/)(?!admin/).*$', angular_index),
     ]
-else:
+elif settings.DEBUG:
     import debug_toolbar
     urlpatterns += [path('__debug__/', include(debug_toolbar.urls))]
