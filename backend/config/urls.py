@@ -2,8 +2,11 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 
+from core.health import health
+
 urlpatterns = [
     path('admin/',            admin.site.urls),
+    path('api/health/',       health),
     path('api/auth/',         include('apps.users.urls')),
     path('api/tenants/',      include('apps.tenants.urls')),
     path('api/licences/',     include('apps.licences.urls')),
