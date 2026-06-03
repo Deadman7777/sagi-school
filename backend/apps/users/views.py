@@ -38,7 +38,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant = get_tenant(self.request)
-        if self.request.user.role != 'SUPER_ADMIN':
+        if tenant:
             serializer.save(tenant=tenant)
         else:
             serializer.save()
