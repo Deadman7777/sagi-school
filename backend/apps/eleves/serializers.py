@@ -36,11 +36,11 @@ class EleveSerializer(serializers.ModelSerializer):
 
 class SectionSerializer(serializers.ModelSerializer):
     total_annuel = serializers.ReadOnlyField()
-    frais_inscription  = serializers.FloatField()
-    frais_mensualite   = serializers.FloatField()
-    frais_uniforme     = serializers.FloatField()
-    frais_fournitures  = serializers.FloatField()
-    frais_yendu        = serializers.FloatField()
+    frais_inscription  = serializers.FloatField(required=False, default=0)
+    frais_mensualite   = serializers.FloatField(required=False, default=0)
+    frais_uniforme     = serializers.FloatField(required=False, default=0)
+    frais_fournitures  = serializers.FloatField(required=False, default=0)
+    frais_yendu        = serializers.FloatField(required=False, default=0)
 
     class Meta:
         model  = Section
