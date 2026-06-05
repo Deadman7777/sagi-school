@@ -187,7 +187,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }} *</label>
-          <p-select [options]="typesLicence" [(ngModel)]="form.type_licence"
+          <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="form.type_licence"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
@@ -234,7 +234,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group" style="margin-top:16px">
           <label>{{ 'licences.duree_renouvellement' | translate }}</label>
-          <p-select [options]="durees" [(ngModel)]="moisRenouvellement"
+          <p-select appendTo="body" [options]="durees" [(ngModel)]="moisRenouvellement"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="tarif-bar" style="margin-top:12px">
@@ -265,7 +265,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }}</label>
-          <p-select [options]="typesLicence" [(ngModel)]="nouveauType"
+          <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="nouveauType"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       </div>

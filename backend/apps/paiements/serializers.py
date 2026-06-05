@@ -10,6 +10,9 @@ class ExerciceSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Exercice
         fields = '__all__'
+        extra_kwargs = {
+            'tenant': {'required': False, 'read_only': True},
+        }
 
 
 class PaiementSerializer(serializers.ModelSerializer):

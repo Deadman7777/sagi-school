@@ -11,3 +11,6 @@ class LicenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Licence
         fields = '__all__'
+        extra_kwargs = {
+            'tenant': {'required': False, 'read_only': True},
+        }

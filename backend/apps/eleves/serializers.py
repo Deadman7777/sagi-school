@@ -3,14 +3,6 @@ from django.utils import timezone
 from .models import Eleve, Section
 
 
-class SectionSerializer(serializers.ModelSerializer):
-    total_annuel = serializers.ReadOnlyField()
-
-    class Meta:
-        model  = Section
-        fields = '__all__'
-
-
 class EleveSerializer(serializers.ModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)
     total_theorique              = serializers.ReadOnlyField()
@@ -53,3 +45,6 @@ class SectionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Section
         fields = '__all__'
+        extra_kwargs = {
+            'tenant': {'required': False, 'read_only': True},
+        }
