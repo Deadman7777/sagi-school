@@ -78,6 +78,7 @@ class LicenceViewSet(viewsets.ModelViewSet):
         if nouveau_type not in ['ESSAI', 'BASIC', 'PRO', 'AVANCE', 'TAXAWU_DAARA']:
             return Response({'error': 'Type invalide'}, status=400)
         licence.type = nouveau_type
+        licence.date_debut = timezone.now().date()
         licence.save()
         return Response(LicenceSerializer(licence).data)
 
