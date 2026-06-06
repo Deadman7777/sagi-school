@@ -188,7 +188,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }} *</label>
           <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="form.type_licence"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
           <label>{{ 'licences.duree_mois' | translate }}</label>
@@ -235,7 +235,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <div class="form-group" style="margin-top:16px">
           <label>{{ 'licences.duree_renouvellement' | translate }}</label>
           <p-select appendTo="body" [options]="durees" [(ngModel)]="moisRenouvellement"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="tarif-bar" style="margin-top:12px">
           <span>{{ 'licences.montant_facturer' | translate }}</span>
@@ -266,7 +266,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }}</label>
           <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="nouveauType"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
       </div>
       <ng-template pTemplate="footer">
