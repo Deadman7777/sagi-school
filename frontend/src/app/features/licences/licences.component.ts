@@ -187,7 +187,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }} *</label>
-          <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="form.type_licence"
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="typesLicence" [(ngModel)]="form.type_licence"
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
@@ -234,7 +234,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group" style="margin-top:16px">
           <label>{{ 'licences.duree_renouvellement' | translate }}</label>
-          <p-select appendTo="body" [options]="durees" [(ngModel)]="moisRenouvellement"
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="durees" [(ngModel)]="moisRenouvellement"
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="tarif-bar" style="margin-top:12px">
@@ -265,7 +265,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'licences.type_licence' | translate }}</label>
-          <p-select appendTo="body" [options]="typesLicence" [(ngModel)]="nouveauType"
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="typesLicence" [(ngModel)]="nouveauType"
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
       </div>
@@ -420,6 +420,11 @@ export class LicencesComponent implements OnInit {
   stats                = signal<any>(null);
   loading              = signal(true);
   saving               = signal(false);
+  // Empêche les dropdowns de se fermer quand on scrolle dans un dialog long
+  // (PrimeNG ferme l'overlay au scroll par défaut). On garde fermeture sur clic extérieur / Échap / resize.
+  overlayNoHideOnScroll = {
+    listener: (_event: any, options: any) => options.type === 'scroll' ? false : options.valid,
+  };
   dialogVisible        = false;
   renouvDialogVisible  = false;
   licenceSelectionnee: any = null;
