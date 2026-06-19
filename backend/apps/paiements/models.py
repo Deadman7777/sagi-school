@@ -46,6 +46,12 @@ class Paiement(TenantModel):
     montant_fournitures = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_cantine     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_divers      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Mois scolaires couverts par la mensualité (numéros 1-12), pour le suivi mensuel
+    # et la gestion des paiements anticipés. Ex. [10, 11, 12].
+    mois_regles         = models.JSONField(default=list, blank=True)
+    # Détail des services optionnels réglés dans ce paiement (itemisation reçu).
+    # Ex. [{"nom": "Cantine", "montant": 10000}]. Le montant est inclus dans montant_divers.
+    services_regles     = models.JSONField(default=list, blank=True)
     mode_paiement       = models.CharField(max_length=20, choices=MODE_CHOICES, default='ESPECE')
     observations        = models.TextField(blank=True)
     saisi_par           = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)

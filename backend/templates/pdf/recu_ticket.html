@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: {{ page_size|default:"80mm 297mm" }}; margin: 3mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial, sans-serif; font-size:9px; color:#000; }
+  .center { text-align:center; }
+  .b { font-weight:bold; }
+  .school { font-size:13px; font-weight:bold; text-transform:uppercase; }
+  .sub { font-size:8px; color:#333; }
+  .doc { font-size:10px; font-weight:bold; margin-top:3px; }
+  .sep { border-top:1px dashed #000; margin:5px 0; }
+  .row { width:100%; }
+  .row td { font-size:9px; padding:1px 0; vertical-align:top; }
+  .row td.r { text-align:right; }
+  .lbl { color:#333; }
+  .line td { font-size:9px; padding:2px 0; border-bottom:1px dotted #bbb; }
+  .line td.r { text-align:right; font-weight:bold; }
+  .tot td { font-size:11px; font-weight:bold; padding:4px 0; border-top:2px solid #000; }
+  .tot td.r { text-align:right; }
+  .small { font-size:8px; color:#444; }
+  .footer { text-align:center; font-size:8px; color:#444; margin-top:6px; }
+</style>
+</head>
+<body>
+
+  <div class="center">
+    {% if tenant_logo %}<img src="{{ tenant_logo }}" style="max-height:40px; max-width:60mm; margin-bottom:2px;"><br>{% endif %}
+    <div class="school">{{ tenant_nom }}</div>
+    {% if tenant_ville %}<div class="sub">{{ tenant_ville }}</div>{% endif %}
+    {% if tenant_telephone %}<div class="sub">Tél : {{ tenant_telephone }}</div>{% endif %}
+    <div class="doc">REÇU DE PAIEMENT</div>
+    <div class="sub b">N° {{ no_piece }}</div>
+    <div class="sub">{{ date_edition }}</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <table class="row">
+    <tr><td class="lbl">Élève</td><td class="r b">{{ eleve }}</td></tr>
+    <tr><td class="lbl">Matricule</td><td class="r">{{ matricule }}</td></tr>
+    <tr><td class="lbl">Section</td><td class="r">{{ section }}</td></tr>
+    {% if nom_pere and nom_pere != '—' %}
+    <tr><td class="lbl">Parent</td><td class="r">{{ nom_pere }}</td></tr>
+    {% endif %}
+    <tr><td class="lbl">Année</td><td class="r">{{ annee_scolaire }}</td></tr>
+  </table>
+
+  <div class="sep"></div>
+
+  <table class="row">
+    {% for label, montant in lignes %}
+    <tr class="line"><td>{{ label }}</td><td class="r">{{ montant|floatformat:0 }}</td></tr>
+    {% endfor %}
+    <tr class="tot"><td>TOTAL REÇU</td><td class="r">{{ total|floatformat:0 }} FCFA</td></tr>
+  </table>
+
+  <table class="row" style="margin-top:4px">
+    <tr><td class="lbl">Mode</td><td class="r">{{ mode_label }}</td></tr>
+    <tr><td class="lbl">Caissier</td><td class="r">{{ saisi_par }}</td></tr>
+  </table>
+
+  <div class="sep"></div>
+
+  <table class="row">
+    <tr><td class="lbl">Total attendu</td><td class="r">{{ total_attendu|floatformat:0 }}</td></tr>
+    <tr><td class="lbl">Déjà versé (avant)</td><td class="r">{{ deja_paye_avant|floatformat:0 }}</td></tr>
+    <tr><td class="lbl">Versé après</td><td class="r b">{{ total_paye_apres|floatformat:0 }}</td></tr>
+    <tr><td class="lbl b">Reste à payer</td>
+        <td class="r b">{% if reste_apres == 0 %}SOLDÉ{% else %}{{ reste_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+  </table>
+
+  <div class="sep"></div>
+  <div class="footer">
+    Merci de conserver ce reçu.<br>
+    {{ date_edition }}
+  </div>
+
+</body>
+</html>

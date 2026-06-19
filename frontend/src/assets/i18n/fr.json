@@ -115,7 +115,9 @@
     "services": "Services / Activités",
     "services_ph": "Choisir les services...",
     "services_choix": "Services auxquels l'élève est abonné",
-    "services_aucun": "Aucun service actif. Créez-en dans Paramètres → Services."
+    "services_aucun": "Aucun service actif. Créez-en dans Paramètres → Services.",
+    "date_entree": "Date d'entrée",
+    "date_entree_aide": "Sert au prorata des mensualités dues"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -253,7 +255,14 @@
     "services_vide": "Aucun service. Cliquez sur « Ajouter un service ».",
     "nouveau_service_titre": "Nouveau service",
     "service_placeholder": "Ex. Cantine, Karaté, Transport...",
-    "service_confirm_suppr": "Supprimer le service"
+    "service_confirm_suppr": "Supprimer le service",
+    "section_confirm_suppr": "Supprimer la section",
+    "section_suppr_info": "Les élèves de cette classe ne seront pas supprimés mais perdront leur section.",
+    "logo": "Logo de l'établissement",
+    "logo_aucun": "Aucun logo",
+    "logo_aide": "PNG, JPG, SVG… — max 1 Mo. Apparaît sur les documents officiels.",
+    "logo_format": "Le fichier doit être une image.",
+    "logo_trop_gros": "Image trop lourde (max 1 Mo)."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

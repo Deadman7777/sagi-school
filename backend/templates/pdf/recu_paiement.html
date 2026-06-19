@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <style>
+  @page { size: {{ page_size|default:"A5 portrait" }}; margin: 1cm; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:Arial, sans-serif; font-size:10px; color:#1a1a1a; }
 
@@ -96,6 +97,7 @@
       {% if tenant_telephone %}<div class="rep">Tél : {{ tenant_telephone }}</div>{% endif %}
     </td>
     <td style="width:44%" class="school-block">
+      {% if tenant_logo %}<img src="{{ tenant_logo }}" style="max-height:45px; max-width:130px; margin-bottom:3px;"><br>{% endif %}
       <div class="school-name">{{ tenant_nom }}</div>
       {% if tenant_ville %}<div class="school-sub">{{ tenant_ville }}</div>{% endif %}
       <div class="school-sub" style="margin-top:3px">Année Scolaire : <strong>{{ annee_scolaire }}</strong></div>

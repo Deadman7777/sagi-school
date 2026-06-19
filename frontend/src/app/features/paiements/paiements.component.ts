@@ -13,6 +13,7 @@ import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,7 +23,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, TooltipModule],
+            InputNumberModule, CheckboxModule, TooltipModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -383,6 +384,22 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         }
 
         @if (typePaiement === 'MENSUALITE') {
+          @if (saisieDonnees()?.mois_ecole?.length) {
+            <div class="form-group full" style="margin-bottom:10px">
+              <label>Mois concerné(s) <span style="color:#64748b;font-weight:400">— cocher plusieurs pour anticiper</span></label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+                @for (m of saisieDonnees()!.mois_ecole; track m.num) {
+                  <button type="button" [disabled]="!m.du"
+                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.paye ? '#14321f' : '#1e2d45')"
+                    [style.color]="moisSelected(m.num) ? '#06281f' : (m.du ? '#e8f0fe' : '#475569')"
+                    style="border:1px solid #2a3f5f;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer"
+                    (click)="toggleMois(m.num)">
+                    {{ m.label }}{{ m.paye ? ' ✓' : '' }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
           <div class="montants-grid">
             <div class="form-group">
               <label>Mensualité
@@ -393,14 +410,27 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
             <div class="form-group">
-              <label>Cantine</label>
-              <p-inputNumber [(ngModel)]="form.montant_cantine" [min]="0" mode="decimal" styleClass="w-full" />
-            </div>
-            <div class="form-group">
               <label>Divers</label>
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
           </div>
+
+          <!-- Services optionnels auxquels l'élève est abonné (montant auto) -->
+          @if (form.services.length) {
+            <div class="form-group full" style="margin-top:6px">
+              <label>Services / Activités abonnés</label>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                @for (sv of form.services; track sv.id) {
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <p-checkbox [(ngModel)]="sv.inclus" [binary]="true" />
+                    <span style="flex:1;font-size:13px;color:#e8f0fe">{{ sv.nom }}</span>
+                    <p-inputNumber [(ngModel)]="sv.montant" [min]="0" mode="decimal"
+                                   [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
+                  </div>
+                }
+              </div>
+            </div>
+          }
         }
 
         <!-- Total -->
@@ -482,9 +512,14 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
       </div>
       <ng-template pTemplate="footer">
-        <p-button label="📄 Télécharger PDF" severity="success"
-                  icon="pi pi-download" (onClick)="telechargerRecuPdf()" />
-        <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <span style="font-size:12px;color:#64748b">Format :</span>
+          <p-select appendTo="body" [options]="formatsRecu" [(ngModel)]="recuFormat"
+                    optionLabel="label" optionValue="value" styleClass="w-40" />
+          <p-button label="📄 Télécharger PDF" severity="success"
+                    icon="pi pi-download" (onClick)="telechargerRecuPdf()" />
+          <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
+        </div>
       </ng-template>
     </p-dialog>
 
@@ -770,6 +805,12 @@ export class PaiementsComponent implements OnInit {
   dialogVisible     = false;
   recuVisible       = false;
   recuData          = signal<any>(null);
+  recuFormat        = 'A5';
+  formatsRecu = [
+    { label: 'A5 (demi-A4)',     value: 'A5' },
+    { label: 'A4 (page entière)', value: 'A4' },
+    { label: '80 mm (thermique)', value: '80mm' },
+  ];
   saisieDonnees     = signal<any | null>(null);
   eleveSelectionne: any = null;
   rechercheInput    = '';
@@ -784,6 +825,8 @@ export class PaiementsComponent implements OnInit {
     montant_fournitures: 0,
     montant_cantine:     0,
     montant_divers:      0,
+    mois_regles:         [] as number[],
+    services:            [] as { id: string; nom: string; montant: number; inclus: boolean }[],
     mode_paiement:       '',
     observations:        '',
   };
@@ -902,27 +945,55 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_fournitures  = reste.fournitures  || 0;
       this.form.montant_mensualite   = 0;
       this.form.montant_cantine      = 0;
+      this.form.mois_regles          = [];
+      this.form.services             = [];
     } else {
-      this.form.montant_mensualite   = nets.mensualite    || 0;
+      // Pré-sélectionne le 1er mois dû non encore réglé
+      const dus = (data.mois_ecole || []).filter((m: any) => m.du && !m.paye);
+      this.form.mois_regles          = dus.length ? [dus[0].num] : [];
+      this.form.montant_mensualite   = (nets.mensualite || 0) * this.form.mois_regles.length;
       this.form.montant_inscription  = 0;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
+      // Services abonnés : montant auto = tarif du service, cochés par défaut
+      this.form.services = (data.services || []).map((s: any) => ({
+        id: s.id, nom: s.nom, montant: s.montant || 0, inclus: true,
+      }));
     }
     this.form.montant_divers = 0;
+  }
+
+  servicesTotal(): number {
+    return (this.form.services || [])
+      .filter(s => s.inclus)
+      .reduce((a, s) => a + (Number(s.montant) || 0), 0);
+  }
+
+  moisSelected(num: number): boolean {
+    return this.form.mois_regles.includes(num);
+  }
+
+  toggleMois(num: number) {
+    const i = this.form.mois_regles.indexOf(num);
+    if (i >= 0) this.form.mois_regles.splice(i, 1);
+    else        this.form.mois_regles.push(num);
+    // Le montant mensualité suit le nombre de mois sélectionnés (tarif × nb mois)
+    const tarif = this.saisieDonnees()?.fees_nets?.mensualite || 0;
+    this.form.montant_mensualite = Math.round(tarif * this.form.mois_regles.length);
   }
 
   private resetForm() {
     this.form = {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
-      mode_paiement: this.form.mode_paiement || '', observations: '',
+      mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '', observations: '',
     };
   }
 
   get totalForm(): () => number {
     return () => Object.entries(this.form)
       .filter(([k]) => k.startsWith('montant_'))
-      .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+      .reduce((s, [, v]) => s + (Number(v) || 0), 0) + this.servicesTotal();
   }
 
   totalModifForm(): number {
@@ -955,8 +1026,20 @@ export class PaiementsComponent implements OnInit {
       return;
     }
     this.saving.set(true);
+    // Services inclus : itemisés dans services_regles ; leur montant est ajouté au montant_divers
+    const servicesIncl  = (this.form.services || []).filter(s => s.inclus && Number(s.montant) > 0);
+    const servicesTotal = servicesIncl.reduce((a, s) => a + Number(s.montant), 0);
     this.paiementsService.creerPaiement({
-      ...this.form,
+      montant_inscription: this.form.montant_inscription,
+      montant_mensualite:  this.form.montant_mensualite,
+      montant_uniforme:    this.form.montant_uniforme,
+      montant_fournitures: this.form.montant_fournitures,
+      montant_cantine:     this.form.montant_cantine,
+      montant_divers:      Number(this.form.montant_divers || 0) + servicesTotal,
+      mois_regles:         this.form.mois_regles,
+      services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant) })),
+      mode_paiement:       this.form.mode_paiement,
+      observations:        this.form.observations,
       eleve:    this.eleveSelectionne.id,
       exercice: this.exerciceId,
     }).subscribe({
@@ -1057,12 +1140,12 @@ export class PaiementsComponent implements OnInit {
       this.msg.add({ severity: 'warn', summary: 'ID manquant', detail: 'Fermez et rouvrez le reçu.' });
       return;
     }
-    this.paiementsService.telechargerRecuPdf(d.paiement_id).subscribe({
+    this.paiementsService.telechargerRecuPdf(d.paiement_id, this.recuFormat).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = `recu_${d.no_piece}.pdf`;
+        link.download = `recu_${d.no_piece}_${this.recuFormat}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

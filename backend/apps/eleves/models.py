@@ -1,3 +1,4 @@
+import datetime
 from django.db import models
 from core.models import TenantModel
 
@@ -61,7 +62,8 @@ class Eleve(TenantModel):
     telephone_pere        = models.CharField(max_length=20, blank=True)
     nom_mere              = models.CharField(max_length=200, blank=True)
     telephone_mere        = models.CharField(max_length=20, blank=True)
-    date_inscription      = models.DateField(auto_now_add=True)
+    date_inscription      = models.DateField(default=datetime.date.today,
+                                              help_text="Date d'entrée — sert au prorata des mensualités dues")
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
     # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
@@ -101,18 +103,32 @@ class Eleve(TenantModel):
         return 0.0
 
     @property
+    def nb_mensualites_dues(self):
+        """Nombre de mensualités réellement dues, au prorata de la date d'entrée.
+        Ex. exercice débutant en octobre, élève inscrit en janvier → on ne compte
+        pas oct/nov/déc. Plafonné à nb_mensualites de l'exercice."""
+        if not self.exercice_id:
+            return 10
+        nb    = self.exercice.nb_mensualites
+        debut = self.exercice.date_debut
+        insc  = self.date_inscription or debut
+        if insc <= debut:
+            return nb
+        mois_ecoules = (insc.year - debut.year) * 12 + (insc.month - debut.month)
+        return max(0, nb - mois_ecoules)
+
+    @property
     def montant_pec_annuel(self):
-        """Total annuel pris en charge (inscription + nb_mois × réduction mensualité)."""
-        nb_mois = self.exercice.nb_mensualites if self.exercice_id else 10
-        return round(self.montant_pec_inscription + self.montant_pec_mensualite_mensuel * nb_mois, 2)
+        """Total annuel pris en charge (inscription + mensualités dues × réduction mensualité)."""
+        return round(self.montant_pec_inscription +
+                     self.montant_pec_mensualite_mensuel * self.nb_mensualites_dues, 2)
 
     @property
     def total_theorique(self):
-        """Total annuel brut sans prise en charge (mensualité × nb de mois de l'exercice)."""
+        """Total annuel brut sans prise en charge (mensualité × nb de mensualités dues)."""
         if not self.section:
             return 0.0
-        nb_mois = self.exercice.nb_mensualites if self.exercice_id else 10
-        return float(self.section.total_annuel_pour(nb_mois))
+        return float(self.section.total_annuel_pour(self.nb_mensualites_dues))
 
     @property
     def frais_mensualite_effectif(self):
@@ -127,9 +143,9 @@ class Eleve(TenantModel):
     @property
     def montant_services_annuel(self):
         """Total annuel des services optionnels auxquels l'élève est abonné.
-        Mensuel → montant × nb_mensualites ; Unique → montant une fois.
+        Mensuel → montant × mensualités dues (prorata entrée) ; Unique → montant une fois.
         Les services ne sont PAS soumis à la prise en charge."""
-        nb_mois = self.exercice.nb_mensualites if self.exercice_id else 10
+        nb_mois = self.nb_mensualites_dues
         total = 0.0
         for ab in self.abonnements.all():
             s = ab.service
@@ -178,10 +194,12 @@ class Eleve(TenantModel):
             return 'URGENT' if ratio < 0.5 else 'ATTENTION'
 
         today  = timezone.now().date()
-        debut  = self.exercice.date_debut
+        # Les arriérés se comptent à partir de l'entrée de l'élève (prorata),
+        # plafonnés au nombre de mensualités réellement dues.
+        debut  = max(self.exercice.date_debut, self.date_inscription or self.exercice.date_debut)
         months = max(0, min(
             (today.year - debut.year) * 12 + (today.month - debut.month),
-            10
+            self.nb_mensualites_dues
         ))
 
         mensualites_payees = float(

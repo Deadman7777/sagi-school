@@ -85,6 +85,7 @@
 
   <!-- ── EN-TÊTE ── -->
   <div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
+  {% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:45px; max-width:130px;"></div>{% endif %}
   <div class="school-name">{{ tenant.nom|upper }}</div>
   <div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
   <div class="sep-line"></div>

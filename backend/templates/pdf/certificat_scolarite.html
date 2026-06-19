@@ -61,6 +61,7 @@
       </div>
     </td>
     <td style="width:40%" class="school-block">
+      {% if tenant.logo %}<img src="{{ tenant.logo }}" style="max-height:50px; max-width:140px; margin-bottom:3px;"><br>{% endif %}
       <div class="school-name">{{ tenant.nom }}</div>
       {% if tenant.ville %}<div class="school-sub">{{ tenant.ville }}</div>{% endif %}
       {% if tenant_rccm %}<div class="school-sub">RCCM : {{ tenant_rccm }}</div>{% endif %}

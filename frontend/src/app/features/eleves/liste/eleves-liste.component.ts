@@ -511,6 +511,11 @@ interface PecForm {
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
         </div>
         <div class="form-group">
+          <label>{{ 'eleves.date_entree' | translate }}</label>
+          <input pInputText type="date" [(ngModel)]="nouvelEleve.date_inscription" class="w-full" />
+          <small style="color:#64748b;font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
+        </div>
+        <div class="form-group">
           <label>{{ 'eleves.lieu_naissance' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.lieu_naissance" class="w-full"
                  [placeholder]="'eleves.lieu_naissance_ph' | translate" />
@@ -981,7 +986,7 @@ export class ElevesListeComponent implements OnInit {
   }
 
   ouvrirDialog() {
-    this.nouvelEleve = {};
+    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0] };
     this.dialogVisible = true;
   }
 

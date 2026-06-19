@@ -115,7 +115,9 @@
     "services": "Services / Activities",
     "services_ph": "Select services...",
     "services_choix": "Services the student is subscribed to",
-    "services_aucun": "No active service. Create some in Settings → Services."
+    "services_aucun": "No active service. Create some in Settings → Services.",
+    "date_entree": "Entry date",
+    "date_entree_aide": "Used to prorate the monthly fees due"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -253,7 +255,14 @@
     "services_vide": "No service. Click \"Add a service\".",
     "nouveau_service_titre": "New service",
     "service_placeholder": "E.g. Canteen, Karate, Transport...",
-    "service_confirm_suppr": "Delete service"
+    "service_confirm_suppr": "Delete service",
+    "section_confirm_suppr": "Delete section",
+    "section_suppr_info": "Students in this class will not be deleted but will lose their section.",
+    "logo": "School logo",
+    "logo_aucun": "No logo",
+    "logo_aide": "PNG, JPG, SVG… — max 1 MB. Appears on official documents.",
+    "logo_format": "The file must be an image.",
+    "logo_trop_gros": "Image too large (max 1 MB)."
   },
   "cloture": {
     "title": "Year Closing",

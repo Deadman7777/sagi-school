@@ -11,6 +11,10 @@ class Tenant(TimeStampedModel):
     telephone = models.CharField(max_length=20, blank=True)
     email     = models.EmailField(blank=True)
     code_etablissement = models.CharField(max_length=10, default='ETB')
+    # Logo de l'établissement en data URI base64 (ex. "data:image/png;base64,...").
+    # Stocké en base pour fonctionner identiquement en local (Electron) et en cloud,
+    # et s'embarquer directement dans les PDF (xhtml2pdf gère les data URIs).
+    logo      = models.TextField(blank=True, default='')
     actif     = models.BooleanField(default=True)
 
     class Meta:

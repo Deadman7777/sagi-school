@@ -203,10 +203,45 @@ class EleveViewSet(viewsets.ModelViewSet):
             'fournitures':  round(max(fees_nets['fournitures']  - deja_paye['fournitures'],  0), 2),
         }
 
-        # Vrai total annuel dû = mensualité × nb_mensualites − prise en charge
+        # Vrai total annuel dû = mensualité × mensualités dues − prise en charge
         # (source de vérité partagée avec liste élèves / dashboard / reçus)
         total_annuel = round(float(eleve.total_attendu), 2)
         total_paye = round(sum(deja_paye.values()), 2)
+
+        # ── Services optionnels auxquels l'élève est abonné ─────────────────
+        services_abonnes = [
+            {
+                'id':          str(ab.service_id),
+                'nom':         ab.service.nom,
+                'montant':     float(ab.service.montant),
+                'periodicite': ab.service.periodicite,
+            }
+            for ab in eleve.abonnements.all() if ab.service.actif
+        ]
+
+        # ── Mois de l'année scolaire : dus (prorata entrée) + déjà réglés ────
+        nb_dus     = eleve.nb_mensualites_dues
+        mois_payes = set()
+        if exercice:
+            for p in pmt_qs.filter(statut='ACTIF'):
+                for mr in (p.mois_regles or []):
+                    mois_payes.add(int(mr))
+        mois_ecole = []
+        if exercice:
+            nb_total = exercice.nb_mensualites
+            y, mo = exercice.date_debut.year, exercice.date_debut.month
+            for i in range(nb_total):
+                mois_ecole.append({
+                    'num':   mo,
+                    'annee': y,
+                    'label': MOIS_FR.get(mo, str(mo)),
+                    'du':    i >= (nb_total - nb_dus),   # les mois avant l'entrée ne sont pas dus
+                    'paye':  mo in mois_payes,
+                })
+                mo += 1
+                if mo > 12:
+                    mo = 1
+                    y += 1
 
         return Response({
             'eleve_id':       str(eleve.id),
@@ -233,6 +268,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             'total_paye':        total_paye,
             'total_restant':     round(max(total_annuel - total_paye, 0), 2),
             'nb_paiements':      nb_paiements,
+            'nb_mensualites_dues': nb_dus,
+            'mois_ecole':        mois_ecole,
+            'services':          services_abonnes,
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
         })
@@ -320,16 +358,15 @@ class SuiviMensuelView(APIView):
                 }
             })
 
-        # ── 1. Paiements mensuels agrégés ───────────────────────────────────
+        # ── 1. Paiements mensuels agrégés (hors mensualité) par date de paiement ─
         mensuel_qs = Paiement.objects.filter(
             tenant=tenant, exercice=exercice
         ).annotate(mois_tronc=TruncMonth('date_paiement')).values('mois_tronc').annotate(
-            total       = Sum('montant_inscription') + Sum('montant_mensualite') +
-                          Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                          Sum('montant_cantine')     + Sum('montant_divers'),
+            total_hm    = Sum('montant_inscription') + Sum('montant_uniforme') +
+                          Sum('montant_fournitures') + Sum('montant_cantine') +
+                          Sum('montant_divers'),
             nb          = Count('id'),
             inscription = Sum('montant_inscription'),
-            mensualite  = Sum('montant_mensualite'),
             uniforme    = Sum('montant_uniforme'),
             fournitures = Sum('montant_fournitures'),
             cantine     = Sum('montant_cantine'),
@@ -341,6 +378,27 @@ class SuiviMensuelView(APIView):
             if m['mois_tronc']:
                 key = (m['mois_tronc'].year, m['mois_tronc'].month)
                 pmt_par_mois[key] = m
+
+        # ── Mensualité ventilée par mois concerné (mois_regles) ; fallback date_paiement
+        debut_year, debut_month = exercice.date_debut.year, exercice.date_debut.month
+        def _annee_du_mois(num):
+            return debut_year if num >= debut_month else debut_year + 1
+        mens_par_mois = {}
+        for p in Paiement.objects.filter(tenant=tenant, exercice=exercice).only(
+                'montant_mensualite', 'mois_regles', 'date_paiement'):
+            mm = float(p.montant_mensualite or 0)
+            if mm <= 0:
+                continue
+            mois = [int(x) for x in (p.mois_regles or [])]
+            if mois:
+                part = mm / len(mois)
+                for num in mois:
+                    k = (_annee_du_mois(num), num)
+                    mens_par_mois[k] = mens_par_mois.get(k, 0.0) + part
+            else:
+                d = p.date_paiement
+                k = (d.year, d.month)
+                mens_par_mois[k] = mens_par_mois.get(k, 0.0) + mm
 
         # ── Charges mensuelles (débits 6xx depuis journal) ───────────────────
         charges_qs = JournalEntry.objects.filter(
@@ -374,7 +432,8 @@ class SuiviMensuelView(APIView):
         while cur <= fin:
             key = (cur.year, cur.month)
             m   = pmt_par_mois.get(key, {})
-            enc           = float(m.get('total') or 0)
+            mens          = round(mens_par_mois.get(key, 0.0), 2)   # mensualité ventilée par mois concerné
+            enc           = round(float(m.get('total_hm') or 0) + mens, 2)
             charges       = round(charges_par_mois.get(key, 0.0), 2)
             investissements = round(invest_par_mois.get(key, 0.0), 2)
             decaissements = round(charges + investissements, 2)
@@ -386,7 +445,7 @@ class SuiviMensuelView(APIView):
                 'total':           enc,
                 'nb':              m.get('nb', 0),
                 'inscription':     float(m.get('inscription') or 0),
-                'mensualite':      float(m.get('mensualite')  or 0),
+                'mensualite':      mens,
                 'uniforme':        float(m.get('uniforme')    or 0),
                 'fournitures':     float(m.get('fournitures') or 0),
                 'cantine':         float(m.get('cantine')     or 0),

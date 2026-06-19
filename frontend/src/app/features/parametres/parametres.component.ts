@@ -82,6 +82,26 @@ import { MessageService } from 'primeng/api';
             <label>{{ 'parametres.ninea'     | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.ninea" class="w-full" />
           </div>
+          <div class="form-group full">
+            <label>{{ 'parametres.logo' | translate }}</label>
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <div style="width:90px;height:90px;border:1px dashed #2a3f5f;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#0f1729;overflow:hidden">
+                @if (ecole()?.logo) {
+                  <img [src]="ecole()!.logo" style="max-width:100%;max-height:100%;object-fit:contain" alt="logo" />
+                } @else {
+                  <span style="font-size:11px;color:#475569">{{ 'parametres.logo_aucun' | translate }}</span>
+                }
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <input type="file" accept="image/*" (change)="onLogoSelected($event)" />
+                <small style="color:#64748b;font-size:11px">{{ 'parametres.logo_aide' | translate }}</small>
+                @if (ecole()?.logo) {
+                  <p-button [label]="'common.supprimer' | translate" severity="danger" size="small"
+                            [outlined]="true" (onClick)="retirerLogo()" />
+                }
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-actions">
           <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
@@ -183,9 +203,11 @@ import { MessageService } from 'primeng/api';
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
           </div>
-          <div class="sc-actions">
+          <div class="sc-actions" style="display:flex;gap:8px">
             <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
                       (onClick)="sauvegarderSection(s)" />
+            <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
+                      (onClick)="supprimerSection(s)" />
           </div>
         </div>
       </div>
@@ -685,6 +707,30 @@ chargerExercice() {
     });
   }
 
+  onLogoSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file  = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('parametres.logo_format') });
+      return;
+    }
+    if (file.size > 1024 * 1024) {  // 1 Mo max
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('parametres.logo_trop_gros') });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.ecole.update(e => ({ ...e, logo: reader.result as string }));
+    };
+    reader.readAsDataURL(file);  // data URI base64 (tous formats image)
+    input.value = '';
+  }
+
+  retirerLogo() {
+    this.ecole.update(e => ({ ...e, logo: '' }));
+  }
+
   sauvegarderEcole() {
     if (!this.ecole()) return;
     this.saving.set(true);
@@ -719,6 +765,18 @@ chargerExercice() {
         this.saving.set(false);
       },
       error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+    });
+  }
+
+  supprimerSection(s: any) {
+    if (!confirm(this.translate.instant('parametres.section_confirm_suppr') + ' "' + s.nom + '" ?\n' +
+                 this.translate.instant('parametres.section_suppr_info'))) return;
+    this.api.delete<any>(`/eleves/sections/${s.id}/`).subscribe({
+      next: () => {
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: s.nom });
+        this.chargerSections();
+      },
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); }
     });
   }
 

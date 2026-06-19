@@ -14,6 +14,8 @@ export interface Paiement {
   montant_fournitures: number;
   montant_cantine:     number;
   montant_divers:      number;
+  mois_regles?:        number[];
+  services_regles?:    { nom: string; montant: number }[];
   mode_paiement: string;
   observations?: string;
   total?: number;
@@ -41,8 +43,8 @@ export class PaiementsService {
   }
 
   /** Téléchargement PDF via Angular HttpClient (intercepteur auth inclus). */
-  telechargerRecuPdf(id: string) {
-    return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`);
+  telechargerRecuPdf(id: string, format: string = 'A5') {
+    return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`, { format });
   }
 
   annulerPaiement(id: string) {

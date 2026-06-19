@@ -186,14 +186,36 @@ class PaiementViewSet(viewsets.ModelViewSet):
         total_paiement  = float(p.total)
         reste_apres     = max(total_attendu - deja_paye_avant - total_paiement, 0)
 
+        # Libellé des mois concernés par la mensualité (traçabilité)
+        _MOIS = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',
+                 7:'Juillet',8:'Août',9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'}
+        mois_regles    = [int(m) for m in (p.mois_regles or [])]
+        mois_labels    = [_MOIS.get(m, str(m)) for m in mois_regles]
+        mois_concernes = ', '.join(mois_labels)
+
         # Lignes détail (uniquement les montants > 0)
         lignes = []
         if p.montant_inscription: lignes.append(('Frais d\'inscription',  float(p.montant_inscription)))
-        if p.montant_mensualite:  lignes.append(('Mensualité scolaire',   float(p.montant_mensualite)))
+        if p.montant_mensualite:
+            label_mens = 'Mensualité scolaire'
+            if mois_concernes:
+                label_mens += f' ({mois_concernes})'
+            lignes.append((label_mens, float(p.montant_mensualite)))
         if p.montant_uniforme:    lignes.append(('Uniforme scolaire',     float(p.montant_uniforme)))
         if p.montant_fournitures: lignes.append(('Fournitures scolaires', float(p.montant_fournitures)))
         if p.montant_cantine:     lignes.append(('Cantine / Restauration',float(p.montant_cantine)))
-        if p.montant_divers:      lignes.append(('Frais divers',          float(p.montant_divers)))
+        # Services optionnels itemisés (cantine, karaté...) — leur montant est inclus dans montant_divers
+        services_regles = p.services_regles or []
+        total_services  = 0.0
+        for sv in services_regles:
+            m = float(sv.get('montant') or 0)
+            total_services += m
+            if m:
+                lignes.append((sv.get('nom') or 'Service', m))
+        # Divers résiduel = montant_divers − services déjà itemisés
+        divers_residuel = float(p.montant_divers) - total_services
+        if divers_residuel > 0.009:
+            lignes.append(('Frais divers', round(divers_residuel, 2)))
 
         # Numéro séquentiel du reçu pour cet élève
         nb_recu_eleve = Paiement.objects.filter(
@@ -228,6 +250,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'fournitures':       float(p.montant_fournitures),
             'cantine':           float(p.montant_cantine),
             'divers':            float(p.montant_divers),
+            'mois_concernes':    mois_concernes,
+            'mois_regles':       mois_regles,
+            'services_regles':   services_regles,
             'total':             total_paiement,
             # Suivi financier
             'total_attendu':     round(total_attendu, 2),
@@ -242,6 +267,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'saisi_par':         p.saisi_par.nom if p.saisi_par else '—',
             # Établissement
             'tenant_nom':        p.tenant.nom   if p.tenant else 'SAGI SCHOOL',
+            'tenant_logo':       getattr(p.tenant, 'logo', '') or '',
             'tenant_ville':      p.tenant.ville if p.tenant else '',
             'tenant_rccm':       getattr(p.tenant, 'rccm', '') or '',
             'tenant_telephone':  getattr(p.tenant, 'telephone', '') or '',
@@ -342,6 +368,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
         mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
         observations        = data.get('observations',  paiement.observations or '')
+        mois_regles         = data.get('mois_regles',   paiement.mois_regles or [])
 
         nouveau_total = (montant_inscription + montant_mensualite + montant_uniforme +
                          montant_fournitures + montant_cantine + montant_divers)
@@ -396,6 +423,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             montant_fournitures=montant_fournitures,
             montant_cantine=montant_cantine,
             montant_divers=montant_divers,
+            mois_regles=mois_regles,
             mode_paiement=mode_paiement,
             observations=observations,
             statut='ACTIF',
@@ -463,14 +491,23 @@ class PaiementViewSet(viewsets.ModelViewSet):
         context = self._build_recu_context(p)
         context['p'] = p  # accès direct à l'objet pour le template
 
-        html_str = render_to_string('pdf/recu_paiement.html', context)
+        # Format choisi au tirage : A5 (défaut), A4, ou 80mm thermique
+        fmt = (request.query_params.get('format') or 'A5').upper()
+        if fmt == '80MM':
+            template   = 'pdf/recu_ticket.html'
+            context['page_size'] = '80mm 297mm'
+        else:
+            template   = 'pdf/recu_paiement.html'
+            context['page_size'] = 'A4 portrait' if fmt == 'A4' else 'A5 portrait'
+
+        html_str = render_to_string(template, context)
         buf      = BytesIO()
         result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
         if result.err:
             return HttpResponse('Erreur génération PDF reçu.', status=500)
 
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}.pdf"'
+        response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}_{fmt}.pdf"'
         return response
 
 

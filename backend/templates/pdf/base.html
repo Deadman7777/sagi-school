@@ -63,7 +63,8 @@
 <table class="header-table">
   <tr>
     <td style="width:50%">
-      <div class="logo">SAGI SCHOOL</div>
+      {% if tenant.logo %}<img src="{{ tenant.logo }}" style="max-height:55px; max-width:160px; margin-bottom:4px;"><br>{% endif %}
+      <div class="logo">{{ tenant.nom|default:"SAGI SCHOOL" }}</div>
       <div class="sub">Système de Gestion Scolaire &middot; by HADY GESMAN</div>
     </td>
     <td style="width:50%; text-align:right">
