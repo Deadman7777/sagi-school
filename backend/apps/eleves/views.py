@@ -358,47 +358,47 @@ class SuiviMensuelView(APIView):
                 }
             })
 
-        # ── 1. Paiements mensuels agrégés (hors mensualité) par date de paiement ─
-        mensuel_qs = Paiement.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).annotate(mois_tronc=TruncMonth('date_paiement')).values('mois_tronc').annotate(
-            total_hm    = Sum('montant_inscription') + Sum('montant_uniforme') +
-                          Sum('montant_fournitures') + Sum('montant_cantine') +
-                          Sum('montant_divers'),
-            nb          = Count('id'),
-            inscription = Sum('montant_inscription'),
-            uniforme    = Sum('montant_uniforme'),
-            fournitures = Sum('montant_fournitures'),
-            cantine     = Sum('montant_cantine'),
-        ).order_by('mois_tronc')
-
-        # Index par (annee, mois)
-        pmt_par_mois = {}
-        for m in mensuel_qs:
-            if m['mois_tronc']:
-                key = (m['mois_tronc'].year, m['mois_tronc'].month)
-                pmt_par_mois[key] = m
-
-        # ── Mensualité ventilée par mois concerné (mois_regles) ; fallback date_paiement
+        # ── 1. Paiements ventilés par mois (un seul passage) ─────────────────
+        #  - inscription / uniforme / fournitures / cantine / divers manuel → par date de paiement
+        #  - mensualité + services → par mois concerné (mois_regles), sinon par date de paiement
+        from collections import defaultdict
         debut_year, debut_month = exercice.date_debut.year, exercice.date_debut.month
         def _annee_du_mois(num):
             return debut_year if num >= debut_month else debut_year + 1
-        mens_par_mois = {}
-        for p in Paiement.objects.filter(tenant=tenant, exercice=exercice).only(
-                'montant_mensualite', 'mois_regles', 'date_paiement'):
-            mm = float(p.montant_mensualite or 0)
-            if mm <= 0:
-                continue
+
+        def _cell():
+            return {'nb': 0, 'inscription': 0.0, 'uniforme': 0.0, 'fournitures': 0.0,
+                    'cantine': 0.0, 'mensualite': 0.0, 'services': 0.0, 'divers': 0.0}
+        par_mois = defaultdict(_cell)
+
+        for p in Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF').only(
+                'date_paiement', 'montant_inscription', 'montant_mensualite',
+                'montant_uniforme', 'montant_fournitures', 'montant_cantine',
+                'montant_divers', 'mois_regles', 'services_regles'):
+            d  = p.date_paiement
+            dk = (d.year, d.month)
+            cell = par_mois[dk]
+            cell['nb']          += 1
+            cell['inscription'] += float(p.montant_inscription or 0)
+            cell['uniforme']    += float(p.montant_uniforme    or 0)
+            cell['fournitures'] += float(p.montant_fournitures or 0)
+            cell['cantine']     += float(p.montant_cantine     or 0)
+            # services itemisés (inclus dans montant_divers) + divers manuel résiduel
+            svc           = sum(float(s.get('montant') or 0) for s in (p.services_regles or []))
+            divers_manuel = max(0.0, float(p.montant_divers or 0) - svc)
+            cell['divers'] += divers_manuel
+            # mensualité + services ventilés par mois concerné (anticipation)
+            mm   = float(p.montant_mensualite or 0)
             mois = [int(x) for x in (p.mois_regles or [])]
             if mois:
-                part = mm / len(mois)
+                n = len(mois)
                 for num in mois:
-                    k = (_annee_du_mois(num), num)
-                    mens_par_mois[k] = mens_par_mois.get(k, 0.0) + part
+                    c = par_mois[(_annee_du_mois(num), num)]
+                    c['mensualite'] += mm  / n
+                    c['services']   += svc / n
             else:
-                d = p.date_paiement
-                k = (d.year, d.month)
-                mens_par_mois[k] = mens_par_mois.get(k, 0.0) + mm
+                cell['mensualite'] += mm
+                cell['services']   += svc
 
         # ── Charges mensuelles (débits 6xx depuis journal) ───────────────────
         charges_qs = JournalEntry.objects.filter(
@@ -431,9 +431,15 @@ class SuiviMensuelView(APIView):
         cur = debut
         while cur <= fin:
             key = (cur.year, cur.month)
-            m   = pmt_par_mois.get(key, {})
-            mens          = round(mens_par_mois.get(key, 0.0), 2)   # mensualité ventilée par mois concerné
-            enc           = round(float(m.get('total_hm') or 0) + mens, 2)
+            m   = par_mois.get(key, {})
+            inscription = round(float(m.get('inscription') or 0), 2)
+            mens        = round(float(m.get('mensualite')  or 0), 2)
+            services    = round(float(m.get('services')    or 0), 2)
+            uniforme    = round(float(m.get('uniforme')    or 0), 2)
+            fournitures = round(float(m.get('fournitures') or 0), 2)
+            cantine     = round(float(m.get('cantine')     or 0), 2)
+            divers      = round(float(m.get('divers')      or 0), 2)
+            enc = round(inscription + mens + services + uniforme + fournitures + cantine + divers, 2)
             charges       = round(charges_par_mois.get(key, 0.0), 2)
             investissements = round(invest_par_mois.get(key, 0.0), 2)
             decaissements = round(charges + investissements, 2)
@@ -444,11 +450,13 @@ class SuiviMensuelView(APIView):
                 'annee':           cur.year,
                 'total':           enc,
                 'nb':              m.get('nb', 0),
-                'inscription':     float(m.get('inscription') or 0),
+                'inscription':     inscription,
                 'mensualite':      mens,
-                'uniforme':        float(m.get('uniforme')    or 0),
-                'fournitures':     float(m.get('fournitures') or 0),
-                'cantine':         float(m.get('cantine')     or 0),
+                'services':        services,
+                'uniforme':        uniforme,
+                'fournitures':     fournitures,
+                'cantine':         cantine,
+                'divers':          divers,
                 'charges':         charges,
                 'investissements': investissements,
                 'decaissements':   decaissements,
@@ -471,13 +479,13 @@ class SuiviMensuelView(APIView):
         pmt_eleve = {
             r['eleve_id']: float(r['paye'] or 0)
             for r in Paiement.objects.filter(
-                tenant=tenant, exercice=exercice
+                tenant=tenant, exercice=exercice, statut='ACTIF'
             ).values('eleve_id').annotate(paye=_pmt_sum)
         }
         pmt_section_raw = {
             r['eleve__section__nom']: float(r['paye'] or 0)
             for r in Paiement.objects.filter(
-                tenant=tenant, exercice=exercice
+                tenant=tenant, exercice=exercice, statut='ACTIF'
             ).values('eleve__section__nom').annotate(paye=_pmt_sum)
         }
 
@@ -514,7 +522,8 @@ class SuiviMensuelView(APIView):
 
         creances.sort(key=lambda x: x['reste'], reverse=True)
 
-        total_paiements = sum(float(m.get('total') or 0) for m in pmt_par_mois.values())
+        # Total réellement encaissé = somme de tous les paiements de l'exercice
+        total_paiements = sum(pmt_eleve.values())
         reste_global    = total_attendu - total_paiements
         taux_global     = round(total_paiements / total_attendu * 100, 1) if total_attendu else 0
         total_charges   = sum(charges_par_mois.values())

@@ -731,7 +731,8 @@
     "cumul_col": "Cumul.",
     "mode_col": "Method",
     "aucun_paiement_eleve": "No payments for this student",
-    "rechercher_historique": "Search a student to view their history"
+    "rechercher_historique": "Search a student to view their history",
+    "services_col": "Services"
   },
   "shell": {
     "super_admin": "Super Admin",

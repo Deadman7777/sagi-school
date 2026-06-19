@@ -746,7 +746,8 @@
     "cumul_col": "Cumul",
     "mode_col": "Mode",
     "aucun_paiement_eleve": "Aucun paiement pour cet élève",
-    "rechercher_historique": "Recherchez un élève pour voir son historique"
+    "rechercher_historique": "Recherchez un élève pour voir son historique",
+    "services_col": "Services"
   },
   "shell": {
     "super_admin": "Super Admin",

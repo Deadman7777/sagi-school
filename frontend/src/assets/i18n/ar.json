@@ -731,7 +731,8 @@
     "cumul_col": "التراكمي",
     "mode_col": "الطريقة",
     "aucun_paiement_eleve": "لا توجد مدفوعات لهذا التلميذ",
-    "rechercher_historique": "ابحث عن تلميذ لعرض سجله"
+    "rechercher_historique": "ابحث عن تلميذ لعرض سجله",
+    "services_col": "الخدمات"
   },
   "shell": {
     "super_admin": "مسؤول عام",

@@ -143,6 +143,7 @@ import { Eleve } from '../../core/models/eleve.model';
           <th class="tr">{{ 'suivi.uniforme_col'    | translate }}</th>
           <th class="tr">{{ 'suivi.fournitures_col' | translate }}</th>
           <th class="tr">{{ 'suivi.cantine_col'     | translate }}</th>
+          <th class="tr">{{ 'suivi.services_col'    | translate }}</th>
           <th class="tr">Total Mois</th>
           <th class="tr">Cumul</th>
         </tr>
@@ -156,6 +157,7 @@ import { Eleve } from '../../core/models/eleve.model';
           <td class="mono tr">{{ m.uniforme > 0    ? (m.uniforme    | number:'1.0-0') : '—' }}</td>
           <td class="mono tr">{{ m.fournitures > 0 ? (m.fournitures | number:'1.0-0') : '—' }}</td>
           <td class="mono tr">{{ m.cantine > 0     ? (m.cantine     | number:'1.0-0') : '—' }}</td>
+          <td class="mono tr">{{ m.services > 0    ? (m.services    | number:'1.0-0') : '—' }}</td>
           <td class="mono tr bold" [class.teal]="m.total > 0">
             {{ m.total > 0 ? (m.total | number:'1.0-0') : '—' }}
           </td>
@@ -166,13 +168,13 @@ import { Eleve } from '../../core/models/eleve.model';
         <tr>
           <td class="bold">TOTAL EXERCICE</td>
           <td class="mono tr bold">{{ nbTransactions() }}</td>
-          <td colspan="5"></td>
+          <td colspan="6"></td>
           <td class="mono tr bold teal">{{ totalGlobal() | number:'1.0-0' }}</td>
           <td></td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="9" class="empty-msg">{{ 'suivi.aucun_paiement' | translate }}</td></tr>
+        <tr><td colspan="10" class="empty-msg">{{ 'suivi.aucun_paiement' | translate }}</td></tr>
       </ng-template>
     </p-table>
   </div>
@@ -361,7 +363,7 @@ import { Eleve } from '../../core/models/eleve.model';
       [(ngModel)]="eleveSelectionne"
       [suggestions]="suggestions()"
       (completeMethod)="chercher($event)"
-      field="nom_complet"
+      optionLabel="nom_complet"
       placeholder="Rechercher un élève..."
       styleClass="w-full"
       [forceSelection]="true"
