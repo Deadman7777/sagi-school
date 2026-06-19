@@ -199,8 +199,11 @@ class DashboardKPIView(APIView):
         statuts_qs = eleves.values('statut').annotate(nb=Count('id'))
         statuts    = {s['statut']: s['nb'] for s in statuts_qs}
 
-        # Prises en charge
-        pec_qs = eleves.filter(prise_en_charge__isnull=False).exclude(prise_en_charge='')
+        # Prises en charge — queryset PROPRE (sans la jointure paiements de `eleves`,
+        # sinon Count('id') compte chaque élève autant de fois qu'il a de paiements)
+        pec_qs = Eleve.objects.filter(
+            tenant=tenant, exercice=exercice, prise_en_charge__isnull=False
+        ).exclude(prise_en_charge='')
         pec_nb = pec_qs.count()
         pec_categories = list(pec_qs.values('prise_en_charge').annotate(nb=Count('id')))
 
