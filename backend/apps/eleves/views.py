@@ -8,9 +8,9 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import Eleve, Section
+from .models import Eleve, Section, Service
 from apps.paiements.models import Exercice
-from .serializers import EleveSerializer, SectionSerializer
+from .serializers import EleveSerializer, SectionSerializer, ServiceSerializer
 from django.db.models import Max
 from django.utils import timezone
 
@@ -21,6 +21,17 @@ class SectionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Section.objects.filter(tenant=get_tenant(self.request))
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+
+class ServiceViewSet(viewsets.ModelViewSet):
+    serializer_class   = ServiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Service.objects.filter(tenant=get_tenant(self.request))
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
@@ -39,8 +50,8 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Eleve.objects.none()
 
         qs = Eleve.objects.filter(tenant=tenant).select_related(
-            'section'
-        ).prefetch_related('paiements').annotate(
+            'section', 'exercice'
+        ).prefetch_related('paiements', 'abonnements__service').annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
                 Sum('paiements__montant_mensualite')  +
@@ -100,7 +111,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
-        qs = Eleve.objects.filter(tenant=tenant).select_related('section').order_by('nom_complet')
+        qs = Eleve.objects.filter(tenant=tenant).select_related('section', 'exercice').order_by('nom_complet')
         if exercice:
             qs = qs.filter(exercice=exercice)
 
@@ -152,7 +163,6 @@ class EleveViewSet(viewsets.ModelViewSet):
             'mensualite':  float(section.frais_mensualite)  if section else 0,
             'uniforme':    float(section.frais_uniforme)    if section else 0,
             'fournitures': float(section.frais_fournitures) if section else 0,
-            'yendu':       float(section.frais_yendu)       if section else 0,
         }
 
         # ── Frais nets selon le type de prise en charge ────────────────
@@ -193,7 +203,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             'fournitures':  round(max(fees_nets['fournitures']  - deja_paye['fournitures'],  0), 2),
         }
 
-        total_net = round(sum(fees_nets.values()), 2)
+        # Vrai total annuel dû = mensualité × nb_mensualites − prise en charge
+        # (source de vérité partagée avec liste élèves / dashboard / reçus)
+        total_annuel = round(float(eleve.total_attendu), 2)
         total_paye = round(sum(deja_paye.values()), 2)
 
         return Response({
@@ -217,9 +229,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             'deja_paye':     deja_paye,
             'reste':         reste,
             # Résumé
-            'total_annuel_net':  total_net,
+            'total_annuel_net':  total_annuel,
             'total_paye':        total_paye,
-            'total_restant':     round(max(total_net - total_paye, 0), 2),
+            'total_restant':     round(max(total_annuel - total_paye, 0), 2),
             'nb_paiements':      nb_paiements,
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
@@ -261,7 +273,7 @@ class SuiviMensuelView(APIView):
         # ── Raccourci rapide : détail individuel seulement ───────────────────
         if eleve_id:
             try:
-                eleve = Eleve.objects.select_related('section').get(
+                eleve = Eleve.objects.select_related('section', 'exercice').get(
                     id=eleve_id, tenant=tenant
                 )
             except (Eleve.DoesNotExist, Exception):
@@ -389,7 +401,7 @@ class SuiviMensuelView(APIView):
         # Charger toutes les sections en une seule requête pour éviter les N+1
         eleves_qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section')
+        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
         # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
         _pmt_sum = (
@@ -498,7 +510,7 @@ class PriseEnChargeStatsView(APIView):
 
         eleves_tous = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section')
+        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
         # ── Totaux globaux ────────────────────────────────────────────────
         total_theorique_global   = 0.0
@@ -615,7 +627,7 @@ class ElevesListePDFView(APIView):
 
         qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
-        ).select_related('section').prefetch_related('paiements').annotate(
+        ).select_related('section', 'exercice').prefetch_related('paiements', 'abonnements__service').annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
                 Sum('paiements__montant_mensualite')  +
@@ -715,7 +727,7 @@ class SituationElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 

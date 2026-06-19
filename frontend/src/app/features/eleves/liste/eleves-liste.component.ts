@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC } from '../../../core/models/eleve.model';
+import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -15,6 +15,7 @@ import { MessageService } from 'primeng/api';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TooltipModule } from 'primeng/tooltip';
+import { MultiSelectModule } from 'primeng/multiselect';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -29,7 +30,7 @@ interface PecForm {
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
-            TooltipModule],
+            TooltipModule, MultiSelectModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -149,6 +150,8 @@ interface PecForm {
                             severity="warn" pTooltip="Changer statut" (onClick)="ouvrirChangerStatut(eleve)" />
                   <p-button icon="pi pi-heart" [rounded]="true" [text]="true"
                             severity="secondary" pTooltip="Prise en charge" (onClick)="ouvrirPriseEnCharge(eleve)" />
+                  <p-button icon="pi pi-bookmark" [rounded]="true" [text]="true"
+                            severity="help" pTooltip="Services / Activités" (onClick)="ouvrirServices(eleve)" />
                 </div>
               </td>
             </tr>
@@ -530,10 +533,39 @@ interface PecForm {
           <label>{{ 'eleves.telephone_mere' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.telephone_mere" class="w-full" placeholder="7X XXX XX XX" />
         </div>
+        <div class="form-group full" *ngIf="servicesActifs().length">
+          <label>{{ 'eleves.services' | translate }}</label>
+          <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="nouvelEleve.abonnements"
+                         optionLabel="nom" optionValue="id" display="chip"
+                         [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
         <p-button [label]="'common.enregistrer'| translate" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog services / activités d'un élève -->
+    <p-dialog [header]="'🔖 ' + ('eleves.services' | translate)" [(visible)]="dialogServicesVisible"
+              [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+      <div *ngIf="eleveSelectionne() as e">
+        <div style="font-size:13px;color:#94a3b8;margin-bottom:14px">
+          <strong style="color:#e8f0fe">{{ e.nom_complet }}</strong> — {{ e.section_nom }}
+        </div>
+        <div class="form-group" *ngIf="servicesActifs().length; else aucunService">
+          <label>{{ 'eleves.services_choix' | translate }}</label>
+          <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="formServices" display="chip"
+                         optionLabel="nom" optionValue="id"
+                         [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
+        </div>
+        <ng-template #aucunService>
+          <div style="color:#64748b;font-size:13px">{{ 'eleves.services_aucun' | translate }}</div>
+        </ng-template>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogServicesVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success" [loading]="saving()" (onClick)="sauvegarderServices()" />
       </ng-template>
     </p-dialog>
   `,
@@ -643,11 +675,16 @@ export class ElevesListeComponent implements OnInit {
   exportant     = signal(false);
   onglet        = signal<'liste' | 'prise_en_charge'>('liste');
 
-  dialogVisible       = false;
-  dialogFicheVisible  = false;
-  dialogStatutVisible = false;
-  dialogPECVisible    = false;
+  dialogVisible        = false;
+  dialogFicheVisible   = false;
+  dialogStatutVisible  = false;
+  dialogPECVisible     = false;
+  dialogServicesVisible = false;
   eleveSelectionne    = signal<Eleve | null>(null);
+
+  services       = signal<Service[]>([]);
+  servicesActifs = computed(() => this.services().filter(s => s.actif));
+  formServices: string[] = [];
 
   recherche    = '';
   filtreAlerte = '';
@@ -719,6 +756,34 @@ export class ElevesListeComponent implements OnInit {
   ngOnInit() {
     this.chargerEleves();
     this.chargerSections();
+    this.chargerServices();
+  }
+
+  chargerServices() {
+    this.elevesService.getServices().subscribe({
+      next: res => this.services.set(((res as any).results || res || []).map((s: any) => ({ ...s, montant: +s.montant })))
+    });
+  }
+
+  ouvrirServices(eleve: Eleve) {
+    this.eleveSelectionne.set(eleve);
+    this.formServices = [...(eleve.abonnements || [])];
+    this.dialogServicesVisible = true;
+  }
+
+  sauvegarderServices() {
+    const e = this.eleveSelectionne();
+    if (!e) return;
+    this.saving.set(true);
+    this.elevesService.updateEleve(e.id, { abonnements: this.formServices } as any).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: e.nom_complet });
+        this.dialogServicesVisible = false;
+        this.saving.set(false);
+        this.chargerEleves();
+      },
+      error: () => this.saving.set(false),
+    });
   }
 
   basculerOnglet() {

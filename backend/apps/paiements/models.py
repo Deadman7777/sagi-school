@@ -6,6 +6,7 @@ class Exercice(TenantModel):
     annee_scolaire         = models.CharField(max_length=20)
     date_debut             = models.DateField()
     date_fin               = models.DateField()
+    nb_mensualites         = models.IntegerField(default=10)
     solde_initial_caisse   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     solde_initial_banque   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     solde_initial_mobile   = models.DecimalField(max_digits=15, decimal_places=2, default=0)

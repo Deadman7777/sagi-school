@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
@@ -39,6 +39,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('exercice')">📅 {{ 'parametres.exercice' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'sections'"
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'services'"
+              (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'cloture'"
@@ -109,6 +111,12 @@ import { MessageService } from 'primeng/api';
                    class="form-input w-full" />
           </div>
           <div class="form-group">
+            <label>{{ 'parametres.nb_mensualites' | translate }}</label>
+            <p-inputNumber [(ngModel)]="exercice()!.nb_mensualites"
+                           mode="decimal" [min]="1" [max]="12" [showButtons]="true"
+                           styleClass="w-full" />
+          </div>
+          <div class="form-group">
             <label>{{ 'parametres.solde_caisse' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_caisse"
                            mode="decimal" [min]="0" styleClass="w-full" />
@@ -174,24 +182,56 @@ import { MessageService } from 'primeng/api';
               <p-inputNumber [(ngModel)]="s.frais_fournitures" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
-            <div class="sc-frais">
-              <span>{{ 'parametres.cantine_yendu' | translate }}</span>
-              <p-inputNumber [(ngModel)]="s.frais_yendu" mode="decimal"
-                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
-            </div>
-            <div class="sc-frais total">
-              <span>{{ 'parametres.total_annuel' | translate }}</span>
-              <div class="sc-total">
-                {{ (s.frais_inscription + s.frais_uniforme +
-                    s.frais_fournitures + (s.frais_mensualite * 10) +
-                    s.frais_yendu) | number:'1.0-0' }} FCFA
-              </div>
-            </div>
           </div>
           <div class="sc-actions">
             <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
                       (onClick)="sauvegarderSection(s)" />
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ONGLET SERVICES / ACTIVITÉS ══ -->
+    <div *ngIf="onglet() === 'services'">
+      <div class="section-header-row">
+        <div class="fc-title" style="margin:0">🍽️ {{ 'parametres.services_titre' | translate }}</div>
+        <p-button [label]="'parametres.ajouter_service' | translate" severity="success" size="small"
+                  (onClick)="ouvrirDialogService()" />
+      </div>
+      <p style="font-size:12px;color:#64748b;margin:4px 0 12px">{{ 'parametres.services_aide' | translate }}</p>
+
+      <div class="sections-list">
+        <div class="section-card" *ngFor="let sv of services()">
+          <div class="sc-frais-grid">
+            <div class="sc-frais">
+              <span>{{ 'parametres.service_nom' | translate }}</span>
+              <input pInputText [(ngModel)]="sv.nom" class="w-full" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.service_montant' | translate }}</span>
+              <p-inputNumber [(ngModel)]="sv.montant" mode="decimal"
+                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.service_periodicite' | translate }}</span>
+              <p-select appendTo="body" [options]="periodiciteOptions" [(ngModel)]="sv.periodicite"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.service_actif' | translate }}</span>
+              <p-select appendTo="body" [options]="actifOptions" [(ngModel)]="sv.actif"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+          </div>
+          <div class="sc-actions" style="display:flex;gap:8px">
+            <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
+                      (onClick)="sauvegarderService(sv)" />
+            <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
+                      (onClick)="supprimerService(sv)" />
+          </div>
+        </div>
+        <div *ngIf="services().length === 0" style="color:#64748b;font-size:13px;padding:8px">
+          {{ 'parametres.services_vide' | translate }}
         </div>
       </div>
     </div>
@@ -399,6 +439,30 @@ import { MessageService } from 'primeng/api';
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog nouveau service -->
+    <p-dialog [header]="'🍽️ ' + ('parametres.nouveau_service_titre' | translate)" [(visible)]="serviceDialogVisible"
+              [modal]="true" [style]="{width:'420px'}" [draggable]="false">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>{{ 'parametres.service_nom' | translate }} *</label>
+        <input pInputText [(ngModel)]="newService.nom" class="w-full"
+               [placeholder]="'parametres.service_placeholder' | translate" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>{{ 'parametres.service_montant' | translate }}</label>
+        <p-inputNumber [(ngModel)]="newService.montant" mode="decimal" [min]="0" styleClass="w-full" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>{{ 'parametres.service_periodicite' | translate }}</label>
+        <p-select appendTo="body" [options]="periodiciteOptions" [(ngModel)]="newService.periodicite"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="serviceDialogVisible=false" />
+        <p-button [label]="'common.creer'   | translate" severity="success"
+                  [loading]="saving()" (onClick)="creerService()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Dialog changer mot de passe -->
     <p-dialog [header]="'🔑 ' + ('parametres.changer_mdp_titre' | translate)" [(visible)]="mdpDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
@@ -486,14 +550,30 @@ export class ParametresComponent implements OnInit {
   saving       = signal(false);
   loadingUsers = signal(false);
 
+  // Nb de mensualités de l'exercice (défaut 10) — utilisé pour le total annuel des sections
+  nbMensualites = computed(() => this.exercice()?.nb_mensualites || 10);
+
+  services     = signal<any[]>([]);
+
   userDialogVisible    = false;
   sectionDialogVisible = false;
+  serviceDialogVisible = false;
   mdpDialogVisible     = false;
   userSelectionne: any = null;
   nouveauMdp           = '';
 
   newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
   newSection = { nom:'' };
+  newService: any = { nom:'', montant:0, periodicite:'MENSUEL', actif:true };
+
+  periodiciteOptions = [
+    { label: 'Mensuel',         value: 'MENSUEL' },
+    { label: 'Paiement unique', value: 'UNIQUE'  },
+  ];
+  actifOptions = [
+    { label: 'Actif',   value: true  },
+    { label: 'Inactif', value: false },
+  ];
 
   rolesDisponibles: any[] = [];
 
@@ -591,7 +671,6 @@ chargerExercice() {
         frais_mensualite:   +s.frais_mensualite,
         frais_uniforme:     +s.frais_uniforme,
         frais_fournitures:  +s.frais_fournitures,
-        frais_yendu:        +s.frais_yendu,
       }));
       this.sections.set(sections);
     }
@@ -662,6 +741,60 @@ chargerExercice() {
         this.chargerSections();
       },
       error: () => { this.saving.set(false); }
+    });
+  }
+
+  // ── Services / Activités ───────────────────────────────────────────────
+  chargerServices() {
+    this.api.get<any>('/eleves/services/').subscribe({
+      next: res => {
+        const services = (res.results || res).map((s: any) => ({ ...s, montant: +s.montant }));
+        this.services.set(services);
+      }
+    });
+  }
+
+  ouvrirDialogService() {
+    this.newService = { nom:'', montant:0, periodicite:'MENSUEL', actif:true };
+    this.serviceDialogVisible = true;
+  }
+
+  creerService() {
+    if (!this.newService.nom) {
+      this.msg.add({ severity:'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('parametres.service_nom') });
+      return;
+    }
+    this.saving.set(true);
+    this.api.post<any>('/eleves/services/', this.newService).subscribe({
+      next: () => {
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.cree_ok'), detail: this.newService.nom });
+        this.serviceDialogVisible = false;
+        this.saving.set(false);
+        this.chargerServices();
+      },
+      error: () => { this.saving.set(false); }
+    });
+  }
+
+  sauvegarderService(sv: any) {
+    this.saving.set(true);
+    this.api.patch<any>(`/eleves/services/${sv.id}/`, sv).subscribe({
+      next: () => {
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: sv.nom });
+        this.saving.set(false);
+      },
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+    });
+  }
+
+  supprimerService(sv: any) {
+    if (!confirm(this.translate.instant('parametres.service_confirm_suppr') + ' "' + sv.nom + '" ?')) return;
+    this.api.delete<any>(`/eleves/services/${sv.id}/`).subscribe({
+      next: () => {
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: sv.nom });
+        this.chargerServices();
+      },
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); }
     });
   }
 

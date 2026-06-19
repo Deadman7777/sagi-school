@@ -111,7 +111,11 @@
     "champ_requis": "Champ requis",
     "nom_obligatoire": "Le nom est obligatoire",
     "ajoute": "Élève ajouté ✅",
-    "impossible_ajouter": "Impossible d'ajouter l'élève"
+    "impossible_ajouter": "Impossible d'ajouter l'élève",
+    "services": "Services / Activités",
+    "services_ph": "Choisir les services...",
+    "services_choix": "Services auxquels l'élève est abonné",
+    "services_aucun": "Aucun service actif. Créez-en dans Paramètres → Services."
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -194,6 +198,7 @@
     "annee_scolaire": "Année scolaire",
     "date_debut": "Date de début",
     "date_fin": "Date de fin",
+    "nb_mensualites": "Nombre de mensualités",
     "solde_caisse": "Solde initial Caisse (FCFA)",
     "solde_banque": "Solde initial Banque (FCFA)",
     "solde_mobile": "Solde initial Mobile Money (FCFA)",
@@ -235,7 +240,20 @@
     "sauvegarde_echouee": "Sauvegarde échouée",
     "tous_champs": "Remplissez tous les champs obligatoires",
     "trop_court": "Trop court",
-    "enregistrer_btn": "💾 Sauvegarder"
+    "enregistrer_btn": "💾 Sauvegarder",
+    "yendu": "Yendu",
+    "services": "Services",
+    "services_titre": "Services / Activités",
+    "services_aide": "Services optionnels (cantine, activités...). Chaque élève s'y abonne librement ; le montant entre alors dans son total dû.",
+    "ajouter_service": "Ajouter un service",
+    "service_nom": "Nom du service",
+    "service_montant": "Montant",
+    "service_periodicite": "Périodicité",
+    "service_actif": "Statut",
+    "services_vide": "Aucun service. Cliquez sur « Ajouter un service ».",
+    "nouveau_service_titre": "Nouveau service",
+    "service_placeholder": "Ex. Cantine, Karaté, Transport...",
+    "service_confirm_suppr": "Supprimer le service"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

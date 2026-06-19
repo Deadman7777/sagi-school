@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
-import { Eleve, Section, PaginatedResponse, PriseEnChargeStats } from '../models/eleve.model';
+import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats } from '../models/eleve.model';
 
 @Injectable({ providedIn: 'root' })
 export class ElevesService {
@@ -52,5 +52,9 @@ export class ElevesService {
 
   getSections() {
     return this.api.get<PaginatedResponse<Section>>('/eleves/sections/');
+  }
+
+  getServices() {
+    return this.api.get<PaginatedResponse<Service>>('/eleves/services/');
   }
 }

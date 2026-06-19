@@ -33,7 +33,7 @@ def verifier_avant_cloture(exercice):
                        Sum('paiements__montant_fournitures') +
                        Sum('paiements__montant_cantine')     +
                        Sum('paiements__montant_divers')
-    ).select_related('section')
+    ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
     eleves_impayes = 0
     montant_impaye = 0

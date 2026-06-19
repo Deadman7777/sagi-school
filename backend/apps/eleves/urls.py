@@ -1,11 +1,12 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import (EleveViewSet, SectionViewSet, SuiviMensuelView,
+from .views import (EleveViewSet, SectionViewSet, ServiceViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
                     ElevesListePDFView, SituationElevePDFView)
 
 router = DefaultRouter()
 router.register('sections', SectionViewSet, basename='section')
+router.register('services', ServiceViewSet, basename='service')
 router.register('liste', EleveViewSet, basename='eleve')
 router.register('', EleveViewSet, basename='eleve-root')
 

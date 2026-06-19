@@ -111,7 +111,11 @@
     "champ_requis": "Required field",
     "nom_obligatoire": "Name is required",
     "ajoute": "Student added ✅",
-    "impossible_ajouter": "Unable to add student"
+    "impossible_ajouter": "Unable to add student",
+    "services": "Services / Activities",
+    "services_ph": "Select services...",
+    "services_choix": "Services the student is subscribed to",
+    "services_aucun": "No active service. Create some in Settings → Services."
   },
   "paiements": {
     "title": "Payment Entry",
@@ -194,6 +198,7 @@
     "annee_scolaire": "School year",
     "date_debut": "Start date",
     "date_fin": "End date",
+    "nb_mensualites": "Number of monthly payments",
     "solde_caisse": "Initial Cash Balance (FCFA)",
     "solde_banque": "Initial Bank Balance (FCFA)",
     "solde_mobile": "Initial Mobile Money Balance (FCFA)",
@@ -235,7 +240,20 @@
     "sauvegarde_echouee": "Save failed",
     "tous_champs": "Fill all required fields",
     "trop_court": "Too short",
-    "enregistrer_btn": "💾 Save"
+    "enregistrer_btn": "💾 Save",
+    "yendu": "Yendu",
+    "services": "Services",
+    "services_titre": "Services / Activities",
+    "services_aide": "Optional services (canteen, activities...). Each student subscribes freely; the amount is then added to their total due.",
+    "ajouter_service": "Add a service",
+    "service_nom": "Service name",
+    "service_montant": "Amount",
+    "service_periodicite": "Periodicity",
+    "service_actif": "Status",
+    "services_vide": "No service. Click \"Add a service\".",
+    "nouveau_service_titre": "New service",
+    "service_placeholder": "E.g. Canteen, Karate, Transport...",
+    "service_confirm_suppr": "Delete service"
   },
   "cloture": {
     "title": "Year Closing",

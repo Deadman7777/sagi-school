@@ -111,7 +111,11 @@
     "champ_requis": "حقل مطلوب",
     "nom_obligatoire": "الاسم مطلوب",
     "ajoute": "تمت إضافة التلميذ ✅",
-    "impossible_ajouter": "تعذّر إضافة التلميذ"
+    "impossible_ajouter": "تعذّر إضافة التلميذ",
+    "services": "الخدمات / الأنشطة",
+    "services_ph": "اختر الخدمات...",
+    "services_choix": "الخدمات المشترك فيها التلميذ",
+    "services_aucun": "لا توجد خدمة نشطة. أنشئها في الإعدادات ← الخدمات."
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
@@ -194,6 +198,7 @@
     "annee_scolaire": "السنة الدراسية",
     "date_debut": "تاريخ البداية",
     "date_fin": "تاريخ النهاية",
+    "nb_mensualites": "عدد الأقساط الشهرية",
     "solde_caisse": "رصيد الصندوق الأولي (FCFA)",
     "solde_banque": "الرصيد البنكي الأولي (FCFA)",
     "solde_mobile": "رصيد المحفظة الإلكترونية الأولي (FCFA)",
@@ -235,7 +240,20 @@
     "sauvegarde_echouee": "فشل الحفظ",
     "tous_champs": "يرجى ملء جميع الحقول المطلوبة",
     "trop_court": "قصير جداً",
-    "enregistrer_btn": "💾 حفظ"
+    "enregistrer_btn": "💾 حفظ",
+    "yendu": "يندو",
+    "services": "الخدمات",
+    "services_titre": "الخدمات / الأنشطة",
+    "services_aide": "خدمات اختيارية (المقصف، الأنشطة...). يشترك كل تلميذ بحرية؛ يُضاف المبلغ عندئذٍ إلى إجمالي المستحق.",
+    "ajouter_service": "إضافة خدمة",
+    "service_nom": "اسم الخدمة",
+    "service_montant": "المبلغ",
+    "service_periodicite": "الدورية",
+    "service_actif": "الحالة",
+    "services_vide": "لا توجد خدمة. انقر على «إضافة خدمة».",
+    "nouveau_service_titre": "خدمة جديدة",
+    "service_placeholder": "مثال: المقصف، الكاراتيه، النقل...",
+    "service_confirm_suppr": "حذف الخدمة"
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",

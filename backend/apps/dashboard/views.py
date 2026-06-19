@@ -152,7 +152,7 @@ class DashboardKPIView(APIView):
                 Sum('paiements__montant_mensualite', filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
-        ).select_related('section')
+        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
         critique = urgent = attention = ok = a_jour = 0
         for e in eleves:
@@ -296,7 +296,7 @@ class DashboardAlerteView(APIView):
                 Sum('paiements__montant_mensualite', filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
-        ).select_related('section')
+        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
         data = []
         for e in eleves:
