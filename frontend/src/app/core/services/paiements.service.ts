@@ -44,7 +44,8 @@ export class PaiementsService {
 
   /** Téléchargement PDF via Angular HttpClient (intercepteur auth inclus). */
   telechargerRecuPdf(id: string, format: string = 'A5') {
-    return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`, { format });
+    // NB : param 'taille' et non 'format' ('format' est réservé par DRF → Http404)
+    return this.api.getBlob(`/paiements/paiements/${id}/recu-pdf/`, { taille: format });
   }
 
   annulerPaiement(id: string) {

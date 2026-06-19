@@ -491,8 +491,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
         context = self._build_recu_context(p)
         context['p'] = p  # accès direct à l'objet pour le template
 
-        # Format choisi au tirage : A5 (défaut), A4, ou 80mm thermique
-        fmt = (request.query_params.get('format') or 'A5').upper()
+        # Format choisi au tirage : A5 (défaut), A4, ou 80mm thermique.
+        # NB : on n'utilise PAS le param 'format' (réservé par DRF → Http404), mais 'taille'.
+        fmt = (request.query_params.get('taille') or 'A5').upper()
         if fmt == '80MM':
             template   = 'pdf/recu_ticket.html'
             context['page_size'] = '80mm 297mm'
