@@ -14,30 +14,12 @@ from apps.eleves.models import Eleve
 from core.tenant import get_tenant
 
 
-DEFAULT_NIVEAUX = [
-    ('Préscolaire', 'PRESCOLAIRE', 1),
-    ('Élémentaire', 'ELEMENTAIRE', 2),
-    ('Collège',     'COLLEGE',     3),
-    ('Lycée',       'LYCEE',       4),
-]
-
-
 class NiveauScolaireViewSet(viewsets.ModelViewSet):
     serializer_class   = NiveauScolaireSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        tenant = get_tenant(self.request)
-        qs = NiveauScolaire.objects.filter(tenant=tenant)
-        # Auto-amorçage : une école sans aucun niveau reçoit les 4 niveaux standards
-        # (sinon impossible de créer une classe — aucun niveau à sélectionner).
-        if tenant and not qs.exists():
-            NiveauScolaire.objects.bulk_create([
-                NiveauScolaire(tenant=tenant, nom=nom, code=code, ordre=ordre, note_max=20)
-                for nom, code, ordre in DEFAULT_NIVEAUX
-            ])
-            qs = NiveauScolaire.objects.filter(tenant=tenant)
-        return qs
+        return NiveauScolaire.objects.filter(tenant=get_tenant(self.request))
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
