@@ -697,7 +697,18 @@
     "prime_trans_p": "Transport Allowance",
     "alloc_su_base": "Single Salary Alloc.",
     "alloc_par_enf": "Per Child Alloc.",
-    "plafond_ipres_c_v": "IPRES Exec. Cap"
+    "plafond_ipres_c_v": "IPRES Exec. Cap",
+    "autorisation_titre": "Teaching authorization",
+    "autorisation_numero": "Authorization no.",
+    "autorisation_date": "Issue date",
+    "autorisation_autorite": "Issuing authority",
+    "autorisation_obs": "Notes",
+    "transport_label": "Transport allowance (optional)",
+    "avances_auto_info": "Pending advances up to month end are deducted automatically.",
+    "regime_titre": "Payroll regime",
+    "regime_label": "Establishment regime",
+    "regime_aide_simplifie": "Simplified: payslips without social contributions (non-affiliated).",
+    "regime_aide_complet": "Full: IPRES, CSS, IR and employer charges (affiliated)."
   },
   "suivi": {
     "title": "Monthly Tracking",

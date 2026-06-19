@@ -712,7 +712,18 @@
     "prime_trans_p": "Prime Transport",
     "alloc_su_base": "Alloc. Sal. Unique",
     "alloc_par_enf": "Alloc. / Enfant",
-    "plafond_ipres_c_v": "Plafond IPRES Cadre"
+    "plafond_ipres_c_v": "Plafond IPRES Cadre",
+    "autorisation_titre": "Autorisation d'enseigner",
+    "autorisation_numero": "N° d'autorisation",
+    "autorisation_date": "Date de délivrance",
+    "autorisation_autorite": "Autorité émettrice",
+    "autorisation_obs": "Observations",
+    "transport_label": "Indemnité de transport (optionnelle)",
+    "avances_auto_info": "Les avances en attente jusqu'à la fin du mois seront déduites automatiquement.",
+    "regime_titre": "Régime de paie",
+    "regime_label": "Régime de l'établissement",
+    "regime_aide_simplifie": "Simplifié : bulletins sans cotisations sociales (établissement non affilié).",
+    "regime_aide_complet": "Complet : IPRES, CSS, IR et charges patronales (établissement affilié)."
   },
   "suivi": {
     "title": "Suivi Mensuel",

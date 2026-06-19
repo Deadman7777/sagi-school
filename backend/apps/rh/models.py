@@ -72,6 +72,11 @@ class Employe(TenantModel):
     est_cadre              = models.BooleanField(default=False)
     mode_paiement          = models.CharField(max_length=15, choices=MODE_PAIEMENT_CHOICES, default='CAISSE')
     numero_compte          = models.CharField(max_length=50, blank=True)
+    # Autorisation d'enseigner (personnel enseignant uniquement)
+    autorisation_numero    = models.CharField(max_length=100, blank=True, default='')
+    autorisation_date      = models.DateField(null=True, blank=True)
+    autorisation_autorite  = models.CharField(max_length=150, blank=True, default='')
+    autorisation_obs       = models.TextField(blank=True, default='')
 
     class Meta:
         db_table = 'employes'

@@ -15,6 +15,9 @@ class Tenant(TimeStampedModel):
     # Stocké en base pour fonctionner identiquement en local (Electron) et en cloud,
     # et s'embarquer directement dans les PDF (xhtml2pdf gère les data URIs).
     logo      = models.TextField(blank=True, default='')
+    # Régime de paie : COMPLET (affilié IPRES/CSS/IR) ou SIMPLIFIE (non affilié, sans cotisations)
+    REGIME_PAIE_CHOICES = [('COMPLET', 'Complet (affilié)'), ('SIMPLIFIE', 'Simplifié (non affilié)')]
+    regime_paie = models.CharField(max_length=10, choices=REGIME_PAIE_CHOICES, default='COMPLET')
     actif     = models.BooleanField(default=True)
 
     class Meta:

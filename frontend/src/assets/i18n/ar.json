@@ -697,7 +697,18 @@
     "prime_trans_p": "منحة النقل",
     "alloc_su_base": "منحة الراتب الوحيد",
     "alloc_par_enf": "منحة لكل طفل",
-    "plafond_ipres_c_v": "حد IPRES الإطارات"
+    "plafond_ipres_c_v": "حد IPRES الإطارات",
+    "autorisation_titre": "إذن التدريس",
+    "autorisation_numero": "رقم الإذن",
+    "autorisation_date": "تاريخ الإصدار",
+    "autorisation_autorite": "الجهة المُصدِرة",
+    "autorisation_obs": "ملاحظات",
+    "transport_label": "بدل النقل (اختياري)",
+    "avances_auto_info": "تُخصم السُّلف المعلّقة حتى نهاية الشهر تلقائيًا.",
+    "regime_titre": "نظام الأجور",
+    "regime_label": "نظام المؤسسة",
+    "regime_aide_simplifie": "مبسّط: قسائم دون اشتراكات اجتماعية (غير منتسبة).",
+    "regime_aide_complet": "كامل: IPRES وCSS وIR وأعباء صاحب العمل (منتسبة)."
   },
   "suivi": {
     "title": "المتابعة الشهرية",

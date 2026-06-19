@@ -157,41 +157,52 @@ class PaieCalculateur:
         else:
             alloc = Decimal('0')
 
-        prime_transport = params.prime_transport
+        # Indemnité de transport : optionnelle, saisie manuellement (0 par défaut)
+        prime_transport = _d(kwargs.get('prime_transport', 0))
 
         salaire_brut = (
             base + heures_sup + indemnite_sujetion + indemnite_logement
             + alloc + prime_transport + primes_diverses + avantages_nature
         )
 
-        # IPRES général
-        base_ipres_g      = min(salaire_brut, params.plafond_ipres_general)
-        ipres_g_sal       = _arrondi(base_ipres_g * params.taux_ipres_general_salarie / 100)
-        ipres_g_pat       = _arrondi(base_ipres_g * params.taux_ipres_general_patronal / 100)
+        # Régime de paie de l'établissement : SIMPLIFIE (non affilié) → aucune cotisation
+        regime    = getattr(employe.tenant, 'regime_paie', 'COMPLET')
+        simplifie = (regime == 'SIMPLIFIE')
 
-        # IPRES cadre
-        ipres_c_sal = ipres_c_pat = Decimal('0')
-        if employe.est_cadre:
-            base_ipres_c = min(salaire_brut, params.plafond_ipres_cadre)
-            ipres_c_sal  = _arrondi(base_ipres_c * params.taux_ipres_cadre_salarie / 100)
-            ipres_c_pat  = _arrondi(base_ipres_c * params.taux_ipres_cadre_patronal / 100)
+        ipres_g_sal = ipres_g_pat = ipres_c_sal = ipres_c_pat = Decimal('0')
+        ir = css = atmp = cfce = Decimal('0')
 
-        ipres_salarie_total = ipres_g_sal + ipres_c_sal
+        if not simplifie:
+            # IPRES général
+            base_ipres_g = min(salaire_brut, params.plafond_ipres_general)
+            ipres_g_sal  = _arrondi(base_ipres_g * params.taux_ipres_general_salarie / 100)
+            ipres_g_pat  = _arrondi(base_ipres_g * params.taux_ipres_general_patronal / 100)
+            # IPRES cadre
+            if employe.est_cadre:
+                base_ipres_c = min(salaire_brut, params.plafond_ipres_cadre)
+                ipres_c_sal  = _arrondi(base_ipres_c * params.taux_ipres_cadre_salarie / 100)
+                ipres_c_pat  = _arrondi(base_ipres_c * params.taux_ipres_cadre_patronal / 100)
+            ir = cls.calculer_ir(
+                salaire_brut, employe.nb_enfants, employe.situation_matrimoniale,
+                ipres_g_sal + ipres_c_sal, params
+            )
+            # Charges patronales
+            base_css = min(salaire_brut, params.plafond_css)
+            css  = _arrondi(base_css * params.taux_css_prestations_familiales / 100)
+            atmp = _arrondi(base_css * params.taux_atmp / 100)
+            cfce = _arrondi(salaire_brut * params.taux_cfce / 100)
 
-        ir = cls.calculer_ir(
-            salaire_brut, employe.nb_enfants, employe.situation_matrimoniale,
-            ipres_salarie_total, params
-        )
-
-        # Avances à imputer
-        avance_ids = kwargs.get('avance_ids', [])
+        # Avances à imputer : par défaut toutes les avances EN_ATTENTE jusqu'à fin du mois
+        import calendar as _cal, datetime as _dt
+        avance_ids = kwargs.get('avance_ids', None)
         avances_qs = AvanceSalaire.objects.filter(
             tenant=employe.tenant, employe=employe, statut='EN_ATTENTE'
         )
-        if avance_ids:
-            avances_qs = avances_qs.filter(id__in=avance_ids)
-        elif not kwargs.get('inclure_avances', False):
-            avances_qs = avances_qs.none()
+        if avance_ids is not None:
+            avances_qs = avances_qs.filter(id__in=avance_ids)   # sélection explicite (peut être vide)
+        else:
+            fin_mois = _dt.date(annee, mois, _cal.monthrange(annee, mois)[1])
+            avances_qs = avances_qs.filter(date_avance__lte=fin_mois)
 
         avance_montant = sum((_d(a.montant) for a in avances_qs), Decimal('0'))
 
@@ -199,12 +210,6 @@ class PaieCalculateur:
             ipres_g_sal + ipres_c_sal + ir
             + avance_montant + opposition_saisie + autres_retenues_ext
         )
-
-        # Charges patronales
-        base_css = min(salaire_brut, params.plafond_css)
-        css  = _arrondi(base_css * params.taux_css_prestations_familiales / 100)
-        atmp = _arrondi(base_css * params.taux_atmp / 100)
-        cfce = _arrondi(salaire_brut * params.taux_cfce / 100)
         total_charges_pat = ipres_g_pat + ipres_c_pat + css + atmp + cfce
 
         net_a_payer  = salaire_brut - total_retenues

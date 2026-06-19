@@ -155,6 +155,26 @@
   </tr>
 </table>
 
+{% if employe.type_employe == 'ENSEIGNANT' and employe.autorisation_numero %}
+<!-- Autorisation d'enseigner -->
+<table class="info-table">
+  <tr>
+    <td>
+      <div class="ib-label">Autorisation d'enseigner</div>
+      <div class="ib-val">{{ employe.autorisation_numero }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Délivrée le</div>
+      <div class="ib-val">{{ employe.autorisation_date|date:"d/m/Y"|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="ib-label">Autorité</div>
+      <div class="ib-val">{{ employe.autorisation_autorite|default:"—" }}</div>
+    </td>
+  </tr>
+</table>
+{% endif %}
+
 <!-- ══ GAINS ══ -->
 <div class="section-title green">ÉLÉMENTS DE RÉMUNÉRATION (GAINS)</div>
 <table>
@@ -193,10 +213,12 @@
       <td class="right">{{ bulletin.allocation_salaire_unique|floatformat:0 }}</td>
     </tr>
     {% endif %}
+    {% if bulletin.prime_transport %}
     <tr>
-      <td>Prime de transport</td>
+      <td>Indemnité de transport</td>
       <td class="right">{{ bulletin.prime_transport|floatformat:0 }}</td>
     </tr>
+    {% endif %}
     {% if bulletin.primes_diverses %}
     <tr>
       <td>Primes diverses</td>
@@ -228,6 +250,7 @@
     </tr>
   </thead>
   <tbody>
+    {% if regime != 'SIMPLIFIE' %}
     <tr>
       <td>IPRES — cotisation générale salarié ({{ bulletin.parametres_fiscaux.taux_ipres_general_salarie }} %)</td>
       <td class="right">{{ bulletin.ipres_general_salarie|floatformat:0 }}</td>
@@ -242,6 +265,7 @@
       <td>Impôt sur le Revenu (IR) retenu à la source</td>
       <td class="right">{{ bulletin.ir_retenu|floatformat:0 }}</td>
     </tr>
+    {% endif %}
     {% if bulletin.avance_sur_salaire %}
     <tr>
       <td>Avance sur salaire</td>
@@ -258,6 +282,11 @@
     <tr>
       <td>Autres retenues</td>
       <td class="right">{{ bulletin.autres_retenues|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+    {% if not bulletin.total_retenues_salariales %}
+    <tr>
+      <td colspan="2" style="text-align:center;color:#888">Aucune retenue</td>
     </tr>
     {% endif %}
   </tbody>
@@ -282,6 +311,7 @@
   </table>
 </div>
 
+{% if regime != 'SIMPLIFIE' %}
 <!-- ══ CHARGES PATRONALES ══ -->
 <div class="section-title orange">CHARGES PATRONALES (informatives)</div>
 <table>
@@ -322,6 +352,7 @@
     </tr>
   </tfoot>
 </table>
+{% endif %}
 
 <!-- Récapitulatif coûts -->
 <table class="cost-table">
@@ -334,6 +365,7 @@
       <div class="cost-label">Net à Payer</div>
       <div class="cost-val cost-teal">{{ bulletin.net_a_payer|floatformat:0 }}</div>
     </td>
+    {% if regime != 'SIMPLIFIE' %}
     <td>
       <div class="cost-label">Charges Patronales</div>
       <div class="cost-val cost-blue">{{ bulletin.total_charges_patronales|floatformat:0 }}</div>
@@ -342,6 +374,7 @@
       <div class="cost-label">Coût Total Employeur</div>
       <div class="cost-val cost-red">{{ bulletin.cout_total_employeur|floatformat:0 }}</div>
     </td>
+    {% endif %}
   </tr>
 </table>
 

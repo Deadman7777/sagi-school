@@ -15,6 +15,7 @@ import { ToastModule }       from 'primeng/toast';
 import { TooltipModule }     from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from '../../core/services/auth.service';
+import { ApiService } from '../../core/services/api.service';
 import {
   Employe, BulletinPaie, AvanceSalaire, ParametresFiscaux,
   RhService
@@ -325,6 +326,20 @@ const MOIS_OPTIONS = [
       }
     </div>
 
+    <!-- Régime de paie de l'établissement -->
+    <div class="params-section" style="margin-bottom:16px">
+      <div class="ps-title">🏛️ {{ 'rh.regime_titre' | translate }}</div>
+      <div class="ps-row">
+        <span>{{ 'rh.regime_label' | translate }}</span>
+        <p-select [options]="regimesPaie" [(ngModel)]="regimePaie"
+                  optionLabel="label" optionValue="value" styleClass="param-input"
+                  (onChange)="sauvegarderRegime()" />
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:6px">
+        {{ (regimePaie === 'SIMPLIFIE' ? 'rh.regime_aide_simplifie' : 'rh.regime_aide_complet') | translate }}
+      </div>
+    </div>
+
     @if (parametres()[0]) {
       <div class="params-grid">
         <!-- IPRES Général -->
@@ -516,11 +531,6 @@ const MOIS_OPTIONS = [
     <div class="form-separator full">💰 Informations Paie SYSCOHADA</div>
 
     <div class="form-group">
-      <label>{{ 'rh.niveau_enseignement' | translate }}</label>
-      <p-select [options]="niveauxEnseignement" [(ngModel)]="formEmploye.niveau_enseignement"
-                optionLabel="label" optionValue="value" [showClear]="true" styleClass="w-full" />
-    </div>
-    <div class="form-group">
       <label>{{ 'rh.situation_matrimoniale' | translate }}</label>
       <p-select [options]="situationsMatrimoniales" [(ngModel)]="formEmploye.situation_matrimoniale"
                 optionLabel="label" optionValue="value" styleClass="w-full" />
@@ -544,6 +554,32 @@ const MOIS_OPTIONS = [
         {{ 'rh.est_cadre' | translate }} (régime IPRES cadres)
       </label>
     </div>
+
+    @if (formEmploye.type_employe === 'ENSEIGNANT') {
+      <div class="form-separator full">🎓 {{ 'rh.autorisation_titre' | translate }}</div>
+      <div class="form-group">
+        <label>{{ 'rh.niveau_enseignement' | translate }}</label>
+        <p-select [options]="niveauxEnseignement" [(ngModel)]="formEmploye.niveau_enseignement"
+                  optionLabel="label" optionValue="value" [showClear]="true" styleClass="w-full" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'rh.autorisation_numero' | translate }}</label>
+        <input pInputText [(ngModel)]="formEmploye.autorisation_numero" class="w-full" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'rh.autorisation_date' | translate }}</label>
+        <input pInputText type="date" [(ngModel)]="formEmploye.autorisation_date" class="w-full" />
+      </div>
+      <div class="form-group">
+        <label>{{ 'rh.autorisation_autorite' | translate }}</label>
+        <input pInputText [(ngModel)]="formEmploye.autorisation_autorite" class="w-full"
+               placeholder="Ex. IA / IEF / Ministère" />
+      </div>
+      <div class="form-group full">
+        <label>{{ 'rh.autorisation_obs' | translate }}</label>
+        <input pInputText [(ngModel)]="formEmploye.autorisation_obs" class="w-full" />
+      </div>
+    }
   </div>
   <ng-template pTemplate="footer">
     <p-button [label]="'common.annuler' | translate"     severity="secondary" (onClick)="dialogEmployeVisible=false" />
@@ -591,6 +627,11 @@ const MOIS_OPTIONS = [
                          [minFractionDigits]="0" [maxFractionDigits]="1" styleClass="w-full"
                          placeholder="0 = aucune heure sup" />
         </div>
+        <div class="form-group full">
+          <label>{{ 'rh.transport_label' | translate }}</label>
+          <p-inputNumber [(ngModel)]="formBulletin.prime_transport" [min]="0" mode="decimal" styleClass="w-full"
+                         placeholder="Optionnel — 0 si non applicable" />
+        </div>
         <div class="form-group">
           <label>{{ 'rh.indemnite_sujetion' | translate }}</label>
           <p-inputNumber [(ngModel)]="formBulletin.indemnite_sujetion" [min]="0" mode="decimal" styleClass="w-full" />
@@ -619,6 +660,9 @@ const MOIS_OPTIONS = [
           <label>Mode de paiement</label>
           <p-select [options]="modesPaiement" [(ngModel)]="formBulletin.mode_paiement_effectif"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+        <div class="form-group full" style="font-size:11px;color:#64748b">
+          ℹ️ {{ 'rh.avances_auto_info' | translate }}
         </div>
       </div>
     </div>
@@ -874,9 +918,12 @@ const MOIS_OPTIONS = [
     .params-grid   { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:16px; }
     .params-section { background:#111827; border:1px solid #2a3f5f; border-radius:8px; padding:14px; }
     .ps-title      { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
-    .ps-row        { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; color:#94a3b8; }
+    .ps-row        { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; color:#94a3b8; }
+    .ps-row > span:first-child { flex:1 1 auto; min-width:0; }
     .ps-val        { font-family:monospace; font-weight:600; color:#e8f0fe; }
-    .param-input   { width:120px; }
+    .param-input   { width:130px; flex:0 0 auto; max-width:100%; }
+    :host ::ng-deep .param-input .p-inputnumber,
+    :host ::ng-deep .param-input input { width:100%; box-sizing:border-box; }
     .params-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
     .tranches-section { margin-top:16px; }
     .tranches-table { width:auto; border-collapse:collapse; }
@@ -926,6 +973,7 @@ const MOIS_OPTIONS = [
 })
 export class RhComponent implements OnInit {
   private rh        = inject(RhService);
+  private api       = inject(ApiService);
   private msg       = inject(MessageService);
   private translate = inject(TranslateService);
   private auth      = inject(AuthService);
@@ -944,6 +992,11 @@ export class RhComponent implements OnInit {
   loadingPreview  = signal(false);
   downloadingId   = signal<string | null>(null);
   editingParams   = signal(false);
+  regimePaie      = 'COMPLET';
+  regimesPaie = [
+    { label: 'Complet (affilié IPRES/CSS/IR)',     value: 'COMPLET' },
+    { label: 'Simplifié (non affilié)',            value: 'SIMPLIFIE' },
+  ];
   previewBulletin = signal<any | null>(null);
   bulletinDetail  = signal<BulletinPaie | null>(null);
   bulletinAValider = signal<BulletinPaie | null>(null);
@@ -1057,6 +1110,19 @@ export class RhComponent implements OnInit {
         if (this.parametres()[0]) this.formParams = { ...this.parametres()[0] };
       },
     });
+    // Régime de paie de l'établissement (champ du tenant)
+    this.api.get<any>('/tenants/mon_ecole/').subscribe({
+      next: e => { this.regimePaie = e?.regime_paie || 'COMPLET'; },
+    });
+  }
+
+  sauvegarderRegime() {
+    this.api.patch<any>('/tenants/mon_ecole/', { regime_paie: this.regimePaie }).subscribe({
+      next: () => this.msg.add({ severity: 'success', summary: this.t('common.succes'),
+                                 detail: this.t('rh.regime_titre') }),
+      error: () => this.msg.add({ severity: 'error', summary: this.t('common.erreur'),
+                                  detail: this.t('common.erreur') }),
+    });
   }
 
   // ── Employés ────────────────────────────────────────────────
@@ -1066,6 +1132,7 @@ export class RhComponent implements OnInit {
       date_embauche: '', salaire_base: 0, telephone: '', email: '',
       niveau_enseignement: '', nb_enfants: 0, situation_matrimoniale: 'CELIBATAIRE',
       est_cadre: false, mode_paiement: 'CAISSE', numero_compte: '',
+      autorisation_numero: '', autorisation_date: '', autorisation_autorite: '', autorisation_obs: '',
     };
     this.dialogEmployeVisible = true;
   }
@@ -1104,6 +1171,7 @@ export class RhComponent implements OnInit {
       mois:                now.getMonth() + 1,
       annee:               now.getFullYear(),
       nb_heures_effectuees: 0,
+      prime_transport:     0,
       indemnite_sujetion:  0,
       indemnite_logement:  0,
       primes_diverses:     0,

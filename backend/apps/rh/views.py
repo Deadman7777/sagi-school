@@ -157,10 +157,12 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
         kwargs_paie = {}
-        for k in ('indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
-                  'avantages_nature', 'opposition_saisie', 'autres_retenues',
-                  'avance_ids', 'inclure_avances'):
-            kwargs_paie[k] = vd.get(k, [] if k == 'avance_ids' else 0)
+        for k in ('prime_transport', 'indemnite_sujetion', 'indemnite_logement',
+                  'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues'):
+            kwargs_paie[k] = vd.get(k, 0)
+        # avance_ids non vide = sélection explicite ; sinon auto (toutes EN_ATTENTE du mois)
+        if vd.get('avance_ids'):
+            kwargs_paie['avance_ids'] = vd['avance_ids']
         if 'mode_paiement_effectif' in vd:
             kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
 
@@ -193,10 +195,12 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
         kwargs_paie = {}
-        for k in ('indemnite_sujetion', 'indemnite_logement', 'primes_diverses',
-                  'avantages_nature', 'opposition_saisie', 'autres_retenues',
-                  'avance_ids', 'inclure_avances'):
-            kwargs_paie[k] = vd.get(k, [] if k == 'avance_ids' else 0)
+        for k in ('prime_transport', 'indemnite_sujetion', 'indemnite_logement',
+                  'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues'):
+            kwargs_paie[k] = vd.get(k, 0)
+        # avance_ids non vide = sélection explicite ; sinon auto (toutes EN_ATTENTE du mois)
+        if vd.get('avance_ids'):
+            kwargs_paie['avance_ids'] = vd['avance_ids']
         if 'mode_paiement_effectif' in vd:
             kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
 
@@ -287,6 +291,7 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
             'bulletin':     bulletin,
             'employe':      bulletin.employe,
             'tenant':       bulletin.tenant,
+            'regime':       getattr(bulletin.tenant, 'regime_paie', 'COMPLET'),
             'date_edition': timezone.now(),
             'nom_mois':     NOMS_MOIS.get(bulletin.mois, str(bulletin.mois)),
         }
