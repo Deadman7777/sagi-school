@@ -980,15 +980,9 @@ class HistoriqueExercicesView(APIView):
 class ChargeView(APIView):
     permission_classes = [IsAuthenticated]
 
-    # Comptes de charge acceptés (6xx + immobilisations 2xx) — SYSCOHADA Révisé
+    # Comptes de charge acceptés — uniquement classe 6 (SYSCOHADA Révisé).
+    # Les immobilisations (classe 2) relèvent du module Investissement, pas des charges.
     PLAN_CHARGES = {
-        # Classe 2 — Acquisitions immobilisées
-        '221': 'Bâtiments (acquisition)',
-        '231': 'Matériel et outillage (acquisition)',
-        '241': 'Matériel et mobilier (acquisition)',
-        '244': 'Matériel et mobilier',
-        '245': 'Matériel de transport (acquisition)',
-        '248': 'Autres matériels et équipements',
         # Classe 6 — Achats
         '601': 'Achats de marchandises',
         '604': 'Achats stockés — matières et fournitures',
@@ -1049,13 +1043,13 @@ class ChargeView(APIView):
         if not exercice:
             return Response([])
 
-        # Toutes les charges : manuelles (CHARGE) + paie (PAIE) sur comptes 6xx/2xx
+        # Toutes les charges : manuelles (CHARGE) + paie (PAIE) sur comptes 6xx.
+        # Les immobilisations (2xx, source INVEST) relèvent du module Investissement.
         charges = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
             source__in=('CHARGE', 'PAIE'),
             debit__gt=0,
-        ).filter(
-            Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
+            no_compte__startswith='6',
         ).order_by('-date_ecriture')
 
         return Response([{
@@ -1082,6 +1076,10 @@ class ChargeView(APIView):
 
         if montant <= 0:
             return Response({'error': 'Montant invalide'}, status=400)
+
+        if not str(no_compte).startswith('6'):
+            return Response({'error': "Compte de charge invalide : seuls les comptes de classe 6 sont autorisés. "
+                                      "Les immobilisations relèvent du module Investissement."}, status=400)
 
         from django.db.models import Max
         import re
@@ -1171,6 +1169,10 @@ class ChargeView(APIView):
 
         if montant_new <= 0:
             return Response({'error': 'Montant invalide'}, status=400)
+
+        if not str(no_compte_new).startswith('6'):
+            return Response({'error': "Compte de charge invalide : seuls les comptes de classe 6 sont autorisés. "
+                                      "Les immobilisations relèvent du module Investissement."}, status=400)
 
         last2 = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
             _Max('no_piece')

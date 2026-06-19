@@ -735,31 +735,8 @@ export class PaiementsComponent implements OnInit {
   modifChargeForm      = { no_compte: '', libelle: '', montant: 0, date: '', compte_credit: '571' };
   nouvelleCharge       = { no_compte: '661', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401' };
 
-  planCharges = [
-    { label: '601 — Achats de marchandises',          value: '601' },
-    { label: '604 — Achats de fournitures',           value: '604' },
-    { label: '606 — Eau, électricité, fournitures',   value: '606' },
-    { label: '611 — Transports',                      value: '611' },
-    { label: '612 — Loyer',                           value: '612' },
-    { label: '613 — Locations diverses',              value: '613' },
-    { label: '621 — Personnel extérieur',             value: '621' },
-    { label: '622 — Rémunérations intermédiaires',    value: '622' },
-    { label: '623 — Publicité',                       value: '623' },
-    { label: '624 — Transport du personnel',          value: '624' },
-    { label: '625 — Déplacements et missions',        value: '625' },
-    { label: '631 — Frais bancaires',                 value: '631' },
-    { label: '641 — Impôts et taxes',                 value: '641' },
-    { label: '651 — Pertes sur créances',             value: '651' },
-    { label: '658 — Charges diverses',                value: '658' },
-    { label: '661 — Salaires',                        value: '661' },
-    { label: '662 — Charges sociales (IPRES/CSS)',    value: '662' },
-    { label: '681 — Dotations aux amortissements',    value: '681' },
-    { label: '221 — Bâtiments (acquisition)',         value: '221' },
-    { label: '231 — Matériel et outillage (acq.)',    value: '231' },
-    { label: '241 — Mobilier (acquisition)',          value: '241' },
-    { label: '244 — Matériel informatique (acq.)',    value: '244' },
-    { label: '245 — Matériel de transport (acq.)',    value: '245' },
-  ];
+  // Comptes de charge chargés depuis le plan comptable (classe 6 uniquement, sans immobilisations)
+  planChargesData = signal<any[]>([]);
   planFournisseurs = [
     { label: '401 — Fournisseurs (dettes en compte)',            value: '401' },
     { label: '404 — Fournisseurs, acquisitions immobilisations', value: '404' },
@@ -773,7 +750,11 @@ export class PaiementsComponent implements OnInit {
     { label: '5523 — Free Money',   value: '5523' },
   ];
 
-  planChargesPC = computed(() => this.planCharges);
+  planChargesPC = computed(() =>
+    this.planChargesData()
+      .filter(c => c.type === 'CHARGE' && c.est_actif && c.row_type !== 'CLASSE' && c.no_compte)
+      .map(c => ({ label: `${c.no_compte} — ${c.libelle}`, value: c.no_compte }))
+  );
   comptesFournisseursPC = computed(() => this.planFournisseurs);
   comptesCreditPC = computed(() => this.comptesCredit);
   confirmAnnulVisible = false;
@@ -830,6 +811,14 @@ export class PaiementsComponent implements OnInit {
     this.chargerPaiements();
     this.chargerStats();
     this.chargerExercice();
+    this.chargerPlanCharges();
+  }
+
+  chargerPlanCharges() {
+    // Comptes de charge depuis le plan comptable (classe 6 uniquement)
+    this.compta.getPlanComptable({ type: 'CHARGE' }).subscribe({
+      next: res => this.planChargesData.set(Array.isArray(res) ? res : ((res as any).results || []))
+    });
   }
 
   chargerPaiements() {
