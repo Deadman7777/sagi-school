@@ -24,8 +24,11 @@ STATIC_ROOT      = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = []
 
 import os as _os
+# Angular 17+ écrit dans dist/frontend/browser/ ; on teste les deux formes.
 _possible = [
+    str(BASE_DIR.parent / 'frontend' / 'dist' / 'frontend' / 'browser'),
     str(BASE_DIR.parent / 'frontend' / 'dist'),
+    '/opt/SAGI SCHOOL/resources/frontend/dist/frontend/browser',
     '/opt/SAGI SCHOOL/resources/frontend/dist',
 ]
 FRONTEND_DIR = _possible[0]
