@@ -48,7 +48,24 @@ class ClasseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = Classe.objects.filter(tenant=get_tenant(self.request)).select_related('niveau')
+        tenant = get_tenant(self.request)
+        # Auto-synchronisation : chaque section de l'école (Frais Sections) devient
+        # une classe de l'académique. Pas de double saisie — on gère les classes
+        # à un seul endroit (Paramètres → Frais Sections).
+        if tenant:
+            from apps.eleves.models import Section
+            existants = set(
+                Classe.objects.filter(tenant=tenant).values_list('nom', flat=True)
+            )
+            nouvelles = [
+                Classe(tenant=tenant, nom=s.nom, code=(s.nom or '')[:20], ordre=s.ordre)
+                for s in Section.objects.filter(tenant=tenant)
+                if s.nom not in existants
+            ]
+            if nouvelles:
+                Classe.objects.bulk_create(nouvelles)
+
+        qs = Classe.objects.filter(tenant=tenant).select_related('niveau')
         if niveau := self.request.query_params.get('niveau'):
             qs = qs.filter(niveau_id=niveau)
         return qs

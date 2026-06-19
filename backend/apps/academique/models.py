@@ -24,9 +24,10 @@ class NiveauScolaire(TenantModel):
 
 
 class Classe(TenantModel):
-    niveau     = models.ForeignKey(NiveauScolaire, on_delete=models.CASCADE, related_name='classes')
+    niveau     = models.ForeignKey(NiveauScolaire, on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='classes')
     nom        = models.CharField(max_length=100)
-    code       = models.CharField(max_length=20)
+    code       = models.CharField(max_length=20, blank=True)
     effectif   = models.IntegerField(default=0)
     ordre      = models.IntegerField(default=0)
 
