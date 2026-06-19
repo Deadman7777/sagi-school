@@ -13,6 +13,18 @@ class EmployeSerializer(serializers.ModelSerializer):
             'matricule': {'required': False},
         }
 
+    def to_internal_value(self, data):
+        # Les champs date nullable arrivent souvent en chaîne vide depuis le formulaire
+        # → convertir '' en None (DRF DateField refuse la chaîne vide).
+        if hasattr(data, 'dict'):
+            data = data.dict()
+        else:
+            data = dict(data)
+        for f in ('autorisation_date', 'date_fin_contrat'):
+            if data.get(f) == '':
+                data[f] = None
+        return super().to_internal_value(data)
+
 
 class PaieSerializer(serializers.ModelSerializer):
     employe_nom = serializers.CharField(source='employe.nom_complet', read_only=True)
