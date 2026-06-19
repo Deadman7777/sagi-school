@@ -19,7 +19,22 @@ class NiveauScolaireViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return NiveauScolaire.objects.filter(tenant=get_tenant(self.request))
+        tenant = get_tenant(self.request)
+        # Auto-synchronisation : chaque section (Paramètres → Frais Sections) devient
+        # un NIVEAU. On crée ensuite les classes (CI A, CI B…) à l'intérieur d'une section.
+        if tenant:
+            from apps.eleves.models import Section
+            existants = set(
+                NiveauScolaire.objects.filter(tenant=tenant).values_list('nom', flat=True)
+            )
+            nouveaux = [
+                NiveauScolaire(tenant=tenant, nom=s.nom, code='', ordre=s.ordre, note_max=20)
+                for s in Section.objects.filter(tenant=tenant)
+                if s.nom not in existants
+            ]
+            if nouveaux:
+                NiveauScolaire.objects.bulk_create(nouveaux)
+        return NiveauScolaire.objects.filter(tenant=tenant)
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
@@ -30,24 +45,7 @@ class ClasseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        tenant = get_tenant(self.request)
-        # Auto-synchronisation : chaque section de l'école (Frais Sections) devient
-        # une classe de l'académique. Pas de double saisie — on gère les classes
-        # à un seul endroit (Paramètres → Frais Sections).
-        if tenant:
-            from apps.eleves.models import Section
-            existants = set(
-                Classe.objects.filter(tenant=tenant).values_list('nom', flat=True)
-            )
-            nouvelles = [
-                Classe(tenant=tenant, nom=s.nom, code=(s.nom or '')[:20], ordre=s.ordre)
-                for s in Section.objects.filter(tenant=tenant)
-                if s.nom not in existants
-            ]
-            if nouvelles:
-                Classe.objects.bulk_create(nouvelles)
-
-        qs = Classe.objects.filter(tenant=tenant).select_related('niveau')
+        qs = Classe.objects.filter(tenant=get_tenant(self.request)).select_related('niveau')
         if niveau := self.request.query_params.get('niveau'):
             qs = qs.filter(niveau_id=niveau)
         return qs
