@@ -627,15 +627,26 @@ class BulletinPDFView(APIView):
                 info['poids'] = min(info['poids'], float(ev.type_eval.poids))
             matiere_evals_ordered[mid] = ordered
 
-        eval_columns = []   # [{'key': (tnom, idx), 'label': str}]
+        eval_columns = []   # [{'key': (tnom, idx), 'label': str, 'width': int}]
         for tnom, info in sorted(type_info.items(), key=lambda x: (x[1]['poids'], x[0])):
             for i in range(1, info['max'] + 1):
                 label = f"{tnom} {i}" if info['max'] > 1 else tnom
                 eval_columns.append({'key': (tnom, i), 'label': label})
 
-        # Largeur des colonnes notes : ~40% réparti, le reste pour les colonnes fixes
+        # Largeurs ENTIÈRES sommant exactement à 100 (xhtml2pdf gère mal les % fractionnaires
+        # en table-layout:fixed → une colonne tombe à ~0 et fait planter le rendu).
+        # Colonnes fixes = 66 %, le reste (34 %) réparti en entiers sur les colonnes notes.
         n_cols = max(1, len(eval_columns))
-        note_col_width = round(40 / n_cols, 2)
+        reste = 34
+        base_w = reste // n_cols
+        extra  = reste - base_w * n_cols   # répartit le reliquat sur les 1ères colonnes
+        for j, col in enumerate(eval_columns):
+            col['width'] = base_w + (1 if j < extra else 0)
+        if not eval_columns:
+            # Aucune évaluation : la colonne « notes » fusionnée garde les 34 %
+            note_col_width = 34
+        else:
+            note_col_width = 0  # non utilisé quand eval_columns existe
 
         def build_notes_cells(matiere_id):
             ordered = matiere_evals_ordered.get(str(matiere_id), [])

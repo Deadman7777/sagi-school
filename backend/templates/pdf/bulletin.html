@@ -24,7 +24,7 @@
   .mb4 { margin-bottom: 4pt; }
 
   /* ── INFO ÉLÈVE ── */
-  .tbl-info td { border: 0.75pt solid #b0bec5; padding: 2pt 4pt; font-size: 7pt; }
+  .tbl-info td { border: 0.75pt solid #b0bec5; padding: 1pt 1pt; font-size: 7pt; }
   .lbl { color: #666; font-size: 6pt; }
   .val { font-weight: bold; color: #1a1a1a; }
 
@@ -34,13 +34,13 @@
   .stat-lbl { font-size: 5.5pt; color: #546e7a; }
 
   /* ── TABLEAU NOTES ── */
-  .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 2pt 4pt;
-                        font-size: 6.5pt; font-weight: bold; text-align: center; }
+  .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 1pt 1pt;
+                        font-size: 5.5pt; font-weight: bold; text-align: center; }
   .tbl-notes thead td.left { text-align: left; }
-  .tbl-notes tbody td { padding: 2pt 4pt; border-bottom: 0.5pt solid #dee2e6; font-size: 7pt;
+  .tbl-notes tbody td { padding: 1pt 1pt; border-bottom: 0.5pt solid #dee2e6; font-size: 7pt;
                          vertical-align: middle; }
   .tbl-notes tbody tr.pair td { background-color: #f8f9fa; }
-  .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 2pt 4pt;
+  .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 1pt 1pt;
                         border-top: 1.5pt solid #1a3c5e; font-size: 7pt; }
 
   .tc { text-align: center; }
@@ -49,9 +49,9 @@
   .rang-txt { font-weight: bold; color: #7b3a00; font-size: 6.5pt; }
   .mat-nom  { font-weight: bold; font-size: 7pt; }
 
-  /* Colonne notes : wrap interne propre. Appréciation : jamais coupée. */
+  /* Colonne notes : wrap interne propre. Appréciation : peut passer à la ligne. */
   .col-notes { font-size: 6.5pt; line-height: 1.4; }
-  .col-app   { font-size: 6.5pt; white-space: nowrap; }
+  .col-app   { font-size: 6.5pt; }
 
   /* ── APPRÉCIATIONS ── */
   .ap-ex  { color: #1b5e20; font-weight: bold; }
@@ -121,19 +121,19 @@
   <!-- ── TABLEAU DES NOTES ── -->
   <table class="tbl-notes mb4">
     <colgroup>
-      <col style="width:15%"><col style="width:5%">
-      {% for col in eval_columns %}<col style="width:{{ note_col_width }}%">{% endfor %}
-      <col style="width:11%"><col style="width:6%"><col style="width:6%"><col style="width:15%">
+      <col style="width:22%"><col style="width:6%">
+      {% if eval_columns %}{% for col in eval_columns %}<col style="width:{{ col.width }}%">{% endfor %}{% else %}<col style="width:34%">{% endif %}
+      <col style="width:10%"><col style="width:7%"><col style="width:6%"><col style="width:15%">
     </colgroup>
     <thead>
       <tr>
         <td class="left">MATIÈRE</td>
         <td>COEF</td>
-        {% for col in eval_columns %}<td>{{ col.label }}</td>{% endfor %}
-        <td>MOYENNE</td>
-        <td>POINTS</td>
-        <td>RANG</td>
-        <td class="left">APPRÉCIATION</td>
+        {% if eval_columns %}{% for col in eval_columns %}<td>{{ col.label }}</td>{% endfor %}{% else %}<td>NOTES</td>{% endif %}
+        <td>MOY.</td>
+        <td>PTS</td>
+        <td>RG</td>
+        <td class="left">APPRÉC.</td>
       </tr>
     </thead>
     <tbody>
@@ -141,7 +141,7 @@
       <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
         <td class="mat-nom">{{ m.nom }}</td>
         <td class="tc">{{ m.coefficient }}</td>
-        {% for cell in m.notes_cells %}<td class="tc">{{ cell }}</td>{% endfor %}
+        {% if eval_columns %}{% for cell in m.notes_cells %}<td class="tc">{{ cell }}</td>{% endfor %}{% else %}<td></td>{% endif %}
         <td class="tc moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
         <td class="tc">{{ m.points }}</td>
         <td class="tc rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
@@ -160,7 +160,7 @@
       <tr>
         <td>TOTAL / RÉSULTAT</td>
         <td class="tc">{{ total_coef }}</td>
-        <td{% if eval_columns %} colspan="{{ eval_columns|length }}"{% endif %}></td>
+        {% if eval_columns %}{% for col in eval_columns %}<td></td>{% endfor %}{% else %}<td></td>{% endif %}
         <td class="tc" style="font-size:10pt;color:#1a3c5e">{{ stats.moy_generale }}/{{ note_max }}</td>
         <td class="tc">{{ total_points }}</td>
         <td></td>
