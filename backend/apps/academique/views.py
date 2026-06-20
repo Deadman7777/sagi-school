@@ -733,60 +733,81 @@ class AnalysePerformanceView(APIView):
 
     def get(self, request):
         from apps.paiements.models import Exercice
+        from django.db.models import Sum
+        from collections import defaultdict
+
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
         annee    = exercice.annee_scolaire if exercice else ''
 
         bulletins = BulletinCache.objects.filter(tenant=tenant, annee_scolaire=annee)
 
-        # ── Évolution moyennes par trimestre ──────────────────────────────
+        # BulletinCache est PAR MATIÈRE → la moyenne générale d'un élève = Σpoints / Σcoef.
+        def moyennes_par_eleve(periode):
+            """Retourne [{eleve_id, nom, classe, moyenne}] pour une période donnée."""
+            rows = bulletins.filter(trimestre=periode).values(
+                'eleve_id', 'eleve__nom_complet',
+                'eleve__classe__nom', 'eleve__section__nom',
+            ).annotate(pts=Sum('points'), coef=Sum('matiere__coefficient'))
+            res = []
+            for r in rows:
+                c = float(r['coef'] or 0)
+                if c <= 0:
+                    continue
+                res.append({
+                    'eleve_id': r['eleve_id'],
+                    'nom':      r['eleve__nom_complet'] or '—',
+                    'classe':   r['eleve__classe__nom'] or r['eleve__section__nom'] or '—',
+                    'moyenne':  round(float(r['pts'] or 0) / c, 2),
+                })
+            return res
+
+        # Périodes réellement présentes, triées par numéro (T1<T2<T3 ou S1<S2 ou P1..)
+        def _num(p):
+            digits = ''.join(ch for ch in (p or '') if ch.isdigit())
+            return int(digits) if digits else 0
+        periodes = sorted(
+            {b for b in bulletins.values_list('trimestre', flat=True).distinct() if b},
+            key=_num
+        )
+
+        # ── Évolution des moyennes par période ────────────────────────────
         evolution = []
-        for tri in ['T1', 'T2', 'T3']:
-            agg = bulletins.filter(trimestre=tri).aggregate(
-                moy=Avg('moyenne_generale'), nb=Count('id', distinct=True)
-            )
-            evolution.append({
-                'trimestre': tri,
-                'moyenne':   round(float(agg['moy'] or 0), 2),
-                'nb_eleves': agg['nb'],
-            })
+        for p in periodes:
+            avgs = moyennes_par_eleve(p)
+            moy = round(sum(a['moyenne'] for a in avgs) / len(avgs), 2) if avgs else 0
+            evolution.append({'trimestre': p, 'moyenne': moy, 'nb_eleves': len(avgs)})
 
-        # ── Top 10 élèves (T3 si dispo, sinon T2, sinon T1) ──────────────
-        tri_ref = 'T3' if bulletins.filter(trimestre='T3').exists() else \
-                  'T2' if bulletins.filter(trimestre='T2').exists() else 'T1'
-        top_eleves_qs = (
-            bulletins.filter(trimestre=tri_ref)
-            .select_related('eleve', 'classe')
-            .order_by('-moyenne_generale')[:10]
-        )
+        # Période de référence = la dernière disponible
+        tri_ref = periodes[-1] if periodes else ''
+        ref_avgs = moyennes_par_eleve(tri_ref) if tri_ref else []
+
+        # ── Top 10 élèves ─────────────────────────────────────────────────
         top_eleves = [{
-            'rang':          i + 1,
-            'nom':           b.eleve.nom_complet if b.eleve else '—',
-            'classe':        b.classe.nom if b.classe else '—',
-            'moyenne':       round(float(b.moyenne_generale or 0), 2),
-            'trimestre':     tri_ref,
-        } for i, b in enumerate(top_eleves_qs)]
+            'rang':      i + 1,
+            'nom':       a['nom'],
+            'classe':    a['classe'],
+            'moyenne':   a['moyenne'],
+            'trimestre': tri_ref,
+        } for i, a in enumerate(sorted(ref_avgs, key=lambda x: x['moyenne'], reverse=True)[:10])]
 
-        # ── Top classes par moyenne (tri_ref) ─────────────────────────────
-        from django.db.models import FloatField
-        from django.db.models.functions import Cast
-        classes_qs = (
-            bulletins.filter(trimestre=tri_ref, classe__isnull=False)
-            .values('classe__id', 'classe__nom')
-            .annotate(moy=Avg('moyenne_generale'), nb=Count('id', distinct=True))
-            .order_by('-moy')[:10]
-        )
-        top_classes = [{
-            'rang':    i + 1,
-            'classe':  c['classe__nom'] or '—',
-            'moyenne': round(float(c['moy'] or 0), 2),
-            'nb':      c['nb'],
-        } for i, c in enumerate(classes_qs)]
+        # ── Top classes (moyenne des moyennes générales des élèves) ───────
+        par_classe = defaultdict(list)
+        for a in ref_avgs:
+            par_classe[a['classe']].append(a['moyenne'])
+        classes_calc = [
+            {'classe': nom, 'moyenne': round(sum(v) / len(v), 2), 'nb': len(v)}
+            for nom, v in par_classe.items() if v
+        ]
+        top_classes = [
+            {**c, 'rang': i + 1}
+            for i, c in enumerate(sorted(classes_calc, key=lambda x: x['moyenne'], reverse=True)[:10])
+        ]
 
-        # ── Distribution mentions (tri_ref) ───────────────────────────────
+        # ── Distribution des mentions (période de référence) ──────────────
         distribution = {'excellent': 0, 'bien': 0, 'assez_bien': 0, 'passable': 0, 'insuffisant': 0}
-        for b in bulletins.filter(trimestre=tri_ref).values_list('moyenne_generale', flat=True):
-            m = float(b or 0)
+        for a in ref_avgs:
+            m = a['moyenne']
             if m >= 16:   distribution['excellent']   += 1
             elif m >= 14: distribution['bien']         += 1
             elif m >= 12: distribution['assez_bien']   += 1
