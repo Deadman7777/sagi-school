@@ -563,7 +563,12 @@ class BulletinPDFView(APIView):
         total_points = sum(float(b.points or 0) for b in bulletins_list)
         total_coef   = sum(float(b.matiere.coefficient) for b in bulletins_list)
         moy_generale = round(total_points / total_coef, 2) if total_coef > 0 else 0
-        note_max     = float(bulletins_list[0].matiere.classe.niveau.note_max) if bulletins_list else 20
+        # note_max de référence : niveau si défini, sinon note_max de la matière (niveau nullable)
+        note_max = 20.0
+        if bulletins_list:
+            m0 = bulletins_list[0].matiere
+            niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
+            note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
 
         # Stats classe — 1 seule requête
         from collections import defaultdict
