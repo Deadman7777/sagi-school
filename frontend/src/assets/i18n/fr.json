@@ -303,7 +303,8 @@
     "erreur": "Erreur",
     "requis": "Requis",
     "champ_requis": "Champ requis",
-    "exporter": "Exporter"
+    "exporter": "Exporter",
+    "modifier": "Modifier"
   },
   "auth": {
     "email": "Email",

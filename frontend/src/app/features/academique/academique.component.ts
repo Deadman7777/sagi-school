@@ -52,7 +52,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="pc-body">
             <div class="pc-item" *ngFor="let c of classes()">
               <span>{{ c.nom }}</span>
-              <span class="badge">{{ c.niveau_nom }}</span>
+              <span class="pc-right">
+                <span class="badge">{{ c.niveau_nom }}</span>
+                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                          severity="secondary" (onClick)="ouvrirEditionClasse(c)" pTooltip="Modifier" />
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                          severity="danger" (onClick)="supprimerClasse(c)" pTooltip="Supprimer" />
+              </span>
             </div>
             <div class="empty-msg" *ngIf="classes().length===0">{{ 'academique.aucune_classe' | translate }}</div>
           </div>
@@ -74,7 +80,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="pc-body">
             <div class="pc-item" *ngFor="let m of matieres()">
               <span>{{ m.nom }}</span>
-              <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
+              <span class="pc-right">
+                <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
+                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                          severity="secondary" (onClick)="ouvrirEditionMatiere(m)" pTooltip="Modifier" />
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                          severity="danger" (onClick)="supprimerMatiere(m)" pTooltip="Supprimer" />
+              </span>
             </div>
             <div class="empty-msg" *ngIf="matieres().length===0">{{ 'academique.selectionner_classe' | translate }}</div>
           </div>
@@ -90,7 +102,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="pc-body">
             <div class="pc-item" *ngFor="let t of typesEval()">
               <span>{{ t.nom }}</span>
-              <span class="badge">{{ 'academique.poids' | translate }} {{ t.poids }}</span>
+              <span class="pc-right">
+                <span class="badge">{{ 'academique.poids' | translate }} {{ t.poids }}</span>
+                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                          severity="secondary" (onClick)="ouvrirEditionTypeEval(t)" pTooltip="Modifier" />
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                          severity="danger" (onClick)="supprimerTypeEval(t)" pTooltip="Supprimer" />
+              </span>
             </div>
           </div>
         </div>
@@ -435,7 +453,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     </div>
 
     <!-- Dialog Classe -->
-    <p-dialog [header]="'🏫 ' + ('academique.nouvelle_classe' | translate)" [(visible)]="dialogClasseVisible"
+    <p-dialog [header]="'🏫 ' + (formClasse.id ? ('common.modifier' | translate) : ('academique.nouvelle_classe' | translate))" [(visible)]="dialogClasseVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
@@ -454,12 +472,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogClasseVisible=false" />
-        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerClasse()" />
+        <p-button [label]="(formClasse.id ? 'common.enregistrer' : 'common.creer') | translate" severity="success" (onClick)="creerClasse()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Matière -->
-    <p-dialog [header]="'📖 ' + ('academique.nouvelle_matiere' | translate)" [(visible)]="dialogMatiereVisible"
+    <p-dialog [header]="'📖 ' + (formMatiere.id ? ('common.modifier' | translate) : ('academique.nouvelle_matiere' | translate))" [(visible)]="dialogMatiereVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
@@ -483,12 +501,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogMatiereVisible=false" />
-        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerMatiere()" />
+        <p-button [label]="(formMatiere.id ? 'common.enregistrer' : 'common.creer') | translate" severity="success" (onClick)="creerMatiere()" />
       </ng-template>
     </p-dialog>
 
     <!-- Dialog Type Évaluation -->
-    <p-dialog [header]="'📋 ' + ('academique.nouveau_type_eval' | translate)" [(visible)]="dialogTypeEvalVisible"
+    <p-dialog [header]="'📋 ' + (formTypeEval.id ? ('common.modifier' | translate) : ('academique.nouveau_type_eval' | translate))" [(visible)]="dialogTypeEvalVisible"
               [modal]="true" [style]="{width:'400px'}">
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
@@ -502,7 +520,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogTypeEvalVisible=false" />
-        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerTypeEval()" />
+        <p-button [label]="(formTypeEval.id ? 'common.enregistrer' : 'common.creer') | translate" severity="success" (onClick)="creerTypeEval()" />
       </ng-template>
     </p-dialog>
 
@@ -554,6 +572,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .pc-body { padding:8px 0; max-height:300px; overflow-y:auto; }
     .pc-item { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:13px; color:#94a3b8; }
     .pc-item:hover { background:#1a2235; }
+    .pc-right { display:flex; align-items:center; gap:2px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
     .filters-bar { display:flex; gap:8px; flex-wrap:wrap; }
     .filter-drop { min-width:160px; }
@@ -627,9 +646,9 @@ export class AcademiqueComponent implements OnInit {
     listener: (_event: any, options: any) => options.type === 'scroll' ? false : options.valid,
   };
 
-  formClasse   = { nom: '', code: '', niveau: '' };
-  formMatiere  = { nom: '', classe: '', coefficient: 1, note_max: 20 };
-  formTypeEval = { nom: '', poids: 1 };
+  formClasse:   any = { id: null, nom: '', code: '', niveau: '' };
+  formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20 };
+  formTypeEval: any = { id: null, nom: '', poids: 1 };
   formEval     = { type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
 
   trimestres: any[] = [];
@@ -839,15 +858,27 @@ export class AcademiqueComponent implements OnInit {
   }
 
   ouvrirDialogClasse()   {
-    this.formClasse = { nom:'', code:'', niveau:'' };
+    this.formClasse = { id:null, nom:'', code:'', niveau:'' };
+    this.dialogClasseVisible = true;
+  }
+  ouvrirEditionClasse(c: any) {
+    this.formClasse = { id:c.id, nom:c.nom, code:c.code || '', niveau:c.niveau };
     this.dialogClasseVisible = true;
   }
   ouvrirDialogMatiere()  {
     // Pré-remplir avec la classe filtrée si active
-    this.formMatiere = { nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20 };
+    this.formMatiere = { id:null, nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20 };
     this.dialogMatiereVisible = true;
   }
-  ouvrirDialogTypeEval() { this.formTypeEval = { nom:'', poids:1 }; this.dialogTypeEvalVisible = true; }
+  ouvrirEditionMatiere(m: any) {
+    this.formMatiere = { id:m.id, nom:m.nom, classe:m.classe, coefficient:+m.coefficient, note_max:+m.note_max };
+    this.dialogMatiereVisible = true;
+  }
+  ouvrirDialogTypeEval() { this.formTypeEval = { id:null, nom:'', poids:1 }; this.dialogTypeEvalVisible = true; }
+  ouvrirEditionTypeEval(t: any) {
+    this.formTypeEval = { id:t.id, nom:t.nom, poids:+t.poids };
+    this.dialogTypeEvalVisible = true;
+  }
   ouvrirDialogEvaluation() {
     if (!this.matiereNotes) { this.msg.add({ severity:'warn', summary: this.translate.instant('academique.select_matiere') }); return; }
     this.formEval = { type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max:20, titre:'' };
@@ -859,14 +890,29 @@ export class AcademiqueComponent implements OnInit {
       this.msg.add({ severity:'warn', summary:'Champs requis', detail:'Nom et niveau sont obligatoires.' });
       return;
     }
-    this.acad.creerClasse(this.formClasse).subscribe({
+    const obs = this.formClasse.id
+      ? this.acad.modifierClasse(this.formClasse.id, this.formClasse)
+      : this.acad.creerClasse(this.formClasse);
+    obs.subscribe({
       next: () => {
         this.dialogClasseVisible = false;
         this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.classe_creee') });
       },
       error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
-                                      detail: err?.error?.detail || 'Impossible de créer la classe.' }),
+                                      detail: err?.error?.detail || 'Impossible d\'enregistrer la classe.' }),
+    });
+  }
+
+  supprimerClasse(c: any) {
+    if (!confirm(`Supprimer la classe « ${c.nom} » ?\nLes élèves de cette classe ne seront pas supprimés.`)) return;
+    this.acad.supprimerClasse(c.id).subscribe({
+      next: () => {
+        this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
+        this.msg.add({ severity:'success', summary: this.translate.instant('common.succes') });
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de supprimer la classe.' }),
     });
   }
 
@@ -875,14 +921,29 @@ export class AcademiqueComponent implements OnInit {
       this.msg.add({ severity:'warn', summary:'Champs requis', detail:'Nom et classe sont obligatoires.' });
       return;
     }
-    this.acad.creerMatiere(this.formMatiere).subscribe({
+    const obs = this.formMatiere.id
+      ? this.acad.modifierMatiere(this.formMatiere.id, this.formMatiere)
+      : this.acad.creerMatiere(this.formMatiere);
+    obs.subscribe({
       next: () => {
         this.dialogMatiereVisible = false;
         this.chargerMatieres();
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.matiere_creee') });
       },
       error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
-                                      detail: err?.error?.detail || 'Impossible de créer la matière.' }),
+                                      detail: err?.error?.detail || 'Impossible d\'enregistrer la matière.' }),
+    });
+  }
+
+  supprimerMatiere(m: any) {
+    if (!confirm(`Supprimer la matière « ${m.nom} » ?\nLes notes liées seront aussi supprimées.`)) return;
+    this.acad.supprimerMatiere(m.id).subscribe({
+      next: () => {
+        this.chargerMatieres();
+        this.msg.add({ severity:'success', summary: this.translate.instant('common.succes') });
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de supprimer la matière.' }),
     });
   }
 
@@ -891,14 +952,29 @@ export class AcademiqueComponent implements OnInit {
       this.msg.add({ severity:'warn', summary:'Champ requis', detail:'Le nom est obligatoire.' });
       return;
     }
-    this.acad.creerTypeEval(this.formTypeEval).subscribe({
+    const obs = this.formTypeEval.id
+      ? this.acad.modifierTypeEval(this.formTypeEval.id, this.formTypeEval)
+      : this.acad.creerTypeEval(this.formTypeEval);
+    obs.subscribe({
       next: () => {
         this.dialogTypeEvalVisible = false;
         this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.type_eval_cree') });
       },
       error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
-                                      detail: err?.error?.detail || 'Impossible de créer le type.' }),
+                                      detail: err?.error?.detail || 'Impossible d\'enregistrer le type.' }),
+    });
+  }
+
+  supprimerTypeEval(t: any) {
+    if (!confirm(`Supprimer le type d'évaluation « ${t.nom} » ?`)) return;
+    this.acad.supprimerTypeEval(t.id).subscribe({
+      next: () => {
+        this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
+        this.msg.add({ severity:'success', summary: this.translate.instant('common.succes') });
+      },
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: err?.error?.detail || 'Impossible de supprimer le type.' }),
     });
   }
 

@@ -21,6 +21,13 @@ export class AcademiqueService {
   modifierNote(id: string, data: any) { return this.api.patch<any>(`/academique/notes/${id}/`, data); }
   bulkSaveNotes(notes: any[]) { return this.api.post<any>('/academique/notes/bulk_save/', { notes }); }
 
+  modifierClasse(id: string, data: any)   { return this.api.patch<any>(`/academique/classes/${id}/`, data); }
+  supprimerClasse(id: string)             { return this.api.delete<any>(`/academique/classes/${id}/`); }
+  modifierMatiere(id: string, data: any)  { return this.api.patch<any>(`/academique/matieres/${id}/`, data); }
+  supprimerMatiere(id: string)            { return this.api.delete<any>(`/academique/matieres/${id}/`); }
+  modifierTypeEval(id: string, data: any) { return this.api.patch<any>(`/academique/types-eval/${id}/`, data); }
+  supprimerTypeEval(id: string)           { return this.api.delete<any>(`/academique/types-eval/${id}/`); }
+
   calculerMoyennes(data: any){ return this.api.post<any>('/academique/calculer/', data); }
   getBulletin(eleveId: string, trimestre: string, annee: string) {
     return this.api.get<any>(`/academique/bulletin/${eleveId}/${trimestre}/`, { annee });

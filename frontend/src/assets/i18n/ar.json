@@ -303,7 +303,8 @@
     "erreur": "خطأ",
     "requis": "مطلوب",
     "champ_requis": "حقل مطلوب",
-    "exporter": "تصدير"
+    "exporter": "تصدير",
+    "modifier": "تعديل"
   },
   "auth": {
     "email": "البريد الإلكتروني",
