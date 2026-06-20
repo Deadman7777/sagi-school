@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
 import { ElevesService } from '../../core/services/eleves.service';
+import { ApiService } from '../../core/services/api.service';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
@@ -41,6 +42,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
     <!-- PARAMÉTRAGE -->
     <div *ngIf="onglet()==='parametrage'">
+      <!-- Découpage de l'année : trimestres ou semestres -->
+      <div class="periode-bar">
+        <span class="periode-label">📅 Découpage de l'année scolaire</span>
+        <p-select [options]="periodesOptions" [(ngModel)]="periode"
+                  optionLabel="label" optionValue="value" styleClass="periode-select"
+                  (onChange)="sauvegarderPeriode()" />
+        <span class="periode-hint">Choisissez selon votre école (trimestres ou semestres).</span>
+      </div>
+
       <div class="param-grid">
 
         <!-- Classes -->
@@ -136,7 +146,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   (onChange)="onMatiereNotesChange()" />
         <p-select [options]="trimestres" [(ngModel)]="trimestreNotes"
                   optionLabel="label" optionValue="value"
-                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop"
+                  [placeholder]="periodeLabel()" styleClass="filter-drop"
                   (onChange)="onTrimestreNotesChange()" />
         <p-button [label]="'academique.ajouter_eval' | translate" severity="secondary" size="small"
                   (onClick)="ouvrirDialogEvaluation()" [disabled]="!matiereNotes" />
@@ -231,7 +241,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   [placeholder]="'academique.classe_filter' | translate" styleClass="filter-drop" />
         <p-select [options]="trimestres" [(ngModel)]="trimestreResultats"
                   optionLabel="label" optionValue="value"
-                  [placeholder]="'academique.trimestre_filter' | translate" styleClass="filter-drop" />
+                  [placeholder]="periodeLabel()" styleClass="filter-drop" />
         <p-button [label]="'🔢 ' + ('academique.calculer_moyennes' | translate)" severity="success"
                   [loading]="calculant()" (onClick)="calculerMoyennes()" />
       </div>
@@ -541,7 +551,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                     optionLabel="nom" optionValue="id" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
-          <label>{{ 'academique.trimestre' | translate }} *</label>
+          <label>{{ periodeLabel() }} *</label>
           <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="trimestres" [(ngModel)]="formEval.trimestre"
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
@@ -581,6 +591,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .pc-item:hover { background:#1a2235; }
     .pc-right { display:flex; align-items:center; gap:2px; }
     .pc-actions { display:flex; align-items:center; gap:2px; }
+    .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:12px 16px; margin-bottom:16px; }
+    .periode-label { font-weight:600; color:#e8f0fe; font-size:13px; }
+    .periode-hint { font-size:11px; color:#64748b; }
+    ::ng-deep .periode-select { min-width:180px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
     .filters-bar { display:flex; gap:8px; flex-wrap:wrap; }
     .filter-drop { min-width:160px; }
@@ -661,21 +675,49 @@ export class AcademiqueComponent implements OnInit {
 
   trimestres: any[] = [];
   noteMaxOptions: any[] = [];
+  periode = 'TRIMESTRE';   // TRIMESTRE (3) ou SEMESTRE (2)
+  periodesOptions = [
+    { label: 'Trimestres (3)', value: 'TRIMESTRE' },
+    { label: 'Semestres (2)',  value: 'SEMESTRE' },
+  ];
+
+  // Libellé singulier selon le découpage de l'école
+  periodeLabel(): string { return this.periode === 'SEMESTRE' ? 'Semestre' : 'Trimestre'; }
+
+  // Construit les options de période (libellés en dur → indépendant du cache i18n)
+  construireTrimestres() {
+    this.trimestres = this.periode === 'SEMESTRE'
+      ? [{ label: 'Semestre 1', value: 'S1' }, { label: 'Semestre 2', value: 'S2' }]
+      : [{ label: 'Trimestre 1', value: 'T1' }, { label: 'Trimestre 2', value: 'T2' }, { label: 'Trimestre 3', value: 'T3' }];
+    // Réinitialise les sélections sur la 1ère période valide
+    const vals = this.trimestres.map(t => t.value);
+    if (!vals.includes(this.trimestreNotes))     this.trimestreNotes = vals[0];
+    if (!vals.includes(this.trimestreResultats)) this.trimestreResultats = vals[0];
+  }
+
+  sauvegarderPeriode() {
+    this.construireTrimestres();
+    this.api.patch<any>('/tenants/mon_ecole/', { periode_scolaire: this.periode }).subscribe({
+      next: () => this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }),
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
+    });
+  }
 
   private translate = inject(TranslateService);
 
   constructor(
     private acad: AcademiqueService,
     private elevesService: ElevesService,
+    private api: ApiService,
     private msg: MessageService
   ) {}
 
   ngOnInit() {
-    this.trimestres = [
-      { label: this.translate.instant('academique.trimestre_1'), value: 'T1' },
-      { label: this.translate.instant('academique.trimestre_2'), value: 'T2' },
-      { label: this.translate.instant('academique.trimestre_3'), value: 'T3' },
-    ];
+    this.construireTrimestres();
+    // Réglage période (trimestre/semestre) de l'école
+    this.api.get<any>('/tenants/mon_ecole/').subscribe({
+      next: e => { this.periode = e?.periode_scolaire || 'TRIMESTRE'; this.construireTrimestres(); },
+    });
     this.noteMaxOptions = [
       { label: this.translate.instant('academique.sur_10'), value: 10 },
       { label: this.translate.instant('academique.sur_20'), value: 20 },

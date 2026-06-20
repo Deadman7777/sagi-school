@@ -510,7 +510,8 @@ class BulletinPDFView(APIView):
 
     def get_decision(self, moy, note_max, trimestre='T1'):
         ratio = float(moy) / float(note_max) * 20
-        if trimestre == 'T3':
+        # Période finale (passage en classe supérieure) : T3 en trimestres, S2 en semestres
+        if trimestre in ('T3', 'S2'):
             if ratio >= 16: return 'Admis(e) avec félicitations — Passage en classe supérieure'
             if ratio >= 14: return 'Admis(e) avec encouragements — Passage en classe supérieure'
             if ratio >= 10: return 'Admis(e) — Passage en classe supérieure'

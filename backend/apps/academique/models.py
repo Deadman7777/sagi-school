@@ -70,14 +70,11 @@ class Matiere(TenantModel):
 
 
 class Evaluation(TenantModel):
-    TRIMESTRE_CHOICES = [
-        ('T1', 'Trimestre 1'),
-        ('T2', 'Trimestre 2'),
-        ('T3', 'Trimestre 3'),
-    ]
+    # Période : T1/T2/T3 (trimestres) ou S1/S2 (semestres) selon le réglage de l'école.
+    # Pas de choices figés pour supporter les deux découpages.
     matiere       = models.ForeignKey(Matiere, on_delete=models.CASCADE, related_name='evaluations')
     type_eval     = models.ForeignKey(TypeEvaluation, on_delete=models.CASCADE)
-    trimestre     = models.CharField(max_length=2, choices=TRIMESTRE_CHOICES)
+    trimestre     = models.CharField(max_length=2)
     date_eval     = models.DateField()
     titre         = models.CharField(max_length=100, blank=True)
     note_max      = models.DecimalField(max_digits=4, decimal_places=1, default=20)
