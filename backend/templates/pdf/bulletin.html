@@ -121,14 +121,15 @@
   <!-- ── TABLEAU DES NOTES ── -->
   <table class="tbl-notes mb4">
     <colgroup>
-      <col style="width:15%"><col style="width:5%"><col style="width:37%">
-      <col style="width:11%"><col style="width:7%"><col style="width:7%"><col style="width:18%">
+      <col style="width:15%"><col style="width:5%">
+      {% for col in eval_columns %}<col style="width:{{ note_col_width }}%">{% endfor %}
+      <col style="width:11%"><col style="width:6%"><col style="width:6%"><col style="width:15%">
     </colgroup>
     <thead>
       <tr>
         <td class="left">MATIÈRE</td>
         <td>COEF</td>
-        <td class="left">DEVOIRS &amp; COMPOSITION</td>
+        {% for col in eval_columns %}<td>{{ col.label }}</td>{% endfor %}
         <td>MOYENNE</td>
         <td>POINTS</td>
         <td>RANG</td>
@@ -140,7 +141,7 @@
       <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
         <td class="mat-nom">{{ m.nom }}</td>
         <td class="tc">{{ m.coefficient }}</td>
-        <td class="col-notes">{{ m.notes_detail|default:"—" }}</td>
+        {% for cell in m.notes_cells %}<td class="tc">{{ cell }}</td>{% endfor %}
         <td class="tc moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
         <td class="tc">{{ m.points }}</td>
         <td class="tc rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
@@ -159,7 +160,7 @@
       <tr>
         <td>TOTAL / RÉSULTAT</td>
         <td class="tc">{{ total_coef }}</td>
-        <td></td>
+        <td{% if eval_columns %} colspan="{{ eval_columns|length }}"{% endif %}></td>
         <td class="tc" style="font-size:10pt;color:#1a3c5e">{{ stats.moy_generale }}/{{ note_max }}</td>
         <td class="tc">{{ total_points }}</td>
         <td></td>

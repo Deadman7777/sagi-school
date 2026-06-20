@@ -605,28 +605,43 @@ class BulletinPDFView(APIView):
         ))
         notes_par_eval: dict = {str(n.evaluation_id): n for n in notes_eleve}
 
-        def build_notes_detail(matiere_id):
-            evs = evals_par_matiere.get(str(matiere_id), [])
-            type_counts: dict = {}
-            parts = []
+        # ── Colonnes d'évaluation dynamiques (union, ordonnées par poids) ──
+        # Ex. 2 Devoirs + 1 Composition → colonnes [Devoir 1, Devoir 2, Composition].
+        # Chaque matière remplit les cases qu'elle possède, les autres = «—».
+        type_info: dict = {}            # tnom -> {'poids': float, 'max': int}
+        matiere_evals_ordered: dict = {}  # matiere_id -> [(ev, tnom, idx)]
+        for mid, evs in evals_par_matiere.items():
+            counts: dict = {}
+            ordered = []
             for ev in evs:
-                tnom = ev.type_eval.nom
-                type_counts[tnom] = type_counts.get(tnom, 0) + 1
-                count = type_counts[tnom]
-                label = f"{tnom} {count}" if count > 1 else tnom
+                t = ev.type_eval.nom
+                counts[t] = counts.get(t, 0) + 1
+                ordered.append((ev, t, counts[t]))
+                info = type_info.setdefault(t, {'poids': float(ev.type_eval.poids), 'max': 0})
+                info['max']   = max(info['max'], counts[t])
+                info['poids'] = min(info['poids'], float(ev.type_eval.poids))
+            matiere_evals_ordered[mid] = ordered
+
+        eval_columns = []   # [{'key': (tnom, idx), 'label': str}]
+        for tnom, info in sorted(type_info.items(), key=lambda x: (x[1]['poids'], x[0])):
+            for i in range(1, info['max'] + 1):
+                label = f"{tnom} {i}" if info['max'] > 1 else tnom
+                eval_columns.append({'key': (tnom, i), 'label': label})
+
+        # Largeur des colonnes notes : ~40% réparti, le reste pour les colonnes fixes
+        n_cols = max(1, len(eval_columns))
+        note_col_width = round(40 / n_cols, 2)
+
+        def build_notes_cells(matiere_id):
+            ordered = matiere_evals_ordered.get(str(matiere_id), [])
+            by_key: dict = {}
+            for ev, t, idx in ordered:
                 n = notes_par_eval.get(str(ev.id))
                 if n:
-                    valeur = 'Abs' if n.absent else f"{float(n.valeur):g}"
+                    by_key[(t, idx)] = 'ABS' if n.absent else f"{float(n.valeur):g}"
                 else:
-                    valeur = '—'
-                note_max = int(ev.note_max) if float(ev.note_max) == int(ev.note_max) else float(ev.note_max)
-                if valeur == 'Abs':
-                    parts.append(f"{label}: ABS")
-                elif valeur == '—':
-                    parts.append(f"{label}: ND")
-                else:
-                    parts.append(f"{label}: {valeur}/{note_max}")
-            return " | ".join(parts) if parts else ""
+                    by_key[(t, idx)] = '—'
+            return [by_key.get(col['key'], '—') for col in eval_columns]
 
         def _fmt(val):
             if val is None:
@@ -644,7 +659,7 @@ class BulletinPDFView(APIView):
                 'points':       _fmt(b.points),
                 'rang':         b.rang_matiere,
                 'appreciation': b.appreciation,
-                'notes_detail': build_notes_detail(b.matiere_id),
+                'notes_cells':  build_notes_cells(b.matiere_id),
             })
         # ─────────────────────────────────────────────────────────────────
 
@@ -653,6 +668,8 @@ class BulletinPDFView(APIView):
             'annee':     annee,
             'trimestre': trimestre,
             'note_max':  int(note_max) if note_max == int(note_max) else note_max,
+            'eval_columns':   eval_columns,
+            'note_col_width': note_col_width,
             'eleve': {
                 'nom_complet':    eleve.nom_complet,
                 'matricule':      eleve.numero or '—',
