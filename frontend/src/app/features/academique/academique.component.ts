@@ -48,7 +48,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <p-select [options]="periodesOptions" [(ngModel)]="periode"
                   optionLabel="label" optionValue="value" styleClass="periode-select"
                   (onChange)="sauvegarderPeriode()" />
-        <span class="periode-hint">Choisissez selon votre école (trimestres ou semestres).</span>
+        <span class="periode-hint">Nombre :</span>
+        <p-inputNumber [(ngModel)]="nbPeriodes" [min]="1" [max]="12" [showButtons]="true"
+                       (onInput)="construireTrimestres()" (onBlur)="sauvegarderPeriode()" styleClass="periode-nb" />
+        <span class="periode-hint">Ex. {{ periodeLabel() }} 1 … {{ periodeLabel() }} {{ nbPeriodes }}.</span>
       </div>
 
       <div class="param-grid">
@@ -594,7 +597,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:12px 16px; margin-bottom:16px; }
     .periode-label { font-weight:600; color:#e8f0fe; font-size:13px; }
     .periode-hint { font-size:11px; color:#64748b; }
-    ::ng-deep .periode-select { min-width:180px; }
+    ::ng-deep .periode-select { min-width:150px; }
+    ::ng-deep .periode-nb { width:110px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
     .filters-bar { display:flex; gap:8px; flex-wrap:wrap; }
     .filter-drop { min-width:160px; }
@@ -675,29 +679,37 @@ export class AcademiqueComponent implements OnInit {
 
   trimestres: any[] = [];
   noteMaxOptions: any[] = [];
-  periode = 'TRIMESTRE';   // TRIMESTRE (3) ou SEMESTRE (2)
+  periode = 'TRIMESTRE';   // type/mot : TRIMESTRE | SEMESTRE | PERIODE
+  nbPeriodes = 3;          // nombre de périodes (libre)
   periodesOptions = [
-    { label: 'Trimestres (3)', value: 'TRIMESTRE' },
-    { label: 'Semestres (2)',  value: 'SEMESTRE' },
+    { label: 'Trimestre', value: 'TRIMESTRE' },
+    { label: 'Semestre',  value: 'SEMESTRE' },
+    { label: 'Période',   value: 'PERIODE' },
   ];
 
-  // Libellé singulier selon le découpage de l'école
-  periodeLabel(): string { return this.periode === 'SEMESTRE' ? 'Semestre' : 'Trimestre'; }
+  // Mot singulier + préfixe de code selon le type
+  periodeLabel(): string {
+    return this.periode === 'SEMESTRE' ? 'Semestre' : this.periode === 'PERIODE' ? 'Période' : 'Trimestre';
+  }
+  private periodePrefixe(): string {
+    return this.periode === 'SEMESTRE' ? 'S' : this.periode === 'PERIODE' ? 'P' : 'T';
+  }
 
-  // Construit les options de période (libellés en dur → indépendant du cache i18n)
+  // Construit les options de période (mot + nombre choisis par l'école)
   construireTrimestres() {
-    this.trimestres = this.periode === 'SEMESTRE'
-      ? [{ label: 'Semestre 1', value: 'S1' }, { label: 'Semestre 2', value: 'S2' }]
-      : [{ label: 'Trimestre 1', value: 'T1' }, { label: 'Trimestre 2', value: 'T2' }, { label: 'Trimestre 3', value: 'T3' }];
-    // Réinitialise les sélections sur la 1ère période valide
+    const n = Math.max(1, Math.min(12, +this.nbPeriodes || 1));
+    const mot = this.periodeLabel();
+    const pre = this.periodePrefixe();
+    this.trimestres = Array.from({ length: n }, (_, i) => ({ label: `${mot} ${i + 1}`, value: `${pre}${i + 1}` }));
     const vals = this.trimestres.map(t => t.value);
     if (!vals.includes(this.trimestreNotes))     this.trimestreNotes = vals[0];
     if (!vals.includes(this.trimestreResultats)) this.trimestreResultats = vals[0];
   }
 
   sauvegarderPeriode() {
+    this.nbPeriodes = Math.max(1, Math.min(12, +this.nbPeriodes || 1));
     this.construireTrimestres();
-    this.api.patch<any>('/tenants/mon_ecole/', { periode_scolaire: this.periode }).subscribe({
+    this.api.patch<any>('/tenants/mon_ecole/', { periode_scolaire: this.periode, nb_periodes: this.nbPeriodes }).subscribe({
       next: () => this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }),
       error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
     });
@@ -716,7 +728,11 @@ export class AcademiqueComponent implements OnInit {
     this.construireTrimestres();
     // Réglage période (trimestre/semestre) de l'école
     this.api.get<any>('/tenants/mon_ecole/').subscribe({
-      next: e => { this.periode = e?.periode_scolaire || 'TRIMESTRE'; this.construireTrimestres(); },
+      next: e => {
+        this.periode = e?.periode_scolaire || 'TRIMESTRE';
+        this.nbPeriodes = e?.nb_periodes || 3;
+        this.construireTrimestres();
+      },
     });
     this.noteMaxOptions = [
       { label: this.translate.instant('academique.sur_10'), value: 10 },

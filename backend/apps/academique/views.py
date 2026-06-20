@@ -14,6 +14,17 @@ from apps.eleves.models import Eleve
 from core.tenant import get_tenant
 
 
+def _est_periode_finale(tenant, periode):
+    """True si la période (ex. 'T3', 'S2', 'P4') est la dernière de l'année,
+    selon le nombre de périodes configuré pour l'école."""
+    try:
+        idx = int(''.join(ch for ch in (periode or '') if ch.isdigit()))
+    except ValueError:
+        return False
+    nb = getattr(tenant, 'nb_periodes', 3) or 3
+    return idx >= nb
+
+
 class NiveauScolaireViewSet(viewsets.ModelViewSet):
     serializer_class   = NiveauScolaireSerializer
     permission_classes = [IsAuthenticated]
@@ -508,10 +519,12 @@ class BulletinPDFView(APIView):
         if ratio >= 8:  return 'Insuffisant'
         return 'Très Insuffisant'
 
-    def get_decision(self, moy, note_max, trimestre='T1'):
+    def get_decision(self, moy, note_max, trimestre='T1', est_finale=None):
         ratio = float(moy) / float(note_max) * 20
-        # Période finale (passage en classe supérieure) : T3 en trimestres, S2 en semestres
-        if trimestre in ('T3', 'S2'):
+        # Période finale (passage en classe supérieure). Compat : T3/S2 si non précisé.
+        if est_finale is None:
+            est_finale = trimestre in ('T3', 'S2')
+        if est_finale:
             if ratio >= 16: return 'Admis(e) avec félicitations — Passage en classe supérieure'
             if ratio >= 14: return 'Admis(e) avec encouragements — Passage en classe supérieure'
             if ratio >= 10: return 'Admis(e) — Passage en classe supérieure'
@@ -658,8 +671,8 @@ class BulletinPDFView(APIView):
                 'nb_eleves':    len(moyennes_classe),
             },
             'appreciation_generale': self.get_appreciation(moy_generale, note_max),
-            'decision':              self.get_decision(moy_generale, note_max, trimestre),
-            'is_final':              trimestre == 'T3',
+            'decision':              self.get_decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
+            'is_final':              _est_periode_finale(tenant, trimestre),
             'decision_positive':     moy_generale >= (note_max * 10 / 20),
         }
 

@@ -18,9 +18,10 @@ class Tenant(TimeStampedModel):
     # Régime de paie : COMPLET (affilié IPRES/CSS/IR) ou SIMPLIFIE (non affilié, sans cotisations)
     REGIME_PAIE_CHOICES = [('COMPLET', 'Complet (affilié)'), ('SIMPLIFIE', 'Simplifié (non affilié)')]
     regime_paie = models.CharField(max_length=10, choices=REGIME_PAIE_CHOICES, default='COMPLET')
-    # Découpage de l'année scolaire : 3 trimestres ou 2 semestres (selon l'école)
-    PERIODE_CHOICES = [('TRIMESTRE', 'Trimestres'), ('SEMESTRE', 'Semestres')]
+    # Découpage de l'année scolaire — libre : type (mot) + nombre de périodes
+    PERIODE_CHOICES = [('TRIMESTRE', 'Trimestre'), ('SEMESTRE', 'Semestre'), ('PERIODE', 'Période')]
     periode_scolaire = models.CharField(max_length=10, choices=PERIODE_CHOICES, default='TRIMESTRE')
+    nb_periodes      = models.IntegerField(default=3)
     actif     = models.BooleanField(default=True)
 
     class Meta:
