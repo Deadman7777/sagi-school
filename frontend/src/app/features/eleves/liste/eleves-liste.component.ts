@@ -498,7 +498,13 @@ interface PecForm {
         <div class="form-group">
           <label>{{ 'eleves.section' | translate }} *</label>
           <p-select appendTo="body" [options]="sections()" [(ngModel)]="nouvelEleve.section"
-                    optionLabel="nom" optionValue="id"
+                    optionLabel="nom" optionValue="id" (onChange)="onSectionChange()"
+                    [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.classe' | translate }} *</label>
+          <p-select appendTo="body" [options]="classesSection()" [(ngModel)]="nouvelEleve.classe"
+                    optionLabel="nom" optionValue="id" [disabled]="!nouvelEleve.section"
                     [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
         <div class="form-group">
@@ -674,6 +680,7 @@ export class ElevesListeComponent implements OnInit {
   eleves        = signal<Eleve[]>([]);
   elevesFiltres = signal<Eleve[]>([]);
   sections      = signal<any[]>([]);
+  classes       = signal<any[]>([]);
   statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);
   saving        = signal(false);
@@ -762,6 +769,27 @@ export class ElevesListeComponent implements OnInit {
     this.chargerEleves();
     this.chargerSections();
     this.chargerServices();
+    this.chargerClasses();
+  }
+
+  chargerClasses() {
+    this.elevesService.getClasses().subscribe({
+      next: res => this.classes.set((res as any).results || res || []),
+    });
+  }
+
+  // Classes de la section sélectionnée (les classes ont niveau_nom = nom de la section).
+  // Méthode (pas computed) car nouvelEleve.section n'est pas un signal.
+  classesSection(): any[] {
+    const secNom = this.sections().find(s => s.id === this.nouvelEleve.section)?.nom;
+    if (!secNom) return [];
+    return this.classes().filter(c => c.niveau_nom === secNom);
+  }
+
+  onSectionChange() {
+    // Réinitialise la classe ; pré-sélectionne si la section n'a qu'une classe
+    const cs = this.classesSection();
+    this.nouvelEleve.classe = cs.length === 1 ? cs[0].id : undefined;
   }
 
   chargerServices() {
@@ -994,6 +1022,11 @@ export class ElevesListeComponent implements OnInit {
     if (!this.nouvelEleve.nom_complet) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.nom_obligatoire') });
+      return;
+    }
+    if (!this.nouvelEleve.section || !this.nouvelEleve.classe) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.section_classe_obligatoire') });
       return;
     }
     this.saving.set(true);

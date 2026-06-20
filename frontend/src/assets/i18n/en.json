@@ -117,7 +117,9 @@
     "services_choix": "Services the student is subscribed to",
     "services_aucun": "No active service. Create some in Settings → Services.",
     "date_entree": "Entry date",
-    "date_entree_aide": "Used to prorate the monthly fees due"
+    "date_entree_aide": "Used to prorate the monthly fees due",
+    "classe": "Class",
+    "section_classe_obligatoire": "Section and class are required."
   },
   "paiements": {
     "title": "Payment Entry",

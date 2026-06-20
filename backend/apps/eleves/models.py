@@ -52,6 +52,10 @@ class Eleve(TenantModel):
 
     exercice              = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
     section               = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
+    # Classe précise de l'élève (CI A, CI B…) au sein de sa section. Une section à classe
+    # unique a une classe portant son nom. FK string pour éviter l'import circulaire.
+    classe                = models.ForeignKey('academique.Classe', null=True, blank=True,
+                                              on_delete=models.SET_NULL, related_name='eleves_classe')
     numero                = models.IntegerField(null=True, blank=True)
     matricule             = models.CharField(max_length=20, blank=True, unique=True, null=True)
     nom_complet           = models.CharField(max_length=200)

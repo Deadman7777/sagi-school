@@ -29,6 +29,8 @@ export interface Eleve {
   genre: 'G' | 'F';
   section: string;
   section_nom: string;
+  classe: string;
+  classe_nom: string;
   date_naissance: string;
   lieu_naissance: string;
   nom_pere: string;

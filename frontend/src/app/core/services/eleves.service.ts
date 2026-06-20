@@ -57,4 +57,8 @@ export class ElevesService {
   getServices() {
     return this.api.get<PaginatedResponse<Service>>('/eleves/services/');
   }
+
+  getClasses() {
+    return this.api.get<any>('/academique/classes/');
+  }
 }

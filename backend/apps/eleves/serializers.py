@@ -16,6 +16,7 @@ class ServiceSerializer(serializers.ModelSerializer):
 
 class EleveSerializer(serializers.ModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)
+    classe_nom                   = serializers.SerializerMethodField()
     total_theorique              = serializers.ReadOnlyField()
     total_attendu                = serializers.ReadOnlyField()
     montant_pec_inscription      = serializers.ReadOnlyField()
@@ -34,6 +35,9 @@ class EleveSerializer(serializers.ModelSerializer):
             'tenant':   {'required': False, 'read_only': True},
             'exercice': {'required': False, 'read_only': True},
         }
+
+    def get_classe_nom(self, obj):
+        return obj.classe.nom if obj.classe_id else ''
 
     def get_abonnements(self, obj):
         """Liste des IDs de services auxquels l'élève est abonné."""

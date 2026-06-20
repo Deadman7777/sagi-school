@@ -117,7 +117,9 @@
     "services_choix": "Services auxquels l'élève est abonné",
     "services_aucun": "Aucun service actif. Créez-en dans Paramètres → Services.",
     "date_entree": "Date d'entrée",
-    "date_entree_aide": "Sert au prorata des mensualités dues"
+    "date_entree_aide": "Sert au prorata des mensualités dues",
+    "classe": "Classe",
+    "section_classe_obligatoire": "Section et classe sont obligatoires."
   },
   "paiements": {
     "title": "Saisie des Paiements",
