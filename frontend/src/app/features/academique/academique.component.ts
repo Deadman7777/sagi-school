@@ -5,6 +5,7 @@ import { AcademiqueService } from '../../core/services/academique.service';
 import { ElevesService } from '../../core/services/eleves.service';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
+import { TooltipModule } from 'primeng/tooltip';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -18,7 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   selector: 'app-academique',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
-            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TranslateModule],
+            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -54,10 +55,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <span>{{ c.nom }}</span>
               <span class="pc-right">
                 <span class="badge">{{ c.niveau_nom }}</span>
-                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
-                          severity="secondary" (onClick)="ouvrirEditionClasse(c)" pTooltip="Modifier" />
-                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
-                          severity="danger" (onClick)="supprimerClasse(c)" pTooltip="Supprimer" />
+                <span class="pc-actions">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                            severity="secondary" (onClick)="ouvrirEditionClasse(c)" [pTooltip]="'common.modifier' | translate" tooltipPosition="top" />
+                  <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                            severity="danger" (onClick)="supprimerClasse(c)" [pTooltip]="'common.supprimer' | translate" tooltipPosition="top" />
+                </span>
               </span>
             </div>
             <div class="empty-msg" *ngIf="classes().length===0">{{ 'academique.aucune_classe' | translate }}</div>
@@ -82,10 +85,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <span>{{ m.nom }}</span>
               <span class="pc-right">
                 <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
-                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
-                          severity="secondary" (onClick)="ouvrirEditionMatiere(m)" pTooltip="Modifier" />
-                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
-                          severity="danger" (onClick)="supprimerMatiere(m)" pTooltip="Supprimer" />
+                <span class="pc-actions">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                            severity="secondary" (onClick)="ouvrirEditionMatiere(m)" [pTooltip]="'common.modifier' | translate" tooltipPosition="top" />
+                  <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                            severity="danger" (onClick)="supprimerMatiere(m)" [pTooltip]="'common.supprimer' | translate" tooltipPosition="top" />
+                </span>
               </span>
             </div>
             <div class="empty-msg" *ngIf="matieres().length===0">{{ 'academique.selectionner_classe' | translate }}</div>
@@ -104,10 +109,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <span>{{ t.nom }}</span>
               <span class="pc-right">
                 <span class="badge">{{ 'academique.poids' | translate }} {{ t.poids }}</span>
-                <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
-                          severity="secondary" (onClick)="ouvrirEditionTypeEval(t)" pTooltip="Modifier" />
-                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
-                          severity="danger" (onClick)="supprimerTypeEval(t)" pTooltip="Supprimer" />
+                <span class="pc-actions">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                            severity="secondary" (onClick)="ouvrirEditionTypeEval(t)" [pTooltip]="'common.modifier' | translate" tooltipPosition="top" />
+                  <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                            severity="danger" (onClick)="supprimerTypeEval(t)" [pTooltip]="'common.supprimer' | translate" tooltipPosition="top" />
+                </span>
               </span>
             </div>
           </div>
@@ -573,6 +580,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .pc-item { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:13px; color:#94a3b8; }
     .pc-item:hover { background:#1a2235; }
     .pc-right { display:flex; align-items:center; gap:2px; }
+    .pc-actions { display:flex; align-items:center; gap:2px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
     .filters-bar { display:flex; gap:8px; flex-wrap:wrap; }
     .filter-drop { min-width:160px; }
