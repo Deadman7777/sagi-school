@@ -698,19 +698,23 @@ class BulletinPDFView(APIView):
             'decision_positive':     moy_generale >= (note_max * 10 / 20),
         }
 
+        import logging, traceback as _tb
+        _logger = logging.getLogger('django')
         html_str = render_to_string('pdf/bulletin.html', context)
         buffer   = BytesIO()
         try:
             import weasyprint
             weasyprint.HTML(string=html_str).write_pdf(buffer)
-        except Exception:
+        except Exception as e_weasy:
             try:
                 from xhtml2pdf import pisa
                 buffer = BytesIO()
                 result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
                 if result.err:
+                    _logger.error('Bulletin PDF — xhtml2pdf err=%s (weasy: %s)', result.err, e_weasy)
                     return HttpResponse('Erreur génération bulletin PDF.', status=500)
             except Exception as e:
+                _logger.error('Bulletin PDF — échec rendu :\n%s', _tb.format_exc())
                 return HttpResponse(f'Erreur PDF : {e}', status=500)
 
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
