@@ -633,20 +633,12 @@ class BulletinPDFView(APIView):
                 label = f"{tnom} {i}" if info['max'] > 1 else tnom
                 eval_columns.append({'key': (tnom, i), 'label': label})
 
-        # Largeurs ENTIÈRES sommant exactement à 100 (xhtml2pdf gère mal les % fractionnaires
-        # en table-layout:fixed → une colonne tombe à ~0 et fait planter le rendu).
-        # Colonnes fixes = 66 %, le reste (34 %) réparti en entiers sur les colonnes notes.
-        n_cols = max(1, len(eval_columns))
-        reste = 34
-        base_w = reste // n_cols
-        extra  = reste - base_w * n_cols   # répartit le reliquat sur les 1ères colonnes
-        for j, col in enumerate(eval_columns):
-            col['width'] = base_w + (1 if j < extra else 0)
-        if not eval_columns:
-            # Aucune évaluation : la colonne « notes » fusionnée garde les 34 %
-            note_col_width = 34
-        else:
-            note_col_width = 0  # non utilisé quand eval_columns existe
+        # Largeur des colonnes d'évaluation : ~37% partagé (le reste = colonnes fixes du template).
+        # Ex. 3 évals → 12.3% ; 4 évals → 9.2%. (template : 20+6+37+12+8+6+11 = 100)
+        ESPACE_EVAL = 37
+        nb = max(1, len(eval_columns))
+        for col in eval_columns:
+            col['width'] = round(ESPACE_EVAL / nb, 1)
 
         def build_notes_cells(matiere_id):
             ordered = matiere_evals_ordered.get(str(matiere_id), [])
@@ -685,7 +677,6 @@ class BulletinPDFView(APIView):
             'trimestre': trimestre,
             'note_max':  int(note_max) if note_max == int(note_max) else note_max,
             'eval_columns':   eval_columns,
-            'note_col_width': note_col_width,
             'eleve': {
                 'nom_complet':    eleve.nom_complet,
                 'matricule':      eleve.numero or '—',
