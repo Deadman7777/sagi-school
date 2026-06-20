@@ -37,14 +37,16 @@
      Toutes les cellules du corps sont centrées par défaut (notes, moy, pts, rg).
      MATIÈRE et APPRÉC. sont remises à gauche via .left. */
   .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 2pt 2pt;
-                        font-size: 6pt; font-weight: bold; text-align: center; }
+                        font-size: 6pt; font-weight: bold; text-align: center;
+                        border: 0.5pt solid #3a5a7e; }
   .tbl-notes thead td.left { text-align: left; padding-left: 4pt; }
-  .tbl-notes tbody td { padding: 2pt 2pt; border-bottom: 0.5pt solid #dee2e6; font-size: 7pt;
+  .tbl-notes tbody td { padding: 2pt 2pt; border: 0.5pt solid #dee2e6; font-size: 7pt;
                         vertical-align: middle; text-align: center; }
   .tbl-notes tbody td.left { text-align: left; padding-left: 4pt; }
   .tbl-notes tbody tr.pair td { background-color: #f8f9fa; }
   .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 2pt 2pt;
-                        border-top: 1.5pt solid #1a3c5e; font-size: 7pt; text-align: center; }
+                        border: 0.5pt solid #b0c4de; border-top: 1.5pt solid #1a3c5e;
+                        font-size: 7pt; text-align: center; }
   .tbl-notes tfoot td.left { text-align: left; padding-left: 4pt; }
 
   .moy-val { font-weight: bold; color: #1a3c5e; }
@@ -122,8 +124,8 @@
        Les colonnes d'évaluation se partagent les ~37% restants (calculé côté Django dans col.width). -->
   <table class="tbl-notes mb4">
     <colgroup>
-      <col style="width:20%"><col style="width:6%">
-      {% if eval_columns %}{% for col in eval_columns %}<col style="width:{{ col.width }}%">{% endfor %}{% else %}<col style="width:37%">{% endif %}
+      <col style="width:23%"><col style="width:6%">
+      {% if eval_columns %}{% for col in eval_columns %}<col style="width:{{ col.width }}%">{% endfor %}{% else %}<col style="width:34%">{% endif %}
       <col style="width:12%"><col style="width:8%"><col style="width:6%"><col style="width:11%">
     </colgroup>
     <thead>
@@ -161,10 +163,10 @@
       <tr>
         <td class="left">TOTAL / RÉSULTAT</td>
         <td>{{ total_coef }}</td>
-        {% if eval_columns %}{% for col in eval_columns %}<td></td>{% endfor %}{% else %}<td></td>{% endif %}
+        {% if eval_columns %}{% for col in eval_columns %}<td>&nbsp;</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
         <td class="moy-val" style="font-size:9pt">{{ stats.moy_generale }}/{{ note_max }}</td>
         <td>{{ total_points }}</td>
-        <td></td>
+        <td>&nbsp;</td>
         <td class="left col-app
           {% if appreciation_generale == 'Excellent' %}ap-ex
           {% elif appreciation_generale == 'Très Bien' %}ap-tb

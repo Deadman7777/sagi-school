@@ -633,12 +633,15 @@ class BulletinPDFView(APIView):
                 label = f"{tnom} {i}" if info['max'] > 1 else tnom
                 eval_columns.append({'key': (tnom, i), 'label': label})
 
-        # Largeur des colonnes d'évaluation : ~37% partagé (le reste = colonnes fixes du template).
-        # Ex. 3 évals → 12.3% ; 4 évals → 9.2%. (template : 20+6+37+12+8+6+11 = 100)
-        ESPACE_EVAL = 37
+        # Largeur des colonnes d'évaluation : 37% partagé, en ENTIERS.
+        # xhtml2pdf (table-layout:fixed) gère mal les % fractionnaires → colonnes écrasées.
+        # On distribue 37 en entiers (reliquat sur les 1ères). Template fixe : 20+6+37+12+8+6+11=100.
+        ESPACE_EVAL = 34
         nb = max(1, len(eval_columns))
-        for col in eval_columns:
-            col['width'] = round(ESPACE_EVAL / nb, 1)
+        base_w = ESPACE_EVAL // nb
+        extra  = ESPACE_EVAL - base_w * nb
+        for j, col in enumerate(eval_columns):
+            col['width'] = base_w + (1 if j < extra else 0)
 
         def build_notes_cells(matiere_id):
             ordered = matiere_evals_ordered.get(str(matiere_id), [])
