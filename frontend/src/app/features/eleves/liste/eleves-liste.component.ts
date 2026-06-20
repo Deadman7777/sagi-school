@@ -501,12 +501,14 @@ interface PecForm {
                     optionLabel="nom" optionValue="id" (onChange)="onSectionChange()"
                     [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
-        <div class="form-group">
-          <label>{{ 'eleves.classe' | translate }} *</label>
-          <p-select appendTo="body" [options]="classesSection()" [(ngModel)]="nouvelEleve.classe"
-                    optionLabel="nom" optionValue="id" [disabled]="!nouvelEleve.section"
-                    [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
-        </div>
+        @if (classesSection().length) {
+          <div class="form-group">
+            <label>{{ 'eleves.classe' | translate }} *</label>
+            <p-select appendTo="body" [options]="classesSection()" [(ngModel)]="nouvelEleve.classe"
+                      optionLabel="nom" optionValue="id"
+                      [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
+          </div>
+        }
         <div class="form-group">
           <label>{{ 'eleves.genre' | translate }}</label>
           <p-select appendTo="body" [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
@@ -1024,9 +1026,15 @@ export class ElevesListeComponent implements OnInit {
                      detail: this.translate.instant('eleves.nom_obligatoire') });
       return;
     }
-    if (!this.nouvelEleve.section || !this.nouvelEleve.classe) {
+    if (!this.nouvelEleve.section) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.section_classe_obligatoire') });
+      return;
+    }
+    // Classe requise uniquement si la section possède des classes
+    if (this.classesSection().length && !this.nouvelEleve.classe) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.classe') });
       return;
     }
     this.saving.set(true);

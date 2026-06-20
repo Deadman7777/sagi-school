@@ -45,39 +45,10 @@ class ClasseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        tenant = get_tenant(self.request)
-        if tenant:
-            self._assurer_classes_par_defaut(tenant)
-        qs = Classe.objects.filter(tenant=tenant).select_related('niveau')
+        qs = Classe.objects.filter(tenant=get_tenant(self.request)).select_related('niveau')
         if niveau := self.request.query_params.get('niveau'):
             qs = qs.filter(niveau_id=niveau)
         return qs
-
-    def _assurer_classes_par_defaut(self, tenant):
-        """Chaque niveau (= section) sans classe reçoit une classe par défaut (même nom).
-        Les élèves sans classe sont affectés à la classe par défaut de leur section."""
-        from apps.eleves.models import Eleve
-        niveaux_sans_classe = NiveauScolaire.objects.filter(
-            tenant=tenant, classes__isnull=True
-        ).distinct()
-        for niv in niveaux_sans_classe:
-            Classe.objects.create(
-                tenant=tenant, niveau=niv, nom=niv.nom, code=(niv.nom or '')[:20], ordre=niv.ordre
-            )
-        # Affectation : élève sans classe → classe portant le nom de sa section
-        eleves_sans_classe = Eleve.objects.filter(
-            tenant=tenant, classe__isnull=True, section__isnull=False
-        ).select_related('section')
-        if eleves_sans_classe.exists():
-            classes_par_nom = {c.nom: c for c in Classe.objects.filter(tenant=tenant)}
-            a_jour = []
-            for e in eleves_sans_classe:
-                c = classes_par_nom.get(e.section.nom)
-                if c:
-                    e.classe = c
-                    a_jour.append(e)
-            if a_jour:
-                Eleve.objects.bulk_update(a_jour, ['classe'])
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
