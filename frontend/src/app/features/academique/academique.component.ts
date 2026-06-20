@@ -159,7 +159,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="eval-card" *ngFor="let e of evaluations()"
                [class.active]="evalSelectionnee?.id === e.id"
                (click)="selectionnerEvaluation(e)">
-            <div class="ec-titre">{{ e.type_eval_nom || e.titre || 'Évaluation' }}</div>
+            <div class="ec-titre">{{ (e.type_eval_nom || 'Évaluation') + (e.titre ? ' — ' + e.titre : '') }}</div>
             <div class="ec-info">{{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}</div>
           </div>
         </div>
@@ -175,7 +175,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <div style="padding:12px 16px;border-bottom:1px solid #2a3f5f;display:flex;justify-content:space-between;align-items:center">
           <div>
             <span style="color:#e8f0fe;font-weight:600">
-              {{ evalSelectionnee.matiere_nom }} · {{ evalSelectionnee.type_eval_nom }}
+              {{ evalSelectionnee.matiere_nom }} · {{ evalSelectionnee.type_eval_nom }}{{ evalSelectionnee.titre ? ' — ' + evalSelectionnee.titre : '' }}
             </span>
             <span style="color:#64748b;font-size:11px;margin-left:8px">
               {{ evalSelectionnee.trimestre }} · /{{ evalSelectionnee.note_max }} ·
