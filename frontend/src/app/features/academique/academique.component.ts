@@ -440,8 +440,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
           <label>{{ 'academique.niveau' | translate }} *</label>
-          <p-select [options]="niveaux()" [(ngModel)]="formClasse.niveau"
-                    optionLabel="nom" optionValue="id" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="niveaux()" [(ngModel)]="formClasse.niveau"
+                    optionLabel="nom" optionValue="id" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
           <label>{{ 'academique.nom' | translate }} *</label>
@@ -464,8 +464,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <div class="form-grid" style="grid-template-columns:1fr">
         <div class="form-group">
           <label>{{ 'academique.classe' | translate }} *</label>
-          <p-select [options]="classes()" [(ngModel)]="formMatiere.classe"
-                    optionLabel="nom" optionValue="id" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="classes()" [(ngModel)]="formMatiere.classe"
+                    optionLabel="nom" optionValue="id" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
           <label>{{ 'academique.nom' | translate }} *</label>
@@ -477,8 +477,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'academique.note_max' | translate }}</label>
-          <p-select [options]="noteMaxOptions" [(ngModel)]="formMatiere.note_max"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="noteMaxOptions" [(ngModel)]="formMatiere.note_max"
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -512,13 +512,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <div class="form-grid" style="grid-template-columns:1fr 1fr">
         <div class="form-group full">
           <label>{{ 'academique.type_eval' | translate }} *</label>
-          <p-select [options]="typesEval()" [(ngModel)]="formEval.type_eval"
-                    optionLabel="nom" optionValue="id" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="typesEval()" [(ngModel)]="formEval.type_eval"
+                    optionLabel="nom" optionValue="id" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
           <label>{{ 'academique.trimestre' | translate }} *</label>
-          <p-select [options]="trimestres" [(ngModel)]="formEval.trimestre"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="trimestres" [(ngModel)]="formEval.trimestre"
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
           <label>{{ 'academique.date' | translate }} *</label>
@@ -526,8 +526,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'academique.note_max' | translate }}</label>
-          <p-select [options]="noteMaxOptions" [(ngModel)]="formEval.note_max"
-                    optionLabel="label" optionValue="value" styleClass="w-full" />
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="noteMaxOptions" [(ngModel)]="formEval.note_max"
+                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group full">
           <label>{{ 'academique.titre_optionnel' | translate }}</label>
@@ -621,6 +621,11 @@ export class AcademiqueComponent implements OnInit {
   dialogMatiereVisible  = false;
   dialogTypeEvalVisible = false;
   dialogEvalVisible     = false;
+
+  // Empêche les dropdowns de se fermer au scroll dans un dialog (comme licences)
+  overlayNoHideOnScroll = {
+    listener: (_event: any, options: any) => options.type === 'scroll' ? false : options.valid,
+  };
 
   formClasse   = { nom: '', code: '', niveau: '' };
   formMatiere  = { nom: '', classe: '', coefficient: 1, note_max: 20 };
