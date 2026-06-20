@@ -8,12 +8,15 @@ import Aura from '@primeuix/themes/aura';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { Observable } from 'rxjs';
+import { BUILD_ID } from '../build-id';
 
-// Loader personnalisé — compatible toutes versions
+// Loader personnalisé — compatible toutes versions.
+// Le paramètre ?v=BUILD_ID force le rechargement des traductions après chaque
+// déploiement (cache-busting navigateur + Cloudflare).
 class CustomTranslateLoader implements TranslateLoader {
   constructor(private http: HttpClient) {}
   getTranslation(lang: string): Observable<any> {
-    return this.http.get(`/assets/i18n/${lang}.json`);
+    return this.http.get(`/assets/i18n/${lang}.json?v=${BUILD_ID}`);
   }
 }
 
