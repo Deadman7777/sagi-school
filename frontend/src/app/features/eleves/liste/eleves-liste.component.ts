@@ -369,6 +369,10 @@ interface PecForm {
         </div>
       }
       <ng-template pTemplate="footer">
+        <p-button label="Modifier" severity="warn" icon="pi pi-pencil"
+                  (onClick)="ouvrirModifier(eleveSelectionne())" />
+        <p-button label="Exporter la fiche" severity="info" icon="pi pi-file-pdf"
+                  [loading]="exportantFiche()" (onClick)="telechargerFichePDF(eleveSelectionne()!)" />
         <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
                   (onClick)="genererCertificat(eleveSelectionne())" />
         <p-button label="Situation financière" severity="success" icon="pi pi-wallet"
@@ -488,7 +492,7 @@ interface PecForm {
     </p-dialog>
 
     <!-- ══════════════════════ DIALOG NOUVEL ÉLÈVE ══════════════════════ -->
-    <p-dialog [header]="'eleves.nouveau' | translate" [(visible)]="dialogVisible"
+    <p-dialog [header]="(editId ? 'eleves.modifier' : 'eleves.nouveau') | translate" [(visible)]="dialogVisible"
               [modal]="true" [style]="{width:'480px'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
@@ -687,6 +691,7 @@ export class ElevesListeComponent implements OnInit {
   loading       = signal(true);
   saving        = signal(false);
   exportant     = signal(false);
+  exportantFiche = signal(false);
   onglet        = signal<'liste' | 'prise_en_charge'>('liste');
 
   dialogVisible        = false;
@@ -729,6 +734,7 @@ export class ElevesListeComponent implements OnInit {
   });
 
   nouvelEleve: Partial<Eleve> = {};
+  editId: string | null = null;
 
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
@@ -933,6 +939,29 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  telechargerFichePDF(eleve: Eleve) {
+    if (!eleve?.id) return;
+    this.exportantFiche.set(true);
+    this.elevesService.fichePDF(eleve.id).subscribe({
+      next: (blob: Blob) => {
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href     = url;
+        link.download = `fiche_${(eleve.nom_complet || 'eleve').replace(/ /g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        this.exportantFiche.set(false);
+      },
+      error: () => {
+        this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                       detail: 'Impossible de générer la fiche.' });
+        this.exportantFiche.set(false);
+      },
+    });
+  }
+
   exporterListePDF() {
     this.exportant.set(true);
     const params: Record<string, string> = {};
@@ -1016,7 +1045,29 @@ export class ElevesListeComponent implements OnInit {
   }
 
   ouvrirDialog() {
+    this.editId = null;
     this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0] };
+    this.dialogVisible = true;
+  }
+
+  ouvrirModifier(eleve: Eleve | null) {
+    if (!eleve) return;
+    this.editId = eleve.id;
+    this.nouvelEleve = {
+      nom_complet:      eleve.nom_complet,
+      section:          eleve.section,
+      classe:           eleve.classe,
+      genre:            eleve.genre,
+      date_naissance:   eleve.date_naissance,
+      date_inscription: eleve.date_inscription,
+      lieu_naissance:   eleve.lieu_naissance,
+      nom_pere:         eleve.nom_pere,
+      telephone_pere:   eleve.telephone_pere,
+      nom_mere:         eleve.nom_mere,
+      telephone_mere:   eleve.telephone_mere,
+      abonnements:      [...(eleve.abonnements || [])],
+    };
+    this.dialogFicheVisible = false;
     this.dialogVisible = true;
   }
 
@@ -1038,12 +1089,17 @@ export class ElevesListeComponent implements OnInit {
       return;
     }
     this.saving.set(true);
-    this.elevesService.createEleve(this.nouvelEleve).subscribe({
+    const obs = this.editId
+      ? this.elevesService.updateEleve(this.editId, this.nouvelEleve)
+      : this.elevesService.createEleve(this.nouvelEleve);
+    obs.subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'),
-                       detail: this.translate.instant('eleves.ajoute') });
+                       detail: this.translate.instant(this.editId ? 'eleves.modifie' : 'eleves.ajoute') });
         this.dialogVisible = false;
         this.saving.set(false);
+        this.editId = null;
+        this.statsPEC.set(null);  // les montants peuvent changer (section, PEC…)
         this.chargerEleves();
       },
       error: () => {

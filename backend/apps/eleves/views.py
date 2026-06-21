@@ -378,7 +378,6 @@ class SuiviMensuelView(APIView):
             d  = p.date_paiement
             dk = (d.year, d.month)
             cell = par_mois[dk]
-            cell['nb']          += 1
             cell['inscription'] += float(p.montant_inscription or 0)
             cell['uniforme']    += float(p.montant_uniforme    or 0)
             cell['fournitures'] += float(p.montant_fournitures or 0)
@@ -399,6 +398,15 @@ class SuiviMensuelView(APIView):
             else:
                 cell['mensualite'] += mm
                 cell['services']   += svc
+
+            # Compteur de paiements : sur chaque mois où le paiement laisse une trace
+            # (mois de saisie + mois réglés par anticipation), pas seulement le mois de
+            # la date de paiement — sinon les mensualités ventilées affichent nb = 0.
+            mois_touches = {dk}
+            for num in mois:
+                mois_touches.add((_annee_du_mois(num), num))
+            for key in mois_touches:
+                par_mois[key]['nb'] += 1
 
         # ── Charges mensuelles (débits 6xx depuis journal) ───────────────────
         charges_qs = JournalEntry.objects.filter(
@@ -581,18 +589,25 @@ class PriseEnChargeStatsView(APIView):
         ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
         # ── Totaux globaux ────────────────────────────────────────────────
-        total_theorique_global   = 0.0
-        total_attendu_global     = 0.0
-        cout_mensuel_pec_global  = 0.0
-        cout_annuel_pec_global   = 0.0
+        total_theorique_global       = 0.0
+        total_attendu_global         = 0.0   # avec services (recettes réelles attendues)
+        total_attendu_frais_global   = 0.0   # frais scolaires seuls, après PEC (sans services)
+        cout_mensuel_pec_global      = 0.0
+        cout_annuel_pec_global       = 0.0
 
         for e in eleves_tous:
-            total_theorique_global  += e.total_theorique
-            total_attendu_global    += float(e.total_attendu)
-            cout_mensuel_pec_global += e.montant_pec_mensualite_mensuel
-            cout_annuel_pec_global  += e.montant_pec_annuel
+            th  = e.total_theorique
+            pec = e.montant_pec_annuel
+            total_theorique_global      += th
+            total_attendu_global        += float(e.total_attendu)
+            total_attendu_frais_global  += max(th - pec, 0.0)
+            cout_mensuel_pec_global     += e.montant_pec_mensualite_mensuel
+            cout_annuel_pec_global      += pec
 
-        perte_annuelle = round(total_theorique_global - total_attendu_global, 2)
+        # La perte annuelle = écart entre le théorique et l'attendu sur le même
+        # périmètre (frais scolaires). Les services optionnels (cantine, etc.) sont
+        # des recettes en plus, hors PEC : ils ne doivent pas réduire la perte.
+        perte_annuelle = round(total_theorique_global - total_attendu_frais_global, 2)
 
         # ── Élèves sous prise en charge ───────────────────────────────────
         eleves_pec = [e for e in eleves_tous if e.type_pec]
@@ -899,4 +914,62 @@ class CertificatScolariteView(APIView):
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="certificat_{safe_name}.pdf"'
+        return response
+
+
+class FicheElevePDFView(APIView):
+    """Export PDF de la fiche complète d'un élève (identité, parents, situation)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, eleve_id):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        from apps.paiements.models import Exercice
+
+        tenant = get_tenant(request)
+        try:
+            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
+        except Eleve.DoesNotExist:
+            return HttpResponse('Élève introuvable', status=404)
+
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+        total_attendu = float(eleve.total_attendu)
+        total_paye    = float(eleve.total_paye)
+        reste         = round(max(0.0, total_attendu - total_paye), 0)
+
+        motif_pec = dict(Eleve.PRISE_EN_CHARGE_CHOICES).get(eleve.prise_en_charge, eleve.prise_en_charge or '')
+        type_pec  = dict(Eleve.TYPE_PEC_CHOICES).get(eleve.type_pec, eleve.type_pec or '')
+
+        context = {
+            'tenant':            tenant,
+            'eleve':             eleve,
+            'section_nom':       eleve.section.nom if eleve.section else '—',
+            'exercice':          exercice,
+            'date_edition':      timezone.now(),
+            'total_theorique':   round(float(eleve.total_theorique), 0),
+            'montant_pec_annuel': round(float(eleve.montant_pec_annuel), 0),
+            'total_attendu':     round(total_attendu, 0),
+            'total_paye':        round(total_paye, 0),
+            'reste':             reste,
+            'motif_pec':         motif_pec,
+            'type_pec':          type_pec,
+        }
+
+        html_str = render_to_string('pdf/fiche_eleve.html', context)
+        buf      = BytesIO()
+        result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération fiche PDF.', status=500)
+
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="fiche_{safe_name}.pdf"'
         return response

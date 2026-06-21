@@ -75,6 +75,7 @@
   "eleves": {
     "title": "Students & Payments",
     "nouveau": "New Student",
+    "modifier": "Edit Student",
     "nom": "Full Name",
     "section": "Section",
     "genre": "Gender",
@@ -111,6 +112,7 @@
     "champ_requis": "Required field",
     "nom_obligatoire": "Name is required",
     "ajoute": "Student added ✅",
+    "modifie": "Student updated ✅",
     "impossible_ajouter": "Unable to add student",
     "services": "Services / Activities",
     "services_ph": "Select services...",

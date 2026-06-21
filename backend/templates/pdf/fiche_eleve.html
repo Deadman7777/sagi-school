@@ -1,0 +1,137 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Fiche Élève{% endblock %}
+{% block content %}
+
+<!-- Identité -->
+<div class="section-title">Identité</div>
+<table class="school-band" style="margin-bottom:14px">
+  <tr>
+    <td>
+      <div class="sb-label">Nom complet</div>
+      <div class="sb-value">{{ eleve.nom_complet }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Matricule</div>
+      <div class="sb-value">{{ eleve.matricule|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">N° interne</div>
+      <div class="sb-value">{{ eleve.numero|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Genre</div>
+      <div class="sb-value">{% if eleve.genre == 'F' %}Fille{% else %}Garçon{% endif %}</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="sb-label">Date de naissance</div>
+      <div class="sb-value">{{ eleve.date_naissance|date:"d/m/Y"|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Lieu de naissance</div>
+      <div class="sb-value">{{ eleve.lieu_naissance|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Section</div>
+      <div class="sb-value">{{ section_nom }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Statut</div>
+      <div class="sb-value">{{ eleve.statut }}</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="sb-label">Date d'inscription</div>
+      <div class="sb-value">{{ eleve.date_inscription|date:"d/m/Y"|default:"—" }}</div>
+    </td>
+    <td colspan="3"></td>
+  </tr>
+</table>
+
+<!-- Parents / Tuteurs -->
+<div class="section-title">Parents / Tuteurs</div>
+<table class="school-band" style="margin-bottom:14px">
+  <tr>
+    <td>
+      <div class="sb-label">Père</div>
+      <div class="sb-value">{{ eleve.nom_pere|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Tél. père</div>
+      <div class="sb-value">{{ eleve.telephone_pere|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Mère</div>
+      <div class="sb-value">{{ eleve.nom_mere|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Tél. mère</div>
+      <div class="sb-value">{{ eleve.telephone_mere|default:"—" }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if montant_pec_annuel %}
+<!-- Prise en charge -->
+<div class="section-title">Prise en charge</div>
+<table class="school-band" style="margin-bottom:14px">
+  <tr>
+    <td>
+      <div class="sb-label">Motif</div>
+      <div class="sb-value">{{ motif_pec|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Type</div>
+      <div class="sb-value">{{ type_pec|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Taux inscription</div>
+      <div class="sb-value">{% if eleve.taux_pec_inscription %}{{ eleve.taux_pec_inscription }} %{% else %}—{% endif %}</div>
+    </td>
+    <td>
+      <div class="sb-label">Taux mensualités</div>
+      <div class="sb-value">{% if eleve.taux_pec_mensualite %}{{ eleve.taux_pec_mensualite }} %{% else %}—{% endif %}</div>
+    </td>
+  </tr>
+</table>
+{% endif %}
+
+<!-- Situation financière -->
+<div class="section-title">Situation financière</div>
+<table class="kpi-table">
+  <tr>
+    {% if montant_pec_annuel %}
+    <td>
+      <div class="kb-label">Total théorique</div>
+      <div class="kb-val">{{ total_theorique|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Prise en charge</div>
+      <div class="kb-val red">- {{ montant_pec_annuel|floatformat:0 }}</div>
+    </td>
+    {% endif %}
+    <td>
+      <div class="kb-label">Total attendu</div>
+      <div class="kb-val kb-blue">{{ total_attendu|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total payé</div>
+      <div class="kb-val kb-green">{{ total_paye|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Reste à payer</div>
+      <div class="kb-val {% if reste > 0 %}red{% else %}kb-green{% endif %}">{{ reste|floatformat:0 }}</div>
+    </td>
+  </tr>
+</table>
+
+<table class="resultat-table {% if reste == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+  <tr>
+    <td class="rb-label">{% if reste == 0 %}Situation soldée ✓{% else %}Reste à payer{% endif %}</td>
+    <td class="rb-val {% if reste == 0 %}green{% else %}red{% endif %}">{{ reste|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+
+{% endblock %}

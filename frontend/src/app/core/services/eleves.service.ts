@@ -50,6 +50,10 @@ export class ElevesService {
     return this.api.getBlob(`/eleves/${eleveId}/situation-pdf/`);
   }
 
+  fichePDF(eleveId: string) {
+    return this.api.getBlob(`/eleves/${eleveId}/fiche-pdf/`);
+  }
+
   getSections() {
     return this.api.get<PaginatedResponse<Section>>('/eleves/sections/');
   }

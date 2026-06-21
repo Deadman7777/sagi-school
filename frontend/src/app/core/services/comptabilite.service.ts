@@ -37,4 +37,5 @@ export class ComptabiliteService {
   modifierImmobilisation(id: string, data: unknown) { return this.api.put<any>(`/comptabilite/immobilisations/${id}/`, data); }
   supprimerImmobilisation(id: string)        { return this.api.delete(`/comptabilite/immobilisations/${id}/`); }
   amortirImmobilisation(id: string, data: unknown) { return this.api.post<any>(`/comptabilite/immobilisations/${id}/amortir/`, data); }
+  reglerImmobilisation(id: string, data: unknown)  { return this.api.post<any>(`/comptabilite/immobilisations/${id}/regler/`, data); }
 }

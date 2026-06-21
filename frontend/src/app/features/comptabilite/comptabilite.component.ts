@@ -1044,9 +1044,14 @@ import { TooltipModule } from 'primeng/tooltip';
             <td>
               <p-tag *ngIf="i.est_amorti" value="Amorti"  severity="secondary" />
               <p-tag *ngIf="!i.est_amorti" value="Actif" severity="success" />
+              <p-tag *ngIf="!i.est_regle" [value]="'À régler : ' + (i.reste_a_regler | number:'1.0-0')"
+                     severity="danger" pTooltip="Bien acquis à crédit — reste dû au fournisseur"
+                     styleClass="ml-1" />
             </td>
             <td>
               <div class="btn-row">
+                <p-button *ngIf="!i.est_regle" icon="pi pi-money-bill" [rounded]="true" [text]="true" severity="success"
+                          pTooltip="Régler (remboursement fournisseur)" (onClick)="ouvrirDialogRegler(i)" />
                 <p-button icon="pi pi-calculator" [rounded]="true" [text]="true" severity="info"
                           pTooltip="Enregistrer dotation" [disabled]="i.est_amorti"
                           (onClick)="ouvrirDialogAmortir(i)" />
@@ -1166,6 +1171,53 @@ import { TooltipModule } from 'primeng/tooltip';
       <p-button label="Annuler" severity="secondary" (onClick)="dialogAmortirVisible=false" />
       <p-button label="Enregistrer la dotation" severity="warn"
                 [loading]="savingImmo()" (onClick)="enregistrerAmortissement()" />
+    </ng-template>
+  </p-dialog>
+
+  <!-- Dialog Règlement (bien acquis à crédit) -->
+  <p-dialog header="Régler un bien acquis à crédit"
+            [(visible)]="dialogReglerVisible" [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+    @if (immoARegler()) {
+      <div class="employe-banner" style="margin-bottom:14px">
+        <div class="eb-name">{{ immoARegler()!.no_bien }} — {{ immoARegler()!.libelle }}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+          Reste dû : <strong style="color:#ef4444">{{ immoARegler()!.reste_a_regler | number:'1.0-0' }} FCFA</strong>
+          &nbsp;·&nbsp; Fournisseur : <strong>{{ immoARegler()!.compte_fournisseur }}</strong>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Montant du règlement (FCFA)</label>
+          <p-inputNumber [(ngModel)]="formRegler.montant" [min]="1" [max]="immoARegler()!.reste_a_regler"
+                         mode="decimal" styleClass="w-full" />
+          <span style="font-size:10px;color:#64748b">Règlement partiel autorisé (plafonné au reste dû).</span>
+        </div>
+        <div class="form-group">
+          <label>Mode de règlement</label>
+          <p-select appendTo="body" [options]="modesReglementPaye" optionLabel="label" optionValue="value"
+                    [(ngModel)]="formRegler.mode_reglement" styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label>Compte de trésorerie</label>
+          <p-select appendTo="body" [options]="comptesCreditPC()" optionLabel="label" optionValue="value"
+                    [(ngModel)]="formRegler.compte_tresorerie" styleClass="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>Date d'écriture</label>
+          <input pInputText type="date" [(ngModel)]="formRegler.date" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <div style="background:#0f2027;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8;border-left:3px solid #00745a">
+            <strong style="color:#00d4aa">Écriture générée :</strong><br>
+            Débit {{ immoARegler()!.compte_fournisseur }} / Crédit {{ formRegler.compte_tresorerie }} (règlement)
+          </div>
+        </div>
+      </div>
+    }
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogReglerVisible=false" />
+      <p-button label="Enregistrer le règlement" severity="success"
+                [loading]="savingImmo()" (onClick)="enregistrerReglement()" />
     </ng-template>
   </p-dialog>
 
@@ -1428,8 +1480,11 @@ export class ComptabiliteComponent implements OnInit {
   editImmoMode       = false;
   dialogAmortirVisible = false;
   immoAAmortir       = signal<any | null>(null);
+  dialogReglerVisible = false;
+  immoARegler        = signal<any | null>(null);
   formImmo: any      = {};
   formAmortir: any   = {};
+  formRegler: any    = {};
 
   // Comptes dynamiques dérivés du plan comptable — avec fallback SYSCOHADA si plan non chargé
   private readonly FALLBACK_IMMO = [
@@ -1526,6 +1581,8 @@ modesReglementImmo = [
     { label: 'Orange Money', value: 'Orange Money' },
     { label: 'Free Money',   value: 'Free Money' },
 ];
+// Modes de paiement effectifs (sans l'option « à crédit ») pour le règlement d'un bien
+modesReglementPaye = this.modesReglementImmo.filter(m => m.value !== '');
 comptesCredit = [
     { label: '571  — Caisse',        value: '571' },
     { label: '521  — Banque',        value: '521' },
@@ -1810,6 +1867,32 @@ comptesCredit = [
     this.compta.amortirImmobilisation(i.id, this.formAmortir).subscribe({
       next: () => {
         this.dialogAmortirVisible = false;
+        this.savingImmo.set(false);
+        this.chargerImmobilisations();
+        this.rafraichirComptabilite();
+      },
+      error: () => this.savingImmo.set(false),
+    });
+  }
+
+  ouvrirDialogRegler(i: any) {
+    this.immoARegler.set(i);
+    this.formRegler = {
+      montant:           i.reste_a_regler,
+      mode_reglement:    'Espèces',
+      compte_tresorerie: '571',
+      date:              new Date().toISOString().split('T')[0],
+    };
+    this.dialogReglerVisible = true;
+  }
+
+  enregistrerReglement() {
+    const i = this.immoARegler();
+    if (!i || !this.formRegler.montant) return;
+    this.savingImmo.set(true);
+    this.compta.reglerImmobilisation(i.id, this.formRegler).subscribe({
+      next: () => {
+        this.dialogReglerVisible = false;
         this.savingImmo.set(false);
         this.chargerImmobilisations();
         this.rafraichirComptabilite();

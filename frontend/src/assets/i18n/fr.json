@@ -75,6 +75,7 @@
   "eleves": {
     "title": "Élèves & Paiements",
     "nouveau": "Nouvel Élève",
+    "modifier": "Modifier l'élève",
     "nom": "Nom Complet",
     "section": "Section",
     "genre": "Genre",
@@ -111,6 +112,7 @@
     "champ_requis": "Champ requis",
     "nom_obligatoire": "Le nom est obligatoire",
     "ajoute": "Élève ajouté ✅",
+    "modifie": "Élève modifié ✅",
     "impossible_ajouter": "Impossible d'ajouter l'élève",
     "services": "Services / Activités",
     "services_ph": "Choisir les services...",

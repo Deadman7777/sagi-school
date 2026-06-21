@@ -1592,7 +1592,21 @@ PLAN_AMORT = {
 }
 
 
+def _immo_reste_a_regler(immo):
+    """Reste dû au fournisseur pour ce bien = crédits (engagement) − débits (règlements)
+    sur le compte fournisseur, à partir du journal INVEST. Couvre les acquisitions à
+    crédit réglées plus tard, et les règlements partiels."""
+    agg = JournalEntry.objects.filter(
+        tenant_id=immo.tenant_id, source='INVEST', source_id=immo.id,
+        no_compte=immo.compte_fournisseur,
+    ).aggregate(d=Sum('debit'), c=Sum('credit'))
+    credit = float(agg['c'] or 0)
+    debit  = float(agg['d'] or 0)
+    return round(max(credit - debit, 0.0), 2)
+
+
 def _immo_to_dict(immo):
+    reste = _immo_reste_a_regler(immo)
     return {
         'id':                    str(immo.id),
         'no_bien':               immo.no_bien,
@@ -1612,7 +1626,9 @@ def _immo_to_dict(immo):
         'compte_fournisseur':    immo.compte_fournisseur,
         'mode_reglement':        immo.mode_reglement,
         'compte_tresorerie':     immo.compte_tresorerie,
-        'est_regle':             bool(immo.mode_reglement),
+        'reste_a_regler':        reste,
+        'montant_regle':         round(float(immo.valeur_entree) - reste, 2),
+        'est_regle':             reste <= 0.01,
         'est_cede':              immo.est_cede,
         'est_amorti':            immo.est_amorti,
     }
@@ -1839,5 +1855,78 @@ class AmortirView(APIView):
         from decimal import Decimal
         immo.cumul_amortissements += Decimal(str(montant))
         immo.save()
+
+        return Response(_immo_to_dict(immo))
+
+
+class ReglerImmobilisationView(APIView):
+    """Règlement d'un bien acquis à crédit (remboursement du fournisseur).
+
+    Génère l'écriture SYSCOHADA : Débit compte fournisseur (404/481…) / Crédit
+    trésorerie (5xx). Gère les règlements partiels (plusieurs remboursements
+    jusqu'à extinction de la dette)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        try:
+            immo = Immobilisation.objects.get(tenant=tenant, id=pk)
+        except Immobilisation.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+
+        reste = _immo_reste_a_regler(immo)
+        if reste <= 0.01:
+            return Response({'error': 'Ce bien est déjà entièrement réglé'}, status=400)
+
+        try:
+            montant = float(request.data.get('montant', reste))
+        except (ValueError, TypeError):
+            return Response({'error': 'Montant invalide'}, status=400)
+
+        # Ne jamais régler plus que le reste dû
+        montant = round(min(montant, reste), 2)
+        if montant <= 0:
+            return Response({'error': 'Montant invalide'}, status=400)
+
+        mode_reglement    = request.data.get('mode_reglement', '') or 'Espèces'
+        compte_tresorerie = request.data.get('compte_tresorerie', '571') or '571'
+        date_str          = request.data.get('date', str(timezone.now().date()))
+
+        import re as _re
+        from django.db.models import Max as _Max
+        last_piece = JournalEntry.objects.filter(tenant=tenant, source='INVEST').aggregate(_Max('no_piece'))['no_piece__max']
+        nums = _re.findall(r'\d+', last_piece or 'INV-0000')
+        no_piece = f"INV-{int(nums[-1]) + 1:04d}" if nums else 'INV-0001'
+
+        lib_fourn = f"{immo.compte_fournisseur} Fournisseurs immo"
+        lib = f"Règlement {lib_fourn} — {immo.libelle}"
+
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date_str,
+            source='INVEST', source_id=immo.id,
+            no_compte=immo.compte_fournisseur, debit=montant, credit=0,
+            libelle=lib, ordre=1,
+        )
+        JournalEntry.objects.create(
+            tenant=tenant, exercice=exercice,
+            no_piece=no_piece, date_ecriture=date_str,
+            source='INVEST', source_id=immo.id,
+            no_compte=compte_tresorerie, debit=0, credit=montant,
+            libelle=f"Règlement par {mode_reglement} — {immo.libelle}", ordre=2,
+        )
+
+        # Mémorise le dernier mode/compte ; marque réglé si la dette est éteinte
+        immo.mode_reglement    = mode_reglement
+        immo.compte_tresorerie = compte_tresorerie
+        immo.save(update_fields=['mode_reglement', 'compte_tresorerie'])
+
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Investissement', str(immo.id),
+                  f"Règlement {immo.libelle} ({montant:,.0f} FCFA) par {mode_reglement} — pièce {no_piece}")
 
         return Response(_immo_to_dict(immo))
