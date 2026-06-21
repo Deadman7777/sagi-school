@@ -32,7 +32,7 @@
     "urgent": "URGENT",
     "attention": "ATTENTION",
     "a_jour": "À JOUR",
-    "retard_60": "Retard > 60 jours",
+    "retard_60": "Retards",
     "retard_30": "Retard > 30 jours",
     "paiements_ok": "Paiements OK",
     "total_eleves": "élèves inscrits",
@@ -69,8 +69,14 @@
     "nom_col": "Nom",
     "section_col": "Section",
     "reste_col": "Reste",
+    "arriere_col": "Arriéré",
     "alerte_col": "Alerte",
-    "tel_col": "Tél"
+    "tel_col": "Tél",
+    "legende_intro": "Seuls les élèves en retard sur des mensualités déjà échues figurent ici. Le niveau dépend du nombre de mois impayés :",
+    "legende_attention": "1 mois de retard",
+    "legende_urgent": "2 mois de retard",
+    "legende_critique": "3 mois de retard ou plus",
+    "legende_reliquat": "Un élève à jour sur ses mensualités échues mais devant encore le solde des mois à venir n'apparaît pas : ce n'est pas un retard, juste le reste de la somme annuelle à régler au fil de l'année."
   },
   "eleves": {
     "title": "Élèves & Paiements",

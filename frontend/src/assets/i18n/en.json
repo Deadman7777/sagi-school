@@ -32,7 +32,7 @@
     "urgent": "URGENT",
     "attention": "ATTENTION",
     "a_jour": "UP TO DATE",
-    "retard_60": "Delay > 60 days",
+    "retard_60": "Delays",
     "retard_30": "Delay > 30 days",
     "paiements_ok": "Payments OK",
     "total_eleves": "enrolled students",
@@ -69,8 +69,14 @@
     "nom_col": "Name",
     "section_col": "Section",
     "reste_col": "Balance",
+    "arriere_col": "Overdue",
     "alerte_col": "Alert",
-    "tel_col": "Phone"
+    "tel_col": "Phone",
+    "legende_intro": "Only students behind on monthly fees already due appear here. The level depends on the number of unpaid months:",
+    "legende_attention": "1 month overdue",
+    "legende_urgent": "2 months overdue",
+    "legende_critique": "3 or more months overdue",
+    "legende_reliquat": "A student up to date on due monthly fees but still owing the balance for upcoming months does not appear here: it is not a delay, just the remaining annual amount to be paid over the year."
   },
   "eleves": {
     "title": "Students & Payments",

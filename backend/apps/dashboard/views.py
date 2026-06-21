@@ -276,69 +276,91 @@ class DashboardAlerteView(APIView):
         if not exercice:
             return Response([])
 
-        today  = timezone.now().date()
-        debut  = exercice.date_debut
-        months_elapsed = max(0, min(
-            (today.year - debut.year) * 12 + (today.month - debut.month), 10
-        ))
+        from dateutil.relativedelta import relativedelta
+        from django.db.models import Prefetch
+        from apps.eleves.views import MOIS_FR
 
-        _pf = Q(paiements__statut='ACTIF')
+        today    = timezone.now().date()
+        debut    = exercice.date_debut
+        nb_total = exercice.nb_mensualites
+
+        # Mois de l'exercice échus à ce jour (du début jusqu'au mois courant inclus)
+        mois_exercice = []
+        for i in range(nb_total):
+            md = debut + relativedelta(months=i)
+            if (md.year, md.month) > (today.year, today.month):
+                break
+            mois_exercice.append((i, md.year, md.month))
+
         eleves = Eleve.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).annotate(
-            total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription', filter=_pf) +
-                Sum('paiements__montant_mensualite',  filter=_pf) +
-                Sum('paiements__montant_uniforme',    filter=_pf) +
-                Sum('paiements__montant_fournitures', filter=_pf) +
-                Sum('paiements__montant_cantine',     filter=_pf) +
-                Sum('paiements__montant_divers',      filter=_pf),
-                Value(0), output_field=DecimalField()
-            ),
-            mensualites_payees_sql=Coalesce(
-                Sum('paiements__montant_mensualite', filter=_pf),
-                Value(0), output_field=DecimalField()
-            ),
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+            tenant=tenant, exercice=exercice, statut='INSCRIT'
+        ).select_related('section', 'exercice').prefetch_related(
+            'abonnements__service',
+            Prefetch('paiements',
+                     queryset=Paiement.objects.filter(statut='ACTIF').only(
+                         'eleve_id', 'montant_mensualite', 'mois_regles',
+                         'montant_inscription', 'montant_uniforme',
+                         'montant_fournitures', 'montant_cantine', 'montant_divers'),
+                     to_attr='paiements_actifs'),
+        )
 
         data = []
         for e in eleves:
-            total = float(e.total_attendu)
-            paye  = float(e.total_paye_sql or 0)
-            reste = total - paye
-            if reste <= 0: continue  # à jour : rien à relancer
+            mensualite = float(e.section.frais_mensualite) if e.section else 0
+            if mensualite <= 0:
+                continue  # pas d'échéancier mensuel → pas d'arriéré calculable ici
 
-            mensualite   = float(e.section.frais_mensualite) if e.section else 0
-            nb_arrieres  = 0.0
-            jours_retard = 0.0
+            # Mois dus pour CET élève (au prorata de sa date d'entrée)
+            insc = e.date_inscription or debut
+            mois_avant_entree = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
+            mois_dus = [(y, m) for (i, y, m) in mois_exercice if i >= mois_avant_entree]
+            if not mois_dus:
+                continue
 
-            if mensualite > 0:
-                mens_payees = float(e.mensualites_payees_sql or 0)
-                arrieres    = max(0.0, months_elapsed * mensualite - mens_payees)
-                nb_arrieres  = arrieres / mensualite
-                jours_retard = nb_arrieres * 30
-                if jours_retard >= 60 and nb_arrieres >= 2: alerte = 'CRITIQUE'
-                elif jours_retard >= 30 and nb_arrieres >= 1: alerte = 'URGENT'
-                elif arrieres > 0:                            alerte = 'ATTENTION'
-                else:                                          alerte = 'OK'  # reliquat mais à jour sur l'échéancier
-            else:
-                ratio  = paye / total if total > 0 else 0
-                alerte = 'URGENT' if ratio < 0.5 else 'ATTENTION'
+            # Mois effectivement réglés (via mois_regles) + montants payés
+            mois_payes  = set()
+            mens_payees = 0.0
+            total_paye  = 0.0
+            for p in e.paiements_actifs:
+                mm = float(p.montant_mensualite or 0)
+                mens_payees += mm
+                total_paye  += (mm + float(p.montant_inscription or 0) +
+                                float(p.montant_uniforme or 0) + float(p.montant_fournitures or 0) +
+                                float(p.montant_cantine or 0) + float(p.montant_divers or 0))
+                for num in (p.mois_regles or []):
+                    mois_payes.add(int(num))
+
+            # Nombre de mois en retard, validé par le montant réellement payé
+            nb_arr = int(round(max(0.0, len(mois_dus) * mensualite - mens_payees) / mensualite))
+            if nb_arr <= 0:
+                continue  # à jour sur les mensualités échues → pas d'arriéré (exclu)
+
+            # Quels mois : ceux non couverts par mois_regles ; à défaut, les plus récents dus
+            non_payes = [(y, m) for (y, m) in mois_dus if m not in mois_payes]
+            source    = non_payes if len(non_payes) >= nb_arr else mois_dus
+            mois_arr  = source[-nb_arr:]
+            libelles  = [MOIS_FR.get(m, str(m)) for (y, m) in mois_arr]
+            montant_arriere = round(nb_arr * mensualite)
+
+            # Niveau d'alerte selon le nombre de mois d'arriéré
+            if   nb_arr >= 3: alerte = 'CRITIQUE'
+            elif nb_arr == 2: alerte = 'URGENT'
+            else:             alerte = 'ATTENTION'
 
             data.append({
-                'id':                    str(e.id),
-                'nom_complet':           e.nom_complet,
-                'section':               e.section.nom if e.section else '',
-                'telephone':             e.telephone_pere,
-                'reste_a_payer':         reste,
-                'niveau_alerte':         alerte,
-                'jours_retard':          round(jours_retard),
-                'nb_mensualites_arrieres': round(nb_arrieres, 1),
+                'id':              str(e.id),
+                'nom_complet':     e.nom_complet,
+                'section':         e.section.nom if e.section else '',
+                'telephone':       e.telephone_pere,
+                'montant_arriere': montant_arriere,
+                'mois_arrieres':   libelles,
+                'nb_mois_arrieres': nb_arr,
+                'reste_a_payer':   round(float(e.total_attendu) - total_paye, 0),
+                'niveau_alerte':   alerte,
             })
 
-        # Plus prioritaires d'abord (arriérés), puis simples reliquats, par montant décroissant
-        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2, 'OK': 3}
-        data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['reste_a_payer']))
+        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2}
+        data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['montant_arriere']))
         return Response(data)
 
 

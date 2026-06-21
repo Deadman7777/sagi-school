@@ -321,12 +321,24 @@ import { DecimalPipe, DatePipe } from '@angular/common';
         @if (alertes().length > 0) {
           <div class="card">
             <div class="card-header">📋 {{ 'dashboard.relancer' | translate }}</div>
+
+            <!-- Légende : comment lire les alertes -->
+            <div class="alerte-legende">
+              <div class="al-intro">{{ 'dashboard.legende_intro' | translate }}</div>
+              <div class="al-tags">
+                <span><p-tag value="ATTENTION" severity="warn" /> {{ 'dashboard.legende_attention' | translate }}</span>
+                <span><p-tag value="URGENT" severity="danger" /> {{ 'dashboard.legende_urgent' | translate }}</span>
+                <span><p-tag value="CRITIQUE" severity="danger" /> {{ 'dashboard.legende_critique' | translate }}</span>
+              </div>
+              <div class="al-note">ℹ️ {{ 'dashboard.legende_reliquat' | translate }}</div>
+            </div>
+
             <p-table [value]="alertes()" styleClass="p-datatable-sm" [rows]="10" [paginator]="true">
               <ng-template pTemplate="header">
                 <tr>
                   <th>{{ 'dashboard.nom_col'     | translate }}</th>
                   <th>{{ 'dashboard.section_col' | translate }}</th>
-                  <th>{{ 'dashboard.reste_col'   | translate }}</th>
+                  <th>{{ 'dashboard.arriere_col' | translate }}</th>
                   <th>{{ 'dashboard.retard_60'   | translate }}</th>
                   <th>{{ 'dashboard.alerte_col'  | translate }}</th>
                   <th>{{ 'dashboard.tel_col'     | translate }}</th>
@@ -336,8 +348,8 @@ import { DecimalPipe, DatePipe } from '@angular/common';
                 <tr>
                   <td class="bold">{{ e.nom_complet }}</td>
                   <td>{{ e.section }}</td>
-                  <td class="mono danger">{{ e.reste_a_payer | number:'1.0-0' }} FCFA</td>
-                  <td class="mono">{{ e.jours_retard }}j</td>
+                  <td class="mono danger">{{ e.montant_arriere | number:'1.0-0' }} FCFA</td>
+                  <td>{{ e.mois_arrieres?.join(', ') }}</td>
                   <td><p-tag [value]="e.niveau_alerte" [severity]="alerteSeverity(e.niveau_alerte)" /></td>
                   <td class="mono">{{ e.telephone }}</td>
                 </tr>
@@ -381,6 +393,12 @@ import { DecimalPipe, DatePipe } from '@angular/common';
     .card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:16px; }
     .card-header { padding:12px 18px; border-bottom:1px solid #2a3f5f; font-size:13px; font-weight:600; color:#e8f0fe; }
     .card-body   { padding:16px 18px; }
+
+    .alerte-legende { padding:12px 18px; border-bottom:1px solid #2a3f5f; background:#172338; font-size:12px; color:#94a3b8; }
+    .alerte-legende .al-intro { margin-bottom:8px; }
+    .alerte-legende .al-tags  { display:flex; flex-wrap:wrap; gap:18px; margin-bottom:8px; }
+    .alerte-legende .al-tags span { display:inline-flex; align-items:center; gap:6px; }
+    .alerte-legende .al-note  { color:#64748b; font-style:italic; }
 
     .alert-row { display:flex; align-items:center; gap:16px; padding:10px 0; border-bottom:1px solid rgba(42,63,95,0.4); }
     .alert-num  { font-size:32px; font-weight:700; font-family:monospace; min-width:48px; }
