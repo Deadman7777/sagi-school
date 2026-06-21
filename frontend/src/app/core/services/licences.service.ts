@@ -10,6 +10,7 @@ export interface NouvelleEcole {
   ninea: string;
   type_licence: string;
   mois_licence: number;
+  cycle: string;            // 'MENSUEL' | 'ANNUEL'
   annee_scolaire: string;
   date_debut: string;
   date_fin: string;

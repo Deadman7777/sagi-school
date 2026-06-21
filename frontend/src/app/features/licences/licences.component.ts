@@ -191,8 +191,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="form-group">
-          <label>{{ 'licences.duree_mois' | translate }}</label>
-          <p-inputNumber [(ngModel)]="form.mois_licence" [min]="1" [max]="36" styleClass="w-full" />
+          <label>Cycle de paiement</label>
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="cyclesOptions"
+                    [(ngModel)]="form.cycle" optionLabel="label" optionValue="value"
+                    styleClass="w-full" scrollHeight="320px" [disabled]="form.type_licence === 'ESSAI'" />
         </div>
         <div class="form-group">
           <label>{{ 'licences.annee_scolaire' | translate }}</label>
@@ -212,8 +214,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
       <!-- Tarif -->
       <div class="tarif-bar">
-        <span>{{ 'licences.tarif_estime' | translate }}</span>
-        <span class="tarif-val">{{ tarifEstime() | number:'1.0-0' }} FCFA</span>
+        <span>
+          {{ 'licences.tarif_estime' | translate }}
+          @if (form.cycle === 'ANNUEL' && form.type_licence !== 'ESSAI') {
+            <span style="color:#10b981;font-size:11px">&nbsp;(−10% annuel)</span>
+          }
+        </span>
+        <span class="tarif-val">{{ tarifEstime() | number:'1.0-0' }} FCFA{{ form.cycle === 'MENSUEL' && form.type_licence !== 'ESSAI' ? ' / mois' : '' }}</span>
       </div>
 
       <ng-template pTemplate="footer">
@@ -233,12 +240,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="ri-row"><span>{{ 'licences.expire_le'   | translate }}</span><span style="color:#ef4444">{{ licenceSelectionnee.date_fin }}</span></div>
         </div>
         <div class="form-group" style="margin-top:16px">
-          <label>{{ 'licences.duree_renouvellement' | translate }}</label>
-          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="durees" [(ngModel)]="moisRenouvellement"
+          <label>Cycle de paiement</label>
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="cyclesOptions" [(ngModel)]="cycleRenouvellement"
                     optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
         </div>
         <div class="tarif-bar" style="margin-top:12px">
-          <span>{{ 'licences.montant_facturer' | translate }}</span>
+          <span>
+            {{ 'licences.montant_facturer' | translate }}
+            @if (cycleRenouvellement === 'ANNUEL') {
+              <span style="color:#10b981;font-size:11px">&nbsp;(−10% annuel)</span>
+            }
+          </span>
           <span class="tarif-val">{{ montantRenouvellement() | number:'1.0-0' }} FCFA</span>
         </div>
       </div>
@@ -433,7 +445,7 @@ export class LicencesComponent implements OnInit {
   form: NouvelleEcole = {
     nom: '', ville: '', telephone: '', email: '',
     rccm: '', ninea: '', code_etablissement: 'ETB',
-    type_licence: 'ESSAI', mois_licence: 1,
+    type_licence: 'ESSAI', mois_licence: 1, cycle: 'ANNUEL',
     annee_scolaire: '2025-2026',
     date_debut: '2025-10-01', date_fin: '2026-09-30',
   };
@@ -459,9 +471,16 @@ export class LicencesComponent implements OnInit {
     { label: '24 mois', value: 24 },
   ];
 
-  TARIFS: Record<string, number> = {
-    ESSAI: 0, BASIC: 75000, PRO: 150000, AVANCE: 250000, TAXAWU_DAARA: 200000
+  // Tarifs MENSUELS par type (l'annuel = 12 mois − 10%)
+  TARIFS_MENSUEL: Record<string, number> = {
+    ESSAI: 0, BASIC: 30000, PRO: 75000, AVANCE: 150000, TAXAWU_DAARA: 25000
   };
+  REMISE_ANNUELLE = 0.10;   // 10% sur le paiement annuel
+  cyclesOptions = [
+    { label: 'Mensuel (1 mois)',        value: 'MENSUEL' },
+    { label: 'Annuel (12 mois, −10%)',  value: 'ANNUEL'  },
+  ];
+  cycleRenouvellement = 'ANNUEL';
 
   constructor(
     private licencesService: LicencesService,
@@ -520,22 +539,27 @@ export class LicencesComponent implements OnInit {
     return jours <= 7 ? '#ef4444' : jours <= 30 ? '#f59e0b' : '#10b981';
   }
 
+  // Montant selon le cycle : mensuel = tarif ; annuel = tarif × 12 × (1 − 10%)
+  private montantCycle(type: string, cycle: string): number {
+    const mensuel = this.TARIFS_MENSUEL[type] || 0;
+    if (cycle === 'ANNUEL') return Math.round(mensuel * 12 * (1 - this.REMISE_ANNUELLE));
+    return mensuel;
+  }
+
   tarifEstime(): number {
-    const annuel = this.TARIFS[this.form.type_licence] || 0;
-    return (annuel / 12) * this.form.mois_licence;
+    return this.montantCycle(this.form.type_licence, this.form.cycle);
   }
 
   montantRenouvellement(): number {
     if (!this.licenceSelectionnee) return 0;
-    const annuel = this.TARIFS[this.licenceSelectionnee.type] || 0;
-    return (annuel / 12) * this.moisRenouvellement;
+    return this.montantCycle(this.licenceSelectionnee.type, this.cycleRenouvellement);
   }
 
 ouvrirDialog() {
   this.form = {
     nom: '', ville: '', telephone: '', email: '',
     rccm: '', ninea: '', code_etablissement: 'ETB',
-    type_licence: 'ESSAI', mois_licence: 1,
+    type_licence: 'ESSAI', mois_licence: 1, cycle: 'ANNUEL',
     annee_scolaire: '2025-2026', date_debut: '2025-10-01', date_fin: '2026-09-30',
   };
   this.dialogVisible = true;
@@ -543,7 +567,7 @@ ouvrirDialog() {
 
   ouvrirRenouvellement(l: any) {
     this.licenceSelectionnee = l;
-    this.moisRenouvellement  = 12;
+    this.cycleRenouvellement = 'ANNUEL';
     this.renouvDialogVisible = true;
   }
 
@@ -553,7 +577,10 @@ ouvrirDialog() {
       return;
     }
     this.saving.set(true);
-    this.licencesService.creerEcole(this.form).subscribe({
+    // Cycle → durée : Essai = 1 mois (~30 j) ; sinon Mensuel = 1, Annuel = 12
+    const mois = this.form.type_licence === 'ESSAI' ? 1 : (this.form.cycle === 'ANNUEL' ? 12 : 1);
+    const payload = { ...this.form, mois_licence: mois };
+    this.licencesService.creerEcole(payload).subscribe({
       next: res => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('licences.ecole_creee'), detail: `Clé: ${res.cle_licence}` });
         this.dialogVisible = false;
@@ -569,7 +596,8 @@ ouvrirDialog() {
 
   renouveler() {
     this.saving.set(true);
-    this.licencesService.renouveler(this.licenceSelectionnee.id, this.moisRenouvellement).subscribe({
+    const mois = this.cycleRenouvellement === 'ANNUEL' ? 12 : 1;
+    this.licencesService.renouveler(this.licenceSelectionnee.id, mois).subscribe({
       next: () => {
         this.msg.add({ severity:'success', summary: this.translate.instant('licences.renouvelee'), detail: this.translate.instant('licences.prolongee') });
         this.renouvDialogVisible = false;
