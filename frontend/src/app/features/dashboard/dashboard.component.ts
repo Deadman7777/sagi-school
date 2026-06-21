@@ -181,16 +181,24 @@ import { DecimalPipe, DatePipe } from '@angular/common';
           <div class="card">
             <div class="card-header">🚨 {{ 'dashboard.alertes' | translate }}</div>
             <div class="card-body">
+              <div class="alert-row critique">
+                <div class="alert-num">{{ d.eleves.critique || 0 }}</div>
+                <div><div class="alert-title">CRITIQUE</div><div class="alert-sub">{{ 'dashboard.legende_critique' | translate }}</div></div>
+              </div>
               <div class="alert-row urgent">
                 <div class="alert-num">{{ d.eleves.urgent }}</div>
-                <div><div class="alert-title">{{ 'dashboard.urgent' | translate }}</div><div class="alert-sub">Retard &gt; 60 jours</div></div>
+                <div><div class="alert-title">{{ 'dashboard.urgent' | translate }}</div><div class="alert-sub">{{ 'dashboard.legende_urgent' | translate }}</div></div>
               </div>
               <div class="alert-row attention">
                 <div class="alert-num">{{ d.eleves.attention }}</div>
-                <div><div class="alert-title">{{ 'dashboard.attention' | translate }}</div><div class="alert-sub">Retard &gt; 30 jours</div></div>
+                <div><div class="alert-title">{{ 'dashboard.attention' | translate }}</div><div class="alert-sub">{{ 'dashboard.legende_attention' | translate }}</div></div>
+              </div>
+              <div class="alert-row reliquat">
+                <div class="alert-num">{{ d.eleves.ok }}</div>
+                <div><div class="alert-title">{{ 'dashboard.niveau_ok' | translate }}</div><div class="alert-sub">{{ 'dashboard.niveau_ok_sub' | translate }}</div></div>
               </div>
               <div class="alert-row ok">
-                <div class="alert-num">{{ d.eleves.ok }}</div>
+                <div class="alert-num">{{ d.eleves.a_jour || 0 }}</div>
                 <div><div class="alert-title">{{ 'dashboard.a_jour' | translate }}</div><div class="alert-sub">{{ 'dashboard.paiements_ok' | translate }}</div></div>
               </div>
               <div class="total-eleves">
@@ -404,8 +412,10 @@ import { DecimalPipe, DatePipe } from '@angular/common';
     .alert-num  { font-size:32px; font-weight:700; font-family:monospace; min-width:48px; }
     .alert-title { font-size:13px; font-weight:600; }
     .alert-sub   { font-size:11px; color:#64748b; }
+    .critique .alert-num { color:#dc2626; }
     .urgent   .alert-num { color:#ef4444; }
     .attention .alert-num { color:#f59e0b; }
+    .reliquat .alert-num { color:#0099ff; }
     .ok        .alert-num { color:#10b981; }
     .total-eleves { font-size:12px; color:#64748b; margin-top:12px; padding-top:8px; border-top:1px solid #2a3f5f; }
 

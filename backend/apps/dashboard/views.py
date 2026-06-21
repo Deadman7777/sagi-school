@@ -129,11 +129,7 @@ class DashboardKPIView(APIView):
                                exercice.solde_initial_banque +
                                exercice.solde_initial_mobile)
 
-        today  = timezone.now().date()
-        debut          = exercice.date_debut
-        months_elapsed = max(0, min(
-            (today.year - debut.year) * 12 + (today.month - debut.month), 10
-        ))
+        today = timezone.now().date()
 
         _pf = Q(paiements__statut='ACTIF')
         eleves = Eleve.objects.filter(
@@ -154,25 +150,16 @@ class DashboardKPIView(APIView):
             ),
         ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
+        # Mêmes niveaux que le module Élèves (source de vérité : Eleve.niveau_alerte_detail)
         critique = urgent = attention = ok = a_jour = 0
+        compteur = {'CRITIQUE': 0, 'URGENT': 0, 'ATTENTION': 0, 'OK': 0, 'A_JOUR': 0}
         for e in eleves:
-            total = float(e.total_attendu)
-            paye  = float(e.total_paye_sql or 0)
-            if total <= 0 or paye >= total:
-                a_jour += 1; continue
-            mensualite = float(e.section.frais_mensualite) if e.section else 0
-            if mensualite > 0:
-                mens_payees = float(e.mensualites_payees_sql or 0)
-                arrieres    = max(0.0, months_elapsed * mensualite - mens_payees)
-                if arrieres <= 0:
-                    ok += 1
-                else:
-                    nb_arr = arrieres / mensualite
-                    if nb_arr * 30 >= 60 and nb_arr >= 2: critique   += 1
-                    elif nb_arr * 30 >= 30 and nb_arr >= 1: urgent    += 1
-                    else:                                    attention += 1
-            else:
-                ok += 1
+            niveau, _ = e.niveau_alerte_detail(
+                e.total_paye_sql or 0, e.mensualites_payees_sql or 0, today)
+            compteur[niveau] += 1
+        critique, urgent, attention, ok, a_jour = (
+            compteur['CRITIQUE'], compteur['URGENT'], compteur['ATTENTION'],
+            compteur['OK'], compteur['A_JOUR'])
 
         modes_raw = paiements.values('mode_paiement').annotate(
             nb=Count('id'),
@@ -306,16 +293,9 @@ class DashboardAlerteView(APIView):
 
         data = []
         for e in eleves:
-            mensualite = float(e.section.frais_mensualite) if e.section else 0
+            mensualite = e.frais_mensualite_effectif  # après prise en charge
             if mensualite <= 0:
                 continue  # pas d'échéancier mensuel → pas d'arriéré calculable ici
-
-            # Mois dus pour CET élève (au prorata de sa date d'entrée)
-            insc = e.date_inscription or debut
-            mois_avant_entree = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
-            mois_dus = [(y, m) for (i, y, m) in mois_exercice if i >= mois_avant_entree]
-            if not mois_dus:
-                continue
 
             # Mois effectivement réglés (via mois_regles) + montants payés
             mois_payes  = set()
@@ -330,22 +310,19 @@ class DashboardAlerteView(APIView):
                 for num in (p.mois_regles or []):
                     mois_payes.add(int(num))
 
-            # Nombre de mois en retard, validé par le montant réellement payé
-            nb_arr = int(round(max(0.0, len(mois_dus) * mensualite - mens_payees) / mensualite))
-            if nb_arr <= 0:
+            # Niveau + nb de mois d'arriéré : MÊME source de vérité que le module Élèves
+            alerte, nb_arr = e.niveau_alerte_detail(total_paye, mens_payees, today)
+            if alerte in ('A_JOUR', 'OK') or nb_arr <= 0:
                 continue  # à jour sur les mensualités échues → pas d'arriéré (exclu)
 
-            # Quels mois : ceux non couverts par mois_regles ; à défaut, les plus récents dus
+            # Mois concernés : ceux dus (au prorata de l'entrée) non couverts par mois_regles
+            insc = e.date_inscription or debut
+            mois_avant_entree = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
+            mois_dus  = [(y, m) for (i, y, m) in mois_exercice if i >= mois_avant_entree]
             non_payes = [(y, m) for (y, m) in mois_dus if m not in mois_payes]
             source    = non_payes if len(non_payes) >= nb_arr else mois_dus
-            mois_arr  = source[-nb_arr:]
-            libelles  = [MOIS_FR.get(m, str(m)) for (y, m) in mois_arr]
+            libelles  = [MOIS_FR.get(m, str(m)) for (y, m) in source[-nb_arr:]]
             montant_arriere = round(nb_arr * mensualite)
-
-            # Niveau d'alerte selon le nombre de mois d'arriéré
-            if   nb_arr >= 3: alerte = 'CRITIQUE'
-            elif nb_arr == 2: alerte = 'URGENT'
-            else:             alerte = 'ATTENTION'
 
             data.append({
                 'id':              str(e.id),

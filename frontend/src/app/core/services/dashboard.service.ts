@@ -13,7 +13,7 @@ export interface DashboardKPI {
   taux_recouvrement: number;
 };
   eleves: {
-    total: number; urgent: number; attention: number; ok: number;
+    total: number; critique: number; urgent: number; attention: number; ok: number; a_jour: number;
     inscrits: number; abandonnes: number; transferes: number; diplomes: number;
     garcons: number; filles: number;
   };

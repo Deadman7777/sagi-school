@@ -180,48 +180,63 @@ class Eleve(TenantModel):
     def reste_a_payer(self):
         return self.total_attendu - self.total_paye
 
-    @property
-    def niveau_alerte(self):
+    def mois_echus(self, today=None):
+        """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée
+        de l'élève (mois courant inclus), plafonné au nombre de mensualités dues."""
         from django.utils import timezone
-        from django.db.models import Sum
+        if not self.exercice_id:
+            return 0
+        today = today or timezone.now().date()
+        debut = self.exercice.date_debut
+        insc  = self.date_inscription or debut
+        mois_avant = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
+        elapsed_incl = (today.year - debut.year) * 12 + (today.month - debut.month) + 1
+        elapsed_incl = max(0, min(elapsed_incl, self.exercice.nb_mensualites))
+        return max(0, elapsed_incl - mois_avant)
 
+    def niveau_alerte_detail(self, total_paye, mensualites_payees, today=None):
+        """Source de vérité unique des alertes paiement → (niveau, nb_mois_arrieres).
+
+        Niveaux :
+          - A_JOUR    : rien dû / entièrement payé
+          - OK        : reliquat sur les mois à venir, mais aucun arriéré (à jour)
+          - ATTENTION : 1 mois de retard
+          - URGENT    : 2 mois de retard
+          - CRITIQUE  : 3 mois de retard ou plus
+
+        total_paye / mensualites_payees peuvent provenir d'annotations pour éviter
+        les requêtes (cohérence garantie entre module Élèves et tableau de bord)."""
         total = float(self.total_attendu)
-        paye  = float(self.total_paye)
-
+        paye  = float(total_paye)
         if total <= 0 or paye >= total:
-            return 'A_JOUR'
+            return ('A_JOUR', 0)
 
         mensualite = self.frais_mensualite_effectif  # tient compte de la prise en charge
-
         if mensualite <= 0:
             ratio = paye / total if total > 0 else 0
-            return 'URGENT' if ratio < 0.5 else 'ATTENTION'
+            return ('URGENT' if ratio < 0.5 else 'ATTENTION', 0)
 
-        today  = timezone.now().date()
-        # Les arriérés se comptent à partir de l'entrée de l'élève (prorata),
-        # plafonnés au nombre de mensualités réellement dues.
-        debut  = max(self.exercice.date_debut, self.date_inscription or self.exercice.date_debut)
-        months = max(0, min(
-            (today.year - debut.year) * 12 + (today.month - debut.month),
-            self.nb_mensualites_dues
-        ))
+        arrieres = max(0.0, self.mois_echus(today) * mensualite - float(mensualites_payees))
+        nb_arr   = int(round(arrieres / mensualite))
+        if nb_arr <= 0:
+            return ('OK', 0)
+        if nb_arr >= 3:
+            return ('CRITIQUE', nb_arr)
+        if nb_arr == 2:
+            return ('URGENT', nb_arr)
+        return ('ATTENTION', nb_arr)
 
-        mensualites_payees = float(
-            self.paiements.aggregate(t=Sum('montant_mensualite'))['t'] or 0
+    @property
+    def niveau_alerte(self):
+        from django.db.models import Sum
+        agg = self.paiements.filter(statut='ACTIF').aggregate(
+            tp=Sum('montant_inscription') + Sum('montant_mensualite') +
+               Sum('montant_uniforme')    + Sum('montant_fournitures') +
+               Sum('montant_cantine')     + Sum('montant_divers'),
+            tm=Sum('montant_mensualite'),
         )
-        arrieres = max(0.0, months * mensualite - mensualites_payees)
-
-        if arrieres <= 0:
-            return 'OK'
-
-        nb_arrieres  = arrieres / mensualite
-        jours_retard = nb_arrieres * 30
-
-        if jours_retard >= 60 and nb_arrieres >= 2:
-            return 'CRITIQUE'
-        if jours_retard >= 30 and nb_arrieres >= 1:
-            return 'URGENT'
-        return 'ATTENTION'
+        niveau, _ = self.niveau_alerte_detail(agg['tp'] or 0, agg['tm'] or 0)
+        return niveau
 
 
 class Service(TenantModel):

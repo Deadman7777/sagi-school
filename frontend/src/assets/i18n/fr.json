@@ -76,7 +76,9 @@
     "legende_attention": "1 mois de retard",
     "legende_urgent": "2 mois de retard",
     "legende_critique": "3 mois de retard ou plus",
-    "legende_reliquat": "Un élève à jour sur ses mensualités échues mais devant encore le solde des mois à venir n'apparaît pas : ce n'est pas un retard, juste le reste de la somme annuelle à régler au fil de l'année."
+    "legende_reliquat": "Un élève à jour sur ses mensualités échues mais devant encore le solde des mois à venir n'apparaît pas : ce n'est pas un retard, juste le reste de la somme annuelle à régler au fil de l'année.",
+    "niveau_ok": "OK — Reliquat",
+    "niveau_ok_sub": "À jour, reste les mois à venir"
   },
   "eleves": {
     "title": "Élèves & Paiements",
@@ -97,6 +99,12 @@
     "rechercher": "Rechercher un élève...",
     "toutes_sections": "Toutes sections",
     "toutes_alertes": "Toutes alertes",
+    "alertes_aide": "Comprendre les alertes de paiement",
+    "alerte_critique": "CRITIQUE — 3 mois de retard ou plus",
+    "alerte_urgent": "URGENT — 2 mois de retard",
+    "alerte_attention": "ATTENTION — 1 mois de retard",
+    "alerte_ok": "OK — à jour sur les mois échus, reste le solde des mois à venir",
+    "alerte_a_jour": "À JOUR — entièrement payé, rien à devoir",
     "exporter": "Exporter",
     "aucun": "Aucun élève trouvé",
     "enregistrer": "Enregistrer",

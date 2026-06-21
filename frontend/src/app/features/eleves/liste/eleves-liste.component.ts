@@ -99,6 +99,22 @@ interface PecForm {
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
       </div>
 
+      <!-- Légende des alertes (repliable) -->
+      <div class="alerte-aide">
+        <button class="aide-toggle" (click)="legendeVisible = !legendeVisible">
+          {{ legendeVisible ? '▾' : '▸' }} {{ 'eleves.alertes_aide' | translate }}
+        </button>
+        @if (legendeVisible) {
+          <div class="aide-corps">
+            <span><p-tag value="CRITIQUE" severity="danger" /> {{ 'eleves.alerte_critique' | translate }}</span>
+            <span><p-tag value="URGENT" severity="danger" /> {{ 'eleves.alerte_urgent' | translate }}</span>
+            <span><p-tag value="ATTENTION" severity="warn" /> {{ 'eleves.alerte_attention' | translate }}</span>
+            <span><p-tag value="OK" severity="success" /> {{ 'eleves.alerte_ok' | translate }}</span>
+            <span><p-tag value="A JOUR" severity="success" /> {{ 'eleves.alerte_a_jour' | translate }}</span>
+          </div>
+        }
+      </div>
+
       <div class="table-card">
         <p-table [value]="elevesFiltres()" [loading]="loading()"
                  [rowHover]="true" styleClass="p-datatable-sm"
@@ -618,6 +634,14 @@ interface PecForm {
 
     .filters-bar { display:flex; gap:12px; margin-bottom:16px; }
     .search-input { flex:1; }
+
+    .alerte-aide { margin-bottom:14px; }
+    .aide-toggle { background:none; border:none; color:#94a3b8; font-size:12px; cursor:pointer; padding:2px 0; }
+    .aide-toggle:hover { color:#e8f0fe; }
+    .aide-corps { display:flex; flex-wrap:wrap; gap:18px; margin-top:8px; padding:12px 14px;
+                  background:#172338; border:1px solid #2a3f5f; border-radius:8px;
+                  font-size:12px; color:#94a3b8; }
+    .aide-corps span { display:inline-flex; align-items:center; gap:6px; }
     ::ng-deep .filter-drop { min-width:160px; }
 
     .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
@@ -735,6 +759,7 @@ export class ElevesListeComponent implements OnInit {
 
   nouvelEleve: Partial<Eleve> = {};
   editId: string | null = null;
+  legendeVisible = false;
 
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
