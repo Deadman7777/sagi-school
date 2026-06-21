@@ -306,21 +306,21 @@ class DashboardAlerteView(APIView):
             total = float(e.total_attendu)
             paye  = float(e.total_paye_sql or 0)
             reste = total - paye
-            if reste <= 0: continue
+            if reste <= 0: continue  # à jour : rien à relancer
 
-            mensualite  = float(e.section.frais_mensualite) if e.section else 0
-            nb_arrieres = 0.0
+            mensualite   = float(e.section.frais_mensualite) if e.section else 0
+            nb_arrieres  = 0.0
+            jours_retard = 0.0
 
             if mensualite > 0:
                 mens_payees = float(e.mensualites_payees_sql or 0)
                 arrieres    = max(0.0, months_elapsed * mensualite - mens_payees)
-                if arrieres <= 0:
-                    continue  # aucun arriéré — pas d'alerte
                 nb_arrieres  = arrieres / mensualite
                 jours_retard = nb_arrieres * 30
                 if jours_retard >= 60 and nb_arrieres >= 2: alerte = 'CRITIQUE'
                 elif jours_retard >= 30 and nb_arrieres >= 1: alerte = 'URGENT'
-                else:                                          alerte = 'ATTENTION'
+                elif arrieres > 0:                            alerte = 'ATTENTION'
+                else:                                          alerte = 'OK'  # reliquat mais à jour sur l'échéancier
             else:
                 ratio  = paye / total if total > 0 else 0
                 alerte = 'URGENT' if ratio < 0.5 else 'ATTENTION'
@@ -332,12 +332,14 @@ class DashboardAlerteView(APIView):
                 'telephone':             e.telephone_pere,
                 'reste_a_payer':         reste,
                 'niveau_alerte':         alerte,
+                'jours_retard':          round(jours_retard),
                 'nb_mensualites_arrieres': round(nb_arrieres, 1),
             })
 
-        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2}
+        # Plus prioritaires d'abord (arriérés), puis simples reliquats, par montant décroissant
+        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2, 'OK': 3}
         data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['reste_a_payer']))
-        return Response(data[:30])
+        return Response(data)
 
 
 class DashboardTresorerieCanauView(APIView):

@@ -338,7 +338,7 @@ import { DecimalPipe, DatePipe } from '@angular/common';
                   <td>{{ e.section }}</td>
                   <td class="mono danger">{{ e.reste_a_payer | number:'1.0-0' }} FCFA</td>
                   <td class="mono">{{ e.jours_retard }}j</td>
-                  <td><p-tag [value]="e.niveau_alerte" [severity]="e.niveau_alerte === 'URGENT' ? 'danger' : 'warn'" /></td>
+                  <td><p-tag [value]="e.niveau_alerte" [severity]="alerteSeverity(e.niveau_alerte)" /></td>
                   <td class="mono">{{ e.telephone }}</td>
                 </tr>
               </ng-template>
@@ -422,6 +422,12 @@ export class DashboardComponent implements OnInit {
 
   pecLabel(cat: string) {
     return { ORPHELIN: 'Orphelin', HANDICAP: 'Handicap', FAMILLE_DEMUNIE: 'Famille démunie', AUTRE: 'Autre' }[cat] || cat;
+  }
+
+  alerteSeverity(niveau: string): 'danger' | 'warn' | 'secondary' {
+    if (niveau === 'CRITIQUE' || niveau === 'URGENT') return 'danger';
+    if (niveau === 'ATTENTION') return 'warn';
+    return 'secondary';  // OK : reliquat sans arriéré
   }
 
   ngOnInit() {
