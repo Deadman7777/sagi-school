@@ -1,0 +1,411 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{longtable}
+\usepackage[hidelinks]{hyperref}
+
+% ---- Couleurs de marque ----
+\definecolor{sagiteal}{HTML}{00745A}
+\definecolor{sagidark}{HTML}{1A1A2E}
+\definecolor{sagigray}{HTML}{6B7280}
+\definecolor{sagibg}{HTML}{F4F6F8}
+
+\hypersetup{
+  pdftitle={SAGI SCHOOL -- Documentation des modules},
+  pdfauthor={HADY GESMAN},
+  colorlinks=false,
+}
+
+% ---- Titres ----
+\titleformat{\chapter}[hang]
+  {\bfseries\Large\color{sagiteal}}{\thechapter.}{0.6em}{}
+\titlespacing{\chapter}{0pt}{0pt}{12pt}
+\titleformat{\section}
+  {\bfseries\large\color{sagidark}}{\thesection}{0.6em}{}
+\titleformat{\subsection}
+  {\bfseries\normalsize\color{sagidark}}{\thesubsection}{0.6em}{}
+
+% ---- En-tête / pied ----
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{sagiteal}\textbf{SAGI SCHOOL}}
+\fancyhead[R]{\small\color{sagigray}Documentation des modules}
+\fancyfoot[L]{\small\color{sagigray}by HADY GESMAN}
+\fancyfoot[C]{\small\color{sagigray}Conforme SYSCOHADA Révisé}
+\fancyfoot[R]{\small\thepage}
+
+\newcommand{\feat}[1]{\item #1}
+\newcommand{\modtag}[1]{{\small\color{sagigray}\textit{Route applicative : \texttt{#1}}}}
+\setlist[itemize]{leftmargin=1.3em,itemsep=2pt,topsep=3pt}
+
+\renewcommand{\tabularxcolumn}[1]{>{\small}m{#1}}
+
+\begin{document}
+
+% =========================== PAGE DE TITRE ===========================
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\Huge\bfseries\color{sagiteal} SAGI SCHOOL\par}
+\vspace{0.4cm}
+{\Large\color{sagidark} Système de Gestion Scolaire\par}
+\vspace{0.2cm}
+{\large\color{sagigray} \textit{by HADY GESMAN}\par}
+\vspace{2.2cm}
+{\LARGE\bfseries\color{sagidark} Documentation des modules\par}
+\vspace{0.5cm}
+{\large\color{sagigray} Description fonctionnelle détaillée du système\par}
+\vspace{3cm}
+
+\begin{tabular}{rl}
+\textbf{Version} & 1.11.2\\[4pt]
+\textbf{Architecture} & Electron + Django + Angular\\[4pt]
+\textbf{Déploiement} & Local (.exe / .deb) et Cloud (navigateur)\\[4pt]
+\textbf{Conformité} & SYSCOHADA Révisé (OHADA)\\[4pt]
+\textbf{Cadre RH/fiscal} & Réglementation du Sénégal\\
+\end{tabular}
+
+\vfill
+{\small\color{sagigray} Document de référence --- édité le \today\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+% =========================== PRÉSENTATION ===========================
+\chapter{Présentation générale}
+
+SAGI SCHOOL est une application de gestion scolaire complète destinée aux
+établissements d'enseignement. Elle couvre l'ensemble du cycle de gestion :
+inscription des élèves, encaissement des frais de scolarité, comptabilité
+conforme au référentiel \textbf{SYSCOHADA Révisé}, suivi académique
+(notes et bulletins) et gestion de la paie du personnel selon la
+réglementation sénégalaise.
+
+\section{Architecture technique}
+\begin{itemize}
+\feat{\textbf{Bureau (local)} : application \textbf{Electron} embarquant un
+serveur \textbf{Django} (Python) et une interface \textbf{Angular}. Distribuée
+en installeur Windows (\texttt{.exe}) et Linux (\texttt{.deb} / AppImage).
+Fonctionne \textbf{hors-ligne}.}
+\feat{\textbf{Cloud} : la même interface Angular servie dans un navigateur,
+adossée au backend Django hébergé. Les deux modes sont mutuellement exclusifs.}
+\feat{\textbf{Multi-établissement (multi-tenant)} : chaque école est isolée
+logiquement ; les données d'une école ne sont jamais visibles par une autre.}
+\feat{\textbf{Base de données} : PostgreSQL.}
+\end{itemize}
+
+\section{Rôles et droits d'accès}
+Le système distingue plusieurs profils utilisateur, du super-administrateur
+éditeur jusqu'au simple lecteur :
+
+\begin{center}
+\begin{tabularx}{\textwidth}{>{\bfseries}l X}
+\toprule
+Rôle & Description \\
+\midrule
+Super Administrateur & Éditeur (HADY GESMAN) : gère l'ensemble des écoles clientes et leurs licences. \\
+Administrateur École & Directeur d'une école cliente : accès complet aux modules de son établissement. \\
+Responsable RH & Accès au module Ressources Humaines / Paie. \\
+Responsable Comptable & Accès à la Comptabilité et au Fiscal. \\
+Responsable Scolarité & Accès aux Élèves, Paiements et Académique. \\
+Lecteur & Consultation seule. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Licences et périmètre fonctionnel}
+L'accès aux modules dépend du type de licence de l'établissement. Cinq formules
+existent, dont une dédiée au programme \textbf{Taxawu Daara} (écoles coraniques) :
+
+\begin{center}
+\begin{tabularx}{\textwidth}{>{\bfseries}l X}
+\toprule
+Licence & Périmètre \\
+\midrule
+Essai (30 jours) & Découverte : tableau de bord, élèves, paiements, comptabilité, suivi mensuel. \\
+Basic & Gestion essentielle : tableau de bord, élèves, paiements, suivi mensuel. \\
+Pro & Basic + comptabilité SYSCOHADA complète. \\
+Avancé & Périmètre complet : tout le Pro + académique, ressources humaines et fiscal. \\
+Taxawu Daara & Offre dédiée Daaras : tableau de bord, élèves, paiements, comptabilité, académique, suivi mensuel. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\noindent Les modules \textbf{Ma Licence} et \textbf{Paramètres} restent
+accessibles quelle que soit la licence. La matrice complète figure au
+chapitre~\ref{ch:matrice}.
+
+% =========================== MODULES ===========================
+\chapter{Modules fonctionnels}
+
+% ---------- Tableau de bord ----------
+\section{Tableau de bord}
+\modtag{/dashboard}
+
+\noindent Vue de pilotage synthétique de l'établissement, affichée à la
+connexion.
+\begin{itemize}
+\feat{\textbf{Indicateurs clés} : effectifs, recettes, ventilation des
+encaissements et état des règlements.}
+\feat{\textbf{Élèves à relancer} : liste des élèves présentant des arriérés,
+détaillés \textbf{mois par mois}, avec reliquats et niveaux d'alerte
+(légende et codes couleur unifiés avec le module Élèves).}
+\feat{\textbf{Trésorerie} : suivi par canal (caisse, banque, mobile money).}
+\feat{\textbf{Charges et marge} : aperçu des charges et du résultat
+intermédiaire.}
+\feat{\textbf{Journal d'audit} : traçabilité des actions sensibles
+(qui a fait quoi, et quand).}
+\end{itemize}
+
+% ---------- Élèves ----------
+\section{Élèves}
+\modtag{/eleves}
+
+\noindent Gestion du fichier élèves et de leur tarification.
+\begin{itemize}
+\feat{\textbf{Inscriptions} : matricule (numérotation automatique), identité
+(nom, genre, date et lieu de naissance), \textbf{coordonnées des parents}
+(père et mère avec téléphones), date d'inscription et statut.}
+\feat{\textbf{Sections} : regroupements tarifaires portant les frais
+d'inscription, de mensualité, d'uniforme et de fournitures.}
+\feat{\textbf{Services optionnels} : cantine, transport, etc., avec
+périodicité (mensuelle\ldots) et \textbf{abonnement par élève}.}
+\feat{\textbf{Frais flexibles} : mensualité $\times$ nombre de mensualités,
+avec \textbf{prorata} selon la date d'entrée et les mois concernés.}
+\feat{\textbf{Prise en charge (PEC)} : gestion des bourses et sponsors via des
+\textbf{taux} distincts sur l'inscription et la mensualité, avec observations.}
+\feat{\textbf{Éditions PDF} : fiche élève (et édition), situation détaillée de
+l'élève, \textbf{certificat de scolarité} et liste des élèves.}
+\end{itemize}
+
+% ---------- Paiements ----------
+\section{Paiements}
+\modtag{/paiements}
+
+\noindent Encaissement des frais et émission des reçus.
+\begin{itemize}
+\feat{\textbf{Exercices} : année scolaire, dates de début/fin, nombre de
+mensualités, soldes initiaux (caisse, banque, mobile), devise et clôture.}
+\feat{\textbf{Saisie des règlements} : numéro de pièce unique et ventilation
+fine (inscription, mensualité, uniforme, fournitures, cantine, divers),
+avec mémorisation des \textbf{mois réglés} et des \textbf{services réglés}.}
+\feat{\textbf{Canaux de paiement} : espèces, Orange Money, Wave, Free Money,
+virement\ldots}
+\feat{\textbf{Reçus PDF} en trois formats : \textbf{A4}, \textbf{A5} et
+\textbf{ticket 80\,mm} (imprimante thermique).}
+\feat{\textbf{Annulations} : un règlement peut être annulé ; les
+\textbf{écritures comptables de contre-passation} conformes SYSCOHADA sont
+générées automatiquement.}
+\feat{\textbf{Comptabilisation automatique} : chaque encaissement alimente le
+journal comptable (lien source / pièce).}
+\end{itemize}
+
+% ---------- Suivi mensuel ----------
+\section{Suivi mensuel}
+\modtag{/suivi-mensuel}
+
+\noindent Tableau de bord des règlements mois par mois.
+\begin{itemize}
+\feat{Vue récapitulative des paiements et \textbf{reliquats} par élève sur
+l'ensemble des mensualités de l'exercice.}
+\feat{Identification rapide des \textbf{arriérés} pour relance, en cohérence
+avec le tableau de bord.}
+\feat{Totaux et synthèse par période.}
+\end{itemize}
+
+% ---------- Comptabilité ----------
+\section{Comptabilité (SYSCOHADA Révisé)}
+\modtag{/comptabilite}
+
+\noindent Comptabilité d'engagement complète, conforme au référentiel
+SYSCOHADA Révisé.
+\begin{itemize}
+\feat{\textbf{Plan comptable} : comptes par classe (1 à 9), typés
+(charge, produit, actif\ldots), avec des comptes \textbf{système} non
+supprimables.}
+\feat{\textbf{Journal} : écritures débit/crédit horodatées et numérotées,
+issues de la saisie ou générées automatiquement par les autres modules.}
+\feat{\textbf{Grand livre} et \textbf{Balance} générale.}
+\feat{\textbf{États de synthèse} : \textbf{Bilan} (actif / passif),
+\textbf{Compte de résultat}, \textbf{Soldes Intermédiaires de Gestion (SIG)}
+et \textbf{Notes annexes}.}
+\feat{\textbf{Budget} : prévisions par compte avec ventilation \textbf{mensuelle}
+(12 mois) et distinction charges fixes / variables.}
+\feat{\textbf{Immobilisations} : suivi des biens, \textbf{amortissement}
+(linéaire), durée d'utilisation, comptes d'immobilisation et d'amortissement,
+cumul, \textbf{cession}, et règlement au comptant ou à crédit.}
+\feat{\textbf{Clôture d'exercice} et export PDF de tous les états.}
+\end{itemize}
+
+% ---------- Fiscal ----------
+\section{Fiscal}
+\modtag{/fiscal}
+
+\noindent Suivi des obligations fiscales et sociales (Sénégal).
+\begin{itemize}
+\feat{États et déclarations relatifs aux prélèvements : \textbf{BRS},
+\textbf{CFCE}, \textbf{CSS}, \textbf{IPRES}, \textbf{IR}\ldots}
+\feat{Paramètres fiscaux servant de base aux calculs (taux, plafonds).}
+\feat{Exports PDF dédiés.}
+\end{itemize}
+
+% ---------- Académique ----------
+\section{Académique}
+\modtag{/academique}
+
+\noindent Gestion pédagogique : notes, évaluations et bulletins.
+\begin{itemize}
+\feat{\textbf{Niveaux et classes} : niveaux scolaires (note maximale
+paramétrable) et classes rattachées, avec effectifs.}
+\feat{\textbf{Matières} : coefficient, note maximale et statut actif/inactif.}
+\feat{\textbf{Types d'évaluation} : devoir, composition, interrogation\ldots
+avec \textbf{poids} respectifs.}
+\feat{\textbf{Évaluations et notes} : saisie par matière et par période, avec
+gestion des \textbf{absences} et observations.}
+\feat{\textbf{Période configurable} : trimestre, semestre ou période libre
+(le nombre de périodes est paramétrable par établissement).}
+\feat{\textbf{Bulletins} : moyennes, points, \textbf{rang par matière} et
+appréciations, avec \textbf{bulletin PDF} détaillé et historique.}
+\feat{\textbf{Analyse académique} : taux de réussite et statistiques de classe.}
+\end{itemize}
+
+% ---------- RH ----------
+\section{Ressources Humaines / Paie}
+\modtag{/rh}
+
+\noindent Gestion du personnel et de la paie selon la réglementation
+sénégalaise.
+\begin{itemize}
+\feat{\textbf{Employés} : matricule, type (enseignant, administratif\ldots),
+poste, type de contrat (CDI/CDD), date d'embauche, salaire de base, situation
+matrimoniale, nombre d'enfants, statut cadre, mode de paiement et
+autorisation d'enseigner.}
+\feat{\textbf{Paie} : calcul du salaire brut, des cotisations
+\textbf{IPRES}, \textbf{CSS}, de l'\textbf{IR} et des autres retenues, jusqu'au
+salaire net, par mois.}
+\feat{\textbf{Paramètres fiscaux} : taux IPRES (général et cadre, parts
+salariale et patronale), plafonds, CSS, barème IR, CFCE et ATMP --- versionnés
+par année.}
+\feat{\textbf{Avances sur salaire} et régularisations.}
+\feat{\textbf{Bulletins de paie PDF} conformes.}
+\end{itemize}
+
+% ---------- Licences & Clients ----------
+\section{Licences \& Clients}
+\modtag{/licences}
+
+\noindent Module réservé au \textbf{Super Administrateur} (HADY GESMAN) pour
+l'administration commerciale de la solution.
+\begin{itemize}
+\feat{Gestion des \textbf{écoles clientes} (création, édition, activation).}
+\feat{Délivrance et suivi des \textbf{licences} : type, clé unique, dates de
+début et de fin, statut (active, expirée, suspendue, essai).}
+\feat{\textbf{Tarification} : tarifs mensuels et cycle de facturation
+mensuel ou annuel (remise de 10\,\% sur l'annuel).}
+\feat{Pilotage à distance du périmètre fonctionnel ouvert à chaque client.}
+\end{itemize}
+
+% ---------- Ma Licence ----------
+\section{Ma Licence}
+\modtag{/ma-licence}
+
+\noindent Vue de la licence active de l'établissement (toujours accessible).
+\begin{itemize}
+\feat{Type de licence, plan et niveau de support.}
+\feat{Date d'expiration et statut.}
+\feat{Information de \textbf{reconnexion} en mode local (tolérance hors-ligne
+de 30 jours).}
+\end{itemize}
+
+% ---------- Paramètres ----------
+\section{Paramètres}
+\modtag{/parametres}
+
+\noindent Configuration de l'établissement (toujours accessible).
+\begin{itemize}
+\feat{\textbf{Identité} : nom, ville, adresse, \textbf{RCCM}, \textbf{NINEA},
+téléphone, e-mail et code d'établissement.}
+\feat{\textbf{Logo} : import (intégré aux documents PDF officiels --- reçus,
+bulletins, certificats, états comptables).}
+\feat{\textbf{Préférences} : régime de paie, type de période scolaire et
+nombre de périodes.}
+\end{itemize}
+
+% =========================== TRANSVERSES ===========================
+\chapter{Fonctions transverses}
+
+\section{Documents et impressions}
+\begin{itemize}
+\feat{Génération de \textbf{PDF} pour l'ensemble des documents officiels :
+reçus, certificats, bulletins (élève et paie), fiches et états comptables.}
+\feat{\textbf{Logo de l'établissement} embarqué automatiquement dans chaque
+document.}
+\feat{Mise en page optimisée pour la \textbf{lisibilité à l'impression}
+(police, contraste, mise en gras), y compris en noir et blanc.}
+\end{itemize}
+
+\section{Multilingue (i18n)}
+\begin{itemize}
+\feat{Interface disponible en \textbf{français}, \textbf{anglais} et
+\textbf{arabe}.}
+\feat{Traductions versionnées à chaque build pour une prise en compte
+immédiate après mise à jour.}
+\end{itemize}
+
+\section{Sécurité et traçabilité}
+\begin{itemize}
+\feat{\textbf{Isolation multi-tenant} systématique des données par
+établissement.}
+\feat{\textbf{Journal d'audit} des opérations sensibles.}
+\feat{Gestion des \textbf{rôles} et des droits d'accès par module.}
+\feat{Licence locale avec contrôle périodique et tolérance hors-ligne.}
+\end{itemize}
+
+% =========================== MATRICE ===========================
+\chapter{Matrice modules / licences}
+\label{ch:matrice}
+
+Le tableau ci-dessous récapitule l'ouverture des modules selon le type de
+licence. \textbf{Oui} indique que le module est accessible.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{>{\bfseries\small}l *{5}{>{\centering\arraybackslash\small}X}}
+\toprule
+Module & Essai & Basic & Pro & Avancé & Taxawu \\
+\midrule
+Tableau de bord & Oui & Oui & Oui & Oui & Oui \\
+Élèves          & Oui & Oui & Oui & Oui & Oui \\
+Paiements       & Oui & Oui & Oui & Oui & Oui \\
+Suivi mensuel   & Oui & Oui & Oui & Oui & Oui \\
+Comptabilité    & Oui & --- & Oui & Oui & Oui \\
+Académique      & --- & --- & --- & Oui & Oui \\
+Ressources Humaines & --- & --- & --- & Oui & --- \\
+Fiscal          & --- & --- & --- & Oui & --- \\
+\midrule
+Ma Licence      & Oui & Oui & Oui & Oui & Oui \\
+Paramètres      & Oui & Oui & Oui & Oui & Oui \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\vspace{1cm}
+\begin{center}
+{\color{sagigray}\small SAGI SCHOOL --- by HADY GESMAN --- Conforme SYSCOHADA Révisé}
+\end{center}
+
+\end{document}
