@@ -4,7 +4,7 @@
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
   Grand Livre Général — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:11px;margin-bottom:14px">
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; Conforme SYSCOHADA Révisé
 </p>
@@ -31,7 +31,7 @@
       <td class="text-right">{% if c.solde_crediteur %}{{ c.solde_crediteur|floatformat:0 }}{% else %}—{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Aucune écriture enregistrée</td></tr>
+    <tr><td colspan="6" style="text-align:center;color:#6b7280;padding:20px">Aucune écriture enregistrée</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>

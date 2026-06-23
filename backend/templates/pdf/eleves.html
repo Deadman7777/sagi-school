@@ -64,12 +64,12 @@
       <td class="bold">{{ e.nom_complet }}</td>
       <td>{{ e.section_nom }}</td>
       <td class="text-center">{{ e.genre }}</td>
-      <td style="font-size:9px">{{ e.statut }}</td>
+      <td style="font-size:10px">{{ e.statut }}</td>
       <td class="text-center">{% if e.prise_en_charge %}&#10003;{% else %}—{% endif %}</td>
       <td class="text-right">{{ e.total_attendu|floatformat:0 }}</td>
       <td class="text-right green">{{ e.total_paye|floatformat:0 }}</td>
       <td class="text-right {% if e.reste > 0 %}red{% else %}green{% endif %}">{{ e.reste|floatformat:0 }}</td>
-      <td style="font-size:9px;font-weight:bold;
+      <td style="font-size:10px;font-weight:bold;
         {% if e.niveau_alerte == 'CRITIQUE' %}color:#dc2626;
         {% elif e.niveau_alerte == 'URGENT' %}color:#ea580c;
         {% elif e.niveau_alerte == 'ATTENTION' %}color:#ca8a04;

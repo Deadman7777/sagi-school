@@ -3,24 +3,24 @@
 {% block doc_title %}Journal Comptable{% endblock %}
 {% block content %}
 <style>
-  .jnl-table { width:100%; border-collapse:collapse; font-size:9px; margin-bottom:12px; }
+  .jnl-table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:12px; }
   .jnl-table thead th {
-    background:#1a1a2e; color:white; padding:5px 6px; font-size:9px;
+    background:#1a1a2e; color:white; padding:5px 6px; font-size:10px;
     text-align:left; white-space:nowrap;
   }
   .jnl-table thead th.r { text-align:right; }
   .jnl-table tbody tr:nth-child(even) { background:#f8f9fa; }
-  .jnl-table tbody td { padding:4px 6px; border-bottom:1px solid #eee; font-size:9px; }
-  .jnl-table tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 6px; border-top:2px solid #1a1a2e; font-size:9px; }
+  .jnl-table tbody td { padding:4px 6px; border-bottom:1px solid #eee; font-size:10px; }
+  .jnl-table tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 6px; border-top:2px solid #1a1a2e; font-size:10px; }
   .mn { font-family:monospace; }
   .tr { text-align:right; }
-  .src-badge { background:#e0f0ff; padding:2px 4px; border-radius:3px; font-size:8px; }
+  .src-badge { background:#e0f0ff; padding:2px 4px; border-radius:3px; font-size:9px; }
 </style>
 
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:6px;font-size:13px">
   Journal Comptable — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:10px;margin-bottom:10px">
+<p style="color:#374151;font-size:11px;margin-bottom:10px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; {{ journal|length }} écriture(s)
 </p>
@@ -45,13 +45,13 @@
       <td class="mn">{{ e.date_ecriture|date:"d/m/Y" }}</td>
       <td class="mn" style="word-break:break-all">{{ e.no_piece }}</td>
       <td class="mn" style="font-weight:bold">{{ e.no_compte }}</td>
-      <td style="color:#64748b">{{ e.libelle_compte }}</td>
+      <td style="color:#334155">{{ e.libelle_compte }}</td>
       <td>{{ e.libelle }}</td>
-      <td class="tr mn" style="color:#10b981">{% if e.debit > 0 %}{{ e.debit|floatformat:0 }}{% else %}—{% endif %}</td>
-      <td class="tr mn" style="color:#1a6b9a">{% if e.credit > 0 %}{{ e.credit|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="tr mn" style="color:#10b981;font-weight:bold">{% if e.debit > 0 %}{{ e.debit|floatformat:0 }}{% else %}—{% endif %}</td>
+      <td class="tr mn" style="color:#1a6b9a;font-weight:bold">{% if e.credit > 0 %}{{ e.credit|floatformat:0 }}{% else %}—{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="8" style="text-align:center;color:#999;padding:20px">Aucune écriture enregistrée</td></tr>
+    <tr><td colspan="8" style="text-align:center;color:#6b7280;padding:20px">Aucune écriture enregistrée</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>

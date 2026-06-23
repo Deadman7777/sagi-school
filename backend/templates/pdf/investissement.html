@@ -4,7 +4,7 @@
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
   Tableau des Immobilisations — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:11px;margin-bottom:14px">
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; Conforme SYSCOHADA Révisé (AUDCIF Art. 41-57)
 </p>
@@ -14,15 +14,15 @@
   <tr>
     <td>
       <div class="kb-label">Valeur Brute Totale</div>
-      <div class="kb-val kb-blue">{{ synthese.total_brut|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val kb-blue">{{ synthese.total_brut|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Cumul Amortissements</div>
-      <div class="kb-val" style="color:#ef4444">{{ synthese.total_amort|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val" style="color:#ef4444">{{ synthese.total_amort|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Valeur Nette Comptable</div>
-      <div class="kb-val kb-green">{{ synthese.total_vnc|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val kb-green">{{ synthese.total_vnc|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Nombre de Biens</div>
@@ -47,23 +47,23 @@
   </thead>
   <tbody>
     {% for i in immobilisations %}
-    <tr{% if i.est_amorti %} style="color:#999"{% endif %}>
+    <tr{% if i.est_amorti %} style="color:#6b7280"{% endif %}>
       <td style="font-family:monospace;font-weight:bold">{{ i.no_bien }}</td>
       <td>{{ i.libelle }}</td>
-      <td style="font-family:monospace;font-size:9px">{{ i.no_compte_immobilisation }}</td>
-      <td style="font-size:10px">{{ i.date_entree }}</td>
+      <td style="font-family:monospace;font-size:10px">{{ i.no_compte_immobilisation }}</td>
+      <td style="font-size:11px">{{ i.date_entree }}</td>
       <td class="text-right bold">{{ i.valeur_entree|floatformat:0 }}</td>
       <td class="text-right red">{{ i.cumul_amortissements|floatformat:0 }}</td>
       <td class="text-right {% if not i.est_amorti %}green bold{% endif %}">{{ i.valeur_nette_comptable|floatformat:0 }}</td>
       <td class="text-right">{{ i.taux_amortissement }} %</td>
-      <td style="text-align:center;font-size:9px">
+      <td style="text-align:center;font-size:10px">
         <span style="background:{% if i.est_amorti %}#e5e7eb{% else %}#d1fae5{% endif %};padding:2px 4px;border-radius:3px">
           {% if i.est_amorti %}Amorti{% else %}Actif{% endif %}
         </span>
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="9" style="text-align:center;color:#999;padding:20px">Aucune immobilisation enregistrée</td></tr>
+    <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:20px">Aucune immobilisation enregistrée</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>

@@ -2,12 +2,12 @@
 {% block doc_title %}Tableau des Flux de Trésorerie{% endblock %}
 {% block content %}
 <style>
-  .tft-table { width:100%; border-collapse:collapse; font-size:10px; margin-bottom:10px; }
+  .tft-table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:10px; }
   .tft-table thead th { background:#1a3c5e; color:white; padding:5px 8px; text-align:left; }
   .tft-table thead th.r { text-align:right; }
   .tft-table tbody td { padding:4px 8px; border-bottom:1px solid #eee; }
   .tft-table tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 8px; border-top:2px solid #1a3c5e; }
-  .tft-section { font-size:11px; font-weight:bold; border-left:4px solid #1a3c5e; padding-left:8px; margin:12px 0 6px; color:#1a3c5e; }
+  .tft-section { font-size:12px; font-weight:bold; border-left:4px solid #1a3c5e; padding-left:8px; margin:12px 0 6px; color:#1a3c5e; }
   .tft-sub { padding-left:16px !important; color:#555; }
   .mn { font-family:monospace; }
   .tr { text-align:right; }
@@ -19,7 +19,7 @@
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px;font-size:13px">
   Tableau des Flux de Trésorerie — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:10px;margin-bottom:14px">
+<p style="color:#374151;font-size:11px;margin-bottom:14px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; Méthode {{ methode }} &mdash; Conforme SYSCOHADA Révisé (AUDCIF Art. 30-35)
 </p>
@@ -29,17 +29,17 @@
   <tr>
     <td>
       <div class="kb-label">TN Ouverture</div>
-      <div class="kb-val kb-blue">{{ tresorerie.tn_debut|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val kb-blue">{{ tresorerie.tn_debut|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Variation Nette</div>
       <div class="kb-val {% if tresorerie.variation >= 0 %}kb-green{% else %}" style="color:#ef4444{% endif %}">
-        {% if tresorerie.variation >= 0 %}+{% endif %}{{ tresorerie.variation|floatformat:0 }} <span style="font-size:11px">FCFA</span>
+        {% if tresorerie.variation >= 0 %}+{% endif %}{{ tresorerie.variation|floatformat:0 }} <span style="font-size:12px">FCFA</span>
       </div>
     </td>
     <td>
       <div class="kb-label">TN Clôture</div>
-      <div class="kb-val kb-teal">{{ tresorerie.tn_fin|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val kb-teal">{{ tresorerie.tn_fin|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
   </tr>
 </table>

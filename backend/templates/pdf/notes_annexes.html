@@ -4,7 +4,7 @@
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
   Notes Annexes aux États Financiers — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:11px;margin-bottom:14px">
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
 </p>
@@ -23,7 +23,7 @@
   </tbody>
 </table>
 {% if note1.sections %}
-<div style="margin-top:8px;font-size:10px;color:#64748b">Répartition par section :</div>
+<div style="margin-top:8px;font-size:11px;color:#334155">Répartition par section :</div>
 <table cellspacing="0" cellpadding="4" style="width:50%">
   <thead><tr><th>Section</th><th class="text-right">Effectif</th></tr></thead>
   <tbody>
@@ -65,7 +65,7 @@
       <td class="{% if t.solde >= 0 %}teal{% else %}red{% endif %}"><strong>{{ t.solde|floatformat:0 }} FCFA</strong></td>
     </tr>
     {% empty %}
-    <tr><td colspan="2" style="color:#999;font-style:italic">Aucun solde de trésorerie enregistré</td></tr>
+    <tr><td colspan="2" style="color:#6b7280;font-style:italic">Aucun solde de trésorerie enregistré</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -4,7 +4,7 @@
 <h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
   Compte de Résultat — {{ exercice.annee_scolaire }}
 </h2>
-<p style="color:#666;font-size:11px;margin-bottom:14px">
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
   Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
   &mdash; Système {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
 </p>
@@ -14,16 +14,16 @@
   <tr>
     <td>
       <div class="kb-label">Total Produits</div>
-      <div class="kb-val kb-teal">{{ total_produits|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val kb-teal">{{ total_produits|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Total Charges</div>
-      <div class="kb-val" style="color:#ef4444">{{ total_charges|floatformat:0 }} <span style="font-size:11px">FCFA</span></div>
+      <div class="kb-val" style="color:#ef4444">{{ total_charges|floatformat:0 }} <span style="font-size:12px">FCFA</span></div>
     </td>
     <td>
       <div class="kb-label">Résultat Net</div>
       <div class="kb-val {% if resultat_net >= 0 %}kb-green{% else %}" style="color:#ef4444{% endif %}">
-        {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} <span style="font-size:11px">FCFA</span>
+        {% if resultat_net >= 0 %}+{% endif %}{{ resultat_net|floatformat:0 }} <span style="font-size:12px">FCFA</span>
       </div>
     </td>
   </tr>
@@ -47,7 +47,7 @@
       <td class="text-right teal bold">{{ p.montant|floatformat:0 }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Aucun produit enregistré</td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#6b7280;padding:14px">Aucun produit enregistré</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
@@ -76,7 +76,7 @@
       <td class="text-right red bold">{{ c.montant|floatformat:0 }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="3" style="text-align:center;color:#999;padding:14px">Aucune charge enregistrée</td></tr>
+    <tr><td colspan="3" style="text-align:center;color:#6b7280;padding:14px">Aucune charge enregistrée</td></tr>
     {% endfor %}
   </tbody>
   <tfoot>
