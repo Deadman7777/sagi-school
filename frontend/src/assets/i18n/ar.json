@@ -483,7 +483,22 @@
     "montant_fcfa": "المبلغ (FCFA)",
     "regle_via": "سُدّد عبر",
     "export_indispo": "تصدير PDF غير متاح لهذه التبويبة",
-    "ex_libelle": "مثال: إيجار أبريل 2026"
+    "ex_libelle": "مثال: إيجار أبريل 2026",
+    "sig_titre": "الأرصدة الوسيطة للتسيير (SIG) — النظام المحاسبي المنقّح",
+    "notes_annexes": "الملاحظات الملحقة",
+    "actif_immobilise": "الأصول الثابتة (الفئة 2)",
+    "total_immobilise": "إجمالي الأصول الثابتة",
+    "actif_circulant_hao": "الأصول المتداولة خارج النشاط العادي",
+    "total_circulant": "إجمالي الأصول المتداولة العادية",
+    "tresorerie_actif": "خزينة الأصول (الفئة 5)",
+    "total_tresorerie": "إجمالي خزينة الأصول",
+    "ecart_conversion": "فرق التحويل",
+    "dettes_financieres": "الديون المالية والموارد المماثلة",
+    "passif_circulant": "الخصوم المتداولة العادية",
+    "passif_circulant_hao": "الخصوم المتداولة خارج النشاط العادي",
+    "tresorerie_passif": "خزينة الخصوم",
+    "total_dettes": "إجمالي الخصوم المتداولة العادية",
+    "compte_fournisseur": "حساب المورّد (401 / 404 / 481)"
   },
   "fiscal": {
     "title": "الإقرارات الضريبية",
