@@ -1,7 +1,29 @@
 from pathlib import Path
-from decouple import config
+from decouple import Config, RepositoryEnv, RepositoryEmpty
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def _build_config():
+    """Lecture tolérante du fichier .env.
+
+    Sous Windows, un .env créé/édité dans Notepad est souvent enregistré en
+    ANSI (cp1252). python-decouple le lit en UTF-8 strict et plante alors avec
+    « 'utf8' codec can't decode byte 0xe9 ». On tente UTF-8 puis cp1252, et on
+    se limite à backend/.env (pas de remontée vers un .env parasite ailleurs
+    sur le disque). En l'absence de fichier, on part sur les valeurs par défaut.
+    """
+    env_path = BASE_DIR / '.env'
+    if env_path.is_file():
+        for enc in ('utf-8-sig', 'utf-8', 'cp1252'):
+            try:
+                return Config(RepositoryEnv(str(env_path), encoding=enc))
+            except UnicodeDecodeError:
+                continue
+    return Config(RepositoryEmpty())
+
+
+config = _build_config()
 
 SECRET_KEY = config('SECRET_KEY', default='changeme-in-production')
 DEBUG = config('DEBUG', default=True, cast=bool)
