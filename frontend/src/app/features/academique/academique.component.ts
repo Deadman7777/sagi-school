@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
 import { ElevesService } from '../../core/services/eleves.service';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
+import { MemorisationComponent } from './memorisation/memorisation.component';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
@@ -20,7 +22,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   selector: 'app-academique',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
-            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule],
+            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule,
+            MemorisationComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -38,7 +41,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 {{ 'academique.onglet_resultats' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='analyse'" (click)="onglet.set('analyse'); chargerAnalyse()">📈 Analyse</button>
       <button class="tab-btn" [class.active]="onglet()==='historique'" (click)="onglet.set('historique'); chargerHistorique()">📋 Historique</button>
+      @if (estDaara) {
+        <button class="tab-btn" [class.active]="onglet()==='memorisation'" (click)="onglet.set('memorisation')">🕌 {{ 'daara.onglet' | translate }}</button>
+      }
     </div>
+
+    <!-- MÉMORISATION CORANIQUE (Taxawu Daara) -->
+    @if (onglet()==='memorisation') {
+      <app-memorisation />
+    }
 
     <!-- PARAMÉTRAGE -->
     <div *ngIf="onglet()==='parametrage'">
@@ -716,6 +727,11 @@ export class AcademiqueComponent implements OnInit {
   }
 
   private translate = inject(TranslateService);
+
+  private auth = inject(AuthService);
+  get estDaara(): boolean {
+    return this.auth.currentUser()?.type_licence === 'TAXAWU_DAARA';
+  }
 
   constructor(
     private acad: AcademiqueService,

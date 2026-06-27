@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: "body"; src: url("{{ font_body }}"); }
+  @font-face { font-family: "arf"; src: url("{{ font_ar }}"); }
+  @page { size: A4; margin: 1.5cm; }
+  body { font-family: "body"; color: #1a1a1a; font-size: 11px; }
+  .ar { font-family: "arf"; }
+  h1 { font-size: 18px; margin: 0; color: #0b6b53; }
+  .titre-ar { font-family: "arf"; font-size: 20px; color: #0b6b53; }
+  .ecole { font-size: 13px; font-weight: bold; }
+  .muted { color: #666; }
+  table { width: 100%; border-collapse: collapse; }
+  .info td { padding: 4px 6px; border: 1px solid #cdd5df; font-size: 11px; }
+  .info .lab { background: #eef2f7; font-weight: bold; width: 28%; }
+  .prog { margin: 10px 0; }
+  .prog .pct { font-size: 30px; font-weight: bold; color: #0b6b53; }
+  .juz { margin-top: 6px; }
+  .juz td { border: 1px solid #fff; text-align: center; font-size: 9px; padding: 5px 2px; color: #06281f; }
+  .suivi th { background: #0b6b53; color: #fff; padding: 5px; font-size: 10px; text-align: left; }
+  .suivi td { border-bottom: 1px solid #e2e8f0; padding: 4px 5px; font-size: 10px; }
+  .sec { margin-top: 14px; font-size: 13px; font-weight: bold; color: #0b6b53;
+         border-bottom: 2px solid #0b6b53; padding-bottom: 2px; }
+  .foot { margin-top: 16px; font-size: 9px; color: #888; text-align: center; }
+</style>
+</head>
+<body>
+
+  <table>
+    <tr>
+      <td style="width:60%">
+        <div class="ecole">{{ ecole }}</div>
+        <h1>Rapport de mémorisation du Coran</h1>
+        <div class="muted">Suivi du NONGO (élève)</div>
+      </td>
+      <td style="width:40%; text-align:right">
+        <div class="titre-ar">{{ titre_ar }}</div>
+        <div class="ar">{{ sous_titre_ar }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="sec">Informations — <span class="ar">{{ ar.infos }}</span></div>
+  <table class="info">
+    <tr><td class="lab">NONGO (élève)</td><td>{{ eleve }}</td>
+        <td class="lab">Riwaaya — <span class="ar">{{ ar.riwaya }}</span></td><td>{{ riwaya }}</td></tr>
+    <tr><td class="lab">Niveau — <span class="ar">{{ ar.niveau }}</span></td>
+        <td>{{ niveau_fr }} <span class="ar">{{ niveau_ar }}</span></td>
+        <td class="lab">Statut — <span class="ar">{{ ar.statut }}</span></td><td>{{ statut }}</td></tr>
+    <tr><td class="lab">Date de début</td><td>{{ date_debut|default:"—" }}</td>
+        <td class="lab">Date de sortie</td><td>{{ date_sortie|default:"—" }}</td></tr>
+  </table>
+
+  <div class="sec">Progression — <span class="ar">{{ ar.progression }}</span></div>
+  <table class="prog">
+    <tr>
+      <td style="width:30%; text-align:center">
+        <span class="pct">{{ prog.pct }}%</span><br/>
+        <span class="muted">mémorisé — <span class="ar">{{ ar.memorise }}</span></span>
+      </td>
+      <td style="width:70%">
+        {{ prog.versets_memorises }} / {{ prog.total_versets }} versets ·
+        {{ prog.nb_suivis }} entrées de suivi
+      </td>
+    </tr>
+  </table>
+
+  <div class="muted" style="font-size:10px">Couverture par Juz (<span class="ar">{{ ar.juz }}</span>) :</div>
+  <table class="juz">
+    <tr>
+    {% for j in prog.par_juz %}
+      <td style="background-color: {% if j.pct >= 100 %}#00d4aa{% elif j.pct >= 50 %}#6dd6b6{% elif j.pct > 0 %}#c4eee2{% else %}#e6eaf0{% endif %}">
+        {{ j.juz }}<br/>{{ j.pct|floatformat:0 }}%
+      </td>
+      {% if forloop.counter|divisibleby:10 and not forloop.last %}</tr><tr>{% endif %}
+    {% endfor %}
+    </tr>
+  </table>
+
+  <div class="sec">Suivi quotidien — <span class="ar">{{ ar.suivi }}</span></div>
+  <table class="suivi">
+    <tr>
+      <th style="width:13%">Date</th>
+      <th style="width:42%">Portion — <span class="ar">{{ ar.portion }}</span></th>
+      <th style="width:12%">Qualité</th>
+      <th style="width:8%">Prés.</th>
+      <th style="width:25%">Observation</th>
+    </tr>
+    {% for s in suivis %}
+    <tr>
+      <td>{{ s.date }}</td>
+      <td>{{ s.deb_fr }} <span class="ar">{{ s.deb_ar }}</span> {{ s.vd }}
+          → {{ s.fin_fr }} <span class="ar">{{ s.fin_ar }}</span> {{ s.vf }}</td>
+      <td>{{ s.qualite }}</td>
+      <td>{% if s.present %}Oui{% else %}Non{% endif %}</td>
+      <td>{{ s.observation }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" style="text-align:center; color:#888; padding:10px">Aucune entrée de suivi.</td></tr>
+    {% endfor %}
+  </table>
+
+  <div class="foot">
+    Édité par SAGI SCHOOL — HADY GESMAN · Programme Taxawu Daara
+  </div>
+
+</body>
+</html>

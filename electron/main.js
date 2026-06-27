@@ -105,6 +105,22 @@ function runMigrate(backendDir) {
   return runManageCommand(backendDir, ['migrate', '--noinput'], 'migrate');
 }
 
+// Tâches idempotentes à CHAQUE démarrage : applique les migrations en attente
+// (essentiel après une mise à jour) et seed les données de référence du Coran.
+// Non bloquant : un échec ne doit pas empêcher l'app de démarrer.
+async function runMaintenance(backendDir) {
+  try {
+    await runMigrate(backendDir);
+  } catch (e) {
+    console.warn('[Maintenance] migrate:', e.message);
+  }
+  try {
+    await runManageCommand(backendDir, ['init_coran'], 'init_coran');
+  } catch (e) {
+    console.warn('[Maintenance] init_coran:', e.message);
+  }
+}
+
 function initParametresFiscaux(backendDir) {
   return new Promise(resolve => {
     const python   = getPython();
@@ -408,6 +424,9 @@ if (!gotTheLock) {
         app.quit();
         return;
       }
+
+      // Migrations en attente (mises à jour) + seed Coran — idempotent, non bloquant
+      await runMaintenance(getBackendDir());
     }
 
     // ── 2. Démarrer Django (nécessaire pour la vérif licence) ──
