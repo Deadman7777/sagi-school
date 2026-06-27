@@ -418,7 +418,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <!-- Services optionnels auxquels l'élève est abonné (montant auto) -->
           @if (form.services.length) {
             <div class="form-group full" style="margin-top:6px">
-              <label>Services / Activités abonnés</label>
+              <label>Services / Activités abonnés
+                @if (form.mois_regles.length > 1) {
+                  <span class="fee-hint">× {{ form.mois_regles.length }} mois</span>
+                }
+              </label>
               <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
                 @for (sv of form.services; track sv.id) {
                   <div style="display:flex;align-items:center;gap:8px">
@@ -826,7 +830,7 @@ export class PaiementsComponent implements OnInit {
     montant_cantine:     0,
     montant_divers:      0,
     mois_regles:         [] as number[],
-    services:            [] as { id: string; nom: string; montant: number; inclus: boolean }[],
+    services:            [] as { id: string; nom: string; tarif: number; montant: number; inclus: boolean }[],
     mode_paiement:       '',
     observations:        '',
   };
@@ -955,9 +959,10 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_inscription  = 0;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
-      // Services abonnés : montant auto = tarif du service, cochés par défaut
+      // Services abonnés : montant auto = tarif du service × nb mois sélectionnés, cochés par défaut
       this.form.services = (data.services || []).map((s: any) => ({
-        id: s.id, nom: s.nom, montant: s.montant || 0, inclus: true,
+        id: s.id, nom: s.nom, tarif: s.montant || 0,
+        montant: Math.round((s.montant || 0) * this.form.mois_regles.length), inclus: true,
       }));
     }
     this.form.montant_divers = 0;
@@ -979,7 +984,12 @@ export class PaiementsComponent implements OnInit {
     else        this.form.mois_regles.push(num);
     // Le montant mensualité suit le nombre de mois sélectionnés (tarif × nb mois)
     const tarif = this.saisieDonnees()?.fees_nets?.mensualite || 0;
-    this.form.montant_mensualite = Math.round(tarif * this.form.mois_regles.length);
+    const nb    = this.form.mois_regles.length;
+    this.form.montant_mensualite = Math.round(tarif * nb);
+    // Les services abonnés suivent aussi le nombre de mois (tarif unitaire × nb mois)
+    for (const sv of this.form.services) {
+      sv.montant = Math.round((sv.tarif || 0) * nb);
+    }
   }
 
   private resetForm() {

@@ -530,23 +530,26 @@ interface PecForm {
           </div>
         }
         <div class="form-group">
-          <label>{{ 'eleves.genre' | translate }}</label>
+          <label>{{ 'eleves.genre' | translate }} *</label>
           <p-select appendTo="body" [options]="genreOptions" [(ngModel)]="nouvelEleve.genre"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
         <div class="form-group">
-          <label>{{ 'eleves.date_naissance' | translate }}</label>
+          <label>{{ 'eleves.date_naissance' | translate }} *</label>
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
         </div>
         <div class="form-group">
-          <label>{{ 'eleves.date_entree' | translate }}</label>
+          <label>{{ 'eleves.date_entree' | translate }} *</label>
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_inscription" class="w-full" />
           <small style="color:#64748b;font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
         </div>
         <div class="form-group">
-          <label>{{ 'eleves.lieu_naissance' | translate }}</label>
+          <label>{{ 'eleves.lieu_naissance' | translate }} *</label>
           <input pInputText [(ngModel)]="nouvelEleve.lieu_naissance" class="w-full"
                  [placeholder]="'eleves.lieu_naissance_ph' | translate" />
+        </div>
+        <div class="form-group full" style="margin-top:2px">
+          <small style="color:#64748b;font-size:11px">⚑ {{ 'eleves.parent_obligatoire' | translate }}</small>
         </div>
         <div class="form-group">
           <label>{{ 'eleves.nom_pere' | translate }}</label>
@@ -1111,6 +1114,21 @@ export class ElevesListeComponent implements OnInit {
     if (this.classesSection().length && !this.nouvelEleve.classe) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.classe') });
+      return;
+    }
+    // Tous les champs obligatoires (sauf services) : genre, naissance, lieu, date d'entrée
+    const e = this.nouvelEleve;
+    if (!e.genre || !e.date_naissance || !e.lieu_naissance || !e.date_inscription) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.tous_champs_obligatoires') });
+      return;
+    }
+    // Au moins un parent complet (nom + téléphone)
+    const pereOk = !!(e.nom_pere && e.telephone_pere);
+    const mereOk = !!(e.nom_mere && e.telephone_mere);
+    if (!pereOk && !mereOk) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.parent_obligatoire') });
       return;
     }
     this.saving.set(true);

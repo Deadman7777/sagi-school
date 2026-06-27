@@ -135,7 +135,9 @@
     "date_entree": "تاريخ الدخول",
     "date_entree_aide": "يُستخدم لاحتساب الأقساط الشهرية المستحقة بالتناسب",
     "classe": "القسم",
-    "section_classe_obligatoire": "القسم والفصل إلزاميان."
+    "section_classe_obligatoire": "القسم والفصل إلزاميان.",
+    "tous_champs_obligatoires": "يرجى ملء جميع الحقول الإلزامية (الجنس، تاريخ ومكان الميلاد، تاريخ الالتحاق).",
+    "parent_obligatoire": "أدخل ولي أمر واحدًا على الأقل مع رقم هاتفه."
   },
   "paiements": {
     "title": "تسجيل المدفوعات",

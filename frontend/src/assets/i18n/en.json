@@ -135,7 +135,9 @@
     "date_entree": "Entry date",
     "date_entree_aide": "Used to prorate the monthly fees due",
     "classe": "Class",
-    "section_classe_obligatoire": "Section and class are required."
+    "section_classe_obligatoire": "Section and class are required.",
+    "tous_champs_obligatoires": "Please fill in all required fields (gender, date and place of birth, entry date).",
+    "parent_obligatoire": "Provide at least one parent with their phone number."
   },
   "paiements": {
     "title": "Payment Entry",

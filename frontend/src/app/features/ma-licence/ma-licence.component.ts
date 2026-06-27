@@ -104,7 +104,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           </div>
           <div class="cc-row">
             <span>{{ 'ma_licence.support' | translate }}</span>
-            <span>support&#64;hadygesman.com</span>
+            <span>hadygesman&#64;gmail.com</span>
           </div>
         </div>
       </div>
