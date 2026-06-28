@@ -37,7 +37,7 @@ class Paiement(TenantModel):
 
     eleve               = models.ForeignKey('eleves.Eleve', on_delete=models.CASCADE, related_name='paiements')
     exercice            = models.ForeignKey(Exercice, on_delete=models.CASCADE, related_name='paiements')
-    no_piece            = models.CharField(max_length=30, unique=True)
+    no_piece            = models.CharField(max_length=30)
     date_paiement       = models.DateField(auto_now_add=True)
     statut              = models.CharField(max_length=10, choices=STATUT_CHOICES, default='ACTIF')
     montant_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -59,6 +59,14 @@ class Paiement(TenantModel):
     class Meta:
         db_table = 'paiements'
         ordering = ['-date_paiement']
+        # no_piece est séquentiel PAR école (généré via filter(tenant=...)),
+        # il doit donc être unique par tenant, jamais globalement, sinon
+        # le 1er reçu d'une nouvelle école (REC-0001) entre en collision avec
+        # celui d'une école existante → IntegrityError 500.
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'no_piece'],
+                                    name='uniq_no_piece_par_tenant'),
+        ]
 
     @property
     def total(self):
