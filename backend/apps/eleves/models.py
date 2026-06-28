@@ -57,7 +57,7 @@ class Eleve(TenantModel):
     classe                = models.ForeignKey('academique.Classe', null=True, blank=True,
                                               on_delete=models.SET_NULL, related_name='eleves_classe')
     numero                = models.IntegerField(null=True, blank=True)
-    matricule             = models.CharField(max_length=20, blank=True, unique=True, null=True)
+    matricule             = models.CharField(max_length=20, blank=True, null=True)
     nom_complet           = models.CharField(max_length=200)
     genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance        = models.DateField(null=True, blank=True)
@@ -84,6 +84,15 @@ class Eleve(TenantModel):
     class Meta:
         db_table = 'eleves'
         ordering = ['numero', 'nom_complet']
+        # Le matricule (AAAA-CODE-NNNNNN) est généré PAR école : son numéro est
+        # séquentiel par tenant et le code établissement peut rester au défaut 'ETB'.
+        # Il doit donc être unique par tenant, jamais globalement, sinon deux écoles
+        # sur 'ETB' entrent en collision (2026-ETB-000001) → IntegrityError 500.
+        # Les NULL restent autorisés en multiple (matricule optionnel).
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'matricule'],
+                                    name='uniq_matricule_par_tenant'),
+        ]
 
     def __str__(self):
         return self.nom_complet
