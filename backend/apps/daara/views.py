@@ -256,7 +256,7 @@ class RapportParentPDFView(APIView):
                 'juz': 'جزء', 'suivi': 'المتابعة اليومية', 'portion': 'المقدار',
             }.items()},
             'font_body': 'DejaVuSans.ttf',
-            'font_ar':   'KacstOne.ttf',
+            'font_ar':   'Amiri-Regular.ttf',
         }
 
         html_str = render_to_string('pdf/rapport_daara.html', context)
