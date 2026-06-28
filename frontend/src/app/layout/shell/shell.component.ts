@@ -229,7 +229,7 @@ export class ShellComponent {
     const acces: Record<string, string[]> = {
       'ADMIN_ECOLE':     ['*'],
       'ADMIN_RH':        ['/dashboard', '/rh'],
-      'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal'],
+      'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal', '/paiements', '/suivi-mensuel'],
       'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
       'LECTEUR':         ['/dashboard'],
     };
