@@ -1,5 +1,6 @@
 """
-Seed des données de référence du Coran : 114 sourates + subdivisions (Juz).
+Seed des données de référence du Coran : 114 sourates + subdivisions
+(Juz 30, Hizb 60, Nisf 60, Rub' 240) pour Hafs et Warsh.
 
 Idempotent (update_or_create). Données partagées (non multi-tenant).
 
@@ -7,17 +8,19 @@ Idempotent (update_or_create). Données partagées (non multi-tenant).
     python manage.py init_coran --force  # idem (réservé pour usages futurs)
 
 NOTE données :
-- nb_versets_hafs : comptage Hafs standard (total 6236).
-- nb_versets_warsh : initialisé = Hafs (baseline). Les écarts Warsh sur
-  certaines sourates restent à affiner depuis une source vérifiée — sans
-  impact bloquant (seul le % mémorisé varie marginalement).
-- Subdivisions : les 30 JUZ (bornes Madani standard, identiques en position
-  pour Hafs et Warsh) sont seedées. Les HIZB / NISF / RUB' sont supportés par
-  le schéma et à renseigner depuis une source vérifiée (data à venir).
+- nb_versets_hafs : comptage Kufi/Hafs (total 6236).
+- nb_versets_warsh : initialisé = Hafs (baseline). Warsh suit le comptage
+  Madani al-akhir (total 6214 ; écart = comptage des fawatih/basmala, AUCUNE
+  différence de texte). Faute de table par sourate vérifiée et machine-lisible,
+  on garde Hafs (impact ~0,35 % sur le % mémorisé).
+- Subdivisions : bornes Juz/Hizb/Nisf/Rub' issues de Tanzil.net (CC-BY),
+  embarquées dans coran_subdivisions.py. Numérotation des versets = Hafs ;
+  positions physiques identiques pour Warsh.
 """
 from django.core.management.base import BaseCommand
 
 from apps.daara.models import Sourate, Subdivision
+from apps.daara.coran_subdivisions import JUZ, HIZB, NISF, RUB
 
 # (numero, nom_ar, nom_fr, type_revelation, nb_versets_hafs)
 SOURATES = [
@@ -137,19 +140,12 @@ SOURATES = [
     (114, 'الناس', 'An-Nas', 'MECQUOISE', 6),
 ]
 
-# Bornes de début des 30 Juz : (juz, sourate, verset) — découpage Madani standard.
-JUZ_DEBUT = [
-    (1, 1, 1),   (2, 2, 142), (3, 2, 253), (4, 3, 93),  (5, 4, 24),
-    (6, 4, 148), (7, 5, 82),  (8, 6, 111), (9, 7, 88),  (10, 8, 41),
-    (11, 9, 93), (12, 11, 6), (13, 12, 53),(14, 15, 1), (15, 17, 1),
-    (16, 18, 75),(17, 21, 1), (18, 23, 1), (19, 25, 21),(20, 27, 56),
-    (21, 29, 46),(22, 33, 31),(23, 36, 28),(24, 39, 32),(25, 41, 47),
-    (26, 46, 1), (27, 51, 31),(28, 58, 1), (29, 67, 1), (30, 78, 1),
-]
+# (type Subdivision -> liste de bornes (numero, sourate, verset)) issues de Tanzil.
+SUBDIVISIONS = {'JUZ': JUZ, 'HIZB': HIZB, 'NISF': NISF, 'RUB': RUB}
 
 
 class Command(BaseCommand):
-    help = "Seed des sourates (114) et subdivisions (Juz) du Coran — référence partagée."
+    help = "Seed des sourates (114) et subdivisions (Juz/Hizb/Nisf/Rub') du Coran."
 
     def add_arguments(self, parser):
         parser.add_argument('--force', action='store_true',
@@ -164,22 +160,21 @@ class Command(BaseCommand):
                     'nom_fr': nom_fr,
                     'type_revelation': type_rev,
                     'nb_versets_hafs': versets,
-                    'nb_versets_warsh': versets,   # baseline = Hafs (à affiner)
+                    'nb_versets_warsh': versets,   # baseline = Hafs (cf. note module)
                 },
             )
         self.stdout.write(self.style.SUCCESS(f"Sourates : {Sourate.objects.count()}/114"))
 
         sourates = {s.numero: s for s in Sourate.objects.all()}
         for riwaya in ('HAFS', 'WARSH'):
-            for juz, s_num, verset in JUZ_DEBUT:
-                Subdivision.objects.update_or_create(
-                    riwaya=riwaya, type='JUZ', numero=juz,
-                    defaults={'sourate_debut': sourates[s_num], 'verset_debut': verset},
-                )
-        self.stdout.write(self.style.SUCCESS(
-            f"Subdivisions JUZ : {Subdivision.objects.filter(type='JUZ').count()} "
-            f"(30 × 2 riwaaya)"
-        ))
-        self.stdout.write(self.style.WARNING(
-            "Hizb/Nisf/Rub' non seedés (source vérifiée à venir) — schéma prêt."
-        ))
+            for type_, bornes in SUBDIVISIONS.items():
+                for numero, s_num, verset in bornes:
+                    Subdivision.objects.update_or_create(
+                        riwaya=riwaya, type=type_, numero=numero,
+                        defaults={'sourate_debut': sourates[s_num], 'verset_debut': verset},
+                    )
+        for type_, bornes in SUBDIVISIONS.items():
+            n = Subdivision.objects.filter(type=type_).count()
+            self.stdout.write(self.style.SUCCESS(
+                f"Subdivisions {type_} : {n} ({len(bornes)} × 2 riwaaya)"
+            ))

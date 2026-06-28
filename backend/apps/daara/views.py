@@ -129,8 +129,26 @@ def _merge(intervals):
     return total, fusion
 
 
+def _segments(type_, riwaya, offset, total):
+    """Intervalles globaux [début, fin] de chaque subdivision d'un type, ordonnés."""
+    subs = list(Subdivision.objects.filter(riwaya=riwaya, type=type_)
+                .select_related('sourate_debut').order_by('numero'))
+    bornes = [(s.numero, offset[s.sourate_debut.numero] + s.verset_debut) for s in subs]
+    segs = []
+    for i, (num, debut) in enumerate(bornes):
+        fin = (bornes[i + 1][1] - 1) if i + 1 < len(bornes) else total
+        segs.append((num, debut, fin))
+    return segs
+
+
+def _couvert(d, f, fusion):
+    """Nombre de versets de [d, f] couverts par l'union fusion."""
+    return sum(max(0, min(ff, f) - max(dd, d) + 1) for dd, ff in fusion)
+
+
 def compute_progression(parcours):
-    """% mémorisé (versets distincts couverts / total riwaaya) + couverture par Juz."""
+    """% mémorisé (versets distincts couverts / total riwaaya) + couverture
+    par Juz et nombre de Hizb / Rub' entièrement mémorisés."""
     riwaya = parcours.riwaya
     offset, total = _offsets(riwaya)
 
@@ -145,16 +163,17 @@ def compute_progression(parcours):
     couverts, fusion = _merge(intervals)
     pct = round(100 * couverts / total, 1) if total else 0
 
-    juzs = list(Subdivision.objects.filter(riwaya=riwaya, type='JUZ')
-                .select_related('sourate_debut').order_by('numero'))
-    bornes = [offset[j.sourate_debut.numero] + j.verset_debut for j in juzs]
-    par_juz = []
-    for i, j in enumerate(juzs):
-        debut = bornes[i]
-        fin   = (bornes[i + 1] - 1) if i + 1 < len(bornes) else total
-        taille = fin - debut + 1
-        couv = sum(max(0, min(f, fin) - max(d, debut) + 1) for d, f in fusion)
-        par_juz.append({'juz': j.numero, 'pct': round(100 * couv / taille, 0) if taille else 0})
+    par_juz = [
+        {'juz': num, 'pct': round(100 * _couvert(d, f, fusion) / (f - d + 1), 0) if f >= d else 0}
+        for num, d, f in _segments('JUZ', riwaya, offset, total)
+    ]
+
+    def _complets(type_):
+        segs = _segments(type_, riwaya, offset, total)
+        return sum(1 for _, d, f in segs if _couvert(d, f, fusion) >= (f - d + 1)), len(segs)
+
+    hizb_ok, hizb_tot = _complets('HIZB')
+    rub_ok,  rub_tot  = _complets('RUB')
 
     return {
         'parcours': str(parcours.id),
@@ -164,6 +183,10 @@ def compute_progression(parcours):
         'pct': pct,
         'nb_suivis': parcours.suivis.count(),
         'par_juz': par_juz,
+        'hizb_complets': hizb_ok,
+        'hizb_total': hizb_tot,
+        'rub_complets': rub_ok,
+        'rub_total': rub_tot,
     }
 
 
@@ -254,6 +277,7 @@ class RapportParentPDFView(APIView):
                 'infos': 'المعلومات', 'riwaya': 'الرواية', 'niveau': 'المستوى',
                 'statut': 'الحالة', 'progression': 'التقدّم', 'memorise': 'محفوظ',
                 'juz': 'جزء', 'suivi': 'المتابعة اليومية', 'portion': 'المقدار',
+                'hizb': 'حزب', 'rub': 'ربع',
             }.items()},
             'font_body': 'DejaVuSans.ttf',
             'font_ar':   'Amiri-Regular.ttf',

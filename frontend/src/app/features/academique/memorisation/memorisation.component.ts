@@ -208,6 +208,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
           </div>
           <div class="prog-info">
             <div>{{ pr.versets_memorises }} / {{ pr.total_versets }} {{ 'daara.versets' | translate }}</div>
+            <div>{{ 'daara.hizb' | translate }} : {{ pr.hizb_complets }}/{{ pr.hizb_total }} · {{ 'daara.rub' | translate }} : {{ pr.rub_complets }}/{{ pr.rub_total }}</div>
             <div>{{ pr.nb_suivis }} {{ 'daara.entrees' | translate }} · {{ pr.riwaya }}</div>
           </div>
           <p-button [label]="'daara.export_parent' | translate" icon="pi pi-file-pdf"
