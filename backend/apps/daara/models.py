@@ -104,11 +104,21 @@ class ParcoursNongo(TenantModel):
         ('SORTI',    'Sorti'),
         ('KHATMA',   'Khatma (Coran terminé)'),
     ]
+    # Niveau IDJIE (apprentissage de l'alphabet arabe) : on ne modélise pas la
+    # pédagogie fine (assemblage des lettres 2 à 2, masques…), on suit seulement
+    # le palier atteint par le NONGO. N'a de sens que si niveau.categorie == IDJIE.
+    NIVEAU_IDJIE_CHOICES = [
+        ('DEBUTANT', 'Débutant'),
+        ('MOYEN',    'Moyen'),
+        ('AVANCE',   'Avancé'),
+    ]
     eleve       = models.ForeignKey('eleves.Eleve', on_delete=models.CASCADE,
                                     related_name='parcours_coranique')
     riwaya      = models.CharField(max_length=6, choices=RIWAYA_CHOICES, default='WARSH')
     niveau      = models.ForeignKey(NiveauDaara, on_delete=models.SET_NULL,
                                     null=True, blank=True, related_name='parcours')
+    niveau_idjie = models.CharField(max_length=10, choices=NIVEAU_IDJIE_CHOICES,
+                                    blank=True, null=True)
     sens        = models.CharField(max_length=5, choices=SENS_CHOICES, default='FIN')
     date_debut  = models.DateField(null=True, blank=True)
     date_sortie = models.DateField(null=True, blank=True)
