@@ -43,7 +43,11 @@
     "chargement": "Chargement...",
     "nongo_requis": "Veuillez choisir un élève.",
     "niveau_requis": "Le nom du niveau est obligatoire.",
-    "erreur_action": "Action impossible."
+    "erreur_action": "Action impossible.",
+    "idjie_titre": "Niveau d'apprentissage de l'alphabet",
+    "idjie_aide": "Pour le niveau Idjie, on suit uniquement le palier atteint par l'élève dans l'apprentissage de l'alphabet arabe.",
+    "idjie_niveau": "Niveau atteint",
+    "idjie_enregistre": "Niveau enregistré."
   },
   "app": {
     "name": "SAGI SCHOOL",
