@@ -212,7 +212,21 @@ MOBILE_ACCOUNTS = ('552', '5521', '5522', '5523')
 SEUIL_SMT_SERVICES = 30_000_000
 
 
-def get_exercice(tenant):
+def get_exercice(tenant, request=None):
+    """Exercice ciblé par les rapports.
+
+    Si la requête fournit `?exercice=<id>` (vue de lecture : consultation d'une
+    année clôturée), on renvoie cet exercice — qu'il soit clôturé ou non — tant
+    qu'il appartient au tenant. À défaut, l'exercice actif (non clôturé) le plus
+    récent. Les vues d'écriture appellent get_exercice(tenant) sans request,
+    donc elles restent toujours sur l'exercice actif (clôturé = lecture seule).
+    """
+    if request is not None:
+        ex_id = request.query_params.get('exercice')
+        if ex_id:
+            ex = Exercice.objects.filter(tenant=tenant, id=ex_id).first()
+            if ex:
+                return ex
     return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
 
@@ -253,7 +267,7 @@ class JournalView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response([])
 
@@ -283,7 +297,7 @@ class GrandLivreView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response([])
 
@@ -355,7 +369,7 @@ class BalanceView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({'lignes': [], 'totaux': {}})
 
@@ -467,7 +481,7 @@ class CompteResultatView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({})
 
@@ -626,7 +640,7 @@ class BilanView(APIView):
 
     def get(self, request):
         tenant    = get_tenant(request)
-        exercice  = get_exercice(tenant)
+        exercice  = get_exercice(tenant, request)
         if not exercice:
             return Response({})
 
@@ -756,7 +770,7 @@ class TableauFluxView(APIView):
         from django.db.models import Count
 
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({})
 
@@ -861,7 +875,7 @@ class NotesAnnexesView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({})
 

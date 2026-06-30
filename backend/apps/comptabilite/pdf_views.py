@@ -34,9 +34,8 @@ class ExportPDFView(APIView):
             return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant   = get_tenant(request)
-        exercice = Exercice.objects.filter(
-            tenant=tenant, cloture=False
-        ).order_by('-date_debut').first()
+        # Honore ?exercice=<id> pour exporter une année clôturée ; sinon actif.
+        exercice = get_exercice(tenant, request)
 
         if not exercice:
             return HttpResponse('Aucun exercice actif', status=404)

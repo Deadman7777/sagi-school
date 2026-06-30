@@ -10,6 +10,11 @@ export class ElevesService {
     return this.api.get<PaginatedResponse<Eleve>>('/eleves/liste', { limit: '500', ...params });
   }
 
+  // Liste des exercices (actif + clôturés) pour consulter une année passée.
+  getExercices() {
+    return this.api.get<any>('/paiements/exercices/');
+  }
+
   getEleve(id: string) {
     return this.api.get<Eleve>(`/eleves/${id}/`);
   }
