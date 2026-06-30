@@ -43,7 +43,11 @@
     "chargement": "Loading...",
     "nongo_requis": "Please choose a student.",
     "niveau_requis": "Level name is required.",
-    "erreur_action": "Action failed."
+    "erreur_action": "Action failed.",
+    "idjie_titre": "Alphabet learning level",
+    "idjie_aide": "For the Idjie level, we only track the stage the student has reached in learning the Arabic alphabet.",
+    "idjie_niveau": "Level reached",
+    "idjie_enregistre": "Level saved."
   },
   "app": {
     "name": "SAGI SCHOOL",

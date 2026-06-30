@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
@@ -38,9 +38,11 @@ import { ElevesService } from '../../../core/services/eleves.service';
         <button class="sub-tab" [class.active]="vue()==='suivi'" (click)="vue.set('suivi'); chargerSuivi()">
           📅 {{ 'daara.suivi' | translate }}
         </button>
-        <button class="sub-tab" [class.active]="vue()==='progression'" (click)="vue.set('progression'); chargerProgression()">
-          📈 {{ 'daara.progression' | translate }}
-        </button>
+        @if (!estIdjie()) {
+          <button class="sub-tab" [class.active]="vue()==='progression'" (click)="vue.set('progression'); chargerProgression()">
+            📈 {{ 'daara.progression' | translate }}
+          </button>
+        }
       }
     </div>
 
@@ -125,7 +127,24 @@ import { ElevesService } from '../../../core/services/eleves.service';
     }
 
     <!-- ════════════════ SUIVI QUOTIDIEN ════════════════ -->
-    @if (vue()==='suivi' && parcoursActif()) {
+    @if (vue()==='suivi' && parcoursActif() && estIdjie()) {
+      <div class="card-form">
+        <h4>{{ 'daara.idjie_titre' | translate }}</h4>
+        <p class="idjie-hint">{{ 'daara.idjie_aide' | translate }}</p>
+        <div class="grid">
+          <div class="fg full">
+            <label>{{ 'daara.idjie_niveau' | translate }}</label>
+            <p-select appendTo="body" [options]="niveauIdjieOptions" [(ngModel)]="formIdjieNiveau"
+                      optionLabel="label" optionValue="value" [showClear]="true"
+                      [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+          </div>
+        </div>
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="enregistrerNiveauIdjie()" />
+      </div>
+    }
+
+    @if (vue()==='suivi' && parcoursActif() && !estIdjie()) {
       <div class="card-form">
         <h4>{{ 'daara.nouvelle_entree' | translate }}</h4>
         <div class="grid">
@@ -319,6 +338,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
     .empty { text-align:center; color:#64748b; padding:18px; }
     .card-form { background:#16233a; border:1px solid #2a3f5f; border-radius:10px; padding:16px; margin-bottom:16px; }
     .card-form h4, h4 { color:#e8f0fe; margin:0 0 12px; font-size:14px; }
+    .idjie-hint { color:#94a3b8; font-size:12px; margin:-6px 0 12px; }
     .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
     .fg { display:flex; flex-direction:column; gap:4px; }
     .fg.full { grid-column:1 / -1; }
@@ -356,6 +376,16 @@ export class MemorisationComponent implements OnInit {
   suivis   = signal<any[]>([]);
   parcoursActif = signal<any | null>(null);
   progression   = signal<any | null>(null);
+
+  // Niveau IDJIE = apprentissage de l'alphabet : le suivi Coran (sourate/verset)
+  // et la progression en versets/juz n'ont pas de sens, on suit juste le palier.
+  estIdjie = computed(() => this.parcoursActif()?.niveau_categorie === 'IDJIE');
+  niveauIdjieOptions = [
+    { label: 'Débutant', value: 'DEBUTANT' },
+    { label: 'Moyen',    value: 'MOYEN' },
+    { label: 'Avancé',   value: 'AVANCE' },
+  ];
+  formIdjieNiveau: string | null = null;
 
   riwayaOptions = [{ label: 'Warsh', value: 'WARSH' }, { label: 'Hafs', value: 'HAFS' }];
   sensOptions = [
@@ -454,9 +484,31 @@ export class MemorisationComponent implements OnInit {
   chargerSuivi() {
     const p = this.parcoursActif();
     if (!p) return;
+    // Parcours IDJIE : on ne suit que le palier alphabet, pas le suivi Coran.
+    if (this.estIdjie()) {
+      this.formIdjieNiveau = p.niveau_idjie || null;
+      return;
+    }
     this.formSuivi = { date: new Date().toISOString().split('T')[0], qualite: 'MOYEN',
                        verset_debut: 1, verset_fin: 1, present: true, observation: '' };
     this.daara.getSuivi(p.id).subscribe(l => this.suivis.set(l || []));
+  }
+
+  enregistrerNiveauIdjie() {
+    const p = this.parcoursActif();
+    if (!p) return;
+    this.saving.set(true);
+    this.daara.modifierParcours(p.id, { niveau_idjie: this.formIdjieNiveau }).subscribe({
+      next: (maj) => {
+        this.saving.set(false);
+        // Refléter le nouveau palier dans le parcours actif et la liste.
+        this.parcoursActif.set({ ...p, niveau_idjie: this.formIdjieNiveau });
+        this.chargerParcours();
+        this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'),
+                       detail: this.translate.instant('daara.idjie_enregistre') });
+      },
+      error: () => { this.saving.set(false); this.erreur(); },
+    });
   }
   enregistrerSuivi() {
     const p = this.parcoursActif();

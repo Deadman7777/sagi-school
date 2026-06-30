@@ -27,8 +27,10 @@ class NiveauDaaraSerializer(serializers.ModelSerializer):
 
 
 class ParcoursNongoSerializer(serializers.ModelSerializer):
-    eleve_nom   = serializers.CharField(source='eleve.nom_complet', read_only=True)
-    niveau_nom  = serializers.CharField(source='niveau.nom_fr', read_only=True)
+    eleve_nom       = serializers.CharField(source='eleve.nom_complet', read_only=True)
+    niveau_nom      = serializers.CharField(source='niveau.nom_fr', read_only=True)
+    # Catégorie du niveau → le front bascule le suivi en mode alphabet (IDJIE).
+    niveau_categorie = serializers.CharField(source='niveau.categorie', read_only=True)
 
     class Meta:
         model = ParcoursNongo

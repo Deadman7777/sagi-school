@@ -173,9 +173,14 @@ export class MaLicenceComponent implements OnInit {
     this.licencesService.getLicences().subscribe({
       next: res => {
         const licences = res.results || res;
-        const tenantId = localStorage.getItem('tenant_id');
-        const maLicence = licences.find((l: any) => l.tenant === tenantId || l.tenant_nom);
-        this.licence.set(maLicence || licences[0] || null);
+        // Tenant effectif : école impersonée (super_admin) sinon tenant du user.
+        // L'API /licences/ renvoie TOUTES les licences au super_admin → on doit
+        // filtrer sur l'ID exact, sinon on affiche par erreur la 1ʳᵉ école.
+        const tenantId = this.auth.effectiveTenantId;
+        const maLicence = tenantId
+          ? licences.find((l: any) => l.tenant === tenantId)
+          : null;
+        this.licence.set(maLicence || (licences.length === 1 ? licences[0] : null));
         this.loading.set(false);
       },
       error: () => this.loading.set(false)
