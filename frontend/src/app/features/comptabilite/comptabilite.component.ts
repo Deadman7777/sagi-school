@@ -25,10 +25,27 @@ import { TooltipModule } from 'primeng/tooltip';
         <h2 class="page-title">📒 {{ 'comptabilite.title' | translate }}</h2>
         <span class="page-sub">{{ 'comptabilite.subtitle' | translate }}</span>
       </div>
-      <button class="btn-export" (click)="exporter()" [title]="'Exporter ' + labelOngletCourant() + ' en PDF'">
-        📤 Exporter PDF — {{ labelOngletCourant() }}
-      </button>
+      <div class="header-actions">
+        <div class="ex-selector">
+          <label for="ex-sel">📅 {{ 'comptabilite.exercice' | translate }}</label>
+          <select id="ex-sel" [ngModel]="exerciceSel()" (ngModelChange)="changerExercice($event)">
+            <option value="">{{ 'comptabilite.annee_active' | translate }}</option>
+            @for (ex of exercices(); track ex.id) {
+              <option [value]="ex.id">{{ ex.annee_scolaire }}{{ ex.cloture ? ' 🔒' : '' }}</option>
+            }
+          </select>
+        </div>
+        <button class="btn-export" (click)="exporter()" [title]="'Exporter ' + labelOngletCourant() + ' en PDF'">
+          📤 Exporter PDF — {{ labelOngletCourant() }}
+        </button>
+      </div>
     </div>
+
+    @if (estLectureSeule()) {
+      <div class="readonly-banner">
+        🔒 {{ 'comptabilite.lecture_seule' | translate }}
+      </div>
+    }
 
     <!-- Onglets primaires -->
     <div class="tabs-bar">
@@ -809,7 +826,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <p-select appendTo="body" [options]="typesFiltres" [(ngModel)]="filtreType"
                   (onChange)="filtrerPlan()" [showClear]="true"
                   placeholder="Type" styleClass="filter-sel" />
-        <p-button label="+ Compte" severity="success" size="small" (onClick)="ouvrirDialogCompte()" />
+        <p-button label="+ Compte" severity="success" size="small" [disabled]="estLectureSeule()" (onClick)="ouvrirDialogCompte()" />
       </div>
     </div>
     <p-table [value]="planComptable()" [loading]="loadingPlan()"
@@ -874,7 +891,7 @@ import { TooltipModule } from 'primeng/tooltip';
         <h3 class="budget-title">🎯 Budget Prévisionnel — {{ budget()?.exercice }}</h3>
         <span style="font-size:12px;color:#64748b">Charges fixes et variables · Prévision vs Réalisé</span>
       </div>
-      <p-button label="+ Ligne budget" severity="success" (onClick)="ouvrirDialogBudget()" />
+      <p-button label="+ Ligne budget" severity="success" [disabled]="estLectureSeule()" (onClick)="ouvrirDialogBudget()" />
     </div>
 
     <!-- KPIs budget -->
@@ -1011,7 +1028,7 @@ import { TooltipModule } from 'primeng/tooltip';
     <div class="table-card">
       <div class="table-toolbar">
         <span class="tbl-count">🏗️ Immobilisations</span>
-        <p-button label="+ Ajouter un bien" severity="success" (onClick)="ouvrirDialogImmo()" />
+        <p-button label="+ Ajouter un bien" severity="success" [disabled]="estLectureSeule()" (onClick)="ouvrirDialogImmo()" />
       </div>
       <p-table [value]="immobilisations()?.immobilisations || []" [loading]="loadingImmo()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
@@ -1310,6 +1327,12 @@ import { TooltipModule } from 'primeng/tooltip';
     .page-sub    { font-size:12px; color:#64748b; }
     .btn-export  { background:transparent; border:1px solid #2a3f5f; color:#94a3b8; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
     .btn-export:hover { border-color:#00d4aa; color:#00d4aa; }
+    .header-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .ex-selector { display:flex; align-items:center; gap:6px; }
+    .ex-selector label { font-size:12px; color:#94a3b8; }
+    .ex-selector select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
+    .ex-selector select:hover { border-color:#00d4aa; }
+    .readonly-banner { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:14px; }
 
     /* ── Onglets primaires ── */
     .tabs-bar { display:flex; gap:3px; margin-bottom:8px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; scrollbar-color:#2a3f5f transparent; }
@@ -1437,6 +1460,24 @@ import { TooltipModule } from 'primeng/tooltip';
 export class ComptabiliteComponent implements OnInit {
   onglet         = signal('journal');
   filtreSource   = '';
+
+  // ── Sélecteur d'exercice (consultation/export des années clôturées) ──
+  // '' = année active. Une valeur = id d'un exercice (clôturé = lecture seule).
+  exercices   = signal<any[]>([]);
+  exerciceSel = signal<string>('');
+  private get exId(): string | undefined { return this.exerciceSel() || undefined; }
+  estLectureSeule = computed(() =>
+    !!this.exercices().find(e => e.id === this.exerciceSel())?.cloture);
+
+  changerExercice(id: string) {
+    this.exerciceSel.set(id || '');
+    // Recharge tous les rapports de lecture pour l'exercice choisi.
+    this.chargerJournal();
+    this.chargerGrandLivre();
+    this.chargerBalance();
+    this.chargerResultat();
+    this.chargerEtatsSynthese();
+  }
 
   readonly etafiOnglets = ['bilan', 'resultat', 'flux', 'notes'];
   isEtafiActif  = computed(() => this.etafiOnglets.includes(this.onglet()));
@@ -1768,8 +1809,7 @@ comptesCredit = [
 
   chargerJournal(source = this.filtreSource) {
     this.loadingJournal.set(true);
-    const params = source ? { source } : undefined;
-    this.compta.getJournal(params).subscribe({
+    this.compta.getJournal(this.exId, source || undefined).subscribe({
       next: res => { this.journal.set(res); this.loadingJournal.set(false); },
       error: () => this.loadingJournal.set(false),
     });
@@ -1781,20 +1821,24 @@ comptesCredit = [
   }
 
   ngOnInit() {
+    this.compta.getExercices().subscribe({
+      next: (r: any) => this.exercices.set(r?.results || r || []),
+      error: () => {},
+    });
     this.chargerJournal();
     this.chargerBalance();
     this.chargerResultat();
     this.chargerPlanComplet();
-    this.compta.getGrandLivre().subscribe({
+    this.compta.getGrandLivre(this.exId).subscribe({
       next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
       error: ()  => this.loadingGL.set(false),
     });
-    this.compta.getBilan().subscribe({
+    this.compta.getBilan(this.exId).subscribe({
       next:  res => { this.bilan.set(res); if (res?.systeme) this.systeme.set(res.systeme); },
       error: ()  => {},
     });
-    this.compta.getNotesAnnexes().subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
-    this.compta.getTableauFlux().subscribe({  next: res => this.flux.set(res),          error: () => {} });
+    this.compta.getNotesAnnexes(this.exId).subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
+    this.compta.getTableauFlux(this.exId).subscribe({  next: res => this.flux.set(res),          error: () => {} });
     this.compta.getHistorique().subscribe({   next: res => this.historique.set(res),    error: () => {} });
   }
 
@@ -1903,19 +1947,19 @@ comptesCredit = [
 
   chargerGrandLivre() {
     this.loadingGL.set(true);
-    this.compta.getGrandLivre().subscribe({
+    this.compta.getGrandLivre(this.exId).subscribe({
       next:  res => { this.grandLivre.set(res); this.loadingGL.set(false); },
       error: ()  => this.loadingGL.set(false),
     });
   }
 
   chargerEtatsSynthese() {
-    this.compta.getBilan().subscribe({
+    this.compta.getBilan(this.exId).subscribe({
       next: res => { this.bilan.set(res); if (res?.systeme) this.systeme.set(res.systeme); },
       error: () => {},
     });
-    this.compta.getTableauFlux().subscribe({  next: res => this.flux.set(res),       error: () => {} });
-    this.compta.getNotesAnnexes().subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
+    this.compta.getTableauFlux(this.exId).subscribe({  next: res => this.flux.set(res),       error: () => {} });
+    this.compta.getNotesAnnexes(this.exId).subscribe({ next: res => this.notesAnnexes.set(res), error: () => {} });
     this.compta.getHistorique().subscribe({   next: res => this.historique.set(res),  error: () => {} });
   }
 
@@ -1930,14 +1974,14 @@ comptesCredit = [
 
   chargerBalance() {
     this.loadingBalance.set(true);
-    this.compta.getBalance().subscribe({
+    this.compta.getBalance(this.exId).subscribe({
       next:  res => { this.balance.set(res); this.loadingBalance.set(false); },
       error: ()  => { this.balance.set({ lignes: [], totaux: {} }); this.loadingBalance.set(false); },
     });
   }
 
   chargerResultat() {
-    this.compta.getCompteResultat().subscribe({
+    this.compta.getCompteResultat(this.exId).subscribe({
       next:  res => this.resultat.set(res),
       error: ()  => this.resultat.set({}),
     });
@@ -1979,7 +2023,7 @@ comptesCredit = [
     }
     this.msg.add({ severity: 'info', summary: 'Génération en cours…',
                    detail: `Export ${entry.label}` });
-    this.compta.exportPDF(entry.type).subscribe({
+    this.compta.exportPDF(entry.type, this.exId).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');

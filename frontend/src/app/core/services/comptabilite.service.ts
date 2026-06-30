@@ -5,19 +5,29 @@ import { ApiService } from './api.service';
 export class ComptabiliteService {
   private api = inject(ApiService);
 
-  getJournal(params?: Record<string, string>) { return this.api.get<any[]>('/comptabilite/journal/', params); }
-  getGrandLivre()     { return this.api.get<any[]>('/comptabilite/grand-livre/'); }
-  getBalance()        { return this.api.get<any>('/comptabilite/balance/'); }
-  getCompteResultat() { return this.api.get<any>('/comptabilite/compte-resultat/'); }
-  getBilan()          { return this.api.get<any>('/comptabilite/bilan/'); }
-  getTableauFlux()    { return this.api.get<any>('/comptabilite/tableau-flux/'); }
+  // `exercice` (id) optionnel : permet de consulter/exporter une année clôturée.
+  private exParams(exercice?: string, extra?: Record<string, string>): Record<string, string> | undefined {
+    const p: Record<string, string> = { ...(extra || {}) };
+    if (exercice) p['exercice'] = exercice;
+    return Object.keys(p).length ? p : undefined;
+  }
+
+  // Liste de tous les exercices du tenant (actif + clôturés) pour le sélecteur.
+  getExercices()      { return this.api.get<any>('/paiements/exercices/'); }
+
+  getJournal(exercice?: string, source?: string) { return this.api.get<any[]>('/comptabilite/journal/', this.exParams(exercice, source ? { source } : undefined)); }
+  getGrandLivre(exercice?: string)     { return this.api.get<any[]>('/comptabilite/grand-livre/', this.exParams(exercice)); }
+  getBalance(exercice?: string)        { return this.api.get<any>('/comptabilite/balance/', this.exParams(exercice)); }
+  getCompteResultat(exercice?: string) { return this.api.get<any>('/comptabilite/compte-resultat/', this.exParams(exercice)); }
+  getBilan(exercice?: string)          { return this.api.get<any>('/comptabilite/bilan/', this.exParams(exercice)); }
+  getTableauFlux(exercice?: string)    { return this.api.get<any>('/comptabilite/tableau-flux/', this.exParams(exercice)); }
   getHistorique()     { return this.api.get<any>('/comptabilite/historique/'); }
-  getNotesAnnexes()   { return this.api.get<any>('/comptabilite/notes-annexes/'); }
+  getNotesAnnexes(exercice?: string)   { return this.api.get<any>('/comptabilite/notes-annexes/', this.exParams(exercice)); }
   getCharges()        { return this.api.get<any[]>('/comptabilite/charges/'); }
   creerCharge(data: any)      { return this.api.post<any>('/comptabilite/charges/', data); }
   supprimerCharge(id: string) { return this.api.delete(`/comptabilite/charges/${id}/`); }
   modifierCharge(id: string, data: any) { return this.api.put<any>(`/comptabilite/charges/${id}/`, data); }
-  exportPDF(type: string)     { return this.api.getBlob(`/comptabilite/export-pdf/${type}/`); }
+  exportPDF(type: string, exercice?: string) { return this.api.getBlob(`/comptabilite/export-pdf/${type}/`, this.exParams(exercice)); }
 
   // Plan comptable paramétrable
   getPlanComptable(params?: Record<string, string>) { return this.api.get<any[]>('/comptabilite/plan-comptable/', params); }

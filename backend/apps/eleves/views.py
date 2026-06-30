@@ -704,9 +704,14 @@ class ElevesListePDFView(APIView):
             return HttpResponse('xhtml2pdf non installé', status=500)
 
         tenant   = get_tenant(request)
-        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        # Honore ?exercice=<id> pour la liste d'une année clôturée ; sinon actif.
+        ex_id = request.query_params.get('exercice')
+        if ex_id:
+            exercice = Exercice.objects.filter(tenant=tenant, id=ex_id).first()
+        else:
+            exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
         if not exercice:
-            return HttpResponse('Aucun exercice actif', status=404)
+            return HttpResponse('Aucun exercice', status=404)
 
         qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice

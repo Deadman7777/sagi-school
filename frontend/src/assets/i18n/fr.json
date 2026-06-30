@@ -132,6 +132,7 @@
   },
   "eleves": {
     "title": "Élèves & Paiements",
+    "annee_cloturee": "Année clôturée — consultation des élèves et fiches en lecture seule (aucune inscription possible).",
     "nouveau": "Nouvel Élève",
     "modifier": "Modifier l'élève",
     "nom": "Nom Complet",
@@ -455,6 +456,9 @@
   "comptabilite": {
     "title": "Comptabilité SYSCOHADA",
     "subtitle": "Journal · Grand Livre · Balance · Résultat · Bilan · Flux",
+    "exercice": "Exercice",
+    "annee_active": "Année active",
+    "lecture_seule": "Exercice clôturé — consultation et export PDF uniquement (lecture seule).",
     "exporter_pdf": "Exporter PDF",
     "journal": "Journal",
     "grand_livre": "Grand Livre",

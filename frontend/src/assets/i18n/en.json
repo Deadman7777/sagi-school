@@ -132,6 +132,7 @@
   },
   "eleves": {
     "title": "Students & Payments",
+    "annee_cloturee": "Closed year — students and records are read-only (no new enrolment).",
     "nouveau": "New Student",
     "modifier": "Edit Student",
     "nom": "Full Name",
@@ -455,6 +456,9 @@
   "comptabilite": {
     "title": "SYSCOHADA Accounting",
     "subtitle": "Journal · Ledger · Balance · P&L · Balance Sheet · Cash Flow",
+    "exercice": "Financial year",
+    "annee_active": "Active year",
+    "lecture_seule": "Closed year — viewing and PDF export only (read-only).",
     "exporter_pdf": "Export PDF",
     "journal": "Journal",
     "grand_livre": "Ledger",

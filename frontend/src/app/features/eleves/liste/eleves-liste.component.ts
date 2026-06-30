@@ -50,7 +50,7 @@ interface PecForm {
                   pTooltip="Exporter la liste en PDF"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
         <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success"
-                  pTooltip="Inscrire un nouvel élève"
+                  pTooltip="Inscrire un nouvel élève" [disabled]="estAnneeCloturee()"
                   (onClick)="ouvrirDialog()" />
       </div>
     </div>
@@ -97,7 +97,16 @@ interface PecForm {
         <p-select appendTo="body" [options]="filtresAlerte" [(ngModel)]="filtreAlerte"
                   (onChange)="filtrer()" [placeholder]="'eleves.toutes_alertes' | translate"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
+        <select class="ex-select" [(ngModel)]="exerciceSel" (ngModelChange)="changerExercice()">
+          <option value="">{{ 'comptabilite.annee_active' | translate }}</option>
+          @for (ex of exercices(); track ex.id) {
+            <option [value]="ex.id">{{ ex.annee_scolaire }}{{ ex.cloture ? ' 🔒' : '' }}</option>
+          }
+        </select>
       </div>
+      @if (estAnneeCloturee()) {
+        <div class="readonly-banner-el">🔒 {{ 'eleves.annee_cloturee' | translate }}</div>
+      }
 
       <!-- Légende des alertes (repliable) -->
       <div class="alerte-aide">
@@ -637,6 +646,9 @@ interface PecForm {
 
     .filters-bar { display:flex; gap:12px; margin-bottom:16px; }
     .search-input { flex:1; }
+    .ex-select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer; }
+    .ex-select:hover { border-color:#00d4aa; }
+    .readonly-banner-el { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:16px; }
 
     .alerte-aide { margin-bottom:14px; }
     .aide-toggle { background:none; border:none; color:#94a3b8; font-size:12px; cursor:pointer; padding:2px 0; }
@@ -735,6 +747,13 @@ export class ElevesListeComponent implements OnInit {
   recherche    = '';
   filtreAlerte = '';
   filtreStatut = '';
+  // Sélecteur d'exercice : '' = année active ; sinon id d'un exercice (clôturé
+  // = consultation/fiches en lecture seule, création d'élève désactivée).
+  exercices    = signal<any[]>([]);
+  exerciceSel  = '';
+  estAnneeCloturee(): boolean {
+    return !!this.exercices().find((e: any) => e.id === this.exerciceSel)?.cloture;
+  }
   formStatut   = 'INSCRIT';
   formPEC: PecForm = this.pecFormVide();
 
@@ -806,6 +825,10 @@ export class ElevesListeComponent implements OnInit {
     this.chargerSections();
     this.chargerServices();
     this.chargerClasses();
+    this.elevesService.getExercices().subscribe({
+      next: (r: any) => this.exercices.set(r?.results || r || []),
+      error: () => {},
+    });
   }
 
   chargerClasses() {
@@ -863,9 +886,14 @@ export class ElevesListeComponent implements OnInit {
     }
   }
 
+  changerExercice() {
+    this.chargerEleves();
+  }
+
   chargerEleves() {
     this.loading.set(true);
-    this.elevesService.getEleves().subscribe({
+    const params = this.exerciceSel ? { exercice: this.exerciceSel } : undefined;
+    this.elevesService.getEleves(params).subscribe({
       next: res => {
         const data = Array.isArray(res) ? res : ((res as any).results || []);
         this.eleves.set(data);
@@ -995,6 +1023,7 @@ export class ElevesListeComponent implements OnInit {
     const params: Record<string, string> = {};
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
     if (this.filtreAlerte) params['alerte']  = this.filtreAlerte;
+    if (this.exerciceSel)  params['exercice'] = this.exerciceSel;
     this.elevesService.exporterListePDF(params).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
