@@ -74,6 +74,96 @@ import { GmrfService } from '../../core/services/gmrf.service';
         </div>
       </div>
 
+      @if (analyse(); as an) {
+        <!-- Ratios financiers -->
+        <div class="ratios">
+          <div class="ratio">
+            <span class="ratio-lbl">Taux d'endettement</span>
+            <span class="ratio-val" [class.hot]="an.ratios.taux_endettement > 70">{{ an.ratios.taux_endettement }}%</span>
+            <div class="gauge"><i [style.width.%]="min(an.ratios.taux_endettement, 100)"
+                                  [class.hot]="an.ratios.taux_endettement > 70"></i></div>
+          </div>
+          <div class="ratio">
+            <span class="ratio-lbl">Part financement externe</span>
+            <span class="ratio-val">{{ an.ratios.part_financement_externe }}%</span>
+            <div class="gauge"><i [style.width.%]="min(an.ratios.part_financement_externe, 100)"></i></div>
+          </div>
+          <div class="ratio">
+            <span class="ratio-lbl">Coût moyen de la dette</span>
+            <span class="ratio-val">{{ an.ratios.cout_dette }}%</span>
+            <span class="ratio-sub">{{ an.ratios.interets_previsionnels | number:'1.0-0' }} F d'intérêts prévus</span>
+          </div>
+          <div class="ratio">
+            <span class="ratio-lbl">Dette totale en cours</span>
+            <span class="ratio-val amber">{{ an.ratios.dette_totale | number:'1.0-0' }} F</span>
+            <span class="ratio-sub">prêts {{ an.ratios.capital_restant_prets | number:'1.0-0' }} · NATT {{ an.ratios.dette_natt | number:'1.0-0' }}</span>
+          </div>
+        </div>
+
+        <!-- Alertes -->
+        @if (an.alertes.length) {
+          <h3 class="sec">🔔 Alertes & rappels</h3>
+          <div class="alerts">
+            @for (a of an.alertes; track $index) {
+              <div class="alert" [class]="'al-' + a.niveau">
+                <span class="al-dot"></span>
+                <div class="al-body">
+                  <b>{{ a.titre }}</b>
+                  <span class="al-msg">{{ a.message }}</span>
+                </div>
+                <span class="al-montant">{{ a.montant | number:'1.0-0' }} F</span>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Graphiques -->
+        <div class="charts">
+          <!-- Répartition des ressources -->
+          <div class="chart-box">
+            <h4>Répartition des ressources mobilisées</h4>
+            @if (an.repartition.length) {
+              @for (r of an.repartition; track r.categorie) {
+                <div class="hbar">
+                  <span class="hbar-lbl">{{ r.categorie }}</span>
+                  <div class="hbar-track">
+                    <i [style.width.%]="pct(r.montant, totalRepartition())"
+                       [style.background]="couleur($index)"></i>
+                  </div>
+                  <span class="hbar-val">{{ r.montant | number:'1.0-0' }}</span>
+                </div>
+              }
+            } @else { <p class="muted center">Aucune ressource mobilisée.</p> }
+          </div>
+
+          <!-- Évolution mensuelle -->
+          <div class="chart-box">
+            <h4>Évolution mensuelle (12 mois)</h4>
+            <div class="vbars">
+              @for (m of an.evolution; track m.mois) {
+                <div class="vbar" [title]="m.mois + ' : ' + (m.montant | number:'1.0-0') + ' F'">
+                  <div class="vbar-fill teal-bg" [style.height.%]="pct(m.montant, maxOf(an.evolution))"></div>
+                  <span class="vbar-lbl">{{ m.mois }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Échéancier de remboursement -->
+        <div class="chart-box wide">
+          <h4>Échéancier de remboursement à venir (12 mois)</h4>
+          <div class="vbars">
+            @for (m of an.echeancier; track m.mois) {
+              <div class="vbar" [title]="m.mois + ' : ' + (m.montant | number:'1.0-0') + ' F'">
+                <div class="vbar-fill amber-bg" [style.height.%]="pct(m.montant, maxOf(an.echeancier))"></div>
+                <span class="vbar-lbl">{{ m.mois }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
       <h3 class="sec">⏰ Échéances à venir (30 jours)</h3>
       <p-table [value]="db.echeances_a_venir" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
@@ -528,6 +618,42 @@ import { GmrfService } from '../../core/services/gmrf.service';
     .kpi-sub { color:#64748b; font-size:11px; margin-top:4px; }
     .amber { color:#f0b429; }
     .amort-preview { margin-top:8px; }
+    /* Ratios */
+    .ratios { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:22px; }
+    .ratio { background:#111827; border:1px solid #1e2d45; border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:4px; }
+    .ratio-lbl { color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+    .ratio-val { font-size:22px; font-weight:700; color:#e8f0fe; }
+    .ratio-val.hot { color:#ef4444; } .ratio-val.amber { color:#f0b429; }
+    .ratio-sub { color:#64748b; font-size:11px; }
+    .gauge { height:6px; background:#0f1a2e; border-radius:4px; overflow:hidden; margin-top:4px; }
+    .gauge i { display:block; height:100%; background:#00d4aa; border-radius:4px; }
+    .gauge i.hot { background:#ef4444; }
+    /* Alertes */
+    .alerts { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+    .alert { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:8px; border:1px solid #1e2d45; background:#111827; }
+    .al-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .al-danger { border-color:rgba(239,68,68,.4); } .al-danger .al-dot { background:#ef4444; }
+    .al-warn { border-color:rgba(240,180,41,.4); } .al-warn .al-dot { background:#f0b429; }
+    .al-info { border-color:rgba(0,153,255,.4); } .al-info .al-dot { background:#0099ff; }
+    .al-body { flex:1; display:flex; flex-direction:column; gap:2px; }
+    .al-msg { color:#94a3b8; font-size:12px; }
+    .al-montant { font-weight:600; font-size:13px; }
+    /* Graphiques */
+    .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-bottom:16px; }
+    .chart-box { background:#111827; border:1px solid #1e2d45; border-radius:10px; padding:16px; margin-bottom:16px; }
+    .chart-box.wide { }
+    .chart-box h4 { margin:0 0 14px; font-size:13px; color:#94a3b8; font-weight:600; }
+    .hbar { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+    .hbar-lbl { width:130px; font-size:12px; color:#94a3b8; flex-shrink:0; text-align:right; }
+    .hbar-track { flex:1; background:#0f1a2e; border-radius:4px; height:14px; overflow:hidden; }
+    .hbar-track i { display:block; height:100%; border-radius:4px; min-width:2px; }
+    .hbar-val { width:90px; font-size:12px; text-align:right; flex-shrink:0; }
+    .vbars { display:flex; align-items:flex-end; gap:6px; height:150px; padding-top:8px; }
+    .vbar { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:6px; }
+    .vbar-fill { width:70%; min-height:2px; border-radius:3px 3px 0 0; transition:height .3s; }
+    .teal-bg { background:linear-gradient(180deg,#00d4aa,#008f74); }
+    .amber-bg { background:linear-gradient(180deg,#f0b429,#b8860b); }
+    .vbar-lbl { font-size:9px; color:#64748b; white-space:nowrap; }
     .sec { font-size:14px; margin:20px 0 10px; }
     .toolbar { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
     .hint, .card-org { color:#64748b; font-size:12px; }
@@ -573,6 +699,7 @@ export class GmrfComponent implements OnInit {
   tab = signal('dashboard');
 
   dashboard    = signal<any>(null);
+  analyse      = signal<any>(null);
   financements = signal<any[]>([]);
   cycles       = signal<any[]>([]);
   types        = signal<any[]>([]);
@@ -639,7 +766,10 @@ export class GmrfComponent implements OnInit {
     this.chargerPrets();
   }
 
-  chargerDashboard() { this.gmrf.getDashboard().subscribe(d => this.dashboard.set(d)); }
+  chargerDashboard() {
+    this.gmrf.getDashboard().subscribe(d => this.dashboard.set(d));
+    this.gmrf.getAnalyse().subscribe(a => this.analyse.set(a));
+  }
   chargerFinancements() { this.gmrf.getFinancements().subscribe(r => this.financements.set(r.financements || [])); }
   chargerCycles() { this.gmrf.getCycles().subscribe(r => this.cycles.set(r)); }
   chargerTypes() { this.gmrf.getTypes().subscribe(r => this.types.set(r)); }
@@ -653,6 +783,14 @@ export class GmrfComponent implements OnInit {
   natureLabel(v: string) { return this.natureOpts.find(o => o.value === v)?.label || v; }
   modeAmortLabel(v: string) { return this.modeAmortOpts.find(o => o.value === v)?.label || v; }
   totalInteretsSimule() { return this.amortSimule().reduce((s, e) => s + (e.part_interet || 0), 0); }
+
+  // ── Helpers graphiques ──
+  private palette = ['#00d4aa', '#0099ff', '#f0b429', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa'];
+  couleur(i: number) { return this.palette[i % this.palette.length]; }
+  min(a: number, b: number) { return Math.min(a, b); }
+  pct(v: number, max: number) { return max > 0 ? Math.round((v / max) * 100) : 0; }
+  maxOf(arr: any[]) { return arr.reduce((m, x) => Math.max(m, x.montant || 0), 0); }
+  totalRepartition() { return (this.analyse()?.repartition || []).reduce((s: number, r: any) => s + (r.montant || 0), 0); }
 
   // ── Financements ──
   ouvrirFinancement() {

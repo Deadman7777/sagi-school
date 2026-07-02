@@ -147,3 +147,42 @@ class GmrfComptaTest(TestCase):
         rows = services.calcul_amortissement(Decimal('1000000'), Decimal('0'), 10, 'MENSUELLE', 'CONSTANT')
         self.assertEqual(sum(r['part_interet'] for r in rows), Decimal('0'))
         self.assertEqual(sum(r['part_capital'] for r in rows), Decimal('1000000'))
+
+    # ── Analyse / retards ──────────────────────────────────────────────────
+    def test_maj_retards_bascule_echeances_depassees(self):
+        from .views import _maj_retards
+        hier = datetime.date.today() - datetime.timedelta(days=1)
+        demain = datetime.date.today() + datetime.timedelta(days=1)
+        cycle = NattCycle.objects.create(
+            tenant=self.tenant, reference='NATT-R', nom='T', nb_participants=5, duree=5,
+            montant_cotisation=Decimal('10000'), date_debut=hier)
+        c_retard = NattCotisation.objects.create(tenant=self.tenant, cycle=cycle, numero=1,
+                                                 date_echeance=hier, montant=Decimal('10000'))
+        c_ok = NattCotisation.objects.create(tenant=self.tenant, cycle=cycle, numero=2,
+                                             date_echeance=demain, montant=Decimal('10000'))
+        _maj_retards(self.tenant)
+        c_retard.refresh_from_db(); c_ok.refresh_from_db()
+        self.assertEqual(c_retard.statut, 'EN_RETARD')
+        self.assertEqual(c_ok.statut, 'A_PAYER')
+
+    def test_analyse_endpoint_ratios(self):
+        from django.test import RequestFactory
+        from .views import AnalyseGMRFView
+        tf = TypeFinancement.objects.create(tenant=self.tenant, code='DON', libelle='Don',
+                                            categorie='DON', compte_ressource='7588')
+        Financement.objects.create(tenant=self.tenant, reference='GRF-1', type_financement=tf,
+                                   libelle='Don', montant=Decimal('500000'),
+                                   date_reception=datetime.date.today(), compte_ressource='7588',
+                                   compte_tresorerie='521', statut='RECU')
+        pret = self._creer_pret('CONSTANT', montant=Decimal('1000000'), nb=12)
+        req = RequestFactory().get('/api/gmrf/analyse/')
+        req.tenant = self.tenant
+        resp = AnalyseGMRFView().get(req)
+        self.assertEqual(resp.status_code, 200)
+        r = resp.data['ratios']
+        # dette = capital restant prêt (1M, rien remboursé) ; ressources = don 500k + prêt 1M
+        self.assertEqual(r['capital_restant_prets'], 1000000)
+        self.assertEqual(r['ressources_mobilisees'], 1500000)
+        self.assertTrue(any(x['categorie'] == 'Dons' for x in resp.data['repartition']))
+        self.assertEqual(len(resp.data['evolution']), 12)
+        self.assertEqual(len(resp.data['echeancier']), 12)

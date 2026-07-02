@@ -599,12 +599,39 @@ class PretEcheanceView(APIView):
         return Response(_echeance_to_dict(e))
 
 
+# ── Retards : bascule A_PAYER -> EN_RETARD pour les échéances dépassées ───────
+def _maj_retards(tenant):
+    today = datetime.date.today()
+    NattCotisation.objects.filter(
+        tenant=tenant, statut='A_PAYER', date_echeance__lt=today).update(statut='EN_RETARD')
+    PretEcheance.objects.filter(
+        tenant=tenant, statut='A_PAYER', date_echeance__lt=today).update(statut='EN_RETARD')
+
+
+_MOIS_FR = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'aoû', 'sep', 'oct', 'nov', 'déc']
+
+
+def _mois_key(d):
+    return f"{d.year}-{d.month:02d}"
+
+
+def _mois_label(annee, mois):
+    return f"{_MOIS_FR[mois - 1]} {str(annee)[2:]}"
+
+
+def _serie_mois(depart, n):
+    """Liste ordonnée de n mois consécutifs à partir de `depart` (1er du mois)."""
+    base = depart.replace(day=1)
+    return [base + relativedelta(months=i) for i in range(n)]
+
+
 # ── Tableau de bord GMRF ─────────────────────────────────────────────────────
 class DashboardGMRFView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         tenant = get_tenant(request)
+        _maj_retards(tenant)
         fins = Financement.objects.filter(tenant=tenant)
         total_dons = sum(float(f.montant) for f in fins
                          if f.statut == 'RECU' and f.type_financement.categorie == 'DON')
@@ -660,4 +687,136 @@ class DashboardGMRFView(APIView):
                 'capital_restant_du': capital_restant,
             },
             'echeances_a_venir': echeances_a_venir[:25],
+        })
+
+
+# ── Analyse décisionnelle : ratios, graphiques, alertes ──────────────────────
+class AnalyseGMRFView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant = get_tenant(request)
+        _maj_retards(tenant)
+        today = datetime.date.today()
+
+        fins = list(Financement.objects.filter(tenant=tenant, statut='RECU').select_related('type_financement'))
+        prets = list(Pret.objects.filter(tenant=tenant).prefetch_related('echeances'))
+        cycles = list(NattCycle.objects.filter(tenant=tenant).prefetch_related('cotisations', 'reception'))
+
+        # ── Répartition des ressources par catégorie ──
+        CATS = {
+            'DON': 'Dons', 'SUBV_INVEST': "Subv. investissement", 'SUBV_EXPLOIT': "Subv. exploitation",
+            'PARTENARIAT': 'Partenariats', 'CROWDFUNDING': 'Crowdfunding',
+            'REVENU_EXCEPT': 'Revenus exceptionnels', 'AUTRE': 'Autres',
+        }
+        repartition = {k: 0.0 for k in CATS}
+        for f in fins:
+            cat = f.type_financement.categorie
+            repartition[cat if cat in repartition else 'AUTRE'] += float(f.montant)
+        # Prêts et NATT comme sources de financement mobilisées
+        total_prets = round(sum(float(p.montant) for p in prets), 2)
+        total_natt_recu = round(sum(float(c.reception.montant_recu)
+                                    for c in cycles if getattr(c, 'reception', None)), 2)
+        repartition_list = [{'categorie': lbl, 'montant': round(repartition[k], 2)}
+                            for k, lbl in CATS.items() if repartition[k] > 0]
+        if total_prets > 0:
+            repartition_list.append({'categorie': 'Prêts', 'montant': total_prets})
+        if total_natt_recu > 0:
+            repartition_list.append({'categorie': 'NATT / Tontine', 'montant': total_natt_recu})
+        repartition_list.sort(key=lambda x: -x['montant'])
+
+        total_finance_recu = round(sum(float(f.montant) for f in fins), 2)
+        ressources_mobilisees = round(total_finance_recu + total_prets + total_natt_recu, 2)
+
+        # ── Ratios financiers ──
+        capital_restant_prets = round(sum(_pret_to_dict(p)['capital_restant_du']
+                                          for p in prets if p.statut == 'EN_COURS'), 2)
+        dette_natt = round(sum(_cycle_to_dict(c)['reste_a_verser']
+                               for c in cycles if getattr(c, 'reception', None) and c.statut == 'EN_COURS'), 2)
+        dette_totale = round(capital_restant_prets + dette_natt, 2)
+        interets_previsionnels = round(sum(float(e.part_interet) for p in prets
+                                           if p.statut == 'EN_COURS' for e in p.echeances.all()), 2)
+        base = ressources_mobilisees or 1
+        ratios = {
+            'ressources_mobilisees': ressources_mobilisees,
+            'dette_totale': dette_totale,
+            'capital_restant_prets': capital_restant_prets,
+            'dette_natt': dette_natt,
+            'taux_endettement': round(100 * dette_totale / base, 1),
+            'part_financement_externe': round(100 * (total_prets + total_natt_recu) / base, 1),
+            'interets_previsionnels': interets_previsionnels,
+            'cout_dette': round(100 * interets_previsionnels / (capital_restant_prets or 1), 1),
+        }
+
+        # ── Évolution mensuelle des ressources mobilisées (12 derniers mois) ──
+        mois_passes = _serie_mois(today - relativedelta(months=11), 12)
+        evo = {_mois_key(m): 0.0 for m in mois_passes}
+        for f in fins:
+            if f.date_reception and _mois_key(f.date_reception) in evo:
+                evo[_mois_key(f.date_reception)] += float(f.montant)
+        for p in prets:
+            if _mois_key(p.date_deblocage) in evo:
+                evo[_mois_key(p.date_deblocage)] += float(p.montant)
+        for c in cycles:
+            r = getattr(c, 'reception', None)
+            if r and _mois_key(r.date_reception) in evo:
+                evo[_mois_key(r.date_reception)] += float(r.montant_recu)
+        evolution = [{'mois': _mois_label(m.year, m.month), 'montant': round(evo[_mois_key(m)], 2)}
+                     for m in mois_passes]
+
+        # ── Échéancier de remboursement à venir (12 prochains mois) ──
+        mois_futurs = _serie_mois(today, 12)
+        ech = {_mois_key(m): 0.0 for m in mois_futurs}
+        for p in prets:
+            for e in p.echeances.all():
+                if e.statut != 'PAYE' and _mois_key(e.date_echeance) in ech:
+                    ech[_mois_key(e.date_echeance)] += float(e.montant_echeance)
+        for c in cycles:
+            for co in c.cotisations.all():
+                if co.statut != 'PAYE' and _mois_key(co.date_echeance) in ech:
+                    ech[_mois_key(co.date_echeance)] += float(co.montant)
+        echeancier = [{'mois': _mois_label(m.year, m.month), 'montant': round(ech[_mois_key(m)], 2)}
+                      for m in mois_futurs]
+
+        # ── Alertes ──
+        alertes = []
+        seuil = today + datetime.timedelta(days=7)
+        for co in NattCotisation.objects.filter(
+                tenant=tenant, statut__in=['A_PAYER', 'EN_RETARD'],
+                date_echeance__lte=seuil).select_related('cycle').order_by('date_echeance'):
+            retard = co.date_echeance < today
+            alertes.append({
+                'niveau': 'danger' if retard else 'warn', 'type': 'NATT',
+                'titre': f"Cotisation {co.cycle.nom}",
+                'message': f"Échéance #{co.numero} {'en retard depuis' if retard else 'à payer'} le {co.date_echeance:%d/%m/%Y}",
+                'montant': float(co.montant), 'date': str(co.date_echeance),
+            })
+        for e in PretEcheance.objects.filter(
+                tenant=tenant, statut__in=['A_PAYER', 'EN_RETARD'],
+                date_echeance__lte=seuil).select_related('pret').order_by('date_echeance'):
+            retard = e.date_echeance < today
+            alertes.append({
+                'niveau': 'danger' if retard else 'warn', 'type': 'PRET',
+                'titre': f"Prêt {e.pret.organisme_preteur}",
+                'message': f"Échéance #{e.numero} {'en retard depuis' if retard else 'à régler'} le {e.date_echeance:%d/%m/%Y}",
+                'montant': float(e.montant_echeance), 'date': str(e.date_echeance),
+            })
+        # Financements promis anciens (> 60 jours) non encaissés
+        limite = today - datetime.timedelta(days=60)
+        for f in Financement.objects.filter(tenant=tenant, statut='ATTENDU').select_related('type_financement'):
+            if f.date_reception and f.date_reception < limite:
+                alertes.append({
+                    'niveau': 'info', 'type': 'FINANCEMENT',
+                    'titre': f"{f.type_financement.libelle} attendu",
+                    'message': f"{f.libelle} promis mais non encaissé depuis le {f.date_reception:%d/%m/%Y}",
+                    'montant': float(f.montant), 'date': str(f.date_reception),
+                })
+        alertes.sort(key=lambda a: (a['niveau'] != 'danger', a['date']))
+
+        return Response({
+            'ratios': ratios,
+            'repartition': repartition_list,
+            'evolution': evolution,
+            'echeancier': echeancier,
+            'alertes': alertes,
         })

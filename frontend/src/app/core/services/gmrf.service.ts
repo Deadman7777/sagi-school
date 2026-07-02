@@ -7,6 +7,7 @@ export class GmrfService {
 
   // Tableau de bord décisionnel
   getDashboard() { return this.api.get<any>('/gmrf/dashboard/'); }
+  getAnalyse()   { return this.api.get<any>('/gmrf/analyse/'); }
 
   // Types de financement (paramétrables)
   getTypes()                        { return this.api.get<any[]>('/gmrf/types/'); }
