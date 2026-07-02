@@ -184,6 +184,7 @@ export class ShellComponent {
       { labelKey: 'nav.fiscal',       icon: '📋', route: '/fiscal' },
       { labelKey: 'nav.academique', icon: '📚', route: '/academique' },
       { labelKey: 'nav.rh', icon: '👥', route: '/rh' },
+      { labelKey: 'nav.gmrf', icon: '🏦', route: '/gmrf' },
       { labelKey: 'nav.suivi',        icon: '📅', route: '/suivi-mensuel' },
     ]},
     { labelKey: 'nav.systeme', items: [
@@ -229,7 +230,7 @@ export class ShellComponent {
     const acces: Record<string, string[]> = {
       'ADMIN_ECOLE':     ['*'],
       'ADMIN_RH':        ['/dashboard', '/rh'],
-      'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal', '/paiements', '/suivi-mensuel'],
+      'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal', '/paiements', '/suivi-mensuel', '/gmrf'],
       'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
       'LECTEUR':         ['/dashboard'],
     };
@@ -269,6 +270,7 @@ export class ShellComponent {
       '/paiements':    'nav.paiements',
       '/comptabilite': 'nav.comptabilite',
       '/rh': 'nav.rh',
+      '/gmrf': 'nav.gmrf',
       '/fiscal':       'nav.fiscal',
       '/suivi-mensuel': 'nav.suivi',
       '/licences':     'nav.licences',

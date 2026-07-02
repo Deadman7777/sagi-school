@@ -18,6 +18,7 @@ urlpatterns = [
     path('api/rh/', include('apps.rh.urls')),
     path('api/academique/', include('apps.academique.urls')),
     path('api/daara/',      include('apps.daara.urls')),
+    path('api/gmrf/',       include('apps.gmrf.urls')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):
