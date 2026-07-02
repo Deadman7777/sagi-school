@@ -1,0 +1,78 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Fiche de Prêt — Tableau d'Amortissement{% endblock %}
+{% block content %}
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
+  Prêt {{ pret.reference }} — {{ pret.organisme_preteur }}
+</h2>
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; {{ pret.type_label }}
+</p>
+
+<!-- Caractéristiques -->
+<table class="school-band" cellspacing="0">
+  <tr>
+    <td><div class="sb-label">Montant emprunté</div><div class="sb-value">{{ pret.montant|floatformat:0 }} {{ pret.devise }}</div></td>
+    <td><div class="sb-label">Taux annuel</div><div class="sb-value">{{ pret.taux_interet }} %</div></td>
+    <td><div class="sb-label">Durée</div><div class="sb-value">{{ pret.duree_mois }} mois</div></td>
+    <td><div class="sb-label">Déblocage</div><div class="sb-value">{{ pret.date_deblocage }}</div></td>
+  </tr>
+</table>
+
+<!-- Synthèse -->
+<table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
+  <tr>
+    <td><div class="kb-label">Capital remboursé</div><div class="kb-val kb-green">{{ pret.capital_rembourse|floatformat:0 }}</div></td>
+    <td><div class="kb-label">Capital restant dû</div><div class="kb-val" style="color:#f59e0b">{{ pret.capital_restant_du|floatformat:0 }}</div></td>
+    <td><div class="kb-label">Total intérêts</div><div class="kb-val kb-blue">{{ pret.total_interets|floatformat:0 }}</div></td>
+    <td><div class="kb-label">Coût total du crédit</div><div class="kb-val kb-teal">{{ pret.cout_total_credit|floatformat:0 }}</div></td>
+  </tr>
+</table>
+
+{% if pret.garanties %}
+<p style="font-size:11px;color:#374151;margin-bottom:10px"><strong>Garanties :</strong> {{ pret.garanties }}</p>
+{% endif %}
+
+<div class="section-title">Tableau d'amortissement</div>
+<table cellspacing="0" cellpadding="5">
+  <thead>
+    <tr>
+      <th style="width:35px">N°</th>
+      <th style="width:70px">Échéance</th>
+      <th class="text-right">Capital dû</th>
+      <th class="text-right">Mensualité</th>
+      <th class="text-right">Capital</th>
+      <th class="text-right">Intérêts</th>
+      <th class="text-right">Restant dû</th>
+      <th style="width:55px">Statut</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in echeances %}
+    <tr{% if e.statut == 'PAYE' %} style="color:#6b7280"{% endif %}>
+      <td class="bold">{{ e.numero }}</td>
+      <td style="font-size:11px">{{ e.date_echeance }}</td>
+      <td class="text-right">{{ e.capital_debut|floatformat:0 }}</td>
+      <td class="text-right bold">{{ e.montant_echeance|floatformat:0 }}</td>
+      <td class="text-right">{{ e.part_capital|floatformat:0 }}</td>
+      <td class="text-right blue">{{ e.part_interet|floatformat:0 }}</td>
+      <td class="text-right">{{ e.capital_fin|floatformat:0 }}</td>
+      <td style="text-align:center;font-size:10px">
+        {% if e.statut == 'PAYE' %}<span style="background:#d1fae5;padding:2px 4px;border-radius:3px">Payée</span>
+        {% elif e.statut == 'EN_RETARD' %}<span style="background:#fee2e2;padding:2px 4px;border-radius:3px">Retard</span>
+        {% else %}<span style="background:#fef3c7;padding:2px 4px;border-radius:3px">À payer</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3"><strong>TOTAL</strong></td>
+      <td class="text-right"><strong>{{ pret.cout_total_credit|floatformat:0 }}</strong></td>
+      <td class="text-right"><strong>{{ pret.montant|floatformat:0 }}</strong></td>
+      <td class="text-right blue"><strong>{{ pret.total_interets|floatformat:0 }}</strong></td>
+      <td colspan="2"></td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

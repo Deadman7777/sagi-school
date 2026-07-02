@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, OnInit, computed, inject, signal
+  ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, inject, signal
 } from '@angular/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +31,8 @@ import { GmrfService } from '../../core/services/gmrf.service';
   providers: [MessageService],
   template: `
 <p-toast />
+<input #fileInput type="file" hidden
+       accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" (change)="onFichierChoisi($event)" />
 <div class="gmrf">
   <header class="head">
     <div>
@@ -271,9 +273,12 @@ import { GmrfService } from '../../core/services/gmrf.service';
             <h2>{{ c.nom }} <small class="muted">{{ c.reference }}</small></h2>
             <div class="muted">{{ c.organisateur }} · {{ modeLabel(c.mode_attribution) }} · cagnotte {{ c.montant_cagnotte | number:'1.0-0' }} F</div>
           </div>
-          @if (!c.cagnotte_recue && c.statut === 'EN_COURS') {
-            <button class="btn primary" (click)="ouvrirReception(c)">💰 Recevoir la cagnotte</button>
-          }
+          <div class="head-actions">
+            <button class="btn ghost sm" (click)="telechargerPdfNatt(c)">📄 PDF</button>
+            @if (!c.cagnotte_recue && c.statut === 'EN_COURS') {
+              <button class="btn primary" (click)="ouvrirReception(c)">💰 Recevoir la cagnotte</button>
+            }
+          </div>
         </div>
 
         <div class="suivi-grid">
@@ -311,6 +316,24 @@ import { GmrfService } from '../../core/services/gmrf.service';
             </tr>
           </ng-template>
         </p-table>
+
+        <!-- Documents joints -->
+        <div class="docs">
+          <div class="docs-head">
+            <h4>📎 Documents joints</h4>
+            <button class="btn xs" (click)="choisirFichier('natt', c.id)">+ Ajouter</button>
+          </div>
+          @if (c.documents?.length) {
+            <div class="doc-list">
+              @for (d of c.documents; track $index) {
+                <div class="doc-chip">
+                  <a (click)="telechargerDoc(d)">📄 {{ d.nom }}</a>
+                  <button class="doc-del" (click)="supprimerDoc('natt', c.id, $index)">✕</button>
+                </div>
+              }
+            </div>
+          } @else { <p class="muted" style="font-size:12px">Aucun document.</p> }
+        </div>
       }
     }
   }
@@ -350,6 +373,9 @@ import { GmrfService } from '../../core/services/gmrf.service';
             <h2>{{ p.organisme_preteur }} <small class="muted">{{ p.reference }}</small></h2>
             <div class="muted">{{ p.type_label }} · {{ modeAmortLabel(p.mode_amortissement) }} · {{ p.taux_interet }}% / an</div>
           </div>
+          <div class="head-actions">
+            <button class="btn ghost sm" (click)="telechargerPdfPret(p)">📄 PDF</button>
+          </div>
         </div>
         <div class="suivi-grid">
           <div class="suivi-box"><span>Capital emprunté</span><b>{{ p.montant | number:'1.0-0' }} F</b></div>
@@ -385,6 +411,24 @@ import { GmrfService } from '../../core/services/gmrf.service';
             </tr>
           </ng-template>
         </p-table>
+
+        <!-- Documents joints -->
+        <div class="docs">
+          <div class="docs-head">
+            <h4>📎 Documents contractuels</h4>
+            <button class="btn xs" (click)="choisirFichier('pret', p.id)">+ Ajouter</button>
+          </div>
+          @if (p.documents?.length) {
+            <div class="doc-list">
+              @for (d of p.documents; track $index) {
+                <div class="doc-chip">
+                  <a (click)="telechargerDoc(d)">📄 {{ d.nom }}</a>
+                  <button class="doc-del" (click)="supprimerDoc('pret', p.id, $index)">✕</button>
+                </div>
+              }
+            </div>
+          } @else { <p class="muted" style="font-size:12px">Aucun document.</p> }
+        </div>
       }
     }
   }
@@ -654,6 +698,17 @@ import { GmrfService } from '../../core/services/gmrf.service';
     .teal-bg { background:linear-gradient(180deg,#00d4aa,#008f74); }
     .amber-bg { background:linear-gradient(180deg,#f0b429,#b8860b); }
     .vbar-lbl { font-size:9px; color:#64748b; white-space:nowrap; }
+    .head-actions { display:flex; gap:8px; align-items:center; }
+    /* Documents */
+    .docs { margin-top:18px; background:#111827; border:1px solid #1e2d45; border-radius:10px; padding:14px 16px; }
+    .docs-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .docs-head h4 { margin:0; font-size:13px; color:#94a3b8; }
+    .doc-list { display:flex; flex-wrap:wrap; gap:8px; }
+    .doc-chip { display:flex; align-items:center; gap:6px; background:#0f1a2e; border:1px solid #1e2d45; border-radius:20px; padding:4px 6px 4px 12px; }
+    .doc-chip a { color:#00d4aa; cursor:pointer; font-size:12px; text-decoration:none; }
+    .doc-chip a:hover { text-decoration:underline; }
+    .doc-del { background:transparent; border:none; color:#64748b; cursor:pointer; font-size:12px; padding:0 4px; }
+    .doc-del:hover { color:#ef4444; }
     .sec { font-size:14px; margin:20px 0 10px; }
     .toolbar { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
     .hint, .card-org { color:#64748b; font-size:12px; }
@@ -688,6 +743,9 @@ import { GmrfService } from '../../core/services/gmrf.service';
 export class GmrfComponent implements OnInit {
   private gmrf = inject(GmrfService);
   private msg  = inject(MessageService);
+
+  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
+  private docCible: { type: string; id: string } | null = null;
 
   tabs = [
     { id: 'dashboard',    icon: '📊', label: 'Tableau de bord' },
@@ -912,6 +970,66 @@ export class GmrfComponent implements OnInit {
       next: () => { this.ok('Échéance annulée'); this.rafraichirPret(); this.chargerPrets(); this.chargerDashboard(); },
       error: e => this.err(e),
     });
+  }
+
+  // ── PDF ──
+  telechargerPdfNatt(c: any) {
+    this.gmrf.getNattPdf(c.id).subscribe({
+      next: b => this.telechargerBlob(b, `natt_${c.reference}.pdf`),
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF' }),
+    });
+  }
+  telechargerPdfPret(p: any) {
+    this.gmrf.getPretPdf(p.id).subscribe({
+      next: b => this.telechargerBlob(b, `pret_${p.reference}.pdf`),
+      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF' }),
+    });
+  }
+  private telechargerBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Documents joints ──
+  choisirFichier(type: string, id: string) {
+    this.docCible = { type, id };
+    this.fileInput.nativeElement.value = '';
+    this.fileInput.nativeElement.click();
+  }
+  onFichierChoisi(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !this.docCible) return;
+    if (file.size > 4_000_000) { this.err({ error: { error: 'Fichier trop volumineux (max 4 Mo)' } }); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const cible = this.docCible!;
+      this.gmrf.ajouterDocument(cible.type, cible.id, { nom: file.name, data: reader.result as string })
+        .subscribe({
+          next: () => { this.ok('Document ajouté'); this.rafraichirApres(cible.type); },
+          error: e => this.err(e),
+        });
+    };
+    reader.readAsDataURL(file);
+  }
+  telechargerDoc(d: any) {
+    if (!d?.data) return;
+    const link = document.createElement('a');
+    link.href = d.data; link.download = d.nom || 'document';
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  }
+  supprimerDoc(type: string, id: string, index: number) {
+    this.gmrf.supprimerDocument(type, id, index).subscribe({
+      next: () => { this.ok('Document supprimé'); this.rafraichirApres(type); },
+      error: e => this.err(e),
+    });
+  }
+  private rafraichirApres(type: string) {
+    if (type === 'natt') this.rafraichirDetail();
+    else if (type === 'pret') this.rafraichirPret();
   }
 
   private toIso(d: any): string {

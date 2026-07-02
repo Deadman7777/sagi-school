@@ -186,3 +186,43 @@ class GmrfComptaTest(TestCase):
         self.assertTrue(any(x['categorie'] == 'Dons' for x in resp.data['repartition']))
         self.assertEqual(len(resp.data['evolution']), 12)
         self.assertEqual(len(resp.data['echeancier']), 12)
+
+    # ── PDF & documents ────────────────────────────────────────────────────
+    def test_pdf_pret_et_natt(self):
+        from django.test import RequestFactory
+        from .pdf_views import PretPDFView, NattPDFView
+        pret = self._creer_pret('CONSTANT', nb=6)
+        cycle = NattCycle.objects.create(
+            tenant=self.tenant, reference='NATT-PDF', nom='Tontine', nb_participants=5, duree=5,
+            montant_cotisation=Decimal('20000'), date_debut=datetime.date(2025, 11, 1))
+        NattCotisation.objects.create(tenant=self.tenant, cycle=cycle, numero=1,
+                                      date_echeance=datetime.date(2025, 11, 1), montant=Decimal('20000'))
+        rf = RequestFactory()
+        for view, pk in [(PretPDFView(), pret.id), (NattPDFView(), cycle.id)]:
+            req = rf.get('/pdf/'); req.tenant = self.tenant
+            resp = view.get(req, pk)
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp['Content-Type'], 'application/pdf')
+            self.assertTrue(resp.content[:4] == b'%PDF')
+
+    def test_documents_ajout_suppression(self):
+        from django.test import RequestFactory
+        from .views import DocumentsView
+        pret = self._creer_pret('IN_FINE', nb=3)
+        f = RequestFactory()
+        view = DocumentsView()
+        # Ajout
+        req = f.post('/x/'); req.tenant = self.tenant
+        req.data = {'nom': 'contrat.pdf', 'data': 'data:application/pdf;base64,AAAA'}
+        resp = view.post(req, 'pret', pret.id)
+        self.assertEqual(resp.status_code, 201)
+        pret.refresh_from_db()
+        self.assertEqual(len(pret.documents), 1)
+        self.assertEqual(pret.documents[0]['nom'], 'contrat.pdf')
+        # Suppression
+        req2 = f.delete('/x/?index=0'); req2.tenant = self.tenant
+        req2.query_params = {'index': '0'}
+        resp2 = view.delete(req2, 'pret', pret.id)
+        self.assertEqual(resp2.status_code, 200)
+        pret.refresh_from_db()
+        self.assertEqual(len(pret.documents), 0)

@@ -268,6 +268,7 @@ def _cycle_to_dict(cycle, detail=False):
     }
     if detail:
         data['cotisations'] = [_cotis_to_dict(c) for c in cotis]
+        data['documents'] = cycle.documents or []
         data['reception'] = ({
             'id': str(reception.id), 'numero_echeance': reception.numero_echeance,
             'date_reception': str(reception.date_reception),
@@ -456,6 +457,7 @@ def _pret_to_dict(pret, detail=False):
     }
     if detail:
         data['echeances'] = [_echeance_to_dict(e) for e in echs]
+        data['documents'] = pret.documents or []
     return data
 
 
@@ -597,6 +599,65 @@ class PretEcheanceView(APIView):
             return Response({'error': 'Action invalide pour ce statut'}, status=400)
         log_audit(request, 'MODIFICATION', 'PretEcheance', e.id, action)
         return Response(_echeance_to_dict(e))
+
+
+# ── Documents joints (base64) sur les entités GMRF ───────────────────────────
+class DocumentsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    MODELS = {'financement': Financement, 'natt': NattCycle, 'pret': Pret}
+    MAX_DOCS = 15
+    MAX_TAILLE = 6_000_000  # ~6 Mo par document (base64)
+
+    def _get(self, request, type, pk):
+        model = self.MODELS.get(type)
+        if not model:
+            return None, Response({'error': 'Type inconnu'}, status=400)
+        try:
+            return model.objects.get(tenant=get_tenant(request), id=pk), None
+        except model.DoesNotExist:
+            return None, Response({'error': 'Non trouvé'}, status=404)
+
+    def post(self, request, type, pk):
+        """Ajoute un document {nom, data} (data = data URI base64)."""
+        obj, err = self._get(request, type, pk)
+        if err:
+            return err
+        nom = (request.data.get('nom') or 'document').strip()[:120]
+        data = request.data.get('data') or ''
+        if not data.startswith('data:'):
+            return Response({'error': 'Format de fichier invalide'}, status=400)
+        if len(data) > self.MAX_TAILLE:
+            return Response({'error': 'Fichier trop volumineux (max ~4 Mo)'}, status=400)
+        docs = list(obj.documents or [])
+        if len(docs) >= self.MAX_DOCS:
+            return Response({'error': f'Maximum {self.MAX_DOCS} documents'}, status=400)
+        docs.append({'nom': nom, 'data': data})
+        obj.documents = docs
+        obj.save(update_fields=['documents', 'updated_at'])
+        log_audit(request, 'MODIFICATION', model_name(obj), obj.id, f'+ document {nom}')
+        return Response({'documents': [{'nom': d.get('nom')} for d in docs]}, status=201)
+
+    def delete(self, request, type, pk):
+        """Supprime le document à l'index ?index=."""
+        obj, err = self._get(request, type, pk)
+        if err:
+            return err
+        try:
+            idx = int(request.query_params.get('index'))
+        except (TypeError, ValueError):
+            return Response({'error': 'Index invalide'}, status=400)
+        docs = list(obj.documents or [])
+        if not 0 <= idx < len(docs):
+            return Response({'error': 'Index hors limites'}, status=400)
+        docs.pop(idx)
+        obj.documents = docs
+        obj.save(update_fields=['documents', 'updated_at'])
+        return Response({'documents': [{'nom': d.get('nom')} for d in docs]})
+
+
+def model_name(obj):
+    return obj.__class__.__name__
 
 
 # ── Retards : bascule A_PAYER -> EN_RETARD pour les échéances dépassées ───────

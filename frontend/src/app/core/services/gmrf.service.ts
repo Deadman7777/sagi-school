@@ -33,4 +33,12 @@ export class GmrfService {
   creerPret(data: any)              { return this.api.post<any>('/gmrf/prets/', data); }
   simulerAmortissement(data: any)   { return this.api.post<any>('/gmrf/prets/', { ...data, action: 'simuler' }); }
   actionEcheance(id: string, data: any) { return this.api.patch<any>(`/gmrf/echeances/${id}/`, data); }
+
+  // PDF
+  getPretPdf(id: string)            { return this.api.getBlob(`/gmrf/prets/${id}/pdf/`); }
+  getNattPdf(id: string)            { return this.api.getBlob(`/gmrf/natt/${id}/pdf/`); }
+
+  // Documents joints
+  ajouterDocument(type: string, id: string, doc: any) { return this.api.post<any>(`/gmrf/documents/${type}/${id}/`, doc); }
+  supprimerDocument(type: string, id: string, index: number) { return this.api.delete<any>(`/gmrf/documents/${type}/${id}/?index=${index}`); }
 }
