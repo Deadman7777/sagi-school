@@ -1,0 +1,76 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Fiche NATT / Tontine — Tableau de Suivi{% endblock %}
+{% block content %}
+<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
+  NATT {{ natt.reference }} — {{ natt.nom }}
+</h2>
+<p style="color:#374151;font-size:12px;margin-bottom:14px">
+  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
+  &mdash; Organisateur : {{ natt.organisateur|default:"—" }}
+</p>
+
+<table class="school-band" cellspacing="0">
+  <tr>
+    <td><div class="sb-label">Cotisation</div><div class="sb-value">{{ natt.montant_cotisation|floatformat:0 }} {{ natt.devise }}</div></td>
+    <td><div class="sb-label">Participants</div><div class="sb-value">{{ natt.nb_participants }}</div></td>
+    <td><div class="sb-label">Durée</div><div class="sb-value">{{ natt.duree }} échéances</div></td>
+    <td><div class="sb-label">Cagnotte</div><div class="sb-value">{{ natt.montant_cagnotte|floatformat:0 }}</div></td>
+  </tr>
+</table>
+
+<table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
+  <tr>
+    <td><div class="kb-label">Cotisations payées</div><div class="kb-val kb-teal">{{ natt.nb_cotisations_payees }} / {{ natt.duree }}</div></td>
+    <td><div class="kb-label">Total versé</div><div class="kb-val kb-blue">{{ natt.total_verse|floatformat:0 }}</div></td>
+    <td><div class="kb-label">Reste à verser</div><div class="kb-val" style="color:#f59e0b">{{ natt.reste_a_verser|floatformat:0 }}</div></td>
+    <td><div class="kb-label">Montant reçu</div><div class="kb-val kb-green">{{ natt.montant_recu|floatformat:0 }}</div></td>
+  </tr>
+</table>
+
+{% if reception %}
+<p style="font-size:11px;color:#065f46;background:#ecfdf5;padding:8px 12px;border-radius:6px;margin-bottom:12px">
+  <strong>Cagnotte reçue</strong> à l'échéance #{{ reception.numero_echeance }} le {{ reception.date_reception }} —
+  {{ reception.montant_recu|floatformat:0 }} {{ natt.devise }}
+  (créance soldée {{ reception.montant_creance_soldee|floatformat:0 }}, dette envers le groupe {{ reception.montant_dette|floatformat:0 }}).
+</p>
+{% endif %}
+
+<div class="section-title">Suivi des cotisations</div>
+<table cellspacing="0" cellpadding="5">
+  <thead>
+    <tr>
+      <th style="width:45px">Éch.</th>
+      <th style="width:90px">Date</th>
+      <th class="text-right">Montant</th>
+      <th style="width:90px">Date paiement</th>
+      <th style="width:70px">Statut</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in cotisations %}
+    <tr{% if c.statut == 'PAYE' %} style="color:#6b7280"{% endif %}>
+      <td class="bold">{{ c.numero }}{% if reception and reception.numero_echeance == c.numero %} ★{% endif %}</td>
+      <td style="font-size:11px">{{ c.date_echeance }}</td>
+      <td class="text-right bold">{{ c.montant|floatformat:0 }}</td>
+      <td style="font-size:11px">{{ c.date_paiement|default:"—" }}</td>
+      <td style="text-align:center;font-size:10px">
+        {% if c.statut == 'PAYE' %}<span style="background:#d1fae5;padding:2px 4px;border-radius:3px">Payée</span>
+        {% elif c.statut == 'EN_RETARD' %}<span style="background:#fee2e2;padding:2px 4px;border-radius:3px">Retard</span>
+        {% else %}<span style="background:#fef3c7;padding:2px 4px;border-radius:3px">À payer</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="2"><strong>TOTAL VERSÉ</strong></td>
+      <td class="text-right"><strong>{{ natt.total_verse|floatformat:0 }}</strong></td>
+      <td colspan="2"></td>
+    </tr>
+  </tfoot>
+</table>
+<p style="font-size:10px;color:#6b7280;margin-top:8px">
+  ★ échéance à laquelle l'établissement a perçu la cagnotte. Le NATT est un
+  financement temporaire : ni charge ni produit, soldé en fin de cycle.
+</p>
+{% endblock %}
