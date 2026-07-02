@@ -8,7 +8,8 @@ from django.db.models import Sum
 from apps.tenants.models import Tenant
 from apps.paiements.models import Exercice
 from apps.comptabilite.models import JournalEntry
-from .models import NattCycle, NattCotisation, NattReception, TypeFinancement, Financement
+from .models import (NattCycle, NattCotisation, NattReception, TypeFinancement,
+                     Financement, Pret, PretEcheance)
 from . import services
 
 
@@ -94,3 +95,55 @@ class GmrfComptaTest(TestCase):
         services.annuler_ecriture_financement(f, self.tenant)
         self.assertEqual(self._solde('521'), 0)
         self.assertEqual(self._solde('7588'), 0)
+
+    # ── Prêts ──────────────────────────────────────────────────────────────
+    def _creer_pret(self, mode, taux=Decimal('12'), montant=Decimal('1200000'), nb=12):
+        pret = Pret.objects.create(
+            tenant=self.tenant, reference=f'PRET-{mode[:4]}', type_pret='BANCAIRE',
+            organisme_preteur='Banque X', montant=montant, taux_interet=taux,
+            duree_mois=nb, periodicite='MENSUELLE', mode_amortissement=mode,
+            date_deblocage=datetime.date(2025, 11, 1),
+            compte_tresorerie='521', compte_emprunt='162', compte_interets='671',
+        )
+        rows = services.calcul_amortissement(montant, taux, nb, 'MENSUELLE', mode)
+        PretEcheance.objects.bulk_create([
+            PretEcheance(tenant=self.tenant, pret=pret, numero=r['numero'],
+                         date_echeance=datetime.date(2025, 12, 1),
+                         capital_debut=r['capital_debut'], montant_echeance=r['montant_echeance'],
+                         part_capital=r['part_capital'], part_interet=r['part_interet'],
+                         capital_fin=r['capital_fin'])
+            for r in rows
+        ])
+        return pret
+
+    def test_amortissement_somme_capital_egale_montant(self):
+        for mode in ('CONSTANT', 'CAPITAL_CONSTANT', 'IN_FINE'):
+            rows = services.calcul_amortissement(Decimal('1200000'), Decimal('12'), 12, 'MENSUELLE', mode)
+            total_cap = sum(r['part_capital'] for r in rows)
+            self.assertEqual(total_cap, Decimal('1200000'), f"mode {mode}")
+            self.assertEqual(rows[-1]['capital_fin'], Decimal('0'), f"mode {mode}")
+
+    def test_pret_deblocage_et_remboursement_complet(self):
+        pret = self._creer_pret('CONSTANT')
+        services.generer_ecriture_deblocage_pret(pret, self.tenant)
+        # Déblocage : trésorerie +1.2M, emprunt crédité 1.2M
+        self.assertEqual(self._solde('521'), Decimal('1200000'))
+        self.assertEqual(self._solde('162'), Decimal('-1200000'))
+
+        total_interets = sum(e.part_interet for e in pret.echeances.all())
+        for e in pret.echeances.all():
+            e.statut = 'PAYE'; e.date_paiement = datetime.date(2026, 1, 1); e.save()
+            services.generer_ecriture_echeance(e, self.tenant)
+
+        # Emprunt soldé, intérêts en charge, trésorerie = -(intérêts) net
+        self.assertEqual(self._solde('162'), 0)                       # capital remboursé
+        self.assertEqual(self._solde('671'), total_interets)          # charge d'intérêts (débit)
+        self.assertEqual(self._solde('521'), -total_interets)         # +1.2M -1.2M capital -intérêts
+        # Équilibre général
+        agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(d=Sum('debit'), c=Sum('credit'))
+        self.assertEqual(agg['d'], agg['c'])
+
+    def test_pret_taux_zero(self):
+        rows = services.calcul_amortissement(Decimal('1000000'), Decimal('0'), 10, 'MENSUELLE', 'CONSTANT')
+        self.assertEqual(sum(r['part_interet'] for r in rows), Decimal('0'))
+        self.assertEqual(sum(r['part_capital'] for r in rows), Decimal('1000000'))

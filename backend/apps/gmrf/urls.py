@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (TypeFinancementView, FinancementView, NattCycleView,
-                    NattCotisationView, NattReceptionView, DashboardGMRFView)
+                    NattCotisationView, NattReceptionView, DashboardGMRFView,
+                    PretView, PretEcheanceView)
 
 urlpatterns = [
     path('dashboard/',                DashboardGMRFView.as_view()),
@@ -12,4 +13,7 @@ urlpatterns = [
     path('natt/<uuid:pk>/',           NattCycleView.as_view()),
     path('natt/<uuid:pk>/reception/', NattReceptionView.as_view()),
     path('cotisations/<uuid:pk>/',    NattCotisationView.as_view()),
+    path('prets/',                    PretView.as_view()),
+    path('prets/<uuid:pk>/',          PretView.as_view()),
+    path('echeances/<uuid:pk>/',      PretEcheanceView.as_view()),
 ]

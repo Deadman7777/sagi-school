@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from core.tenant import get_tenant
 from core.models import log_audit
 from .models import (TypeFinancement, Financement, NattCycle,
-                     NattCotisation, NattReception)
+                     NattCotisation, NattReception, Pret, PretEcheance)
 from . import services
 
 
@@ -406,6 +406,199 @@ class NattReceptionView(APIView):
         return Response(_cycle_to_dict(cycle, detail=True), status=201)
 
 
+# ── Prêts ────────────────────────────────────────────────────────────────────
+_PRET_PERIODE_DELTA = {
+    'MENSUELLE':     relativedelta(months=1),
+    'TRIMESTRIELLE': relativedelta(months=3),
+    'SEMESTRIELLE':  relativedelta(months=6),
+    'ANNUELLE':      relativedelta(years=1),
+}
+
+
+def _echeance_to_dict(e):
+    return {
+        'id': str(e.id), 'numero': e.numero, 'date_echeance': str(e.date_echeance),
+        'capital_debut': float(e.capital_debut), 'montant_echeance': float(e.montant_echeance),
+        'part_capital': float(e.part_capital), 'part_interet': float(e.part_interet),
+        'capital_fin': float(e.capital_fin), 'penalite': float(e.penalite),
+        'statut': e.statut, 'date_paiement': str(e.date_paiement) if e.date_paiement else None,
+    }
+
+
+def _pret_to_dict(pret, detail=False):
+    echs = list(pret.echeances.all())
+    payees = [e for e in echs if e.statut == 'PAYE']
+    capital_rembourse = sum(float(e.part_capital) for e in payees)
+    interets_payes = sum(float(e.part_interet) for e in payees)
+    capital_restant = round(float(pret.montant) - capital_rembourse, 2)
+    total_interets = sum(float(e.part_interet) for e in echs)
+    data = {
+        'id': str(pret.id), 'reference': pret.reference, 'type_pret': pret.type_pret,
+        'type_label': pret.get_type_pret_display(), 'organisme_preteur': pret.organisme_preteur,
+        'objet': pret.objet, 'montant': float(pret.montant), 'devise': pret.devise,
+        'taux_interet': float(pret.taux_interet), 'duree_mois': pret.duree_mois,
+        'periodicite': pret.periodicite, 'mode_amortissement': pret.mode_amortissement,
+        'date_deblocage': str(pret.date_deblocage),
+        'frais_dossier': float(pret.frais_dossier),
+        'compte_tresorerie': pret.compte_tresorerie, 'compte_emprunt': pret.compte_emprunt,
+        'compte_interets': pret.compte_interets, 'compte_frais': pret.compte_frais,
+        'compte_penalites': pret.compte_penalites,
+        'garanties': pret.garanties, 'observations': pret.observations, 'statut': pret.statut,
+        'nb_echeances': pret.nb_echeances,
+        # Synthèse
+        'nb_echeances_payees': len(payees),
+        'capital_rembourse': round(capital_rembourse, 2),
+        'capital_restant_du': capital_restant,
+        'interets_payes': round(interets_payes, 2),
+        'total_interets': round(total_interets, 2),
+        'cout_total_credit': round(float(pret.montant) + total_interets + float(pret.frais_dossier), 2),
+        'pourcentage_rembourse': round(100 * capital_rembourse / float(pret.montant), 1) if pret.montant else 0,
+    }
+    if detail:
+        data['echeances'] = [_echeance_to_dict(e) for e in echs]
+    return data
+
+
+class PretView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk=None):
+        tenant = get_tenant(request)
+        if pk:
+            try:
+                pret = Pret.objects.prefetch_related('echeances').get(tenant=tenant, id=pk)
+                return Response(_pret_to_dict(pret, detail=True))
+            except Pret.DoesNotExist:
+                return Response({'error': 'Non trouvé'}, status=404)
+        qs = Pret.objects.filter(tenant=tenant).prefetch_related('echeances')
+        lignes = [_pret_to_dict(p) for p in qs]
+        return Response({
+            'prets': lignes,
+            'synthese': {
+                'nombre': len(lignes),
+                'capital_emprunte': round(sum(l['montant'] for l in lignes), 2),
+                'capital_restant_du': round(sum(l['capital_restant_du'] for l in lignes
+                                                 if l['statut'] == 'EN_COURS'), 2),
+            },
+        })
+
+    def post(self, request):
+        """Simulation du tableau d'amortissement sans enregistrement (aperçu)."""
+        d = request.data
+        if d.get('action') != 'simuler':
+            return self._creer(request)
+        rows = services.calcul_amortissement(
+            d.get('montant', 0), d.get('taux_interet', 0),
+            self._nb(d), d.get('periodicite', 'MENSUELLE'),
+            d.get('mode_amortissement', 'CONSTANT'))
+        return Response({'echeances': [{k: float(v) if k != 'numero' else v
+                                        for k, v in r.items()} for r in rows]})
+
+    @staticmethod
+    def _nb(d):
+        mois_par_periode = {'MENSUELLE': 1, 'TRIMESTRIELLE': 3, 'SEMESTRIELLE': 6, 'ANNUELLE': 12}
+        pas = mois_par_periode.get(d.get('periodicite', 'MENSUELLE'), 1)
+        try:
+            return max(1, round(int(d.get('duree_mois', 0)) / pas))
+        except (TypeError, ValueError):
+            return 0
+
+    @transaction.atomic
+    def _creer(self, request):
+        tenant = get_tenant(request)
+        d = request.data
+        montant = _d(d.get('montant'))
+        try:
+            duree = int(d.get('duree_mois'))
+        except (TypeError, ValueError):
+            return Response({'error': 'Durée invalide'}, status=400)
+        if montant is None or montant <= 0 or duree <= 0:
+            return Response({'error': 'Montant et durée doivent être > 0'}, status=400)
+        if not d.get('organisme_preteur'):
+            return Response({'error': 'Organisme prêteur requis'}, status=400)
+        date_deblocage = d.get('date_deblocage')
+        if not date_deblocage:
+            return Response({'error': 'Date de déblocage requise'}, status=400)
+
+        periodicite = d.get('periodicite', 'MENSUELLE')
+        pret = Pret.objects.create(
+            tenant=tenant, reference=_next_ref(tenant, Pret, 'PRET'),
+            type_pret=d.get('type_pret', 'BANCAIRE'),
+            organisme_preteur=d.get('organisme_preteur', '').strip(),
+            objet=d.get('objet', ''), montant=montant, devise=d.get('devise', 'XOF'),
+            taux_interet=_d(d.get('taux_interet', 0)), duree_mois=duree,
+            periodicite=periodicite, mode_amortissement=d.get('mode_amortissement', 'CONSTANT'),
+            date_deblocage=date_deblocage,
+            date_premiere_echeance=d.get('date_premiere_echeance') or None,
+            frais_dossier=_d(d.get('frais_dossier', 0)),
+            compte_tresorerie=d.get('compte_tresorerie', '521'),
+            compte_emprunt=d.get('compte_emprunt', '162'),
+            compte_interets=d.get('compte_interets', '671'),
+            compte_frais=d.get('compte_frais', '6312'),
+            compte_penalites=d.get('compte_penalites', '6718'),
+            garanties=d.get('garanties', ''), observations=d.get('observations', ''),
+            documents=d.get('documents', []),
+        )
+
+        # Tableau d'amortissement + dates
+        delta = _PRET_PERIODE_DELTA.get(periodicite, _PRET_PERIODE_DELTA['MENSUELLE'])
+        d0 = datetime.date.fromisoformat(str(pret.date_premiere_echeance or date_deblocage))
+        rows = services.calcul_amortissement(montant, pret.taux_interet, pret.nb_echeances,
+                                             periodicite, pret.mode_amortissement)
+        PretEcheance.objects.bulk_create([
+            PretEcheance(tenant=tenant, pret=pret, numero=r['numero'],
+                         date_echeance=d0 + delta * (r['numero'] - 1),
+                         capital_debut=r['capital_debut'], montant_echeance=r['montant_echeance'],
+                         part_capital=r['part_capital'], part_interet=r['part_interet'],
+                         capital_fin=r['capital_fin'])
+            for r in rows
+        ])
+        # Déblocage des fonds
+        services.generer_ecriture_deblocage_pret(pret, tenant)
+        log_audit(request, 'CREATION', 'Pret', pret.id, pret.organisme_preteur)
+        pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
+        return Response(_pret_to_dict(pret, detail=True), status=201)
+
+
+class PretEcheanceView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        """Payer / annuler une échéance de prêt."""
+        tenant = get_tenant(request)
+        try:
+            e = PretEcheance.objects.select_related('pret').get(tenant=tenant, id=pk)
+        except PretEcheance.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+
+        action = request.data.get('action')
+        if action == 'payer' and e.statut != 'PAYE':
+            penalite = _d(request.data.get('penalite', 0)) or Decimal('0')
+            e.penalite = penalite
+            e.statut = 'PAYE'
+            e.date_paiement = request.data.get('date_paiement') or datetime.date.today()
+            e.save()
+            services.generer_ecriture_echeance(e, tenant)
+            # Prêt soldé ?
+            if not e.pret.echeances.exclude(statut='PAYE').exists():
+                e.pret.statut = 'SOLDE'
+                e.pret.save(update_fields=['statut', 'updated_at'])
+        elif action == 'annuler' and e.statut == 'PAYE':
+            services.annuler_ecriture_echeance(e, tenant)
+            e.statut = 'A_PAYER'
+            e.date_paiement = None
+            e.penalite = 0
+            e.save()
+            if e.pret.statut == 'SOLDE':
+                e.pret.statut = 'EN_COURS'
+                e.pret.save(update_fields=['statut', 'updated_at'])
+        else:
+            return Response({'error': 'Action invalide pour ce statut'}, status=400)
+        log_audit(request, 'MODIFICATION', 'PretEcheance', e.id, action)
+        return Response(_echeance_to_dict(e))
+
+
 # ── Tableau de bord GMRF ─────────────────────────────────────────────────────
 class DashboardGMRFView(APIView):
     permission_classes = [IsAuthenticated]
@@ -422,12 +615,32 @@ class DashboardGMRFView(APIView):
         cycles = NattCycle.objects.filter(tenant=tenant).prefetch_related('cotisations', 'reception')
         natt_en_cours = [c for c in cycles if c.statut == 'EN_COURS']
 
-        # Échéances de cotisation à venir (30 jours)
-        horizon = datetime.date.today() + datetime.timedelta(days=30)
-        echeances = NattCotisation.objects.filter(
-            tenant=tenant, statut__in=['A_PAYER', 'EN_RETARD'],
-            date_echeance__lte=horizon,
+        # Prêts
+        prets = Pret.objects.filter(tenant=tenant).prefetch_related('echeances')
+        prets_en_cours = [p for p in prets if p.statut == 'EN_COURS']
+        capital_restant = round(sum(_pret_to_dict(p)['capital_restant_du'] for p in prets_en_cours), 2)
+        montant_emprunte = round(sum(float(p.montant) for p in prets), 2)
+
+        # Échéances à venir (30 jours) : cotisations NATT + échéances de prêt
+        today = datetime.date.today()
+        horizon = today + datetime.timedelta(days=30)
+        cotis = NattCotisation.objects.filter(
+            tenant=tenant, statut__in=['A_PAYER', 'EN_RETARD'], date_echeance__lte=horizon,
         ).select_related('cycle').order_by('date_echeance')[:20]
+        pret_echs = PretEcheance.objects.filter(
+            tenant=tenant, statut__in=['A_PAYER', 'EN_RETARD'], date_echeance__lte=horizon,
+        ).select_related('pret').order_by('date_echeance')[:20]
+
+        echeances_a_venir = [{
+            'type': 'NATT', 'reference': e.cycle.reference, 'nom': e.cycle.nom,
+            'numero': e.numero, 'date_echeance': str(e.date_echeance),
+            'montant': float(e.montant), 'en_retard': e.date_echeance < today,
+        } for e in cotis] + [{
+            'type': 'PRET', 'reference': e.pret.reference, 'nom': e.pret.organisme_preteur,
+            'numero': e.numero, 'date_echeance': str(e.date_echeance),
+            'montant': float(e.montant_echeance), 'en_retard': e.date_echeance < today,
+        } for e in pret_echs]
+        echeances_a_venir.sort(key=lambda x: x['date_echeance'])
 
         return Response({
             'ressources': {
@@ -441,10 +654,10 @@ class DashboardGMRFView(APIView):
                 'total_verse': round(sum(_cycle_to_dict(c)['total_verse'] for c in natt_en_cours), 2),
                 'total_recu': round(sum(_cycle_to_dict(c)['montant_recu'] for c in natt_en_cours), 2),
             },
-            'echeances_a_venir': [{
-                'cycle': e.cycle.reference, 'nom': e.cycle.nom,
-                'numero': e.numero, 'date_echeance': str(e.date_echeance),
-                'montant': float(e.montant),
-                'en_retard': e.date_echeance < datetime.date.today(),
-            } for e in echeances],
+            'prets': {
+                'nombre_en_cours': len(prets_en_cours),
+                'montant_emprunte': montant_emprunte,
+                'capital_restant_du': capital_restant,
+            },
+            'echeances_a_venir': echeances_a_venir[:25],
         })

@@ -229,3 +229,108 @@ class NattReception(TenantModel):
 
     def __str__(self):
         return f"{self.cycle.reference} — réception échéance {self.numero_echeance}"
+
+
+# ── Prêts (bancaires, institutionnels, microfinance, gouvernementaux…) ───────
+class Pret(TenantModel):
+    """Financement remboursable avec échéancier et tableau d'amortissement.
+
+    Comptabilisation automatique :
+      • déblocage      : D compte_tresorerie / C compte_emprunt (16x)
+      • remboursement  : D compte_emprunt (part capital) + D compte_interets
+                         (part intérêts) / C trésorerie ; pénalité éventuelle en
+                         charge financière.
+    Tous les comptes sont paramétrables."""
+
+    TYPE_CHOICES = [
+        ('BANCAIRE',          'Prêt bancaire'),
+        ('INSTITUTIONNEL',    'Prêt institutionnel'),
+        ('MICROFINANCE',      'Prêt de microfinance'),
+        ('GOUVERNEMENTAL',    'Prêt gouvernemental'),
+        ('CREDIT_FOURNISSEUR', 'Crédit fournisseur'),
+        ('AUTRE',             'Autre prêt'),
+    ]
+    PERIODICITE_CHOICES = [
+        ('MENSUELLE',     'Mensuelle'),
+        ('TRIMESTRIELLE', 'Trimestrielle'),
+        ('SEMESTRIELLE',  'Semestrielle'),
+        ('ANNUELLE',      'Annuelle'),
+    ]
+    MODE_CHOICES = [
+        ('CONSTANT',         'Échéances constantes (annuités constantes)'),
+        ('CAPITAL_CONSTANT', 'Amortissement constant du capital'),
+        ('IN_FINE',          'In fine (capital remboursé à la fin)'),
+    ]
+    STATUT_CHOICES = [
+        ('EN_COURS', 'En cours'),
+        ('SOLDE',    'Soldé'),
+        ('ANNULE',   'Annulé'),
+    ]
+
+    reference        = models.CharField(max_length=30)
+    type_pret        = models.CharField(max_length=20, choices=TYPE_CHOICES, default='BANCAIRE')
+    organisme_preteur = models.CharField(max_length=200)
+    objet            = models.CharField(max_length=200, blank=True, default='')
+    montant          = models.DecimalField(max_digits=15, decimal_places=2)  # capital emprunté
+    devise           = models.CharField(max_length=5, default='XOF')
+    taux_interet     = models.DecimalField(max_digits=6, decimal_places=3, default=0)  # annuel %
+    duree_mois       = models.IntegerField()
+    periodicite      = models.CharField(max_length=15, choices=PERIODICITE_CHOICES, default='MENSUELLE')
+    mode_amortissement = models.CharField(max_length=18, choices=MODE_CHOICES, default='CONSTANT')
+    date_deblocage   = models.DateField()
+    date_premiere_echeance = models.DateField(null=True, blank=True)
+    frais_dossier    = models.DecimalField(max_digits=13, decimal_places=2, default=0)
+    # Comptes paramétrables
+    compte_tresorerie = models.CharField(max_length=10, default='521')
+    compte_emprunt    = models.CharField(max_length=10, default='162')   # emprunts et dettes
+    compte_interets   = models.CharField(max_length=10, default='671')   # intérêts des emprunts
+    compte_frais      = models.CharField(max_length=10, default='6312')  # frais sur emprunts
+    compte_penalites  = models.CharField(max_length=10, default='6718')  # autres charges financières
+    garanties        = models.TextField(blank=True, default='')
+    observations     = models.TextField(blank=True, default='')
+    documents        = models.JSONField(default=list, blank=True)
+    statut           = models.CharField(max_length=10, choices=STATUT_CHOICES, default='EN_COURS')
+
+    class Meta:
+        db_table = 'gmrf_prets'
+        unique_together = ['tenant', 'reference']
+        ordering = ['-date_deblocage', 'reference']
+
+    def __str__(self):
+        return f"{self.reference} — {self.organisme_preteur}"
+
+    @property
+    def nb_echeances(self):
+        mois_par_periode = {'MENSUELLE': 1, 'TRIMESTRIELLE': 3, 'SEMESTRIELLE': 6, 'ANNUELLE': 12}
+        pas = mois_par_periode.get(self.periodicite, 1)
+        return max(1, round(self.duree_mois / pas))
+
+
+class PretEcheance(TenantModel):
+    """Ligne du tableau d'amortissement d'un prêt."""
+
+    STATUT_CHOICES = [
+        ('A_PAYER',   'À payer'),
+        ('PAYE',      'Payée'),
+        ('EN_RETARD', 'En retard'),
+    ]
+
+    pret          = models.ForeignKey(Pret, on_delete=models.CASCADE, related_name='echeances')
+    numero        = models.IntegerField()
+    date_echeance = models.DateField()
+    capital_debut = models.DecimalField(max_digits=15, decimal_places=2)  # capital restant dû avant
+    montant_echeance = models.DecimalField(max_digits=15, decimal_places=2)
+    part_capital  = models.DecimalField(max_digits=15, decimal_places=2)
+    part_interet  = models.DecimalField(max_digits=15, decimal_places=2)
+    capital_fin   = models.DecimalField(max_digits=15, decimal_places=2)   # capital restant dû après
+    penalite      = models.DecimalField(max_digits=13, decimal_places=2, default=0)
+    statut        = models.CharField(max_length=10, choices=STATUT_CHOICES, default='A_PAYER')
+    date_paiement = models.DateField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'gmrf_pret_echeances'
+        unique_together = ['tenant', 'pret', 'numero']
+        ordering = ['pret', 'numero']
+
+    def __str__(self):
+        return f"{self.pret.reference} — échéance {self.numero}"

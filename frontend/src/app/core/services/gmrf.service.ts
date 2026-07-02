@@ -25,4 +25,11 @@ export class GmrfService {
   creerCycle(data: any)             { return this.api.post<any>('/gmrf/natt/', data); }
   recevoirCagnotte(cycleId: string, data: any) { return this.api.post<any>(`/gmrf/natt/${cycleId}/reception/`, data); }
   actionCotisation(id: string, data: any)      { return this.api.patch<any>(`/gmrf/cotisations/${id}/`, data); }
+
+  // Prêts
+  getPrets()                        { return this.api.get<any>('/gmrf/prets/'); }
+  getPret(id: string)               { return this.api.get<any>(`/gmrf/prets/${id}/`); }
+  creerPret(data: any)              { return this.api.post<any>('/gmrf/prets/', data); }
+  simulerAmortissement(data: any)   { return this.api.post<any>('/gmrf/prets/', { ...data, action: 'simuler' }); }
+  actionEcheance(id: string, data: any) { return this.api.patch<any>(`/gmrf/echeances/${id}/`, data); }
 }

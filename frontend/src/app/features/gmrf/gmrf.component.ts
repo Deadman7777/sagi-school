@@ -67,16 +67,25 @@ import { GmrfService } from '../../core/services/gmrf.service';
           <div class="kpi-label">NATT en cours</div>
           <div class="kpi-value blue">{{ db.natt.nombre_en_cours }}</div>
         </div>
+        <div class="kpi">
+          <div class="kpi-label">Capital prêts restant dû</div>
+          <div class="kpi-value amber">{{ db.prets.capital_restant_du | number:'1.0-0' }} <small>F</small></div>
+          <div class="kpi-sub">{{ db.prets.nombre_en_cours }} prêt(s) en cours</div>
+        </div>
       </div>
 
       <h3 class="sec">⏰ Échéances à venir (30 jours)</h3>
       <p-table [value]="db.echeances_a_venir" styleClass="p-datatable-sm">
         <ng-template pTemplate="header">
-          <tr><th>NATT</th><th>Échéance</th><th>Date</th><th class="r">Montant</th><th>Statut</th></tr>
+          <tr><th>Type</th><th>Origine</th><th>Échéance</th><th>Date</th><th class="r">Montant</th><th>Statut</th></tr>
         </ng-template>
         <ng-template pTemplate="body" let-e>
           <tr>
-            <td>{{ e.nom }} <small class="muted">({{ e.cycle }})</small></td>
+            <td>
+              @if (e.type === 'PRET') { <p-tag severity="contrast" value="Prêt" /> }
+              @else { <p-tag severity="info" value="NATT" /> }
+            </td>
+            <td>{{ e.nom }} <small class="muted">({{ e.reference }})</small></td>
             <td>#{{ e.numero }}</td>
             <td>{{ e.date_echeance | date:'dd/MM/yyyy' }}</td>
             <td class="r">{{ e.montant | number:'1.0-0' }} F</td>
@@ -87,7 +96,7 @@ import { GmrfService } from '../../core/services/gmrf.service';
           </tr>
         </ng-template>
         <ng-template pTemplate="emptymessage">
-          <tr><td colspan="5" class="muted center">Aucune échéance imminente</td></tr>
+          <tr><td colspan="6" class="muted center">Aucune échéance imminente</td></tr>
         </ng-template>
       </p-table>
     }
@@ -208,6 +217,80 @@ import { GmrfService } from '../../core/services/gmrf.service';
                 } @else {
                   <button class="btn xs ghost" (click)="annulerCotisation(co)">Annuler</button>
                 }
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      }
+    }
+  }
+
+  <!-- ══ PRÊTS ══ -->
+  @if (tab() === 'prets') {
+    @if (!pretActif()) {
+      <div class="toolbar">
+        <button class="btn primary" (click)="ouvrirPret()">+ Nouveau prêt</button>
+      </div>
+      <div class="cards">
+        @for (p of prets(); track p.id) {
+          <button class="card" (click)="ouvrirDetailPret(p.id)">
+            <div class="card-top">
+              <strong>{{ p.organisme_preteur }}</strong>
+              <p-tag [severity]="p.statut === 'EN_COURS' ? 'info' : (p.statut === 'SOLDE' ? 'success' : 'secondary')" [value]="p.statut" />
+            </div>
+            <div class="card-org">{{ p.type_label }} · {{ p.reference }}</div>
+            <div class="card-line">
+              <span>{{ p.montant | number:'1.0-0' }} F</span>
+              <span>{{ p.taux_interet }}% · {{ p.duree_mois }} mois</span>
+            </div>
+            <p-progressBar [value]="p.pourcentage_rembourse" [showValue]="true" />
+            <div class="card-line muted">
+              <span>Restant dû : {{ p.capital_restant_du | number:'1.0-0' }} F</span>
+              <span>{{ p.nb_echeances_payees }}/{{ p.nb_echeances }} éch.</span>
+            </div>
+          </button>
+        }
+        @if (!prets().length) { <div class="empty">Aucun prêt enregistré.</div> }
+      </div>
+    } @else {
+      @if (pretActif(); as p) {
+        <button class="btn ghost sm" (click)="pretActif.set(null)">← Retour</button>
+        <div class="detail-head">
+          <div>
+            <h2>{{ p.organisme_preteur }} <small class="muted">{{ p.reference }}</small></h2>
+            <div class="muted">{{ p.type_label }} · {{ modeAmortLabel(p.mode_amortissement) }} · {{ p.taux_interet }}% / an</div>
+          </div>
+        </div>
+        <div class="suivi-grid">
+          <div class="suivi-box"><span>Capital emprunté</span><b>{{ p.montant | number:'1.0-0' }} F</b></div>
+          <div class="suivi-box"><span>Capital restant dû</span><b class="amber">{{ p.capital_restant_du | number:'1.0-0' }} F</b></div>
+          <div class="suivi-box"><span>Intérêts payés</span><b>{{ p.interets_payes | number:'1.0-0' }} F</b></div>
+          <div class="suivi-box"><span>Coût total du crédit</span><b>{{ p.cout_total_credit | number:'1.0-0' }} F</b></div>
+        </div>
+
+        <p-table [value]="p.echeances" styleClass="p-datatable-sm" [scrollable]="true" scrollHeight="440px">
+          <ng-template pTemplate="header">
+            <tr><th>N°</th><th>Date</th><th class="r">Capital dû</th><th class="r">Échéance</th>
+                <th class="r">Capital</th><th class="r">Intérêts</th><th>Statut</th><th></th></tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-e>
+            <tr>
+              <td>#{{ e.numero }}</td>
+              <td>{{ e.date_echeance | date:'dd/MM/yyyy' }}</td>
+              <td class="r">{{ e.capital_debut | number:'1.0-0' }}</td>
+              <td class="r"><b>{{ e.montant_echeance | number:'1.0-0' }}</b></td>
+              <td class="r">{{ e.part_capital | number:'1.0-0' }}</td>
+              <td class="r muted">{{ e.part_interet | number:'1.0-0' }}</td>
+              <td>
+                @switch (e.statut) {
+                  @case ('PAYE')      { <p-tag severity="success" value="Payée" /> }
+                  @case ('EN_RETARD') { <p-tag severity="danger" value="En retard" /> }
+                  @default            { <p-tag severity="warn" value="À payer" /> }
+                }
+              </td>
+              <td class="r">
+                @if (e.statut !== 'PAYE') { <button class="btn xs" (click)="ouvrirPaiementEcheance(e)">Payer</button> }
+                @else { <button class="btn xs ghost" (click)="annulerEcheance(e)">Annuler</button> }
               </td>
             </tr>
           </ng-template>
@@ -345,6 +428,88 @@ import { GmrfService } from '../../core/services/gmrf.service';
     <button class="btn primary" (click)="enregistrerType()">Enregistrer</button>
   </ng-template>
 </p-dialog>
+
+<!-- Nouveau prêt -->
+<p-dialog [(visible)]="dlgPret" [modal]="true" header="Nouveau prêt" [style]="{width:'720px'}">
+  <div class="form">
+    <div class="row">
+      <div><label>Organisme prêteur</label><input pInputText [(ngModel)]="pret.organisme_preteur" /></div>
+      <div><label>Type de prêt</label>
+        <p-select [options]="typePretOpts" optionLabel="label" optionValue="value" [(ngModel)]="pret.type_pret" appendTo="body" /></div>
+    </div>
+    <label>Objet du prêt</label>
+    <input pInputText [(ngModel)]="pret.objet" />
+    <div class="row">
+      <div><label>Montant (F)</label><p-inputNumber [(ngModel)]="pret.montant" [min]="0" (ngModelChange)="simuler()" /></div>
+      <div><label>Taux annuel (%)</label><p-inputNumber [(ngModel)]="pret.taux_interet" [min]="0" [maxFractionDigits]="3" (ngModelChange)="simuler()" /></div>
+      <div><label>Durée (mois)</label><p-inputNumber [(ngModel)]="pret.duree_mois" [min]="1" (ngModelChange)="simuler()" /></div>
+    </div>
+    <div class="row">
+      <div><label>Périodicité</label>
+        <p-select [options]="pretPeriodeOpts" optionLabel="label" optionValue="value" [(ngModel)]="pret.periodicite" (ngModelChange)="simuler()" appendTo="body" /></div>
+      <div><label>Amortissement</label>
+        <p-select [options]="modeAmortOpts" optionLabel="label" optionValue="value" [(ngModel)]="pret.mode_amortissement" (ngModelChange)="simuler()" appendTo="body" /></div>
+      <div><label>Frais de dossier (F)</label><p-inputNumber [(ngModel)]="pret.frais_dossier" [min]="0" /></div>
+    </div>
+    <div class="row">
+      <div><label>Date de déblocage</label><p-datepicker [(ngModel)]="pret.date_deblocage" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>1ʳᵉ échéance (option)</label><p-datepicker [(ngModel)]="pret.date_premiere_echeance" dateFormat="dd/mm/yy" appendTo="body" /></div>
+    </div>
+    <div class="row">
+      <div><label>Compte trésorerie</label><input pInputText [(ngModel)]="pret.compte_tresorerie" /></div>
+      <div><label>Compte emprunt (16x)</label><input pInputText [(ngModel)]="pret.compte_emprunt" /></div>
+      <div><label>Compte intérêts</label><input pInputText [(ngModel)]="pret.compte_interets" /></div>
+    </div>
+    <label>Garanties</label>
+    <textarea pTextarea [(ngModel)]="pret.garanties" rows="2"></textarea>
+
+    @if (amortSimule().length) {
+      <div class="calc">
+        Aperçu — échéance : <b>{{ amortSimule()[0].montant_echeance | number:'1.0-0' }} F</b> ·
+        total intérêts : <b>{{ totalInteretsSimule() | number:'1.0-0' }} F</b> ·
+        {{ amortSimule().length }} échéances
+      </div>
+      <div class="amort-preview">
+        <p-table [value]="amortSimule()" styleClass="p-datatable-sm" [scrollable]="true" scrollHeight="200px">
+          <ng-template pTemplate="header">
+            <tr><th>N°</th><th class="r">Échéance</th><th class="r">Capital</th><th class="r">Intérêts</th><th class="r">Restant dû</th></tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-e>
+            <tr>
+              <td>#{{ e.numero }}</td>
+              <td class="r">{{ e.montant_echeance | number:'1.0-0' }}</td>
+              <td class="r">{{ e.part_capital | number:'1.0-0' }}</td>
+              <td class="r muted">{{ e.part_interet | number:'1.0-0' }}</td>
+              <td class="r">{{ e.capital_fin | number:'1.0-0' }}</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
+    }
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="btn ghost" (click)="dlgPret.set(false)">Annuler</button>
+    <button class="btn primary" (click)="enregistrerPret()">Créer + débloquer les fonds</button>
+  </ng-template>
+</p-dialog>
+
+<!-- Paiement d'échéance de prêt -->
+<p-dialog [(visible)]="dlgEcheance" [modal]="true" header="Régler l'échéance" [style]="{width:'420px'}">
+  <div class="form">
+    <div class="calc">
+      Échéance #{{ echeanceEdit.numero }} — capital {{ echeanceEdit.part_capital | number:'1.0-0' }} F +
+      intérêts {{ echeanceEdit.part_interet | number:'1.0-0' }} F
+    </div>
+    <label>Date de paiement</label>
+    <p-datepicker [(ngModel)]="echeanceEdit.date_paiement" dateFormat="dd/mm/yy" appendTo="body" />
+    <label>Pénalité de retard (F) — optionnel</label>
+    <p-inputNumber [(ngModel)]="echeanceEdit.penalite" [min]="0" />
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="btn ghost" (click)="dlgEcheance.set(false)">Annuler</button>
+    <button class="btn primary" (click)="payerEcheance()">Régler</button>
+  </ng-template>
+</p-dialog>
   `,
   styles: [`
     .gmrf { color:#e8f0fe; }
@@ -359,7 +524,10 @@ import { GmrfService } from '../../core/services/gmrf.service';
     .kpi-label { color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:1px; }
     .kpi-value { font-size:24px; font-weight:700; margin-top:6px; }
     .kpi-value small { font-size:13px; color:#64748b; }
-    .kpi-value.teal { color:#00d4aa; } .kpi-value.blue { color:#0099ff; }
+    .kpi-value.teal { color:#00d4aa; } .kpi-value.blue { color:#0099ff; } .kpi-value.amber { color:#f0b429; }
+    .kpi-sub { color:#64748b; font-size:11px; margin-top:4px; }
+    .amber { color:#f0b429; }
+    .amort-preview { margin-top:8px; }
     .sec { font-size:14px; margin:20px 0 10px; }
     .toolbar { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
     .hint, .card-org { color:#64748b; font-size:12px; }
@@ -399,6 +567,7 @@ export class GmrfComponent implements OnInit {
     { id: 'dashboard',    icon: '📊', label: 'Tableau de bord' },
     { id: 'financements', icon: '💠', label: 'Financements' },
     { id: 'natt',         icon: '🤝', label: 'NATT / Tontine' },
+    { id: 'prets',        icon: '🏛️', label: 'Prêts' },
     { id: 'params',       icon: '⚙️', label: 'Paramètres' },
   ];
   tab = signal('dashboard');
@@ -408,13 +577,19 @@ export class GmrfComponent implements OnInit {
   cycles       = signal<any[]>([]);
   types        = signal<any[]>([]);
   cycleActif   = signal<any>(null);
+  prets        = signal<any[]>([]);
+  pretActif    = signal<any>(null);
+  amortSimule  = signal<any[]>([]);
 
   dlgFin = signal(false); dlgCycle = signal(false); dlgRecep = signal(false); dlgType = signal(false);
+  dlgPret = signal(false); dlgEcheance = signal(false);
 
   fin: any = {};
   cyc: any = {};
   recep: any = {};
   typeEdit: any = {};
+  pret: any = {};
+  echeanceEdit: any = {};
   private receptionCycleId = '';
 
   statutFinOpts = [{ label: 'Reçu', value: 'RECU' }, { label: 'Attendu', value: 'ATTENDU' }];
@@ -441,18 +616,34 @@ export class GmrfComponent implements OnInit {
     { label: 'Produit', value: 'PRODUIT' }, { label: 'Capitaux propres', value: 'CAPITAUX' },
     { label: 'Dette / financement', value: 'DETTE' },
   ];
+  typePretOpts = [
+    { label: 'Prêt bancaire', value: 'BANCAIRE' }, { label: 'Prêt institutionnel', value: 'INSTITUTIONNEL' },
+    { label: 'Microfinance', value: 'MICROFINANCE' }, { label: 'Prêt gouvernemental', value: 'GOUVERNEMENTAL' },
+    { label: 'Crédit fournisseur', value: 'CREDIT_FOURNISSEUR' }, { label: 'Autre', value: 'AUTRE' },
+  ];
+  pretPeriodeOpts = [
+    { label: 'Mensuelle', value: 'MENSUELLE' }, { label: 'Trimestrielle', value: 'TRIMESTRIELLE' },
+    { label: 'Semestrielle', value: 'SEMESTRIELLE' }, { label: 'Annuelle', value: 'ANNUELLE' },
+  ];
+  modeAmortOpts = [
+    { label: 'Échéances constantes', value: 'CONSTANT' },
+    { label: 'Amortissement constant', value: 'CAPITAL_CONSTANT' },
+    { label: 'In fine', value: 'IN_FINE' },
+  ];
 
   ngOnInit() {
     this.chargerDashboard();
     this.chargerFinancements();
     this.chargerCycles();
     this.chargerTypes();
+    this.chargerPrets();
   }
 
   chargerDashboard() { this.gmrf.getDashboard().subscribe(d => this.dashboard.set(d)); }
   chargerFinancements() { this.gmrf.getFinancements().subscribe(r => this.financements.set(r.financements || [])); }
   chargerCycles() { this.gmrf.getCycles().subscribe(r => this.cycles.set(r)); }
   chargerTypes() { this.gmrf.getTypes().subscribe(r => this.types.set(r)); }
+  chargerPrets() { this.gmrf.getPrets().subscribe(r => this.prets.set(r.prets || [])); }
 
   private ok(m: string) { this.msg.add({ severity: 'success', summary: m }); }
   private err(e: any) { this.msg.add({ severity: 'error', summary: e?.error?.error || 'Erreur' }); }
@@ -460,6 +651,8 @@ export class GmrfComponent implements OnInit {
   periodeLabel(v: string) { return this.periodeOpts.find(o => o.value === v)?.label || v; }
   modeLabel(v: string) { return this.modeOpts.find(o => o.value === v)?.label || v; }
   natureLabel(v: string) { return this.natureOpts.find(o => o.value === v)?.label || v; }
+  modeAmortLabel(v: string) { return this.modeAmortOpts.find(o => o.value === v)?.label || v; }
+  totalInteretsSimule() { return this.amortSimule().reduce((s, e) => s + (e.part_interet || 0), 0); }
 
   // ── Financements ──
   ouvrirFinancement() {
@@ -535,6 +728,52 @@ export class GmrfComponent implements OnInit {
       ? this.gmrf.modifierType(this.typeEdit.id, this.typeEdit)
       : this.gmrf.creerType(this.typeEdit);
     obs.subscribe({ next: () => { this.dlgType.set(false); this.ok('Type enregistré'); this.chargerTypes(); }, error: e => this.err(e) });
+  }
+
+  // ── Prêts ──
+  ouvrirPret() {
+    this.pret = { type_pret: 'BANCAIRE', montant: 0, taux_interet: 0, duree_mois: 12,
+                  periodicite: 'MENSUELLE', mode_amortissement: 'CONSTANT', frais_dossier: 0,
+                  date_deblocage: new Date(), date_premiere_echeance: null,
+                  compte_tresorerie: '521', compte_emprunt: '162', compte_interets: '671' };
+    this.amortSimule.set([]);
+    this.dlgPret.set(true);
+  }
+  simuler() {
+    const { montant, taux_interet, duree_mois, periodicite, mode_amortissement } = this.pret;
+    if (!montant || !duree_mois) { this.amortSimule.set([]); return; }
+    this.gmrf.simulerAmortissement({ montant, taux_interet, duree_mois, periodicite, mode_amortissement })
+      .subscribe({ next: r => this.amortSimule.set(r.echeances || []), error: () => this.amortSimule.set([]) });
+  }
+  enregistrerPret() {
+    const p = { ...this.pret, date_deblocage: this.toIso(this.pret.date_deblocage),
+                date_premiere_echeance: this.pret.date_premiere_echeance ? this.toIso(this.pret.date_premiere_echeance) : null };
+    this.gmrf.creerPret(p).subscribe({
+      next: () => { this.dlgPret.set(false); this.ok('Prêt créé, fonds débloqués'); this.chargerPrets(); this.chargerDashboard(); },
+      error: e => this.err(e),
+    });
+  }
+  ouvrirDetailPret(id: string) { this.gmrf.getPret(id).subscribe(p => this.pretActif.set(p)); }
+  rafraichirPret() { if (this.pretActif()) this.ouvrirDetailPret(this.pretActif().id); }
+
+  ouvrirPaiementEcheance(e: any) {
+    this.echeanceEdit = { ...e, date_paiement: new Date(), penalite: 0 };
+    this.dlgEcheance.set(true);
+  }
+  payerEcheance() {
+    this.gmrf.actionEcheance(this.echeanceEdit.id, {
+      action: 'payer', date_paiement: this.toIso(this.echeanceEdit.date_paiement),
+      penalite: this.echeanceEdit.penalite || 0,
+    }).subscribe({
+      next: () => { this.dlgEcheance.set(false); this.ok('Échéance réglée'); this.rafraichirPret(); this.chargerPrets(); this.chargerDashboard(); },
+      error: e => this.err(e),
+    });
+  }
+  annulerEcheance(e: any) {
+    this.gmrf.actionEcheance(e.id, { action: 'annuler' }).subscribe({
+      next: () => { this.ok('Échéance annulée'); this.rafraichirPret(); this.chargerPrets(); this.chargerDashboard(); },
+      error: e => this.err(e),
+    });
   }
 
   private toIso(d: any): string {
