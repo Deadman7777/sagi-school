@@ -6,20 +6,21 @@
   .bal-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 8px;
+    font-size: 9px;
+    color: #111;
     margin-bottom: 12px;
   }
   .bal-table thead th {
     background: #1a3c5e;
     color: white;
     padding: 4px 3px;
-    font-size: 8px;
+    font-size: 9px;
     white-space: nowrap;
   }
   .bal-table tbody td {
     padding: 3px;
     border-bottom: 1px solid #eee;
-    font-size: 8px;
+    font-size: 9px;
     white-space: nowrap;
     overflow: hidden;
   }
@@ -28,7 +29,7 @@
     font-weight: bold;
     padding: 4px 3px;
     border-top: 2px solid #1a3c5e;
-    font-size: 8px;
+    font-size: 9px;
     white-space: nowrap;
   }
   .bal-table tbody tr:nth-child(even) { background: #f8f9fa; }
@@ -59,14 +60,14 @@
   <tbody>
     {% for l in balance %}
     <tr{% if l.is_synthetic %} class="bal-synth"{% endif %}>
-      <td style="width:55px; text-align:left; font-weight:bold; font-family:monospace">{{ l.no_compte }}</td>
+      <td style="width:55px; text-align:left; font-weight:bold">{{ l.no_compte }}</td>
       <td style="width:190px; text-align:left; word-wrap:break-word; white-space:normal">{{ l.libelle }}</td>
-      <td style="width:105px; text-align:right; font-family:monospace">{% if l.so_debiteur %}{{ l.so_debiteur|floatformat:0 }}{% endif %}</td>
-      <td style="width:105px; text-align:right; font-family:monospace">{% if l.so_crediteur %}{{ l.so_crediteur|floatformat:0 }}{% endif %}</td>
-      <td style="width:105px; text-align:right; font-family:monospace; color:#10b981">{% if l.mvt_debit %}{{ l.mvt_debit|floatformat:0 }}{% endif %}</td>
-      <td style="width:105px; text-align:right; font-family:monospace; color:#1a6b9a">{% if l.mvt_credit %}{{ l.mvt_credit|floatformat:0 }}{% endif %}</td>
-      <td style="width:105px; text-align:right; font-family:monospace; color:#00745a">{% if l.sf_debiteur %}{{ l.sf_debiteur|floatformat:0 }}{% endif %}</td>
-      <td style="width:105px; text-align:right; font-family:monospace; color:#a855f7">{% if l.sf_crediteur %}{{ l.sf_crediteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.so_debiteur %}{{ l.so_debiteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.so_crediteur %}{{ l.so_crediteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.mvt_debit %}{{ l.mvt_debit|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.mvt_credit %}{{ l.mvt_credit|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.sf_debiteur %}{{ l.sf_debiteur|floatformat:0 }}{% endif %}</td>
+      <td style="width:105px; text-align:right">{% if l.sf_crediteur %}{{ l.sf_crediteur|floatformat:0 }}{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -75,10 +76,10 @@
       <td style="width:55px; text-align:left" colspan="2"><strong>TOTAUX</strong></td>
       <td style="width:105px; text-align:right"><strong>{{ balance_totaux.so_debiteur|floatformat:0 }}</strong></td>
       <td style="width:105px; text-align:right"><strong>{{ balance_totaux.so_crediteur|floatformat:0 }}</strong></td>
-      <td style="width:105px; text-align:right; color:#10b981"><strong>{{ balance_totaux.mvt_debit|floatformat:0 }}</strong></td>
-      <td style="width:105px; text-align:right; color:#1a6b9a"><strong>{{ balance_totaux.mvt_credit|floatformat:0 }}</strong></td>
-      <td style="width:105px; text-align:right; color:#00745a"><strong>{{ balance_totaux.sf_debiteur|floatformat:0 }}</strong></td>
-      <td style="width:105px; text-align:right; color:#a855f7"><strong>{{ balance_totaux.sf_crediteur|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.mvt_debit|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.mvt_credit|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.sf_debiteur|floatformat:0 }}</strong></td>
+      <td style="width:105px; text-align:right"><strong>{{ balance_totaux.sf_crediteur|floatformat:0 }}</strong></td>
     </tr>
   </tfoot>
 </table>

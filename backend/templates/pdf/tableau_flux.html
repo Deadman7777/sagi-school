@@ -8,11 +8,11 @@
   .tft-table tbody td { padding:4px 8px; border-bottom:1px solid #eee; }
   .tft-table tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 8px; border-top:2px solid #1a3c5e; }
   .tft-section { font-size:12px; font-weight:bold; border-left:4px solid #1a3c5e; padding-left:8px; margin:12px 0 6px; color:#1a3c5e; }
-  .tft-sub { padding-left:16px !important; color:#555; }
-  .mn { font-family:monospace; }
+  .tft-sub { padding-left:16px !important; color:#374151; }
+  .mn { color:#111; }
   .tr { text-align:right; }
-  .pos { color:#10b981; }
-  .neg { color:#ef4444; }
+  .pos { color:#047857; }
+  .neg { color:#b91c1c; }
   .w130 { width:130px; }
 </style>
 
@@ -33,7 +33,7 @@
     </td>
     <td>
       <div class="kb-label">Variation Nette</div>
-      <div class="kb-val {% if tresorerie.variation >= 0 %}kb-green{% else %}" style="color:#ef4444{% endif %}">
+      <div class="kb-val {% if tresorerie.variation >= 0 %}kb-green{% else %}" style="color:#b91c1c{% endif %}">
         {% if tresorerie.variation >= 0 %}+{% endif %}{{ tresorerie.variation|floatformat:0 }} <span style="font-size:12px">FCFA</span>
       </div>
     </td>
@@ -170,15 +170,15 @@
     </tr>
     <tr style="background:#dbeafe">
       <td style="font-weight:bold;padding:5px 8px">= Variation nette (A+B+C)</td>
-      <td class="tr mn" style="font-weight:bold;padding:5px 8px;{% if tresorerie.variation >= 0 %}color:#10b981{% else %}color:#ef4444{% endif %}">
+      <td class="tr mn" style="font-weight:bold;padding:5px 8px;{% if tresorerie.variation >= 0 %}color:#047857{% else %}color:#b91c1c{% endif %}">
         {% if tresorerie.variation >= 0 %}+{% endif %}{{ tresorerie.variation|floatformat:0 }}
       </td>
     </tr>
   </tbody>
   <tfoot>
-    <tr style="background:#1a3c5e;color:white">
-      <td style="padding:6px 8px;font-weight:bold">Trésorerie Nette de Clôture</td>
-      <td class="tr mn" style="padding:6px 8px;font-weight:bold">{{ tresorerie.tn_fin|floatformat:0 }}</td>
+    <tr>
+      <td style="background:#1a3c5e;color:white;padding:6px 8px;font-weight:bold">Trésorerie Nette de Clôture</td>
+      <td class="tr" style="background:#1a3c5e;color:white;padding:6px 8px;font-weight:bold">{{ tresorerie.tn_fin|floatformat:0 }}</td>
     </tr>
   </tfoot>
 </table>
