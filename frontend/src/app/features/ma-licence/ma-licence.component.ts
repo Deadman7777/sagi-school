@@ -11,7 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 /** Coordonnées support HADY GESMAN — à modifier ici uniquement. */
 const SUPPORT_EMAIL  = 'hadygesman@gmail.com';
-const SUPPORT_PHONES = ['+221 77 123 45 67', '+221 78 987 65 43'];
+const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
 
 @Component({
   selector: 'app-ma-licence',
