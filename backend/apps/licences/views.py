@@ -20,7 +20,8 @@ class LicenceViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update',
-                           'destroy', 'creer_ecole', 'stats_globales']:
+                           'destroy', 'creer_ecole', 'stats_globales',
+                           'renouveler']:
             return [IsSuperAdmin()]
         return [IsAuthenticated()]
 
