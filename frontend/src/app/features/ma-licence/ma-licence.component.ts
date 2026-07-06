@@ -1,16 +1,22 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { LicencesService } from '../../core/services/licences.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+/** Coordonnées support HADY GESMAN — à modifier ici uniquement. */
+const SUPPORT_EMAIL  = 'hadygesman@gmail.com';
+const SUPPORT_PHONES = ['+221 77 123 45 67', '+221 78 987 65 43'];
+
 @Component({
   selector: 'app-ma-licence',
   standalone: true,
-  imports: [CommonModule, ButtonModule, ToastModule, TranslateModule],
+  imports: [CommonModule, FormsModule, ButtonModule, DialogModule, ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -104,12 +110,46 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           </div>
           <div class="cc-row">
             <span>{{ 'ma_licence.support' | translate }}</span>
-            <span>hadygesman&#64;gmail.com</span>
+            <a class="cc-link" [href]="'mailto:' + supportEmail">{{ supportEmail }}</a>
+          </div>
+          <div class="cc-row">
+            <span>{{ 'ma_licence.telephone' | translate }}</span>
+            <span class="cc-phones">
+              <a class="cc-link mono" *ngFor="let tel of supportPhones" [href]="tel.href">{{ tel.label }}</a>
+            </span>
           </div>
         </div>
       </div>
 
     </div>
+
+    <!-- Dialog demande de renouvellement -->
+    <p-dialog [header]="'🔄 ' + ('ma_licence.renouv_dialog_titre' | translate)"
+              [(visible)]="renouvDialogVisible" [modal]="true"
+              [style]="{width:'440px'}" [draggable]="false">
+      <div *ngIf="licence()">
+        <p class="rd-info">{{ 'ma_licence.renouv_dialog_info' | translate }}</p>
+        <div class="renouv-info">
+          <div class="ri-row"><span>{{ 'ma_licence.type_abonnement' | translate }}</span><strong>{{ licence().type }}</strong></div>
+          <div class="ri-row"><span>{{ 'ma_licence.date_expiration' | translate }}</span><span class="mono" [style.color]="joursColor()">{{ licence().date_fin }}</span></div>
+        </div>
+        <div class="rd-field">
+          <label for="renouv-message">{{ 'ma_licence.message_optionnel' | translate }}</label>
+          <textarea id="renouv-message" rows="4" class="rd-textarea" [(ngModel)]="messageRenouv"
+                    [placeholder]="'ma_licence.message_placeholder' | translate"></textarea>
+        </div>
+        <div class="rd-tel">
+          📞
+          <a class="cc-link mono" *ngFor="let tel of supportPhones" [href]="tel.href">{{ tel.label }}</a>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="renouvDialogVisible = false" />
+        <p-button [label]="'ma_licence.envoyer_demande' | translate" severity="warn"
+                  [loading]="envoiEnCours()" (onClick)="envoyerDemande()" />
+      </ng-template>
+    </p-dialog>
 
     <!-- Aucune licence -->
     <div class="empty-state" *ngIf="!licence() && !loading()">
@@ -154,12 +194,31 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .cc-row   { display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .cc-row:last-child { border-bottom:none; }
     .cc-row span:first-child { color:#64748b; }
+    .cc-link  { color:#93c5fd; text-decoration:none; }
+    .cc-link:hover { text-decoration:underline; }
+    .cc-phones { display:flex; gap:14px; }
     .empty-state { text-align:center; padding:60px; }
+    .rd-info  { font-size:13px; color:#94a3b8; margin:0 0 14px; }
+    .renouv-info { background:rgba(11,15,26,0.4); border:1px solid #2a3f5f; border-radius:8px; padding:10px 14px; }
+    .ri-row   { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
+    .ri-row span:first-child { color:#64748b; }
+    .rd-field { margin-top:14px; display:flex; flex-direction:column; gap:6px; }
+    .rd-field label { font-size:12px; color:#94a3b8; }
+    .rd-textarea { width:100%; background:#0b0f1a; border:1px solid #2a3f5f; border-radius:8px; color:#e8f0fe; padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; }
+    .rd-textarea:focus { outline:none; border-color:#3b82f6; }
+    .rd-tel   { display:flex; align-items:center; gap:14px; font-size:13px; margin-top:14px; }
   `]
 })
 export class MaLicenceComponent implements OnInit {
   licence = signal<any>(null);
   loading = signal(true);
+
+  renouvDialogVisible = false;
+  messageRenouv       = '';
+  envoiEnCours        = signal(false);
+
+  supportEmail  = SUPPORT_EMAIL;
+  supportPhones = SUPPORT_PHONES.map(t => ({ label: t, href: 'tel:' + t.replace(/\s/g, '') }));
 
   private translate = inject(TranslateService);
 
@@ -198,10 +257,51 @@ export class MaLicenceComponent implements OnInit {
   }
 
   demanderRenouvellement() {
+    this.renouvDialogVisible = true;
+  }
+
+  envoyerDemande() {
+    const lic = this.licence();
+    if (!lic) return;
+    this.envoiEnCours.set(true);
+    this.licencesService.demanderRenouvellement(lic.id, this.messageRenouv.trim()).subscribe({
+      next: res => {
+        this.envoiEnCours.set(false);
+        this.renouvDialogVisible = false;
+        if (res.envoye) {
+          this.msg.add({
+            severity: 'success',
+            summary:  this.translate.instant('ma_licence.demande_envoyee'),
+            detail:   this.translate.instant('ma_licence.contactera_24h')
+          });
+        } else {
+          this.ouvrirMailto(res.sujet, res.corps);
+        }
+      },
+      error: () => {
+        this.envoiEnCours.set(false);
+        this.renouvDialogVisible = false;
+        this.ouvrirMailto();
+      }
+    });
+  }
+
+  /** SMTP indisponible (mode local) : ouvre le client mail, message pré-rempli. */
+  private ouvrirMailto(sujet?: string, corps?: string) {
+    const lic = this.licence();
+    const s = sujet || `[SAGI SCHOOL] Demande de renouvellement — ${lic?.type || ''}`;
+    const c = corps || [
+      `Licence   : ${lic?.type} — ${lic?.cle_licence}`,
+      `Expire le : ${lic?.date_fin} (${lic?.jours_restants} jours restants)`,
+      '',
+      this.messageRenouv.trim(),
+    ].join('\n');
+    window.location.href =
+      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(s)}&body=${encodeURIComponent(c)}`;
     this.msg.add({
       severity: 'info',
-      summary:  this.translate.instant('ma_licence.demande_envoyee'),
-      detail:   this.translate.instant('ma_licence.contactera_24h')
+      summary:  this.translate.instant('ma_licence.messagerie_titre'),
+      detail:   this.translate.instant('ma_licence.messagerie_detail')
     });
   }
 }

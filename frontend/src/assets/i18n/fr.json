@@ -675,7 +675,15 @@
     "aucune_licence": "Aucune licence trouvée",
     "contacter_activer": "Contactez HADY GESMAN pour activer votre abonnement",
     "demande_envoyee": "Demande envoyée",
-    "contactera_24h": "HADY GESMAN vous contactera sous 24h"
+    "contactera_24h": "HADY GESMAN vous contactera sous 24h",
+    "telephone": "Téléphone",
+    "renouv_dialog_titre": "Demande de renouvellement",
+    "renouv_dialog_info": "Votre demande sera transmise à HADY GESMAN avec les informations de votre licence.",
+    "message_optionnel": "Message (optionnel)",
+    "message_placeholder": "Précisez votre besoin : durée souhaitée, changement de plan…",
+    "envoyer_demande": "Envoyer la demande",
+    "messagerie_titre": "Ouverture de votre messagerie",
+    "messagerie_detail": "Le message est pré-rempli — cliquez sur Envoyer dans votre client mail."
   },
   "rh": {
     "title": "Ressources Humaines",

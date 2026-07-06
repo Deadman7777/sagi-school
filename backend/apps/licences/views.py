@@ -2,6 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
+from django.core.mail import send_mail
 from django.utils import timezone
 from core.permissions import IsSuperAdmin
 from core.tenant import get_tenant
@@ -56,7 +58,56 @@ class LicenceViewSet(viewsets.ModelViewSet):
         licence.statut   = 'ACTIVE'
         licence.save()
         return Response(LicenceSerializer(licence).data)
-    
+
+    @action(detail=True, methods=['post'])
+    def demander_renouvellement(self, request, pk=None):
+        """Demande de renouvellement envoyée par email à HADY GESMAN.
+
+        L'isolation tenant est déjà assurée par get_queryset (un admin école
+        ne voit que sa propre licence). Si le SMTP n'est pas configuré (mode
+        local Electron), on renvoie envoye=False avec le sujet/corps pour que
+        le frontend bascule sur un lien mailto:.
+        """
+        licence = self.get_object()
+        t       = licence.tenant
+        user    = request.user
+        message = (request.data.get('message') or '').strip()
+
+        sujet  = f"[SAGI SCHOOL] Demande de renouvellement — {t.nom}"
+        lignes = [
+            "Nouvelle demande de renouvellement de licence.",
+            "",
+            f"École       : {t.nom}" + (f" ({t.ville})" if t.ville else ""),
+            f"Téléphone   : {t.telephone or '—'}",
+            f"Email école : {t.email or '—'}",
+            "",
+            f"Licence     : {licence.type} ({licence.statut})",
+            f"Clé         : {licence.cle_licence}",
+            f"Expire le   : {licence.date_fin} ({licence.jours_restants} jours restants)",
+            "",
+            f"Demandeur   : {f'{user.prenom} {user.nom}'.strip()} — {user.email}",
+        ]
+        if message:
+            lignes += ["", "Message :", message]
+        corps = "\n".join(lignes)
+
+        destinataire = getattr(settings, 'LICENCE_SUPPORT_EMAIL', 'hadygesman@gmail.com')
+        # console.EmailBackend n'envoie rien, et 'localhost' est le défaut
+        # Django sans relais réel : ne prétendre "envoyé" que si un vrai SMTP
+        # est configuré (EMAIL_HOST renseigné, en mode cloud).
+        smtp_configure = ('smtp' in settings.EMAIL_BACKEND
+                          and getattr(settings, 'EMAIL_HOST', '') not in ('', 'localhost'))
+        if smtp_configure:
+            try:
+                send_mail(sujet, corps,
+                          getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sagi-school.com'),
+                          [destinataire])
+                return Response({'envoye': True, 'destinataire': destinataire})
+            except Exception:
+                pass
+        return Response({'envoye': False, 'destinataire': destinataire,
+                         'sujet': sujet, 'corps': corps})
+
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def suspendre(self, request, pk=None):
         licence = self.get_object()

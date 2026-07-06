@@ -32,6 +32,10 @@ export class LicencesService {
     return this.api.post<any>(`/licences/${id}/renouveler/`, { mois });
   }
 
+  demanderRenouvellement(id: string, message: string) {
+    return this.api.post<any>(`/licences/${id}/demander_renouvellement/`, { message });
+  }
+
   verifierCle(cle: string) {
     return this.api.post<any>('/licences/verifier/', { cle_licence: cle });
   }

@@ -675,7 +675,15 @@
     "aucune_licence": "No licence found",
     "contacter_activer": "Contact HADY GESMAN to activate your subscription",
     "demande_envoyee": "Request sent",
-    "contactera_24h": "HADY GESMAN will contact you within 24h"
+    "contactera_24h": "HADY GESMAN will contact you within 24h",
+    "telephone": "Phone",
+    "renouv_dialog_titre": "Renewal request",
+    "renouv_dialog_info": "Your request will be sent to HADY GESMAN along with your licence details.",
+    "message_optionnel": "Message (optional)",
+    "message_placeholder": "Describe your need: desired duration, plan change…",
+    "envoyer_demande": "Send request",
+    "messagerie_titre": "Opening your email client",
+    "messagerie_detail": "The message is pre-filled — click Send in your email client."
   },
   "rh": {
     "title": "Human Resources",

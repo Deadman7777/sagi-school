@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { spawn } = require('child_process');
 const path      = require('path');
 const http      = require('http');
@@ -397,6 +397,15 @@ async function createWindow() {
 
   console.log('[Electron] Chargement:', url);
   mainWindow.loadURL(url);
+
+  // mailto:/tel: (demande de renouvellement, contact support) → application
+  // par défaut de l'OS au lieu d'une navigation dans la fenêtre
+  mainWindow.webContents.on('will-navigate', (e, navUrl) => {
+    if (navUrl.startsWith('mailto:') || navUrl.startsWith('tel:')) {
+      e.preventDefault();
+      shell.openExternal(navUrl);
+    }
+  });
 
   mainWindow.once('ready-to-show', () => {
     splash.destroy();
