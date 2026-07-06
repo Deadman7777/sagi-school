@@ -1,4 +1,5 @@
 import hashlib, secrets
+from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 from core.models import TimeStampedModel
@@ -41,9 +42,26 @@ class Licence(TimeStampedModel):
     def __str__(self):
         return f"{self.tenant} — {self.type} ({self.statut})"
 
+    # Délai de grâce après date_fin avant de couper l'accès aux modules
+    GRACE_JOURS = 7
+
+    @property
+    def acces_expire(self):
+        """True quand l'accès aux modules doit être coupé : licence
+        suspendue, ou expirée au-delà de la période de grâce.
+        Le statut ESSAI n'est pas concerné tant que date_fin + grâce
+        n'est pas dépassée."""
+        if self.statut == 'SUSPENDUE':
+            return True
+        if not self.date_fin:
+            return True
+        return timezone.now().date() > self.date_fin + timedelta(days=self.GRACE_JOURS)
+
     @property
     def modules(self):
         always = ['/ma-licence', '/parametres']
+        if self.acces_expire:
+            return always
         return self.MODULES_PAR_TYPE.get(self.type, []) + always
 
     @property

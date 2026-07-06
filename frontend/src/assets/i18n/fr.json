@@ -666,6 +666,7 @@
     "date_expiration": "Date d'expiration",
     "duree_licence": "Durée de la licence",
     "expiration_alerte": "Votre licence expire dans {{jours}} jours",
+    "expiree_alerte": "Votre licence a expiré — l'accès aux modules sera coupé après le délai de grâce",
     "contacter_renouveler": "Contactez HADY GESMAN pour renouveler votre abonnement.",
     "demander_renouv": "Demander un Renouvellement",
     "besoin_aide": "Besoin d'aide ?",

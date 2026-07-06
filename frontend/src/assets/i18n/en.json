@@ -666,6 +666,7 @@
     "date_expiration": "Expiration date",
     "duree_licence": "Licence duration",
     "expiration_alerte": "Your licence expires in {{jours}} days",
+    "expiree_alerte": "Your licence has expired — module access will be cut off after the grace period",
     "contacter_renouveler": "Contact HADY GESMAN to renew your subscription.",
     "demander_renouv": "Request Renewal",
     "besoin_aide": "Need help?",

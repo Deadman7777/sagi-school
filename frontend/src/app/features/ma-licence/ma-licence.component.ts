@@ -89,7 +89,9 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
       <div class="alerte-banner" *ngIf="licence().jours_restants <= 30">
         <div class="ab-icon">⚠️</div>
         <div class="ab-text">
-          <strong>{{ 'ma_licence.expiration_alerte' | translate:{ jours: licence().jours_restants } }}</strong>
+          <strong>{{ licence().jours_restants > 0
+              ? ('ma_licence.expiration_alerte' | translate:{ jours: licence().jours_restants })
+              : ('ma_licence.expiree_alerte'    | translate) }}</strong>
           <div>{{ 'ma_licence.contacter_renouveler' | translate }}</div>
         </div>
         <p-button [label]="'ma_licence.demander_renouv' | translate"

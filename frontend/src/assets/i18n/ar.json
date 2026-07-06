@@ -666,6 +666,7 @@
     "date_expiration": "تاريخ الانتهاء",
     "duree_licence": "مدة الرخصة",
     "expiration_alerte": "رخصتك تنتهي خلال {{jours}} يوماً",
+    "expiree_alerte": "انتهت صلاحية رخصتك — سيتم قطع الوصول إلى الوحدات بعد فترة السماح",
     "contacter_renouveler": "تواصل مع هادي جيسمان لتجديد اشتراكك.",
     "demander_renouv": "طلب تجديد",
     "besoin_aide": "تحتاج مساعدة؟",
