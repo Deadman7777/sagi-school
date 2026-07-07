@@ -37,6 +37,14 @@ jobs:
         working-directory: electron
         run: npm install
 
+      # La version du .deb/.AppImage vient de electron/package.json :
+      # on la force depuis le tag pour garantir la cohérence du nom
+      - name: Version = tag git
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: electron
+        shell: bash
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+
       - name: Build Linux
         working-directory: electron
         run: npm run build:linux
@@ -86,6 +94,14 @@ jobs:
       - name: Install Electron deps
         working-directory: electron
         run: npm install
+
+      # La version du .exe vient de electron/package.json : on la force
+      # depuis le tag pour garantir la cohérence du nom (oubli fréquent)
+      - name: Version = tag git
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: electron
+        shell: bash
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
 
       - name: Build Windows
         working-directory: electron
