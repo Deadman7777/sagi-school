@@ -34,6 +34,10 @@ class EleveSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'tenant':   {'required': False, 'read_only': True},
             'exercice': {'required': False, 'read_only': True},
+            # DRF 3.15 rend obligatoires les champs d'une UniqueConstraint
+            # (uniq_matricule_par_tenant) ; or le matricule est généré par
+            # perform_create — sans ceci, toute création d'élève renvoie 400.
+            'matricule': {'required': False, 'allow_null': True, 'allow_blank': True},
         }
 
     def get_classe_nom(self, obj):
