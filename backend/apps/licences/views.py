@@ -142,7 +142,8 @@ class LicenceViewSet(viewsets.ModelViewSet):
         essai         = Licence.objects.filter(statut='ESSAI').count()
         total_eleves  = Eleve.objects.count()
 
-        TARIFS  = {'ESSAI': 0, 'BASIC': 75000, 'PRO': 150000, 'AVANCE': 250000, 'TAXAWU_DAARA': 200000}
+        # Annuel = tarif mensuel × 12 − 10% (aligné sur TARIFS_MENSUEL du frontend)
+        TARIFS  = {'ESSAI': 0, 'BASIC': 270000, 'PRO': 540000, 'AVANCE': 972000, 'TAXAWU_DAARA': 216000}
         revenus = sum(
             TARIFS.get(l.type, 0)
             for l in Licence.objects.filter(statut='ACTIVE')

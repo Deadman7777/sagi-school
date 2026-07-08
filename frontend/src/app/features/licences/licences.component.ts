@@ -473,7 +473,7 @@ export class LicencesComponent implements OnInit {
 
   // Tarifs MENSUELS par type (l'annuel = 12 mois − 10%)
   TARIFS_MENSUEL: Record<string, number> = {
-    ESSAI: 0, BASIC: 30000, PRO: 75000, AVANCE: 150000, TAXAWU_DAARA: 25000
+    ESSAI: 0, BASIC: 25000, PRO: 50000, AVANCE: 90000, TAXAWU_DAARA: 20000
   };
   REMISE_ANNUELLE = 0.10;   // 10% sur le paiement annuel
   cyclesOptions = [
