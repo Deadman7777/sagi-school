@@ -16,6 +16,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TooltipModule } from 'primeng/tooltip';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -30,7 +31,7 @@ interface PecForm {
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
-            TooltipModule, MultiSelectModule],
+            TooltipModule, MultiSelectModule, ImportElevesDialogComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -49,6 +50,10 @@ interface PecForm {
         <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
                   pTooltip="Exporter la liste en PDF"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
+        <p-button icon="pi pi-file-import" [label]="'eleves.import_btn' | translate"
+                  severity="info" size="small"
+                  [pTooltip]="'eleves.import_titre' | translate" [disabled]="estAnneeCloturee()"
+                  (onClick)="dialogImportVisible = true" />
         <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success"
                   pTooltip="Inscrire un nouvel élève" [disabled]="estAnneeCloturee()"
                   (onClick)="ouvrirDialog()" />
@@ -613,6 +618,9 @@ interface PecForm {
         <p-button [label]="'common.enregistrer' | translate" severity="success" [loading]="saving()" (onClick)="sauvegarderServices()" />
       </ng-template>
     </p-dialog>
+
+    <!-- ════════════════════ DIALOG IMPORT EXCEL ════════════════════ -->
+    <app-import-eleves-dialog [(visible)]="dialogImportVisible" (importe)="chargerEleves()" />
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
@@ -734,6 +742,7 @@ export class ElevesListeComponent implements OnInit {
   onglet        = signal<'liste' | 'prise_en_charge'>('liste');
 
   dialogVisible        = false;
+  dialogImportVisible  = false;
   dialogFicheVisible   = false;
   dialogStatutVisible  = false;
   dialogPECVisible     = false;

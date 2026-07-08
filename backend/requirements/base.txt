@@ -11,5 +11,6 @@ xhtml2pdf==0.2.16
 arabic-reshaper>=3.0.0
 python-bidi>=0.4.2
 python-dateutil>=2.8
+openpyxl>=3.1
 whitenoise==6.7.0
 waitress==3.0.0

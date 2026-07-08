@@ -2,6 +2,21 @@ import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats } from '../models/eleve.model';
 
+export interface LigneImport {
+  ligne: number;
+  nom_complet: string;
+  section: string;
+  statut: 'OK' | 'DOUBLON' | 'ERREUR';
+  erreurs: string[];
+  avertissements: string[];
+}
+
+export interface RapportImport {
+  resume: { total: number; ok: number; doublons: number; erreurs: number };
+  lignes: LigneImport[];
+  crees?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ElevesService {
   constructor(private api: ApiService) {}
@@ -49,6 +64,18 @@ export class ElevesService {
 
   exporterListePDF(params?: Record<string, string>) {
     return this.api.getBlob('/eleves/export-pdf/', params);
+  }
+
+  telechargerTemplateImport() {
+    return this.api.getBlob('/eleves/import-template/');
+  }
+
+  // confirmer=false : analyse seule (rapport) ; true : création des lignes OK
+  importerExcel(fichier: File, confirmer: boolean) {
+    const form = new FormData();
+    form.append('fichier', fichier);
+    if (confirmer) form.append('confirmer', '1');
+    return this.api.post<RapportImport>('/eleves/import-excel/', form);
   }
 
   situationPDF(eleveId: string) {

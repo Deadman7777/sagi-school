@@ -98,6 +98,72 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
 
+    @action(detail=False, methods=['get'], url_path='import-template')
+    def import_template(self, request):
+        """Template Excel d'import, avec les sections de l'école en consigne."""
+        from django.http import HttpResponse
+        from .import_eleves import generer_template
+        tenant = get_tenant(request)
+        try:
+            buf = generer_template(tenant)
+        except ImportError as e:
+            return Response({'error': str(e)}, status=400)
+        resp = HttpResponse(
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        resp['Content-Disposition'] = 'attachment; filename="import_eleves_sagi.xlsx"'
+        return resp
+
+    @action(detail=False, methods=['post'], url_path='import-excel')
+    def import_excel(self, request):
+        """Import d'élèves depuis un .xlsx.
+
+        Sans confirmer=1 : analyse seule, rend le rapport ligne par ligne.
+        Avec confirmer=1 : re-analyse puis crée les lignes OK en transaction
+        (les DOUBLON sont ignorés — l'import est rejouable sans doublonner).
+        """
+        from django.db import transaction
+        from core.models import log_audit
+        from .import_eleves import analyser
+
+        tenant = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False
+        ).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
+
+        fichier = request.FILES.get('fichier')
+        if not fichier:
+            return Response({'error': 'Aucun fichier reçu.'}, status=400)
+
+        try:
+            rapport = analyser(fichier, tenant, exercice)
+        except (ImportError, ValueError) as e:
+            return Response({'error': str(e)}, status=400)
+
+        if request.data.get('confirmer') != '1':
+            return Response(rapport)
+
+        a_creer = [l['data'] for l in rapport['lignes'] if l['statut'] == 'OK']
+        annee    = str(timezone.now().year)
+        code_etb = (tenant.code_etablissement or 'ETB').upper()
+        with transaction.atomic():
+            numero = Eleve.objects.filter(tenant=tenant).aggregate(m=Max('numero'))['m'] or 0
+            for data in a_creer:
+                numero += 1
+                Eleve.objects.create(
+                    tenant=tenant, exercice=exercice, numero=numero,
+                    matricule=data.pop('matricule') or f"{annee}-{code_etb}-{str(numero).zfill(6)}",
+                    **data,
+                )
+        log_audit(request, 'IMPORT', 'Eleve',
+                  description=f"Import Excel : {len(a_creer)} élèves créés, "
+                              f"{rapport['resume']['doublons']} doublons ignorés, "
+                              f"{rapport['resume']['erreurs']} lignes en erreur")
+        return Response({'resume': rapport['resume'], 'crees': len(a_creer)})
+
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):
         """Recherche ultra-légère pour l'autocomplétion — pas d'annotation paiements.
