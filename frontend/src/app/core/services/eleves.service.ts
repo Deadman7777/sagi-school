@@ -9,12 +9,18 @@ export interface LigneImport {
   statut: 'OK' | 'DOUBLON' | 'ERREUR';
   erreurs: string[];
   avertissements: string[];
+  montant_reprise: number;
 }
 
 export interface RapportImport {
-  resume: { total: number; ok: number; doublons: number; erreurs: number };
+  resume: {
+    total: number; ok: number; doublons: number; erreurs: number;
+    reprises: number; montant_reprise: number;
+  };
   lignes: LigneImport[];
   crees?: number;
+  reprises?: number;
+  montant_reprise?: number;
 }
 
 @Injectable({ providedIn: 'root' })

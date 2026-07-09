@@ -206,7 +206,10 @@
     "import_details": "Détails",
     "import_retour": "Changer de fichier",
     "import_confirmer": "Importer {{n}} élèves",
-    "import_fait": "{{n}} élèves importés avec succès !"
+    "import_fait": "{{n}} élèves importés avec succès !",
+    "import_deja_paye": "Déjà payé",
+    "import_reprises_info": "{{n}} élève(s) avec reprise de soldes : {{montant}} FCFA déjà réglés avant la migration seront enregistrés (compte 890, sans toucher à la caisse).",
+    "import_fait_reprises": "{{n}} reprise(s) de soldes enregistrée(s) pour {{montant}} FCFA."
   },
   "paiements": {
     "title": "Saisie des Paiements",

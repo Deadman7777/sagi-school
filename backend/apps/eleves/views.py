@@ -146,23 +146,35 @@ class EleveViewSet(viewsets.ModelViewSet):
         if request.data.get('confirmer') != '1':
             return Response(rapport)
 
-        a_creer = [l['data'] for l in rapport['lignes'] if l['statut'] == 'OK']
+        from apps.paiements.reprise import creer_paiement_reprise
+        a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
         annee    = str(timezone.now().year)
         code_etb = (tenant.code_etablissement or 'ETB').upper()
+        reprises, montant_reprise = 0, 0.0
         with transaction.atomic():
             numero = Eleve.objects.filter(tenant=tenant).aggregate(m=Max('numero'))['m'] or 0
-            for data in a_creer:
+            for ligne in a_creer:
+                data = ligne['data']
                 numero += 1
-                Eleve.objects.create(
+                eleve = Eleve.objects.create(
                     tenant=tenant, exercice=exercice, numero=numero,
                     matricule=data.pop('matricule') or f"{annee}-{code_etb}-{str(numero).zfill(6)}",
                     **data,
                 )
+                if ligne['montant_reprise'] > 0:
+                    paiement = creer_paiement_reprise(
+                        tenant, exercice, eleve, user=request.user, **ligne['reprise'],
+                    )
+                    if paiement:
+                        reprises += 1
+                        montant_reprise += float(paiement.total)
         log_audit(request, 'IMPORT', 'Eleve',
                   description=f"Import Excel : {len(a_creer)} élèves créés, "
+                              f"{reprises} reprises de soldes ({montant_reprise:,.0f} FCFA), "
                               f"{rapport['resume']['doublons']} doublons ignorés, "
                               f"{rapport['resume']['erreurs']} lignes en erreur")
-        return Response({'resume': rapport['resume'], 'crees': len(a_creer)})
+        return Response({'resume': rapport['resume'], 'crees': len(a_creer),
+                         'reprises': reprises, 'montant_reprise': montant_reprise})
 
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):

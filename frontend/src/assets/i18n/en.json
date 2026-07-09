@@ -206,7 +206,10 @@
     "import_details": "Details",
     "import_retour": "Choose another file",
     "import_confirmer": "Import {{n}} students",
-    "import_fait": "{{n}} students imported successfully!"
+    "import_fait": "{{n}} students imported successfully!",
+    "import_deja_paye": "Already paid",
+    "import_reprises_info": "{{n}} student(s) with opening balances: {{montant}} FCFA already paid before migration will be recorded (account 890, cash untouched).",
+    "import_fait_reprises": "{{n}} opening balance(s) recorded for {{montant}} FCFA."
   },
   "paiements": {
     "title": "Payment Entry",

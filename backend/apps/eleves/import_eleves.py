@@ -31,6 +31,11 @@ COLONNES = {
     'telephone_mere':   'Téléphone mère',
     'date_inscription': "Date d'inscription (JJ/MM/AAAA)",
     'matricule':        'Matricule (vide = automatique)',
+    # Reprise de soldes (migration) — voir apps.paiements.reprise
+    'rep_inscription':  'Inscription déjà payée (O/N)',
+    'rep_mensualites':  'Mensualités déjà payées (nombre)',
+    'rep_uniforme':     'Uniforme déjà payé (O/N)',
+    'rep_fournitures':  'Fournitures déjà payées (O/N)',
 }
 
 # en-têtes acceptés (normalisés) -> clé interne ; tolère les variantes
@@ -61,6 +66,15 @@ _SYNONYMES = {
     "date d'inscription": 'date_inscription',
     'date inscription':   'date_inscription',
     'matricule':          'matricule',
+    'inscription deja payee':    'rep_inscription',
+    'inscription payee':         'rep_inscription',
+    'mensualites deja payees':   'rep_mensualites',
+    'mensualites payees':        'rep_mensualites',
+    'mois payes':                'rep_mensualites',
+    'uniforme deja paye':        'rep_uniforme',
+    'uniforme paye':             'rep_uniforme',
+    'fournitures deja payees':   'rep_fournitures',
+    'fournitures payees':        'rep_fournitures',
 }
 
 _FORMATS_DATE = ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y')
@@ -120,6 +134,29 @@ def _date(val):
     return None, f"date illisible « {txt} » (attendu JJ/MM/AAAA)"
 
 
+def _oui_non(val):
+    """Cellule O/N -> (bool, avertissement | None). Vide = Non."""
+    n = _norm(val)
+    if not n or n in ('n', 'non', 'no', '0', 'faux', 'false'):
+        return False, None
+    if n in ('o', 'oui', 'y', 'yes', 'x', '1', 'vrai', 'true'):
+        return True, None
+    return False, f"valeur « {val} » non reconnue (attendu O ou N) — considérée comme Non"
+
+
+def _entier(val):
+    """Cellule -> (int, erreur | None). Vide = 0."""
+    if val is None or val == '':
+        return 0, None
+    try:
+        n = int(float(val))
+        if n < 0:
+            return 0, f"nombre négatif « {val} » — ramené à 0"
+        return n, None
+    except (TypeError, ValueError):
+        return 0, f"nombre illisible « {val} » — considéré comme 0"
+
+
 def _genre(val):
     """-> ('G'|'F'|'', avertissement | None)"""
     n = _norm(val)
@@ -171,6 +208,15 @@ def generer_template(tenant):
         ('Téléphones', 'Chiffres uniquement, ex. 771234567. Optionnel.'),
         ("Date d'inscription", "Optionnel. Vide = début de l'année scolaire (aucun prorata)."),
         ('Matricule', 'Laissez VIDE pour une génération automatique (recommandé).'),
+        ('', ''),
+        ('Reprise de soldes (migration)', 'Uniquement si votre école a déjà encaissé des'
+         ' frais cette année AVANT de passer à SAGI SCHOOL. Sinon, laissez ces colonnes vides.'),
+        ('Inscription / Uniforme / Fournitures déjà payés', 'O si déjà réglé, N ou vide sinon.'),
+        ('Mensualités déjà payées', 'Nombre de mois déjà réglés depuis le début de l\'année'
+         ' (ex. 3 = octobre, novembre, décembre payés). Vide = 0.'),
+        ('', 'Les montants sont calculés à partir des frais de la section, enregistrés en'
+         ' « Reprise » : le reste à payer et le suivi mensuel repartent d\'un état juste,'
+         ' sans toucher à votre caisse.'),
         ('', ''),
         ('Sections existantes dans votre école :', ', '.join(sections) or
          "(aucune — créez d'abord vos sections dans SAGI SCHOOL)"),
@@ -291,6 +337,29 @@ def analyser(fichier, tenant, exercice):
             else:
                 matricules_pris.add(matricule)
 
+        # ── Reprise de soldes (migration) ────────────────────────────────
+        rep_inscription, w1 = _oui_non(brut.get('rep_inscription'))
+        rep_uniforme,    w2 = _oui_non(brut.get('rep_uniforme'))
+        rep_fournitures, w3 = _oui_non(brut.get('rep_fournitures'))
+        rep_mensualites, w4 = _entier(brut.get('rep_mensualites'))
+        for w, col in ((w1, 'Inscription déjà payée'), (w2, 'Uniforme déjà payé'),
+                       (w3, 'Fournitures déjà payées'), (w4, 'Mensualités déjà payées')):
+            if w:
+                avert.append(f'{col} : {w}')
+        if rep_mensualites > exercice.nb_mensualites:
+            avert.append(f'Mensualités déjà payées : {rep_mensualites} > '
+                         f'{exercice.nb_mensualites} mensualités de l\'exercice — plafonné')
+            rep_mensualites = exercice.nb_mensualites
+
+        montant_reprise = 0.0
+        if section:
+            montant_reprise = float(
+                (section.frais_inscription if rep_inscription else 0)
+                + section.frais_mensualite * rep_mensualites
+                + (section.frais_uniforme if rep_uniforme else 0)
+                + (section.frais_fournitures if rep_fournitures else 0)
+            )
+
         statut = 'ERREUR' if erreurs else 'OK'
         cle_doublon = (_norm(nom), date_naiss)
         if statut == 'OK':
@@ -310,6 +379,13 @@ def analyser(fichier, tenant, exercice):
             'statut':         statut,
             'erreurs':        erreurs,
             'avertissements': avert,
+            'montant_reprise': montant_reprise,
+            'reprise': {
+                'inscription':    rep_inscription,
+                'nb_mensualites': rep_mensualites,
+                'uniforme':       rep_uniforme,
+                'fournitures':    rep_fournitures,
+            },
             'data': {
                 'nom_complet':      nom,
                 'genre':            genre,
@@ -331,5 +407,7 @@ def analyser(fichier, tenant, exercice):
         'ok':       sum(1 for l in lignes if l['statut'] == 'OK'),
         'doublons': sum(1 for l in lignes if l['statut'] == 'DOUBLON'),
         'erreurs':  sum(1 for l in lignes if l['statut'] == 'ERREUR'),
+        'reprises': sum(1 for l in lignes if l['statut'] == 'OK' and l['montant_reprise'] > 0),
+        'montant_reprise': sum(l['montant_reprise'] for l in lignes if l['statut'] == 'OK'),
     }
     return {'resume': resume, 'lignes': lignes}

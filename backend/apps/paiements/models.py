@@ -29,6 +29,10 @@ MODE_CHOICES = [
     ('FREE_MONEY',   'Free Money'),
     ('VIREMENT',     'Virement'),
     ('CHEQUE',       'Chèque'),
+    # Migration : montants réglés avant la bascule sur SAGI SCHOOL.
+    # Comptabilisé au 890 (bilan d'ouverture), jamais en trésorerie —
+    # ne doit pas apparaître dans les formulaires de saisie de paiement.
+    ('REPRISE',      'Reprise (migration)'),
 ]
 
 
