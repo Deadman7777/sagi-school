@@ -13,6 +13,15 @@ class ServiceSerializer(serializers.ModelSerializer):
             'tenant': {'required': False, 'read_only': True},
         }
 
+    def validate(self, attrs):
+        """mois_unique n'a de sens que pour la périodicité UNIQUE
+        (None = dû à l'inscription, 1..12 = mois calendaire)."""
+        periodicite = attrs.get('periodicite',
+                                getattr(self.instance, 'periodicite', 'MENSUEL'))
+        if periodicite != 'UNIQUE':
+            attrs['mois_unique'] = None
+        return attrs
+
 
 class EleveSerializer(serializers.ModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)

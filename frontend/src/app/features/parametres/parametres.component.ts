@@ -244,6 +244,11 @@ import { MessageService } from 'primeng/api';
               <p-select appendTo="body" [options]="periodiciteOptions" [(ngModel)]="sv.periodicite"
                         optionLabel="label" optionValue="value" styleClass="w-full" />
             </div>
+            <div class="sc-frais" *ngIf="sv.periodicite === 'UNIQUE'">
+              <span>{{ 'parametres.service_periode' | translate }}</span>
+              <p-select appendTo="body" [options]="periodeUniqueOptions" [(ngModel)]="sv.mois_unique"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
             <div class="sc-frais">
               <span>{{ 'parametres.service_actif' | translate }}</span>
               <p-select appendTo="body" [options]="actifOptions" [(ngModel)]="sv.actif"
@@ -483,6 +488,12 @@ import { MessageService } from 'primeng/api';
         <p-select appendTo="body" [options]="periodiciteOptions" [(ngModel)]="newService.periodicite"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
       </div>
+      <div class="form-group" style="margin-bottom:14px" *ngIf="newService.periodicite === 'UNIQUE'">
+        <label>{{ 'parametres.service_periode' | translate }}</label>
+        <p-select appendTo="body" [options]="periodeUniqueOptions" [(ngModel)]="newService.mois_unique"
+                  optionLabel="label" optionValue="value" styleClass="w-full" />
+        <small style="color:#64748b;font-size:10px">{{ 'parametres.service_periode_aide' | translate }}</small>
+      </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="serviceDialogVisible=false" />
         <p-button [label]="'common.creer'   | translate" severity="success"
@@ -620,7 +631,19 @@ export class ParametresComponent implements OnInit {
 
   newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
   newSection = { nom:'' };
-  newService: any = { nom:'', montant:0, periodicite:'MENSUEL', actif:true };
+  newService: any = { nom:'', montant:0, periodicite:'MENSUEL', mois_unique:null, actif:true };
+
+  // Période d'exigibilité d'un service à paiement unique
+  // (null = à l'inscription, 1..12 = mois calendaire, libellés dans la langue active)
+  get periodeUniqueOptions() {
+    const lang = this.translate.currentLang || 'fr';
+    const opts: any[] = [{ label: this.translate.instant('parametres.periode_inscription'), value: null }];
+    for (let m = 1; m <= 12; m++) {
+      const nom = new Date(2000, m - 1, 1).toLocaleDateString(lang, { month: 'long' });
+      opts.push({ label: nom.charAt(0).toUpperCase() + nom.slice(1), value: m });
+    }
+    return opts;
+  }
 
   // ── Composition libre de l'inscription (frais de section flexibles) ──
   compositionDialogVisible = false;
@@ -873,7 +896,7 @@ chargerExercice() {
   }
 
   ouvrirDialogService() {
-    this.newService = { nom:'', montant:0, periodicite:'MENSUEL', actif:true };
+    this.newService = { nom:'', montant:0, periodicite:'MENSUEL', mois_unique:null, actif:true };
     this.serviceDialogVisible = true;
   }
 

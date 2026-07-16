@@ -282,6 +282,9 @@ class Service(TenantModel):
     nom         = models.CharField(max_length=100)
     montant     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     periodicite = models.CharField(max_length=10, choices=PERIODICITE_CHOICES, default='MENSUEL')
+    # Période d'exigibilité d'un service à paiement UNIQUE :
+    # None = dû à l'inscription ; 1..12 = dû au mois calendaire indiqué.
+    mois_unique = models.PositiveSmallIntegerField(null=True, blank=True)
     actif       = models.BooleanField(default=True)
 
     class Meta:
