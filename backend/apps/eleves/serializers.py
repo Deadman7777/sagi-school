@@ -108,3 +108,22 @@ class SectionSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'tenant': {'required': False, 'read_only': True},
         }
+
+    def validate(self, attrs):
+        """Composition libre de l'inscription : quand des éléments sont définis,
+        frais_inscription = somme des montants (source de vérité unique)."""
+        compo = attrs.get('composition_inscription',
+                          getattr(self.instance, 'composition_inscription', None))
+        if compo:
+            elements = []
+            for el in compo:
+                libelle = str(el.get('libelle', '')).strip()
+                try:
+                    montant = float(el.get('montant', 0) or 0)
+                except (TypeError, ValueError):
+                    montant = 0
+                if libelle:
+                    elements.append({'libelle': libelle, 'montant': montant})
+            attrs['composition_inscription'] = elements
+            attrs['frais_inscription'] = round(sum(e['montant'] for e in elements), 2)
+        return attrs

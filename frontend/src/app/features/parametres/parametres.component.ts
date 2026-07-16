@@ -185,7 +185,12 @@ import { MessageService } from 'primeng/api';
             <div class="sc-frais">
               <span>{{ 'parametres.inscription_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_inscription" mode="decimal"
-                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+                             [min]="0" styleClass="w-full" inputStyleClass="text-right"
+                             [disabled]="s.composition_inscription?.length > 0" />
+              <a class="compo-link" (click)="ouvrirComposition(s)">
+                🧩 {{ 'parametres.composer_inscription' | translate }}
+                <span *ngIf="s.composition_inscription?.length"> ({{ s.composition_inscription.length }})</span>
+              </a>
             </div>
             <div class="sc-frais">
               <span>{{ 'parametres.mensualite_frais' | translate }}</span>
@@ -485,6 +490,31 @@ import { MessageService } from 'primeng/api';
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog composition de l'inscription -->
+    <p-dialog [header]="'🧩 ' + ('parametres.composition_titre' | translate) + (sectionCompo ? ' — ' + sectionCompo.nom : '')"
+              [(visible)]="compositionDialogVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+      <p style="font-size:12px;color:#64748b;margin:0 0 12px">{{ 'parametres.composition_aide' | translate }}</p>
+      <div class="compo-row" *ngFor="let r of compoRows; let i = index">
+        <input pInputText [(ngModel)]="r.libelle" class="w-full"
+               [placeholder]="'parametres.element_libelle' | translate" />
+        <p-inputNumber [(ngModel)]="r.montant" mode="decimal" [min]="0"
+                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+        <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                  (onClick)="retirerCompoRow(i)" />
+      </div>
+      <p-button [label]="'parametres.ajouter_element' | translate" icon="pi pi-plus"
+                severity="secondary" size="small" (onClick)="ajouterCompoRow()" />
+      <div class="compo-total">
+        {{ 'parametres.composition_total' | translate }} :
+        <strong style="color:#00d4aa">{{ totalCompo() | number:'1.0-0' }} FCFA</strong>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="compositionDialogVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="validerComposition()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Dialog changer mot de passe -->
     <p-dialog [header]="'🔑 ' + ('parametres.changer_mdp_titre' | translate)" [(visible)]="mdpDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
@@ -538,6 +568,10 @@ import { MessageService } from 'primeng/api';
     .sc-frais-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .sc-frais { display:flex; flex-direction:column; gap:6px; }
     .sc-frais span { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
+    .compo-link { font-size:11px; color:#00d4aa; cursor:pointer; user-select:none; }
+    .compo-link:hover { text-decoration:underline; }
+    .compo-row { display:grid; grid-template-columns:1fr 140px 40px; gap:8px; align-items:center; margin-bottom:8px; }
+    .compo-total { margin-top:14px; padding-top:10px; border-top:1px solid #2a3f5f; font-size:13px; color:#94a3b8; text-align:right; }
     .sc-frais.total { grid-column:3/4; }
     .sc-total { font-size:16px; font-weight:700; color:#00d4aa; font-family:monospace; padding:8px 0; }
     .sc-actions { display:flex; justify-content:flex-end; margin-top:14px; padding-top:12px; border-top:1px solid #2a3f5f; }
@@ -587,6 +621,32 @@ export class ParametresComponent implements OnInit {
   newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
   newSection = { nom:'' };
   newService: any = { nom:'', montant:0, periodicite:'MENSUEL', actif:true };
+
+  // ── Composition libre de l'inscription (frais de section flexibles) ──
+  compositionDialogVisible = false;
+  sectionCompo: any = null;
+  compoRows: { libelle: string; montant: number }[] = [];
+
+  ouvrirComposition(s: any) {
+    this.sectionCompo = s;
+    this.compoRows = (s.composition_inscription || []).map((e: any) => ({ ...e }));
+    if (!this.compoRows.length) this.compoRows.push({ libelle: '', montant: 0 });
+    this.compositionDialogVisible = true;
+  }
+  ajouterCompoRow()        { this.compoRows.push({ libelle: '', montant: 0 }); }
+  retirerCompoRow(i: number) { this.compoRows.splice(i, 1); }
+  totalCompo(): number     { return this.compoRows.reduce((t, r) => t + (+r.montant || 0), 0); }
+
+  validerComposition() {
+    const rows = this.compoRows
+      .filter(r => (r.libelle || '').trim())
+      .map(r => ({ libelle: r.libelle.trim(), montant: +r.montant || 0 }));
+    this.sectionCompo.composition_inscription = rows;
+    // Liste vide = retour à la saisie directe du montant global
+    if (rows.length) this.sectionCompo.frais_inscription = rows.reduce((t, r) => t + r.montant, 0);
+    this.compositionDialogVisible = false;
+    this.sauvegarderSection(this.sectionCompo);
+  }
 
   periodiciteOptions = [
     { label: 'Mensuel',         value: 'MENSUEL' },

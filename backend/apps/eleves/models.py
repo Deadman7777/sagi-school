@@ -9,6 +9,11 @@ class Section(TenantModel):
     frais_mensualite   = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     frais_uniforme     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     frais_fournitures  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Composition libre de l'inscription globale, définie par l'école :
+    # [{"libelle": "Frais de dossier", "montant": 5000}, ...]. Quand elle est
+    # renseignée, frais_inscription = somme des éléments (calculée au save du
+    # serializer) — les paiements/reçus continuent de travailler sur le total.
+    composition_inscription = models.JSONField(default=list, blank=True)
     ordre              = models.IntegerField(default=0)
 
     class Meta:
