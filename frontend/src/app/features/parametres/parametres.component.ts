@@ -197,16 +197,8 @@ import { MessageService } from 'primeng/api';
               <p-inputNumber [(ngModel)]="s.frais_mensualite" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
-            <div class="sc-frais">
-              <span>{{ 'parametres.uniforme_frais' | translate }}</span>
-              <p-inputNumber [(ngModel)]="s.frais_uniforme" mode="decimal"
-                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
-            </div>
-            <div class="sc-frais">
-              <span>{{ 'parametres.fournitures_frais' | translate }}</span>
-              <p-inputNumber [(ngModel)]="s.frais_fournitures" mode="decimal"
-                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
-            </div>
+            <!-- Uniforme / fournitures : désormais des éléments de la composition
+                 de l'inscription (repliés par la migration eleves/0015) -->
           </div>
           <div class="sc-actions" style="display:flex;gap:8px">
             <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"

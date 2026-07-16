@@ -360,22 +360,28 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               </label>
               <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
-            <div class="form-group">
-              <label>Uniforme
-                @if (saisieDonnees()!.fees_nets.uniforme > 0) {
-                  <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.uniforme | number:'1.0-0' }}</span>
-                }
-              </label>
-              <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
-            </div>
-            <div class="form-group">
-              <label>Fournitures
-                @if (saisieDonnees()!.fees_nets.fournitures > 0) {
-                  <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.fournitures | number:'1.0-0' }}</span>
-                }
-              </label>
-              <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
-            </div>
+            <!-- Uniforme/fournitures : repliés dans la composition de l'inscription ;
+                 visibles seulement s'il reste un dû historique sur ces catégories -->
+            @if (saisieDonnees()!.fees_nets.uniforme > 0 || saisieDonnees()!.reste.uniforme > 0) {
+              <div class="form-group">
+                <label>Uniforme
+                  @if (saisieDonnees()!.fees_nets.uniforme > 0) {
+                    <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.uniforme | number:'1.0-0' }}</span>
+                  }
+                </label>
+                <p-inputNumber [(ngModel)]="form.montant_uniforme" [min]="0" mode="decimal" styleClass="w-full" />
+              </div>
+            }
+            @if (saisieDonnees()!.fees_nets.fournitures > 0 || saisieDonnees()!.reste.fournitures > 0) {
+              <div class="form-group">
+                <label>Fournitures
+                  @if (saisieDonnees()!.fees_nets.fournitures > 0) {
+                    <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.fournitures | number:'1.0-0' }}</span>
+                  }
+                </label>
+                <p-inputNumber [(ngModel)]="form.montant_fournitures" [min]="0" mode="decimal" styleClass="w-full" />
+              </div>
+            }
             <div class="form-group">
               <label>Divers</label>
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />

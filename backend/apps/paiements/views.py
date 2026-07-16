@@ -195,7 +195,20 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         # Lignes détail (uniquement les montants > 0)
         lignes = []
-        if p.montant_inscription: lignes.append(('Frais d\'inscription',  float(p.montant_inscription)))
+        if p.montant_inscription:
+            # Traçabilité : si l'école a composé son inscription (frais de
+            # dossier, assurance, tenue…) et que le paiement couvre le total,
+            # chaque élément figure sur le reçu. Paiement partiel → une seule
+            # ligne (la ventilation par élément serait arbitraire).
+            compo = (p.eleve.section.composition_inscription or []) if p.eleve.section else []
+            somme_compo = sum(float(e.get('montant') or 0) for e in compo)
+            if compo and abs(float(p.montant_inscription) - somme_compo) < 0.01:
+                for e in compo:
+                    m = float(e.get('montant') or 0)
+                    if m:
+                        lignes.append((e.get('libelle') or 'Inscription', m))
+            else:
+                lignes.append(('Frais d\'inscription', float(p.montant_inscription)))
         if p.montant_mensualite:
             label_mens = 'Mensualité scolaire'
             if mois_concernes:
