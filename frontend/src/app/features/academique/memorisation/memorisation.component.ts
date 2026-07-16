@@ -131,7 +131,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
       <div class="card-form">
         <h4>{{ 'daara.idjie_titre' | translate }}</h4>
         <p class="idjie-hint">{{ 'daara.idjie_aide' | translate }}</p>
-        <div class="grid">
+        <div class="form-grid">
           <div class="fg full">
             <label>{{ 'daara.idjie_niveau' | translate }}</label>
             <p-select appendTo="body" [options]="niveauIdjieOptions" [(ngModel)]="formIdjieNiveau"
@@ -147,7 +147,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
     @if (vue()==='suivi' && parcoursActif() && !estIdjie()) {
       <div class="card-form">
         <h4>{{ 'daara.nouvelle_entree' | translate }}</h4>
-        <div class="grid">
+        <div class="form-grid">
           <div class="fg">
             <label>{{ 'daara.date' | translate }}</label>
             <input pInputText type="date" [(ngModel)]="formSuivi.date" class="w-full" />
@@ -278,7 +278,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
     <!-- ════════════════ DIALOG PARCOURS ════════════════ -->
     <p-dialog [header]="(editParcoursId ? 'daara.modifier_parcours' : 'daara.nouveau_parcours') | translate"
               [(visible)]="dialogParcours" [modal]="true" [style]="{width:'460px'}" [draggable]="false">
-      <div class="grid">
+      <div class="form-grid">
         <div class="fg full">
           <label>{{ 'daara.nongo' | translate }} *</label>
           <p-select appendTo="body" [options]="eleves()" [(ngModel)]="formParcours.eleve"
@@ -326,7 +326,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
     <!-- ════════════════ DIALOG NIVEAU ════════════════ -->
     <p-dialog [header]="(editNiveauId ? 'daara.modifier_niveau' : 'daara.nouveau_niveau') | translate"
               [(visible)]="dialogNiveau" [modal]="true" [style]="{width:'420px'}" [draggable]="false">
-      <div class="grid">
+      <div class="form-grid">
         <div class="fg full">
           <label>{{ 'daara.niveau' | translate }} (FR) *</label>
           <input pInputText [(ngModel)]="formNiveau.nom_fr" class="w-full" />
@@ -366,7 +366,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
     .card-form { background:#16233a; border:1px solid #2a3f5f; border-radius:10px; padding:16px; margin-bottom:16px; }
     .card-form h4, h4 { color:#e8f0fe; margin:0 0 12px; font-size:14px; }
     .idjie-hint { color:#94a3b8; font-size:12px; margin:-6px 0 12px; }
-    .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
     .fg { display:flex; flex-direction:column; gap:4px; }
     .fg.full { grid-column:1 / -1; }
     .fg.sm { max-width:120px; }
