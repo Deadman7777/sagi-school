@@ -421,26 +421,28 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             </div>
           </div>
 
-          <!-- Services optionnels auxquels l'élève est abonné (montant auto) -->
-          @if (form.services.length) {
-            <div class="form-group full" style="margin-top:6px">
-              <label>Services / Activités abonnés
-                @if (form.mois_regles.length > 1) {
-                  <span class="fee-hint">× {{ form.mois_regles.length }} mois</span>
-                }
-              </label>
-              <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
-                @for (sv of form.services; track sv.id) {
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <p-checkbox [(ngModel)]="sv.inclus" [binary]="true" />
-                    <span style="flex:1;font-size:13px;color:#e8f0fe">{{ sv.nom }}</span>
-                    <p-inputNumber [(ngModel)]="sv.montant" [min]="0" mode="decimal"
-                                   [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
-                  </div>
-                }
-              </div>
+        }
+
+        <!-- Services abonnés du contexte : uniques « à l'inscription » en type
+             INSCRIPTION, mensuels + uniques du mois coché en type MENSUALITE -->
+        @if (form.services.length) {
+          <div class="form-group full" style="margin-top:6px">
+            <label>Services / Activités abonnés
+              @if (typePaiement === 'MENSUALITE' && form.mois_regles.length > 1) {
+                <span class="fee-hint">mensuels × {{ form.mois_regles.length }} mois</span>
+              }
+            </label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+              @for (sv of form.services; track sv.id) {
+                <div style="display:flex;align-items:center;gap:8px">
+                  <p-checkbox [(ngModel)]="sv.inclus" [binary]="true" />
+                  <span style="flex:1;font-size:13px;color:#e8f0fe">{{ sv.nom }}</span>
+                  <p-inputNumber [(ngModel)]="sv.montant" [min]="0" mode="decimal"
+                                 [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
+                </div>
+              }
             </div>
-          }
+          </div>
         }
 
         <!-- Total -->
@@ -968,7 +970,6 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_mensualite   = 0;
       this.form.montant_cantine      = 0;
       this.form.mois_regles          = [];
-      this.form.services             = [];
     } else {
       // Pré-sélectionne le 1er mois dû non encore réglé
       const dus = (data.mois_ecole || []).filter((m: any) => m.du && !m.paye);
@@ -977,13 +978,39 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_inscription  = 0;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
-      // Services abonnés : montant auto = tarif du service × nb mois sélectionnés, cochés par défaut
-      this.form.services = (data.services || []).map((s: any) => ({
-        id: s.id, nom: s.nom, tarif: s.montant || 0,
-        montant: Math.round((s.montant || 0) * this.form.mois_regles.length), inclus: true,
-      }));
     }
+    this.construireServices();
     this.form.montant_divers = 0;
+  }
+
+  // Services abonnés proposés selon le contexte du paiement :
+  // - UNIQUE « à l'inscription » (mois_unique null) → uniquement en type INSCRIPTION
+  // - UNIQUE « mois X » → uniquement si le mois X fait partie des mois réglés
+  // - MENSUEL → mensualités, montant = tarif × nb mois sélectionnés
+  private construireServices() {
+    const data = this.saisieDonnees();
+    if (!data) { this.form.services = []; return; }
+    const inclusAvant = new Map((this.form.services || []).map(s => [s.id, s.inclus]));
+    const tous = data.services || [];
+    let retenus: any[];
+    if (this.typePaiement === 'INSCRIPTION') {
+      retenus = tous
+        .filter((s: any) => s.periodicite === 'UNIQUE' && !s.mois_unique)
+        .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
+                            montant: Math.round(s.montant || 0) }));
+    } else {
+      const nb = this.form.mois_regles.length;
+      retenus = [
+        ...tous.filter((s: any) => s.periodicite === 'MENSUEL')
+               .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
+                                   montant: Math.round((s.montant || 0) * nb) })),
+        ...tous.filter((s: any) => s.periodicite === 'UNIQUE' && s.mois_unique &&
+                                   this.form.mois_regles.includes(s.mois_unique))
+               .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
+                                   montant: Math.round(s.montant || 0) })),
+      ];
+    }
+    this.form.services = retenus.map(s => ({ ...s, inclus: inclusAvant.get(s.id) ?? true }));
   }
 
   servicesTotal(): number {
@@ -1004,10 +1031,9 @@ export class PaiementsComponent implements OnInit {
     const tarif = this.saisieDonnees()?.fees_nets?.mensualite || 0;
     const nb    = this.form.mois_regles.length;
     this.form.montant_mensualite = Math.round(tarif * nb);
-    // Les services abonnés suivent aussi le nombre de mois (tarif unitaire × nb mois)
-    for (const sv of this.form.services) {
-      sv.montant = Math.round((sv.tarif || 0) * nb);
-    }
+    // Services : les mensuels suivent le nb de mois, les uniques « mois X »
+    // n'apparaissent que si leur mois est coché
+    this.construireServices();
   }
 
   private resetForm() {
