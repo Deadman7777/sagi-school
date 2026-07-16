@@ -247,6 +247,21 @@ class RapportParentPDFView(APIView):
 
         suivis = []
         for s in parcours.suivis.select_related('sourate_debut', 'sourate_fin')[:25]:
+            if s.mode == 'HIZB' and s.hizb_debut:
+                # Portion saisie par hizb → afficher les hizb, pas les bornes dérivées
+                suivis.append({
+                    'date': s.date,
+                    'deb_fr': f'Hizb {s.hizb_debut}',
+                    'deb_ar': shape_ar(f'حزب {s.hizb_debut}'),
+                    'vd': '',
+                    'fin_fr': f'Hizb {s.hizb_fin}',
+                    'fin_ar': shape_ar(f'حزب {s.hizb_fin}'),
+                    'vf': '',
+                    'qualite': s.get_qualite_display(),
+                    'present': s.present,
+                    'observation': s.observation,
+                })
+                continue
             suivis.append({
                 'date': s.date,
                 'deb_fr': s.sourate_debut.nom_fr if s.sourate_debut_id else '—',

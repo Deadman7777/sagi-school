@@ -133,16 +133,53 @@ class ParcoursNongo(TenantModel):
         return f"Parcours {self.eleve} ({self.riwaya})"
 
 
+def bornes_hizb(riwaya, hizb_debut, hizb_fin):
+    """Bornes (sourate_debut, verset_debut, sourate_fin, verset_fin) couvrant
+    les hizb hizb_debut..hizb_fin inclus, pour une riwaaya donnée.
+    La fin d'un hizb = le verset précédant le début du hizb suivant
+    (dernier verset du Coran pour le hizb 60)."""
+    subs = {s.numero: s for s in Subdivision.objects
+            .filter(riwaya=riwaya, type='HIZB')
+            .select_related('sourate_debut')}
+    deb = subs.get(hizb_debut)
+    if deb is None or hizb_fin not in subs:
+        raise ValueError(f'Hizb {hizb_debut}..{hizb_fin} hors bornes ({riwaya}) '
+                         f'— vérifier la saisie ou lancer init_coran.')
+    suivant = subs.get(hizb_fin + 1)
+    if suivant is None:                                  # hizb 60 → fin du Coran
+        s_fin = Sourate.objects.get(numero=114)
+        v_fin = s_fin.nb_versets(riwaya)
+    elif suivant.verset_debut > 1:
+        s_fin, v_fin = suivant.sourate_debut, suivant.verset_debut - 1
+    else:                                                # hizb suivant en tête de sourate
+        s_fin = Sourate.objects.get(numero=suivant.sourate_debut.numero - 1)
+        v_fin = s_fin.nb_versets(riwaya)
+    return deb.sourate_debut, deb.verset_debut, s_fin, v_fin
+
+
 class SuiviQuotidien(TenantModel):
-    """Entrée de suivi quotidien : portion travaillée + qualité + présence."""
+    """Entrée de suivi quotidien : portion travaillée + qualité + présence.
+
+    Deux méthodes de saisie selon la pédagogie du Daara : par sourate
+    (bornes sourate:verset saisies) ou par hizb (hizb_debut..hizb_fin ; les
+    bornes sourate:verset sont alors dérivées de la table Subdivision à
+    l'enregistrement, si bien que la progression — versets couverts, juz,
+    hizb complets — reste exacte même en mélangeant les deux méthodes)."""
     QUALITE_CHOICES = [
         ('BIEN',     'Bien'),
         ('MOYEN',    'Moyen'),
         ('A_REVOIR', 'À revoir'),
     ]
+    MODE_CHOICES = [
+        ('SOURATE', 'Par sourate'),
+        ('HIZB',    'Par hizb'),
+    ]
     parcours       = models.ForeignKey(ParcoursNongo, on_delete=models.CASCADE,
                                        related_name='suivis')
     date           = models.DateField()
+    mode           = models.CharField(max_length=8, choices=MODE_CHOICES, default='SOURATE')
+    hizb_debut     = models.PositiveSmallIntegerField(null=True, blank=True)   # 1..60
+    hizb_fin       = models.PositiveSmallIntegerField(null=True, blank=True)
     sourate_debut  = models.ForeignKey(Sourate, on_delete=models.SET_NULL,
                                        null=True, blank=True, related_name='+')
     verset_debut   = models.PositiveSmallIntegerField(default=1)

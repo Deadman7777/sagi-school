@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from .models import Sourate, Subdivision, NiveauDaara, ParcoursNongo, SuiviQuotidien
+from .models import (Sourate, Subdivision, NiveauDaara, ParcoursNongo,
+                     SuiviQuotidien, bornes_hizb)
 
 
 class SourateSerializer(serializers.ModelSerializer):
@@ -53,3 +54,30 @@ class SuiviQuotidienSerializer(serializers.ModelSerializer):
             'sourate_debut': {'required': False, 'allow_null': True},
             'sourate_fin': {'required': False, 'allow_null': True},
         }
+
+    def validate(self, attrs):
+        """Mode HIZB : bornes hizb requises, puis dérivation des bornes
+        sourate:verset (riwaaya du parcours) pour que la progression reste
+        exacte. Mode SOURATE : on nettoie les champs hizb."""
+        mode = attrs.get('mode', getattr(self.instance, 'mode', 'SOURATE'))
+        if mode != 'HIZB':
+            attrs['hizb_debut'] = None
+            attrs['hizb_fin']   = None
+            return attrs
+
+        h1 = attrs.get('hizb_debut', getattr(self.instance, 'hizb_debut', None))
+        h2 = attrs.get('hizb_fin',   getattr(self.instance, 'hizb_fin',   None))
+        if not h1 or not h2:
+            raise serializers.ValidationError(
+                {'hizb_debut': 'Hizb de début et de fin requis en saisie par hizb.'})
+        h1, h2 = min(h1, h2), max(h1, h2)
+        parcours = attrs.get('parcours') or (self.instance.parcours if self.instance else None)
+        riwaya   = parcours.riwaya if parcours else 'HAFS'
+        try:
+            s_deb, v_deb, s_fin, v_fin = bornes_hizb(riwaya, h1, h2)
+        except ValueError as e:
+            raise serializers.ValidationError({'hizb_debut': str(e)})
+        attrs.update(hizb_debut=h1, hizb_fin=h2,
+                     sourate_debut=s_deb, verset_debut=v_deb,
+                     sourate_fin=s_fin,   verset_fin=v_fin)
+        return attrs

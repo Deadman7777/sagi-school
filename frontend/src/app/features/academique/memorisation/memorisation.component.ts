@@ -157,26 +157,47 @@ import { ElevesService } from '../../../core/services/eleves.service';
             <p-select appendTo="body" [options]="qualiteOptions" [(ngModel)]="formSuivi.qualite"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
           </div>
+          <!-- Méthode de mémorisation du daara : par sourate ou par hizb -->
           <div class="fg">
-            <label>{{ 'daara.sourate_debut' | translate }}</label>
-            <p-select appendTo="body" [options]="sourates()" [(ngModel)]="formSuivi.sourate_debut"
-                      optionLabel="label" optionValue="id" [filter]="true" filterBy="label"
-                      [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+            <label>{{ 'daara.methode' | translate }}</label>
+            <p-select appendTo="body" [options]="modeOptions" [(ngModel)]="formSuivi.mode"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
           </div>
-          <div class="fg sm">
-            <label>{{ 'daara.verset' | translate }}</label>
-            <p-inputNumber [(ngModel)]="formSuivi.verset_debut" [min]="1" styleClass="w-full" />
-          </div>
-          <div class="fg">
-            <label>{{ 'daara.sourate_fin' | translate }}</label>
-            <p-select appendTo="body" [options]="sourates()" [(ngModel)]="formSuivi.sourate_fin"
-                      optionLabel="label" optionValue="id" [filter]="true" filterBy="label"
-                      [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
-          </div>
-          <div class="fg sm">
-            <label>{{ 'daara.verset' | translate }}</label>
-            <p-inputNumber [(ngModel)]="formSuivi.verset_fin" [min]="1" styleClass="w-full" />
-          </div>
+          @if (formSuivi.mode === 'HIZB') {
+            <div class="fg">
+              <label>{{ 'daara.hizb_debut' | translate }}</label>
+              <p-select appendTo="body" [options]="hizbs()" [(ngModel)]="formSuivi.hizb_debut"
+                        optionLabel="label" optionValue="numero" [filter]="true" filterBy="label"
+                        [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+            </div>
+            <div class="fg">
+              <label>{{ 'daara.hizb_fin' | translate }}</label>
+              <p-select appendTo="body" [options]="hizbs()" [(ngModel)]="formSuivi.hizb_fin"
+                        optionLabel="label" optionValue="numero" [filter]="true" filterBy="label"
+                        [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+            </div>
+          } @else {
+            <div class="fg">
+              <label>{{ 'daara.sourate_debut' | translate }}</label>
+              <p-select appendTo="body" [options]="sourates()" [(ngModel)]="formSuivi.sourate_debut"
+                        optionLabel="label" optionValue="id" [filter]="true" filterBy="label"
+                        [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+            </div>
+            <div class="fg sm">
+              <label>{{ 'daara.verset' | translate }}</label>
+              <p-inputNumber [(ngModel)]="formSuivi.verset_debut" [min]="1" styleClass="w-full" />
+            </div>
+            <div class="fg">
+              <label>{{ 'daara.sourate_fin' | translate }}</label>
+              <p-select appendTo="body" [options]="sourates()" [(ngModel)]="formSuivi.sourate_fin"
+                        optionLabel="label" optionValue="id" [filter]="true" filterBy="label"
+                        [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
+            </div>
+            <div class="fg sm">
+              <label>{{ 'daara.verset' | translate }}</label>
+              <p-inputNumber [(ngModel)]="formSuivi.verset_fin" [min]="1" styleClass="w-full" />
+            </div>
+          }
           <div class="fg check">
             <p-checkbox [(ngModel)]="formSuivi.present" [binary]="true" inputId="present" />
             <label for="present">{{ 'daara.present' | translate }}</label>
@@ -204,7 +225,13 @@ import { ElevesService } from '../../../core/services/eleves.service';
         <ng-template pTemplate="body" let-s>
           <tr>
             <td>{{ s.date }}</td>
-            <td>{{ s.sourate_debut_nom }} {{ s.verset_debut }} → {{ s.sourate_fin_nom }} {{ s.verset_fin }}</td>
+            <td>
+              @if (s.mode === 'HIZB') {
+                {{ 'daara.hizb' | translate }} {{ s.hizb_debut }}@if (s.hizb_fin !== s.hizb_debut) { → {{ s.hizb_fin }}}
+              } @else {
+                {{ s.sourate_debut_nom }} {{ s.verset_debut }} → {{ s.sourate_fin_nom }} {{ s.verset_fin }}
+              }
+            </td>
             <td><p-tag [value]="s.qualite" [severity]="s.qualite==='BIEN' ? 'success' : (s.qualite==='A_REVOIR' ? 'danger' : 'warn')" /></td>
             <td>{{ s.present ? '✓' : '✗' }}</td>
             <td>{{ s.observation }}</td>
@@ -402,6 +429,15 @@ export class MemorisationComponent implements OnInit {
     { label: 'Moyen', value: 'MOYEN' },
     { label: 'À revoir', value: 'A_REVOIR' },
   ];
+  // Saisie du suivi : certains daaras mémorisent par sourate, d'autres par hizb
+  get modeOptions() {
+    return [
+      { label: this.translate.instant('daara.par_sourate'), value: 'SOURATE' },
+      { label: this.translate.instant('daara.par_hizb'),    value: 'HIZB' },
+    ];
+  }
+  hizbs = signal<any[]>([]);
+  private hizbsRiwaya: string | null = null;   // riwaaya des hizb déjà chargés
   categorieOptions = [
     { label: 'Idjie (alphabet)', value: 'IDJIE' },
     { label: 'Mémorisation', value: 'MEMORISATION' },
@@ -489,9 +525,24 @@ export class MemorisationComponent implements OnInit {
       this.formIdjieNiveau = p.niveau_idjie || null;
       return;
     }
-    this.formSuivi = { date: new Date().toISOString().split('T')[0], qualite: 'MOYEN',
+    this.formSuivi = { date: new Date().toISOString().split('T')[0], qualite: 'MOYEN', mode: 'SOURATE',
                        verset_debut: 1, verset_fin: 1, present: true, observation: '' };
-    this.daara.getSuivi(p.id).subscribe(l => this.suivis.set(l || []));
+    this.daara.getSuivi(p.id).subscribe(l => {
+      this.suivis.set(l || []);
+      // Reprendre la méthode de la dernière entrée (le daara garde ses habitudes)
+      if (l?.[0]?.mode) this.formSuivi.mode = l[0].mode;
+    });
+    this.chargerHizbs(p.riwaya);
+  }
+
+  chargerHizbs(riwaya: string) {
+    if (this.hizbsRiwaya === riwaya) return;
+    this.daara.getSubdivisions({ riwaya, type: 'HIZB' }).subscribe(l => {
+      this.hizbs.set((l || []).map(h => ({
+        ...h, label: `${this.translate.instant('daara.hizb')} ${h.numero} — ${h.sourate_nom_fr} ${h.verset_debut}`,
+      })));
+      this.hizbsRiwaya = riwaya;
+    });
   }
 
   enregistrerNiveauIdjie() {
@@ -513,6 +564,11 @@ export class MemorisationComponent implements OnInit {
   enregistrerSuivi() {
     const p = this.parcoursActif();
     if (!p) return;
+    if (this.formSuivi.mode === 'HIZB' && (!this.formSuivi.hizb_debut || !this.formSuivi.hizb_fin)) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('common.requis'),
+                     detail: this.translate.instant('daara.hizb_requis') });
+      return;
+    }
     this.saving.set(true);
     this.daara.creerSuivi({ ...this.formSuivi, parcours: p.id }).subscribe({
       next: () => { this.saving.set(false); this.chargerSuivi(); },
