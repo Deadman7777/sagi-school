@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
@@ -352,6 +353,11 @@ interface PecForm {
             <div class="fiche-row"><span>Statut</span>
               <p-tag [value]="statutLabel(e.statut)" [severity]="statutSeverity(e.statut)" /></div>
             <div class="fiche-row"><span>Date inscription</span><strong>{{ e.date_inscription || '—' }}</strong></div>
+            @if (e.regime === 'PASSAGER') {
+              <div class="fiche-row"><span>{{ 'eleves.regime' | translate }}</span>
+                <p-tag [value]="('eleves.regime_passager' | translate) + ' — ' + e.nb_mois_passager + ' ' + ('eleves.mois' | translate)"
+                       severity="info" /></div>
+            }
             @if (e.prise_en_charge || e.type_pec) {
               <div class="fiche-row"><span>Motif PEC</span>
                 <p-tag [value]="pecLabel(e.prise_en_charge)" [severity]="pecSeverity(e.prise_en_charge)" /></div>
@@ -557,6 +563,22 @@ interface PecForm {
           <input pInputText type="date" [(ngModel)]="nouvelEleve.date_inscription" class="w-full" />
           <small style="color:#64748b;font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
         </div>
+        <!-- Daara : type de ndongo (permanent = exercice / passager = durée en mois) -->
+        @if (estDaara()) {
+          <div class="form-group">
+            <label>{{ 'eleves.regime' | translate }} *</label>
+            <p-select appendTo="body" [options]="regimeOptions" [(ngModel)]="nouvelEleve.regime"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+          @if (nouvelEleve.regime === 'PASSAGER') {
+            <div class="form-group">
+              <label>{{ 'eleves.nb_mois' | translate }} *</label>
+              <p-inputNumber [(ngModel)]="nouvelEleve.nb_mois_passager" [min]="1" [max]="36"
+                             [showButtons]="true" styleClass="w-full" inputStyleClass="w-full" />
+              <small style="color:#64748b;font-size:10px">{{ 'eleves.nb_mois_aide' | translate }}</small>
+            </div>
+          }
+        }
         <div class="form-group">
           <label>{{ 'eleves.lieu_naissance' | translate }} *</label>
           <input pInputText [(ngModel)]="nouvelEleve.lieu_naissance" class="w-full"
@@ -729,6 +751,12 @@ export class ElevesListeComponent implements OnInit {
   private translate     = inject(TranslateService);
   private elevesService = inject(ElevesService);
   private msg           = inject(MessageService);
+  private auth          = inject(AuthService);
+
+  // Licence Taxawu Daara : les ndongos peuvent être « passagers » (durée en mois)
+  estDaara(): boolean {
+    return this.auth.currentUser()?.type_licence === 'TAXAWU_DAARA';
+  }
 
   eleves        = signal<Eleve[]>([]);
   elevesFiltres = signal<Eleve[]>([]);
@@ -828,6 +856,12 @@ export class ElevesListeComponent implements OnInit {
     { label: 'Garçon', value: 'G' },
     { label: 'Fille',  value: 'F' },
   ];
+  get regimeOptions() {
+    return [
+      { label: this.translate.instant('eleves.regime_permanent'), value: 'EXERCICE' },
+      { label: this.translate.instant('eleves.regime_passager'),  value: 'PASSAGER' },
+    ];
+  }
 
   ngOnInit() {
     this.chargerEleves();
@@ -1112,7 +1146,7 @@ export class ElevesListeComponent implements OnInit {
 
   ouvrirDialog() {
     this.editId = null;
-    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0] };
+    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE' };
     this.dialogVisible = true;
   }
 
@@ -1126,6 +1160,8 @@ export class ElevesListeComponent implements OnInit {
       genre:            eleve.genre,
       date_naissance:   eleve.date_naissance,
       date_inscription: eleve.date_inscription,
+      regime:           eleve.regime || 'EXERCICE',
+      nb_mois_passager: eleve.nb_mois_passager,
       lieu_naissance:   eleve.lieu_naissance,
       nom_pere:         eleve.nom_pere,
       telephone_pere:   eleve.telephone_pere,
@@ -1159,6 +1195,12 @@ export class ElevesListeComponent implements OnInit {
     if (!e.genre || !e.date_naissance || !e.lieu_naissance || !e.date_inscription) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.tous_champs_obligatoires') });
+      return;
+    }
+    // Ndongo passager (daara) : la durée en mois est obligatoire
+    if (e.regime === 'PASSAGER' && !e.nb_mois_passager) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.nb_mois_obligatoire') });
       return;
     }
     // Au moins un parent complet (nom + téléphone)

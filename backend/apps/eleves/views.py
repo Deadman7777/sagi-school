@@ -307,13 +307,20 @@ class EleveViewSet(viewsets.ModelViewSet):
         mois_ecole = []
         if exercice:
             nb_total = exercice.nb_mensualites
-            y, mo = exercice.date_debut.year, exercice.date_debut.month
-            for i in range(nb_total):
+            debut    = exercice.date_debut
+            insc     = eleve.date_inscription or debut
+            # Index du 1er mois dû = mois écoulés entre le début d'exercice et l'entrée
+            debut_du = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
+            # Régime passager : la fenêtre due (entrée + nb mois convenus) peut
+            # dépasser la fin d'exercice → on affiche jusqu'à son dernier mois dû
+            nb_aff   = max(nb_total, debut_du + nb_dus) if eleve.regime == 'PASSAGER' else nb_total
+            y, mo = debut.year, debut.month
+            for i in range(nb_aff):
                 mois_ecole.append({
                     'num':   mo,
                     'annee': y,
                     'label': MOIS_FR.get(mo, str(mo)),
-                    'du':    i >= (nb_total - nb_dus),   # les mois avant l'entrée ne sont pas dus
+                    'du':    debut_du <= i < debut_du + nb_dus,   # les mois avant l'entrée ne sont pas dus
                     'paye':  mo in mois_payes,
                 })
                 mo += 1

@@ -49,6 +49,16 @@ class Eleve(TenantModel):
         ('MENSUALITES',  'Mensualités uniquement'),
         ('TOTALE',       'Prise en charge totale'),
     ]
+    # Daara (licence Taxawu Daara) : un ndongo « passager » arrive à n'importe
+    # quel moment (ex. vacances de son école classique) pour une durée convenue.
+    # Il doit nb_mois_passager mensualités à partir de sa date d'entrée — ni les
+    # mois de l'exercice avant son arrivée, ni le plafond de fin d'exercice.
+    # Si son séjour déborde sur l'exercice suivant, on le réinscrit avec les
+    # mois restants (le solde impayé passe par la reprise à la clôture).
+    REGIME_CHOICES = [
+        ('EXERCICE', "Permanent — mensualités de l'exercice"),
+        ('PASSAGER', 'Passager — durée convenue en mois'),
+    ]
 
     exercice              = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
     section               = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
@@ -68,6 +78,9 @@ class Eleve(TenantModel):
     telephone_mere        = models.CharField(max_length=20, blank=True)
     date_inscription      = models.DateField(default=datetime.date.today,
                                               help_text="Date d'entrée — sert au prorata des mensualités dues")
+    regime                = models.CharField(max_length=10, choices=REGIME_CHOICES, default='EXERCICE')
+    nb_mois_passager      = models.PositiveIntegerField(null=True, blank=True,
+                                              help_text='Mensualités dues depuis la date d\'entrée (régime passager)')
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
     # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
@@ -119,7 +132,12 @@ class Eleve(TenantModel):
     def nb_mensualites_dues(self):
         """Nombre de mensualités réellement dues, au prorata de la date d'entrée.
         Ex. exercice débutant en octobre, élève inscrit en janvier → on ne compte
-        pas oct/nov/déc. Plafonné à nb_mensualites de l'exercice."""
+        pas oct/nov/déc. Plafonné à nb_mensualites de l'exercice.
+        Régime PASSAGER (daara) : la durée convenue prime — le ndongo doit
+        nb_mois_passager mensualités depuis son entrée, sans plafond de fin
+        d'exercice (séjour à cheval → réinscrire avec les mois restants)."""
+        if self.regime == 'PASSAGER' and self.nb_mois_passager:
+            return self.nb_mois_passager
         if not self.exercice_id:
             return 10
         nb    = self.exercice.nb_mensualites
@@ -191,7 +209,9 @@ class Eleve(TenantModel):
 
     def mois_echus(self, today=None):
         """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée
-        de l'élève (mois courant inclus), plafonné au nombre de mensualités dues."""
+        de l'élève (mois courant inclus), plafonné au nombre de mensualités dues.
+        Le plafond nb_mensualites_dues couvre les deux régimes : fin d'exercice
+        pour EXERCICE, durée convenue pour PASSAGER (qui peut dépasser l'exercice)."""
         from django.utils import timezone
         if not self.exercice_id:
             return 0
@@ -200,8 +220,7 @@ class Eleve(TenantModel):
         insc  = self.date_inscription or debut
         mois_avant = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
         elapsed_incl = (today.year - debut.year) * 12 + (today.month - debut.month) + 1
-        elapsed_incl = max(0, min(elapsed_incl, self.exercice.nb_mensualites))
-        return max(0, elapsed_incl - mois_avant)
+        return max(0, min(elapsed_incl - mois_avant, self.nb_mensualites_dues))
 
     def niveau_alerte_detail(self, total_paye, mensualites_payees, today=None):
         """Source de vérité unique des alertes paiement → (niveau, nb_mois_arrieres).

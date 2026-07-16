@@ -38,6 +38,9 @@ export interface Eleve {
   nom_mere: string;
   telephone_mere: string;
   date_inscription: string;
+  // Daara (Taxawu Daara) : passager = durée convenue en mois depuis l'entrée
+  regime: 'EXERCICE' | 'PASSAGER';
+  nb_mois_passager: number | null;
   statut: string;
   // Prise en charge — motif
   prise_en_charge: string | null;

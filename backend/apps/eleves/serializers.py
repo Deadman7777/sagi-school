@@ -40,6 +40,18 @@ class EleveSerializer(serializers.ModelSerializer):
             'matricule': {'required': False, 'allow_null': True, 'allow_blank': True},
         }
 
+    def validate(self, attrs):
+        """Régime passager (daara) : la durée en mois est obligatoire ;
+        en régime exercice on nettoie le champ pour éviter toute ambiguïté."""
+        regime = attrs.get('regime', getattr(self.instance, 'regime', 'EXERCICE'))
+        nb     = attrs.get('nb_mois_passager', getattr(self.instance, 'nb_mois_passager', None))
+        if regime == 'PASSAGER' and not nb:
+            raise serializers.ValidationError(
+                {'nb_mois_passager': 'Nombre de mois requis pour un ndongo passager.'})
+        if regime == 'EXERCICE':
+            attrs['nb_mois_passager'] = None
+        return attrs
+
     def get_classe_nom(self, obj):
         return obj.classe.nom if obj.classe_id else ''
 
