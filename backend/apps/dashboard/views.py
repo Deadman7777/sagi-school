@@ -119,8 +119,10 @@ class DashboardKPIView(APIView):
 
         paiements      = Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF')
         total_recettes = sum_paiements(paiements)
+        # Charges directes (CHARGE) + comptabilisations de budget (BUDGET) :
+        # même suivi au tableau de bord quelle que soit l'origine de la charge.
         charges_agg    = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice, source='CHARGE',
+            tenant=tenant, exercice=exercice, source__in=('CHARGE', 'BUDGET'),
         ).filter(
             Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
         ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))

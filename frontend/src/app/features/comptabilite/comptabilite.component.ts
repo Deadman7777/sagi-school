@@ -919,6 +919,48 @@ import { TooltipModule } from 'primeng/tooltip';
       </div>
     </div>
 
+    <!-- Comparaison mensuelle budgétisé / réalisé -->
+    <div class="budget-mensuel-card" *ngIf="budget()?.mois_totaux?.length">
+      <div class="bm-head">
+        <h4 style="margin:0;color:#e8f0fe">📅 Suivi mensuel — Budgétisé vs Réalisé</h4>
+        <span style="font-size:11px;color:#64748b">Toutes lignes confondues · l'écart négatif signale un dépassement</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="budget-tbl bm-tbl">
+          <thead>
+            <tr>
+              <th>Mois</th><th class="num">Budgétisé</th><th class="num">Réalisé</th>
+              <th class="num">Écart</th><th class="num">%</th><th style="min-width:120px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let m of budget()!.mois_totaux" [class.ligne-depasse]="m.realise > m.prevu">
+              <td>{{ m.nom }}</td>
+              <td class="num mono">{{ m.prevu | number:'1.0-0' }}</td>
+              <td class="num mono" [class.over-budget]="m.realise > m.prevu">{{ m.realise | number:'1.0-0' }}</td>
+              <td class="num mono" [style.color]="m.ecart < 0 ? '#ef4444' : '#10b981'">{{ m.ecart | number:'1.0-0' }}</td>
+              <td class="num mono">{{ m.prevu ? ((m.realise / m.prevu * 100) | number:'1.0-0') : '—' }}<span *ngIf="m.prevu"> %</span></td>
+              <td>
+                <div class="bm-bar">
+                  <div class="bm-fill" [style.width.%]="pctBarre(m)" [class.bm-over]="m.realise > m.prevu"></div>
+                </div>
+              </td>
+            </tr>
+            <tr class="bm-total">
+              <td><strong>Total annuel</strong></td>
+              <td class="num mono"><strong>{{ budget()!.totaux.total.prevu | number:'1.0-0' }}</strong></td>
+              <td class="num mono" [class.over-budget]="budget()!.totaux.total.realise > budget()!.totaux.total.prevu">
+                <strong>{{ budget()!.totaux.total.realise | number:'1.0-0' }}</strong></td>
+              <td class="num mono" [style.color]="budget()!.totaux.total.prevu - budget()!.totaux.total.realise < 0 ? '#ef4444' : '#10b981'">
+                <strong>{{ budget()!.totaux.total.prevu - budget()!.totaux.total.realise | number:'1.0-0' }}</strong></td>
+              <td class="num mono"><strong>{{ txRealisation() }} %</strong></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Tableau budget -->
     <div class="budget-table-wrap" *ngIf="budget()?.lignes?.length">
       <table class="budget-tbl">
@@ -952,6 +994,8 @@ import { TooltipModule } from 'primeng/tooltip';
             <td>
               <p-button icon="pi pi-check-circle" [rounded]="true" [text]="true" severity="success"
                         pTooltip="Comptabiliser (créer écriture charge)" (onClick)="ouvrirComptabiliserBudget(l)" />
+              <p-button icon="pi pi-list" [rounded]="true" [text]="true" severity="info"
+                        pTooltip="Écritures comptabilisées (modifier / annuler)" (onClick)="ouvrirEcrituresBudget(l)" />
               <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                         pTooltip="Modifier" (onClick)="ouvrirModifierBudget(l)" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
@@ -1280,6 +1324,76 @@ import { TooltipModule } from 'primeng/tooltip';
     </ng-template>
   </p-dialog>
 
+  <!-- Dialog Écritures d'une ligne budget (modifier / annuler) -->
+  <p-dialog [header]="'📜 Écritures — ' + (ligneEcritures()?.no_compte || '')"
+            [(visible)]="dialogEcrituresVisible" [modal]="true" [style]="{width:'680px'}" [draggable]="false">
+    @if (ligneEcritures(); as lb) {
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">
+        {{ lb.libelle }} — les écritures comptabilisées depuis le budget.
+        Modifier/annuler passe par des contre-écritures (conformité SYSCOHADA), la charge disparaît des listes.
+      </div>
+      <p-table [value]="ecrituresBudget()" [loading]="loadingEcritures()" styleClass="p-datatable-sm">
+        <ng-template pTemplate="header">
+          <tr><th>Date</th><th>N° pièce</th><th>Libellé</th><th style="text-align:right">Montant</th><th style="width:90px"></th></tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-c>
+          <tr>
+            <td>{{ c.date }}</td>
+            <td class="mono">{{ c.no_piece }}</td>
+            <td>{{ c.libelle }}</td>
+            <td class="mono" style="text-align:right">{{ c.montant | number:'1.0-0' }}</td>
+            <td>
+              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                        pTooltip="Modifier (contre-écritures + nouvelle écriture)" (onClick)="ouvrirModifEcriture(c)" />
+              <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                        pTooltip="Annuler définitivement (contre-écritures)" (onClick)="annulerEcritureBudget(c)" />
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="5" class="empty-msg">Aucune écriture comptabilisée pour ce compte.</td></tr>
+        </ng-template>
+      </p-table>
+    }
+  </p-dialog>
+
+  <!-- Dialog Modifier une écriture budget -->
+  <p-dialog header="✏️ Rectifier l'écriture" [(visible)]="dialogModifEcritureVisible"
+            [modal]="true" [style]="{width:'440px'}" [draggable]="false">
+    @if (ecritureModifier) {
+      <div class="form-grid">
+        <div class="form-group full">
+          <div style="background:#1a1a2e;border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:#94a3b8">
+            Original : <strong style="color:#f59e0b">{{ ecritureModifier.no_piece }}</strong> —
+            {{ ecritureModifier.libelle }} · {{ ecritureModifier.montant | number:'1.0-0' }} FCFA
+          </div>
+        </div>
+        <div class="form-group full">
+          <label>Libellé *</label>
+          <input pInputText [(ngModel)]="formModifEcriture.libelle" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>Montant (FCFA) *</label>
+          <p-inputNumber [(ngModel)]="formModifEcriture.montant" [min]="1" mode="decimal" styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input pInputText type="date" [(ngModel)]="formModifEcriture.date" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>Réglé via</label>
+          <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="formModifEcriture.compte_credit"
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+      </div>
+    }
+    <ng-template pTemplate="footer">
+      <p-button label="Annuler" severity="secondary" (onClick)="dialogModifEcritureVisible=false" />
+      <p-button label="✏️ Enregistrer la rectification" severity="warn"
+                [loading]="savingEcriture()" (onClick)="confirmerModifEcriture()" />
+    </ng-template>
+  </p-dialog>
+
   <!-- Dialog Ligne Budget -->
   <p-dialog [header]="editBudgetMode ? 'Modifier Ligne Budget' : 'Nouvelle Ligne Budget'"
             [(visible)]="dialogBudgetVisible" [modal]="true" [style]="{width:'700px'}" [draggable]="false">
@@ -1449,6 +1563,15 @@ import { TooltipModule } from 'primeng/tooltip';
     .realise-small { display:block; font-size:9px; color:#00d4aa; }
     .total-prevu   { color:#e8f0fe; }
     .over-budget   { color:#ef4444; }
+    /* Comparaison mensuelle budget */
+    .budget-mensuel-card { background:#16213e; border:1px solid #2a3f5f; border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+    .bm-head       { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .bm-tbl .num   { text-align:right; }
+    .bm-tbl th.num { text-align:right; }
+    .bm-total td   { border-top:2px solid #2a3f5f; color:#e8f0fe; }
+    .bm-bar        { height:8px; background:#111827; border-radius:4px; overflow:hidden; }
+    .bm-fill       { height:100%; background:#00d4aa; border-radius:4px; transition:width .3s; }
+    .bm-fill.bm-over { background:#ef4444; }
     .ligne-depasse { background:rgba(239,68,68,0.04); }
     .mois-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
     .mois-input-cell { display:flex; flex-direction:column; gap:4px; }
@@ -1804,6 +1927,83 @@ comptesCredit = [
         this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Erreur comptabilisation' });
         this.savingBudget.set(false);
       },
+    });
+  }
+
+  // ── Écritures comptabilisées d'une ligne budget (rectification / annulation) ──
+  ligneEcritures       = signal<any | null>(null);
+  ecrituresBudget      = signal<any[]>([]);
+  loadingEcritures     = signal(false);
+  savingEcriture       = signal(false);
+  dialogEcrituresVisible     = false;
+  dialogModifEcritureVisible = false;
+  ecritureModifier: any = null;
+  formModifEcriture = { libelle: '', montant: 0, date: '', compte_credit: '571' };
+
+  pctBarre(m: any): number {
+    if (!m.prevu) return m.realise > 0 ? 100 : 0;
+    return Math.min(100, Math.round(m.realise / m.prevu * 100));
+  }
+
+  ouvrirEcrituresBudget(l: any) {
+    this.ligneEcritures.set(l);
+    this.dialogEcrituresVisible = true;
+    this.chargerEcrituresBudget();
+  }
+
+  private chargerEcrituresBudget() {
+    const l = this.ligneEcritures();
+    if (!l) return;
+    this.loadingEcritures.set(true);
+    this.compta.getCharges().subscribe({
+      next: (res: any[]) => {
+        this.ecrituresBudget.set((res || []).filter(c =>
+          c.source === 'BUDGET' && (c.no_compte === l.no_compte || c.no_compte.startsWith(l.no_compte))));
+        this.loadingEcritures.set(false);
+      },
+      error: () => this.loadingEcritures.set(false),
+    });
+  }
+
+  ouvrirModifEcriture(c: any) {
+    this.ecritureModifier = c;
+    this.formModifEcriture = { libelle: c.libelle, montant: c.montant, date: c.date, compte_credit: '571' };
+    this.dialogModifEcritureVisible = true;
+  }
+
+  confirmerModifEcriture() {
+    const c = this.ecritureModifier;
+    if (!c || !this.formModifEcriture.montant || this.formModifEcriture.montant <= 0) return;
+    this.savingEcriture.set(true);
+    this.compta.modifierCharge(c.id, { ...this.formModifEcriture, no_compte: c.no_compte }).subscribe({
+      next: (res: any) => {
+        this.msg.add({ severity: 'success', summary: 'Écriture rectifiée',
+                       detail: `${c.no_piece} annulée → nouvelle pièce ${res.no_piece_new}` });
+        this.dialogModifEcritureVisible = false;
+        this.savingEcriture.set(false);
+        this.chargerEcrituresBudget();
+        this.chargerBudget();
+        this.rafraichirComptabilite();
+      },
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Rectification impossible' });
+        this.savingEcriture.set(false);
+      },
+    });
+  }
+
+  annulerEcritureBudget(c: any) {
+    if (!confirm(`Annuler définitivement l'écriture ${c.no_piece} (${c.libelle}) ?\n` +
+                 `Une contre-écriture SYSCOHADA sera générée et la charge disparaîtra des listes.`)) return;
+    this.compta.supprimerCharge(c.id).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success', summary: 'Écriture annulée', detail: c.no_piece });
+        this.chargerEcrituresBudget();
+        this.chargerBudget();
+        this.rafraichirComptabilite();
+      },
+      error: (err) => this.msg.add({ severity: 'error', summary: 'Erreur',
+                                     detail: err?.error?.error || 'Annulation impossible' }),
     });
   }
 

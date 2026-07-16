@@ -560,15 +560,22 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <td>{{ c.date | date:'dd/MM/yyyy' }}</td>
               <td class="mono">{{ c.no_piece }}</td>
               <td class="mono">{{ c.no_compte }}</td>
-              <td>{{ c.libelle }}</td>
+              <td>
+                {{ c.libelle }}
+                @if (c.source === 'BUDGET') { <p-tag value="Budget" severity="info" [style]="{'font-size':'9px'}" /> }
+                @if (c.source === 'PAIE')   { <p-tag value="Paie"   severity="warn" [style]="{'font-size':'9px'}" /> }
+              </td>
               <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
               <td>
-                <div style="display:flex;gap:4px">
-                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
-                            pTooltip="Modifier (contre-écritures + nouvelle charge)" (onClick)="demanderModificationCharge(c)" />
-                  <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
-                            pTooltip="Annuler (contre-écritures SYSCOHADA)" (onClick)="supprimerCharge(c)" />
-                </div>
+                <!-- Les écritures de paie se corrigent dans le module RH, pas ici -->
+                @if (c.source !== 'PAIE') {
+                  <div style="display:flex;gap:4px">
+                    <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                              pTooltip="Modifier (contre-écritures + nouvelle charge)" (onClick)="demanderModificationCharge(c)" />
+                    <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
+                              pTooltip="Annuler (contre-écritures SYSCOHADA)" (onClick)="supprimerCharge(c)" />
+                  </div>
+                }
               </td>
             </tr>
           </ng-template>
@@ -583,15 +590,20 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 [modal]="true" [style]="{width:'460px'}" [draggable]="false">
         <div class="form-grid">
           <div class="form-group full">
+            <label>Libellé *</label>
+            <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
+                  (ngModelChange)="onLibelleChargeChange()"
+                  placeholder="Ex : Facture eau juillet..." />
+            <small style="color:#64748b;font-size:10px">Le compte de charge se remplit automatiquement d'après le libellé</small>
+          </div>
+          <div class="form-group full">
             <label>Compte de charge *</label>
             <p-select appendTo="body" [options]="planChargesPC()" [(ngModel)]="nouvelleCharge.no_compte"
                       optionLabel="label" optionValue="value" styleClass="w-full" [filter]="true"
-                      (onChange)="onCompteChargeChange()" />
-          </div>
-          <div class="form-group full">
-            <label>Libellé *</label>
-            <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
-                  placeholder="Ex : Facture eau juillet..." />
+                      (onChange)="compteChargeVerrouille = true; onCompteChargeChange()" />
+            @if (compteSuggere) {
+              <small style="color:#00d4aa;font-size:10px">🪄 Suggéré d'après le libellé — modifiable si besoin</small>
+            }
           </div>
           <div class="form-group">
             <label>Montant (FCFA) *</label>
@@ -1192,7 +1204,63 @@ export class PaiementsComponent implements OnInit {
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
     };
+    this.compteSuggere = null;
+    this.compteChargeVerrouille = false;
     this.dialogChargeVisible = true;
+  }
+
+  // ── Auto-remplissage du compte de charge d'après le libellé ───────────────
+  // Pour les non-comptables : « facture eau » → 6051, « salaire juillet » → 661…
+  // Le compte fournisseur suit (onCompteChargeChange). Un choix manuel du
+  // compte verrouille la suggestion jusqu'à la prochaine ouverture du dialog.
+  compteSuggere: string | null = null;
+  compteChargeVerrouille = false;
+
+  private static MOTS_CLES_CHARGES: [RegExp, string][] = [
+    [/\beaux?\b|facture sde|sen ?eau/,                                  '6051'],
+    [/electricite|senelec|woyofal|courant/,                             '6052'],
+    [/craies?|cahiers?|stylos?|papier|rames?|marqueurs?|ardoises?|fournitures?/, '6054'],
+    [/marchandises?|denrees?|\briz\b|huile|sucre|cantine/,              '601'],
+    [/carburant|essence|gasoil|\bgaz\b/,                                '605'],
+    [/gardien|vigile|surveillance|sous.?traitance|prestataire/,         '621'],
+    [/loyers?|locations?|\bbail\b/,                                     '622'],
+    [/entretien|reparations?|maintenance|plomb(erie|ier)|peinture|menuis(erie|ier)|nettoyage|vidange/, '624'],
+    [/assurances?/,                                                     '625'],
+    [/etudes?|recherches?|documentation/,                               '626'],
+    [/publicite|flyers?|affiches?|banderoles?|communication|sponsor/,   '627'],
+    [/telephone|internet|wifi|\borange\b|\bfree\b|\bexpresso\b|connexion/, '628'],
+    [/banque|bancaires?|agios|tenue de compte/,                         '631'],
+    [/formations?|seminaires?|ateliers?/,                               '633'],
+    [/missions?|voyages?|receptions?|hotel|restaurant|deplacements?/,   '635'],
+    [/impots?|taxes?|patente|vignette/,                                 '641'],
+    [/timbres?|enregistrement/,                                         '645'],
+    [/salaires?|paie|appointements?|remunerations?|personnel/,          '661'],
+    [/ipres/,                                                           '662'],
+    [/\bcss\b|cotisations?|securite sociale/,                           '664'],
+    [/indemnites?|primes?|avantages?/,                                  '663'],
+    [/interets?|emprunts?|\bprets?\b/,                                  '671'],
+    [/transports?|\bbus\b|\bcar\b|navette/,                             '618'],
+  ];
+
+  onLibelleChargeChange() {
+    if (this.compteChargeVerrouille) return;
+    const brut = (this.nouvelleCharge.libelle || '');
+    const texte = brut.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const comptesDispo = new Set(this.planChargesPC().map(c => c.value));
+    for (const [motif, compte] of PaiementsComponent.MOTS_CLES_CHARGES) {
+      if (!motif.test(texte)) continue;
+      // Si le compte précis n'existe pas dans le plan du tenant, remonter au parent (3 chiffres)
+      const cible = comptesDispo.has(compte) ? compte
+                  : (comptesDispo.has(compte.slice(0, 3)) ? compte.slice(0, 3) : null);
+      if (!cible) continue;
+      if (this.nouvelleCharge.no_compte !== cible) {
+        this.nouvelleCharge.no_compte = cible;
+        this.onCompteChargeChange();          // synchronise le compte fournisseur
+      }
+      this.compteSuggere = cible;
+      return;
+    }
+    this.compteSuggere = null;
   }
 
   onCompteChargeChange() {

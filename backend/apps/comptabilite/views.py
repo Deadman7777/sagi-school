@@ -1057,14 +1057,25 @@ class ChargeView(APIView):
         if not exercice:
             return Response([])
 
-        # Toutes les charges : manuelles (CHARGE) + paie (PAIE) sur comptes 6xx.
-        # Les immobilisations (2xx, source INVEST) relèvent du module Investissement.
+        # Toutes les charges : manuelles (CHARGE) + paie (PAIE) + comptabilisations
+        # budget (BUDGET) sur comptes 6xx — le suivi doit être identique quelle
+        # que soit l'origine. Les immobilisations (2xx, INVEST) relèvent du
+        # module Investissement.
         charges = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
-            source__in=('CHARGE', 'PAIE'),
+            source__in=('CHARGE', 'PAIE', 'BUDGET'),
             debit__gt=0,
             no_compte__startswith='6',
         ).order_by('-date_ecriture')
+
+        # Masquer les écritures annulées/modifiées : leur contre-écriture les
+        # référence par source_id (le journal, lui, garde tout — SYSCOHADA).
+        annulees = set(JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice,
+            source__in=('CHARGE', 'BUDGET'),
+            source_id__isnull=False,
+        ).values_list('source_id', flat=True))
+        charges = [c for c in charges if c.id not in annulees]
 
         return Response([{
             'id':             str(c.id),
@@ -1073,6 +1084,7 @@ class ChargeView(APIView):
             'no_compte':      c.no_compte,
             'libelle':        c.libelle,
             'montant':        float(c.debit),
+            'source':         c.source,
             'libelle_compte': self.PLAN_CHARGES.get(c.no_compte, c.no_compte),
         } for c in charges])
 
@@ -1097,8 +1109,10 @@ class ChargeView(APIView):
 
         from django.db.models import Max
         import re
+        # Séquence commune CHARGE + BUDGET : les deux produisent des pièces
+        # CHG-xxxx, ignorer l'une des sources créait des collisions de numéro.
         last = JournalEntry.objects.filter(
-            tenant=tenant, source='CHARGE'
+            tenant=tenant, source__in=('CHARGE', 'BUDGET')
         ).aggregate(Max('no_piece'))['no_piece__max']
         nums     = re.findall(r'\d+', last or 'CHG-0000')
         no_piece = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
@@ -1152,13 +1166,17 @@ class ChargeView(APIView):
         except JournalEntry.DoesNotExist:
             return Response({'error': 'Écriture introuvable'}, status=404)
 
+        # Fonctionne pour les charges directes (CHARGE) comme pour les
+        # comptabilisations de budget (BUDGET) : la pièce garde sa source
+        # d'origine pour que le réalisé budget continue de la suivre.
+        source_piece = entry.source if entry.source in ('CHARGE', 'BUDGET') else 'CHARGE'
         entries_orig = JournalEntry.objects.filter(
-            tenant=tenant, source='CHARGE', no_piece=entry.no_piece
+            tenant=tenant, source=source_piece, no_piece=entry.no_piece
         )
 
         # 1 — Contre-écritures (annulation de l'original)
         from django.db.models import Max as _Max
-        last = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+        last = JournalEntry.objects.filter(tenant=tenant, source__in=('CHARGE', 'BUDGET')).aggregate(
             _Max('no_piece')
         )['no_piece__max']
         nums = _re.findall(r'\d+', last or 'CHG-0000')
@@ -1168,7 +1186,8 @@ class ChargeView(APIView):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
-                source='CHARGE', source_id=None,
+                # source_id = écriture annulée → la liste des charges masque l'original
+                source=source_piece, source_id=e.id,
                 no_compte=e.no_compte, debit=e.credit, credit=e.debit,
                 libelle=f"MODIF — {e.libelle}", ordre=e.ordre,
             )
@@ -1188,7 +1207,7 @@ class ChargeView(APIView):
             return Response({'error': "Compte de charge invalide : seuls les comptes de classe 6 sont autorisés. "
                                       "Les immobilisations relèvent du module Investissement."}, status=400)
 
-        last2 = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+        last2 = JournalEntry.objects.filter(tenant=tenant, source__in=('CHARGE', 'BUDGET')).aggregate(
             _Max('no_piece')
         )['no_piece__max']
         nums2 = _re.findall(r'\d+', last2 or 'CHG-0000')
@@ -1215,7 +1234,7 @@ class ChargeView(APIView):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_new, date_ecriture=date_new,
-                source='CHARGE', source_id=None, **e
+                source=source_piece, source_id=None, **e
             )
 
         from core.models import log_audit
@@ -1236,7 +1255,8 @@ class ChargeView(APIView):
         exercice = get_exercice(tenant)
         try:
             entry   = JournalEntry.objects.get(id=pk)
-            entries = JournalEntry.objects.filter(tenant=tenant, source='CHARGE', no_piece=entry.no_piece)
+            source_piece = entry.source if entry.source in ('CHARGE', 'BUDGET') else 'CHARGE'
+            entries = JournalEntry.objects.filter(tenant=tenant, source=source_piece, no_piece=entry.no_piece)
         except JournalEntry.DoesNotExist:
             return Response({'success': True})
 
@@ -1245,7 +1265,7 @@ class ChargeView(APIView):
 
         import re as _re2
         from django.db.models import Max as _Max2
-        last = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(_Max2('no_piece'))['no_piece__max']
+        last = JournalEntry.objects.filter(tenant=tenant, source__in=('CHARGE', 'BUDGET')).aggregate(_Max2('no_piece'))['no_piece__max']
         nums = _re2.findall(r'\d+', last or 'CHG-0000')
         no_piece_annul = f"CHG-{int(nums[-1]) + 1:04d}" if nums else 'CHG-0001'
 
@@ -1254,7 +1274,8 @@ class ChargeView(APIView):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
-                source='CHARGE', source_id=None,
+                # source_id = écriture annulée → la liste des charges masque l'original
+                source=source_piece, source_id=e.id,
                 no_compte=e.no_compte,
                 debit=e.credit,
                 credit=e.debit,
@@ -1417,17 +1438,18 @@ class BudgetView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _realise_par_mois(self, tenant, exercice, no_compte):
-        """Somme des débits par mois pour un compte (et ses sous-comptes)."""
+        """Réalisé NET par mois pour un compte (et ses sous-comptes) :
+        débits − crédits, pour que les annulations/modifications par
+        contre-écriture (crédit sur le 6xx) soient bien déduites."""
         qs = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
             source__in=('CHARGE', 'PAIE', 'BUDGET'),
-            debit__gt=0,
         ).filter(
             Q(no_compte=no_compte) | Q(no_compte__startswith=no_compte)
         ).annotate(
             mois=ExtractMonth('date_ecriture')
-        ).values('mois').annotate(realise=Sum('debit'))
-        return {r['mois']: float(r['realise']) for r in qs}
+        ).values('mois').annotate(d=Sum('debit'), c=Sum('credit'))
+        return {r['mois']: float(r['d'] or 0) - float(r['c'] or 0) for r in qs}
 
     def get(self, request):
         tenant   = get_tenant(request)
@@ -1442,6 +1464,9 @@ class BudgetView(APIView):
         total_prevu = total_realise = 0.0
         total_fixe_prevu = total_fixe_realise = 0.0
         total_var_prevu  = total_var_realise  = 0.0
+        # Totaux par mois (toutes lignes confondues) → comparaison mensuelle
+        mois_prevu   = [0.0] * 12
+        mois_realise = [0.0] * 12
 
         for l in lignes:
             realise_mois = self._realise_par_mois(tenant, exercice, l.no_compte)
@@ -1453,6 +1478,8 @@ class BudgetView(APIView):
                 r = realise_mois.get(i, 0.0)
                 t_prevu   += p
                 t_realise += r
+                mois_prevu[i-1]   += p
+                mois_realise[i-1] += r
                 mois_data.append({'mois': i, 'nom': MOIS_NOMS[i-1], 'prevu': p, 'realise': r})
 
             pct = round(t_realise / t_prevu * 100, 1) if t_prevu else 0
@@ -1485,6 +1512,13 @@ class BudgetView(APIView):
                 'variable':{'prevu': round(total_var_prevu, 2),  'realise': round(total_var_realise, 2)},
                 'total':   {'prevu': round(total_prevu, 2),       'realise': round(total_realise, 2)},
             },
+            # Comparaison budgétisé / réalisé mois par mois (toutes lignes)
+            'mois_totaux': [
+                {'mois': i + 1, 'nom': MOIS_NOMS[i],
+                 'prevu': round(mois_prevu[i], 2), 'realise': round(mois_realise[i], 2),
+                 'ecart': round(mois_prevu[i] - mois_realise[i], 2)}
+                for i in range(12)
+            ],
             'mois_noms': MOIS_NOMS,
         })
 
@@ -1548,7 +1582,8 @@ class BudgetComptabiliserView(APIView):
 
         import re as _re
         from django.db.models import Max as _Max
-        last_piece = JournalEntry.objects.filter(tenant=tenant, source='CHARGE').aggregate(
+        # Même séquence que les charges directes (pièces CHG-xxxx communes)
+        last_piece = JournalEntry.objects.filter(tenant=tenant, source__in=('CHARGE', 'BUDGET')).aggregate(
             m=_Max('no_piece')
         )['m']
         nums = _re.findall(r'\d+', last_piece or 'CHG-0000')
