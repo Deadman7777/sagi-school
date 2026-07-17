@@ -52,6 +52,7 @@
 <table class="top-table">
   <tr>
     <td style="width:30%">
+      {% if cfg.entete_ministere %}
       <div class="rep">RÉPUBLIQUE DU SÉNÉGAL</div>
       <div class="rep-bold">Un Peuple — Un But — Une Foi</div>
       <div class="rep" style="margin-top:5px">
@@ -59,17 +60,19 @@
         de la Formation Professionnelle,<br>
         de l'Enseignement Supérieur et de la Recherche
       </div>
+      {% endif %}
     </td>
     <td style="width:40%" class="school-block">
       {% if tenant.logo %}<img src="{{ tenant.logo }}" style="max-height:50px; max-width:140px; margin-bottom:3px;"><br>{% endif %}
       <div class="school-name">{{ tenant.nom }}</div>
       {% if tenant.ville %}<div class="school-sub">{{ tenant.ville }}</div>{% endif %}
       {% if tenant_rccm %}<div class="school-sub">RCCM : {{ tenant_rccm }}</div>{% endif %}
+      {% if tenant_autorisation %}<div class="school-sub">Autorisation d'ouverture N° : {{ tenant_autorisation }}</div>{% endif %}
       {% if tenant_telephone %}<div class="school-sub">Tél : {{ tenant_telephone }}</div>{% endif %}
     </td>
     <td style="width:30%" class="right-block">
       <div><strong>Année Scolaire : {{ annee_scolaire }}</strong></div>
-      <div style="margin-top:6px">Réf. N° : ___________</div>
+      {% if cfg.reference %}<div style="margin-top:6px">Réf. N° : ___________</div>{% endif %}
       <div>{% if tenant_ville %}{{ tenant_ville }}, {% endif %}le {{ date_edition|date:"d/m/Y" }}</div>
     </td>
   </tr>
@@ -85,29 +88,32 @@
 <div class="cert-body">
 
   <p class="cert-intro">
+    {% if cfg.texte_intro %}{{ cfg.texte_intro }}{% else %}
     Nous, soussigné(e), Directeur(trice) de l'établissement scolaire
     <strong>{{ tenant.nom|upper }}</strong>{% if tenant.ville %}, sis à <strong>{{ tenant.ville }}</strong>{% endif %},
     certifions par la présente que :
+    {% endif %}
   </p>
 
   <div class="cert-row">
     <strong>Nom et Prénom :</strong> &nbsp;<strong style="font-size:13px">{{ eleve.nom_complet|upper }}</strong>
   </div>
 
-  {% if eleve.matricule %}
+  {% if cfg.matricule and eleve.matricule %}
   <div class="cert-row">
     <strong>Matricule :</strong> &nbsp;{{ eleve.matricule }}
     &nbsp;&nbsp;&nbsp; <strong>Statut :</strong> &nbsp;{{ eleve.get_statut_display }}
   </div>
   {% endif %}
 
-  {% if eleve.date_naissance or eleve.lieu_naissance %}
+  {% if cfg.naissance %}{% if eleve.date_naissance or eleve.lieu_naissance %}
   <div class="cert-row">
     {% if eleve.date_naissance %}<strong>Né(e) le :</strong> &nbsp;{{ eleve.date_naissance|date:"d/m/Y" }}{% endif %}
     {% if eleve.lieu_naissance %}&nbsp;&nbsp; <strong>à :</strong> &nbsp;{{ eleve.lieu_naissance }}{% endif %}
   </div>
-  {% endif %}
+  {% endif %}{% endif %}
 
+  {% if cfg.parents %}
   {% if eleve.nom_pere %}
   <div class="cert-row">
     <strong>Père / Tuteur :</strong> &nbsp;{{ eleve.nom_pere }}
@@ -121,6 +127,7 @@
     {% if eleve.telephone_mere %}&nbsp;&nbsp; <strong>Tél. :</strong> &nbsp;{{ eleve.telephone_mere }}{% endif %}
   </div>
   {% endif %}
+  {% endif %}
 
   <div class="cert-row" style="margin-top:10px">
     est régulièrement inscrit(e) dans notre établissement, en classe de
@@ -128,8 +135,10 @@
   </div>
 
   <p class="cert-conclusion">
+    {% if cfg.texte_conclusion %}{{ cfg.texte_conclusion }}{% else %}
     Ce certificat est délivré à l'intéressé(e) pour servir et valoir ce que de droit,
     notamment pour toute démarche administrative, demande de bourse, ou tout autre usage légal.
+    {% endif %}
   </p>
 
 </div>
@@ -138,16 +147,20 @@
 <table class="sig-table">
   <tr>
     <td>
+      {% if cfg.signature_parent %}
       <div class="sig-box">
         Le Parent / Tuteur légal
         <div class="sig-space"></div>
         Signature
       </div>
+      {% endif %}
     </td>
     <td>
+      {% if cfg.cachet %}
       <div style="text-align:center">
         <div class="cachet-area">Cachet de<br>l'établissement</div>
       </div>
+      {% endif %}
     </td>
     <td>
       <div class="sig-box">
@@ -159,10 +172,12 @@
   </tr>
 </table>
 
+{% if cfg.mention_validite %}
 <div class="validity">
   Ce certificat est valable uniquement pour l'année scolaire {{ annee_scolaire }}.
   Tout document altéré est nul et non avenu.
 </div>
+{% endif %}
 
 <div class="footer-line">
   {{ tenant.nom }}{% if tenant_ville %} &middot; {{ tenant_ville }}{% endif %} &middot;

@@ -12,6 +12,7 @@ import { TagModule } from 'primeng/tag';
 import { DialogModule } from 'primeng/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastModule } from 'primeng/toast';
+import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService } from 'primeng/api';
 
 @Component({
@@ -19,7 +20,7 @@ import { MessageService } from 'primeng/api';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, InputTextModule, ButtonModule,
             SelectModule, InputNumberModule, TableModule, TagModule,
-            DialogModule, ToastModule],
+            DialogModule, ToastModule, CheckboxModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -41,6 +42,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'services'"
               (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'certificat'"
+              (click)="onglet.set('certificat'); initCertConfig()">📜 {{ 'parametres.certificat' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'cloture'"
@@ -81,6 +84,10 @@ import { MessageService } from 'primeng/api';
           <div class="form-group">
             <label>{{ 'parametres.ninea'     | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.ninea" class="w-full" />
+          </div>
+          <div class="form-group">
+            <label>{{ 'parametres.autorisation' | translate }}</label>
+            <input pInputText [(ngModel)]="ecole()!.numero_autorisation" class="w-full" />
           </div>
           <div class="form-group full">
             <label>{{ 'parametres.logo' | translate }}</label>
@@ -256,6 +263,34 @@ import { MessageService } from 'primeng/api';
         </div>
         <div *ngIf="services().length === 0" style="color:#64748b;font-size:13px;padding:8px">
           {{ 'parametres.services_vide' | translate }}
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ONGLET CERTIFICAT ══ -->
+    <div *ngIf="onglet() === 'certificat'">
+      <div class="form-card">
+        <div class="fc-title">📜 {{ 'parametres.cert_titre' | translate }}</div>
+        <p style="color:#94a3b8;font-size:12px;margin:0 0 14px">{{ 'parametres.cert_aide' | translate }}</p>
+        <div class="form-grid">
+          @for (k of certElements; track k) {
+            <div class="form-group" style="flex-direction:row;align-items:center;gap:8px">
+              <p-checkbox [(ngModel)]="certCfg[k]" [binary]="true" [inputId]="'cert_' + k" />
+              <label [for]="'cert_' + k" style="margin:0;cursor:pointer">{{ ('parametres.cert_' + k) | translate }}</label>
+            </div>
+          }
+          <div class="form-group full">
+            <label>{{ 'parametres.cert_texte_intro' | translate }}</label>
+            <textarea rows="3" class="w-full cert-textarea" [(ngModel)]="certCfg.texte_intro"></textarea>
+          </div>
+          <div class="form-group full">
+            <label>{{ 'parametres.cert_texte_conclusion' | translate }}</label>
+            <textarea rows="3" class="w-full cert-textarea" [(ngModel)]="certCfg.texte_conclusion"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
+                    [loading]="saving()" (onClick)="sauvegarderCertificat()" />
         </div>
       </div>
     </div>
@@ -549,6 +584,8 @@ import { MessageService } from 'primeng/api';
     .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
 
     .form-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:20px 24px; }
+    .cert-textarea { background:#0f1729; border:1px solid #2a3f5f; border-radius:6px; color:#e8f0fe;
+                     padding:8px 10px; font-family:inherit; font-size:13px; resize:vertical; }
     .fc-title  { font-size:14px; font-weight:600; color:#e8f0fe; margin-bottom:16px; }
 
     .form-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
@@ -804,6 +841,34 @@ chargerExercice() {
 
   retirerLogo() {
     this.ecole.update(e => ({ ...e, logo: '' }));
+  }
+
+  // ── Certificat personnalisable ──
+  // Éléments togglables du certificat de scolarité (défaut = tout affiché,
+  // version standard). Les clés correspondent au cfg lu par le PDF backend.
+  certElements = ['entete_ministere', 'reference', 'matricule', 'naissance',
+                  'parents', 'signature_parent', 'cachet', 'mention_validite'];
+  certCfg: any = {};
+
+  initCertConfig() {
+    const saved = this.ecole()?.config_certificat || {};
+    const cfg: any = {};
+    for (const k of this.certElements) cfg[k] = saved[k] !== false;
+    cfg.texte_intro      = saved.texte_intro || '';
+    cfg.texte_conclusion = saved.texte_conclusion || '';
+    this.certCfg = cfg;
+  }
+
+  sauvegarderCertificat() {
+    this.saving.set(true);
+    this.api.patch<any>('/tenants/mon_ecole/', { config_certificat: this.certCfg }).subscribe({
+      next: res => {
+        this.ecole.set(res);
+        this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.certificat') });
+        this.saving.set(false);
+      },
+      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+    });
   }
 
   sauvegarderEcole() {

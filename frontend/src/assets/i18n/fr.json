@@ -377,7 +377,21 @@
     "logo_aucun": "Aucun logo",
     "logo_aide": "PNG, JPG, SVG… — max 1 Mo. Apparaît sur les documents officiels.",
     "logo_format": "Le fichier doit être une image.",
-    "logo_trop_gros": "Image trop lourde (max 1 Mo)."
+    "logo_trop_gros": "Image trop lourde (max 1 Mo).",
+    "autorisation": "N° d'autorisation d'ouverture",
+    "certificat": "Certificat",
+    "cert_titre": "Personnalisation du certificat de scolarité",
+    "cert_aide": "Choisissez les éléments à faire figurer sur le certificat. Par défaut, la version standard complète est appliquée.",
+    "cert_entete_ministere": "En-tête République / Ministère",
+    "cert_reference": "Ligne « Réf. N° »",
+    "cert_matricule": "Matricule et statut",
+    "cert_naissance": "Date et lieu de naissance",
+    "cert_parents": "Père / Mère (et téléphones)",
+    "cert_signature_parent": "Signature du parent / tuteur",
+    "cert_cachet": "Zone cachet de l'établissement",
+    "cert_mention_validite": "Mention de validité",
+    "cert_texte_intro": "Texte d'introduction personnalisé (vide = texte standard)",
+    "cert_texte_conclusion": "Texte de conclusion personnalisé (vide = texte standard)"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

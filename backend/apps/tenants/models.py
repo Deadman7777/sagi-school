@@ -8,6 +8,12 @@ class Tenant(TimeStampedModel):
     adresse   = models.TextField(blank=True)
     rccm      = models.CharField(max_length=50, blank=True)
     ninea     = models.CharField(max_length=20, blank=True)
+    # Numéro d'autorisation d'ouverture délivré par l'autorité de tutelle —
+    # figure sur les documents officiels (certificat, bulletins, reçus).
+    numero_autorisation = models.CharField(max_length=100, blank=True)
+    # Personnalisation du certificat de scolarité : dict {element: bool} +
+    # textes libres. Vide = version standard complète (tous les éléments).
+    config_certificat = models.JSONField(default=dict, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
     email     = models.EmailField(blank=True)
     code_etablissement = models.CharField(max_length=10, default='ETB')

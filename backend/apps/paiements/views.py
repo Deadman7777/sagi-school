@@ -283,6 +283,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'tenant_logo':       getattr(p.tenant, 'logo', '') or '',
             'tenant_ville':      p.tenant.ville if p.tenant else '',
             'tenant_rccm':       getattr(p.tenant, 'rccm', '') or '',
+            'tenant_autorisation': getattr(p.tenant, 'numero_autorisation', '') or '',
             'tenant_telephone':  getattr(p.tenant, 'telephone', '') or '',
         }
 

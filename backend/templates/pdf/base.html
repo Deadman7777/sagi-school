@@ -95,6 +95,12 @@
       <div class="sb-label">RCCM</div>
       <div class="sb-value">{{ tenant.rccm|default:"—" }}</div>
     </td>
+    {% if tenant.numero_autorisation %}
+    <td>
+      <div class="sb-label">N° Autorisation</div>
+      <div class="sb-value">{{ tenant.numero_autorisation }}</div>
+    </td>
+    {% endif %}
   </tr>
 </table>
 

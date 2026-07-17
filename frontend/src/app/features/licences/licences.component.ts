@@ -327,6 +327,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <label>NINEA</label>
             <input pInputText [(ngModel)]="d.tenant.ninea" class="w-full" />
           </div>
+          <div class="form-group">
+            <label>N° autorisation d'ouverture</label>
+            <input pInputText [(ngModel)]="d.tenant.numero_autorisation" class="w-full" />
+          </div>
         </div>
 
         <ng-container *ngIf="d.exercice">

@@ -985,8 +985,25 @@ class CertificatScolariteView(APIView):
         from apps.paiements.models import Exercice
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
+        # Personnalisation du certificat : défauts = version standard complète,
+        # surchargés par la config de l'école (Paramètres → Certificat).
+        cfg = {
+            'entete_ministere': True,   # bloc République / Ministère
+            'reference':        True,   # ligne « Réf. N° »
+            'matricule':        True,   # matricule + statut
+            'naissance':        True,   # date et lieu de naissance
+            'parents':          True,   # lignes père / mère
+            'signature_parent': True,   # colonne signature parent/tuteur
+            'cachet':           True,   # zone cachet de l'établissement
+            'mention_validite': True,   # mention de validité en pied
+            'texte_intro':      '',     # remplace le texte d'introduction standard
+            'texte_conclusion': '',     # remplace la conclusion standard
+        }
+        cfg.update(getattr(tenant, 'config_certificat', None) or {})
+
         context = {
             'tenant':          tenant,
+            'cfg':             cfg,
             'eleve':           eleve,
             'section_nom':     eleve.section.nom if eleve.section else '—',
             'annee_scolaire':  exercice.annee_scolaire if exercice else '—',
@@ -994,6 +1011,7 @@ class CertificatScolariteView(APIView):
             'directeur_nom':   getattr(tenant, 'directeur_nom', '') or '',
             'tenant_ville':    getattr(tenant, 'ville', '') or '',
             'tenant_rccm':     getattr(tenant, 'rccm', '') or '',
+            'tenant_autorisation': getattr(tenant, 'numero_autorisation', '') or '',
             'tenant_telephone':getattr(tenant, 'telephone', '') or '',
         }
 

@@ -377,7 +377,21 @@
     "logo_aucun": "No logo",
     "logo_aide": "PNG, JPG, SVG… — max 1 MB. Appears on official documents.",
     "logo_format": "The file must be an image.",
-    "logo_trop_gros": "Image too large (max 1 MB)."
+    "logo_trop_gros": "Image too large (max 1 MB).",
+    "autorisation": "Opening authorization No.",
+    "certificat": "Certificate",
+    "cert_titre": "School certificate customization",
+    "cert_aide": "Choose the elements to include on the certificate. By default, the full standard version is used.",
+    "cert_entete_ministere": "Republic / Ministry header",
+    "cert_reference": "\"Ref. No.\" line",
+    "cert_matricule": "Registration number and status",
+    "cert_naissance": "Date and place of birth",
+    "cert_parents": "Father / Mother (and phones)",
+    "cert_signature_parent": "Parent / guardian signature",
+    "cert_cachet": "School stamp area",
+    "cert_mention_validite": "Validity notice",
+    "cert_texte_intro": "Custom introduction text (empty = standard text)",
+    "cert_texte_conclusion": "Custom closing text (empty = standard text)"
   },
   "cloture": {
     "title": "Year Closing",

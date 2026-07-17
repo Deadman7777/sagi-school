@@ -30,6 +30,7 @@
     {% if tenant_logo %}<img src="{{ tenant_logo }}" style="max-height:40px; max-width:60mm; margin-bottom:2px;"><br>{% endif %}
     <div class="school">{{ tenant_nom }}</div>
     {% if tenant_ville %}<div class="sub">{{ tenant_ville }}</div>{% endif %}
+    {% if tenant_autorisation %}<div class="sub">Aut. N° {{ tenant_autorisation }}</div>{% endif %}
     {% if tenant_telephone %}<div class="sub">Tél : {{ tenant_telephone }}</div>{% endif %}
     <div class="doc">REÇU DE PAIEMENT</div>
     <div class="sub b">N° {{ no_piece }}</div>
