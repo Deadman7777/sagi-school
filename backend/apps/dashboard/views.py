@@ -184,8 +184,11 @@ class DashboardKPIView(APIView):
         total_impayes = max(total_attendu - total_paye, 0)
         taux_recouvrement = round((total_paye / total_attendu * 100), 1) if total_attendu > 0 else 0
 
-        # Statuts élèves
-        statuts_qs = eleves.values('statut').annotate(nb=Count('id'))
+        # Statuts élèves — queryset PROPRE (sans la jointure paiements de `eleves`,
+        # sinon Count('id') compte chaque élève autant de fois qu'il a de paiements)
+        statuts_qs = Eleve.objects.filter(
+            tenant=tenant, exercice=exercice
+        ).values('statut').annotate(nb=Count('id'))
         statuts    = {s['statut']: s['nb'] for s in statuts_qs}
 
         # Prises en charge — queryset PROPRE (sans la jointure paiements de `eleves`,
