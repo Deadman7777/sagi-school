@@ -136,7 +136,9 @@
     "legende_critique": "3 or more months overdue",
     "legende_reliquat": "A student up to date on due monthly fees but still owing the balance for upcoming months does not appear here: it is not a delay, just the remaining annual amount to be paid over the year.",
     "niveau_ok": "OK — Balance",
-    "niveau_ok_sub": "Up to date, upcoming months remain"
+    "niveau_ok_sub": "Up to date, upcoming months remain",
+    "conseils": "System advice",
+    "conseils_tous": "See all advice (Tax module)"
   },
   "eleves": {
     "title": "Students & Payments",

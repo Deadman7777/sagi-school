@@ -1,23 +1,181 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { SelectModule } from 'primeng/select';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { InputTextModule } from 'primeng/inputtext';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-fiscal',
   standalone: true,
-  imports: [CommonModule, DecimalPipe, TableModule, TagModule, ButtonModule, TranslateModule],
+  imports: [CommonModule, DecimalPipe, FormsModule, TableModule, TagModule, ButtonModule,
+            DialogModule, SelectModule, InputNumberModule, InputTextModule, ToastModule,
+            TranslateModule],
+  providers: [MessageService],
   template: `
+    <p-toast />
     <div class="page-header">
       <div>
-        <h2 class="page-title">📋 Déclarations Fiscales — {{ exercice() }}</h2>
+        <h2 class="page-title">📋 Fiscalité — {{ exercice() }}</h2>
         <span class="page-sub">Sénégal · Convention Collective Enseignement Privé 2018 · CGI</span>
       </div>
       <button class="btn-print" onclick="window.print()">🖨️ Imprimer</button>
     </div>
+
+    <!-- Onglets -->
+    <div class="tabs-bar">
+      <button class="tab-btn" [class.active]="onglet() === 'declarations'"
+              (click)="onglet.set('declarations')">🧾 Déclarations sociales</button>
+      <button class="tab-btn" [class.active]="onglet() === 'obligations'"
+              (click)="onglet.set('obligations'); chargerObligations()">🏛️ Obligations de l'établissement</button>
+      <button class="tab-btn" [class.active]="onglet() === 'conseils'"
+              (click)="onglet.set('conseils'); chargerConseils()">💡 Conseils</button>
+    </div>
+
+    <!-- ════════════ OBLIGATIONS ÉTABLISSEMENT ════════════ -->
+    @if (onglet() === 'obligations') {
+      @if (obligationsData(); as od) {
+        @if (!od.identification?.complet) {
+          <div class="alert-banner">
+            ⚠️ {{ od.message }}
+          </div>
+        } @else {
+          <div class="success-banner">
+            ✅ Identification fiscale : RCCM <strong>{{ od.identification.rccm }}</strong> ·
+            NINEA <strong>{{ od.identification.ninea }}</strong> — calcul automatique activé.
+          </div>
+          @if (od.donnees; as dn) {
+            <div class="kpi-grid">
+              <div class="kpi-card" style="--acc:#10b981">
+                <div class="kpi-label">Produits (exercice)</div>
+                <div class="kpi-value" style="color:#10b981">{{ dn.produits | number:'1.0-0' }}</div>
+                <div class="kpi-sub">FCFA</div>
+              </div>
+              <div class="kpi-card" style="--acc:#ef4444">
+                <div class="kpi-label">Charges</div>
+                <div class="kpi-value" style="color:#ef4444">{{ dn.charges | number:'1.0-0' }}</div>
+                <div class="kpi-sub">FCFA</div>
+              </div>
+              <div class="kpi-card" style="--acc:#0099ff">
+                <div class="kpi-label">Résultat estimé</div>
+                <div class="kpi-value" [style.color]="dn.resultat >= 0 ? '#10b981' : '#ef4444'">{{ dn.resultat | number:'1.0-0' }}</div>
+                <div class="kpi-sub">FCFA</div>
+              </div>
+              <div class="kpi-card" style="--acc:#f59e0b">
+                <div class="kpi-label">Masse salariale</div>
+                <div class="kpi-value" style="color:#f59e0b">{{ dn.masse_salariale | number:'1.0-0' }}</div>
+                <div class="kpi-sub">FCFA ({{ dn.source_paie === 'BULLETINS' ? 'bulletins' : 'estimation' }})</div>
+              </div>
+            </div>
+          }
+          @for (o of od.obligations; track o.code) {
+            <div class="card ob-card">
+              <div class="ob-head">
+                <div>
+                  <div class="ob-titre">{{ o.libelle }}</div>
+                  <div class="ob-desc">{{ o.description }}</div>
+                </div>
+                <p-tag [value]="statutObligation(o.statut)"
+                       [severity]="o.statut === 'EXONERE' || o.statut === 'BULLETINS' || o.statut === 'GERE_PAR_RH' ? 'success' :
+                                   o.statut === 'A_SAISIR' ? 'warn' : 'info'" />
+              </div>
+              <div class="ob-body">
+                <div class="ob-item"><span class="ob-lab">Taux</span><span>{{ o.taux }}</span></div>
+                @if (o.montant !== null) {
+                  <div class="ob-item"><span class="ob-lab">Montant estimé</span>
+                    <span class="mono bold">{{ o.montant | number:'1.0-0' }} FCFA</span></div>
+                }
+                <div class="ob-item"><span class="ob-lab">Périodicité</span><span>{{ o.periodicite }}</span></div>
+                <div class="ob-item"><span class="ob-lab">Échéance</span><span>{{ o.echeance }}</span></div>
+                @if (o.deja_comptabilise > 0) {
+                  <div class="ob-item"><span class="ob-lab">Déjà comptabilisé</span>
+                    <span class="mono" style="color:#10b981">{{ o.deja_comptabilise | number:'1.0-0' }} FCFA</span></div>
+                }
+                @if (o.comptabilisable) {
+                  <p-button label="Comptabiliser" icon="pi pi-book" size="small" severity="success"
+                            [outlined]="true" (onClick)="ouvrirComptabiliser(o)" />
+                }
+              </div>
+            </div>
+          }
+          <div class="ref-note">{{ od.disclaimer }}</div>
+        }
+      } @else {
+        <div class="empty-msg">Chargement…</div>
+      }
+    }
+
+    <!-- ════════════ CONSEILS ════════════ -->
+    @if (onglet() === 'conseils') {
+      @if (conseils(); as cs) {
+        @if (cs.length === 0) {
+          <div class="success-banner">✅ Aucun point d'attention : la situation fiscale, comptable et financière ne déclenche aucune alerte.</div>
+        }
+        @for (c of cs; track c.titre) {
+          <div class="conseil" [class.urgent]="c.niveau === 'URGENT'"
+               [class.attention]="c.niveau === 'ATTENTION'">
+            <div class="conseil-head">
+              <span class="conseil-cat">{{ categorieLabel(c.categorie) }}</span>
+              <p-tag [value]="c.niveau" [severity]="c.niveau === 'URGENT' ? 'danger' : c.niveau === 'ATTENTION' ? 'warn' : 'info'" />
+            </div>
+            <div class="conseil-titre">{{ c.titre }}</div>
+            <div class="conseil-detail">{{ c.detail }}</div>
+          </div>
+        }
+        <div class="ref-note">Conseils générés automatiquement depuis les données du système — ils ne remplacent pas l'avis d'un expert-comptable.</div>
+      } @else {
+        <div class="empty-msg">Chargement…</div>
+      }
+    }
+
+    <!-- Dialog comptabilisation -->
+    <p-dialog header="Comptabiliser une obligation fiscale" [(visible)]="dialogCompta"
+              [modal]="true" [style]="{width:'480px'}" [draggable]="false">
+      @if (obligationActive; as o) {
+        <div class="dlg-ob">{{ o.libelle }}</div>
+        <div class="form-grid">
+          <div class="fg full">
+            <label>Montant (FCFA) *</label>
+            <p-inputNumber [(ngModel)]="formCompta.montant" [min]="0" styleClass="w-full" />
+          </div>
+          <div class="fg">
+            <label>Mode</label>
+            <p-select appendTo="body" [options]="modeComptaOptions" [(ngModel)]="formCompta.mode"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+          @if (formCompta.mode === 'PAIEMENT') {
+            <div class="fg">
+              <label>Canal de paiement</label>
+              <p-select appendTo="body" [options]="canauxOptions" [(ngModel)]="formCompta.canal"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+          }
+          <div class="fg">
+            <label>Date</label>
+            <input pInputText type="date" [(ngModel)]="formCompta.date" class="w-full" />
+          </div>
+        </div>
+        <div class="dlg-hint">
+          Écritures : débit <strong>{{ o.comptes?.debit }}</strong> / crédit <strong>{{ o.comptes?.credit }}</strong>
+          @if (formCompta.mode === 'PAIEMENT') { , puis règlement par <strong>{{ formCompta.canal }}</strong> }
+          — pièce FISC-xxxx (SYSCOHADA).
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Annuler" severity="secondary" (onClick)="dialogCompta = false" />
+        <p-button label="Comptabiliser" severity="success" [loading]="saving()" (onClick)="comptabiliser()" />
+      </ng-template>
+    </p-dialog>
+
+    @if (onglet() === 'declarations') {
 
     <!-- Alerte source estimation -->
     @if (synthese()?.source === 'ESTIMATION') {
@@ -193,6 +351,7 @@ import { TranslateModule } from '@ngx-translate/core';
         </div>
       </div>
     </div>
+    }
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
@@ -233,6 +392,35 @@ import { TranslateModule } from '@ngx-translate/core';
     .tr      { text-align:right; }
     .empty-msg { text-align:center; padding:30px; color:#64748b; }
 
+    .tabs-bar { display:flex; gap:4px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
+    .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:13px; cursor:pointer; font-family:inherit; }
+    .tab-btn:hover  { background:#1a2235; color:#e8f0fe; }
+    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
+
+    .ob-card { padding:14px 16px; }
+    .ob-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px; }
+    .ob-titre { font-size:13px; font-weight:600; color:#e8f0fe; margin-bottom:4px; }
+    .ob-desc  { font-size:11px; color:#94a3b8; line-height:1.5; max-width:720px; }
+    .ob-body  { display:flex; flex-wrap:wrap; gap:18px; align-items:center; }
+    .ob-item  { display:flex; flex-direction:column; gap:2px; font-size:12px; color:#cbd5e1; }
+    .ob-lab   { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+
+    .conseil { background:#1e2d45; border:1px solid #2a3f5f; border-left:4px solid #0099ff; border-radius:10px; padding:12px 16px; margin-bottom:10px; }
+    .conseil.attention { border-left-color:#f59e0b; }
+    .conseil.urgent    { border-left-color:#ef4444; }
+    .conseil-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+    .conseil-cat  { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; }
+    .conseil-titre { font-size:13px; font-weight:600; color:#e8f0fe; margin-bottom:4px; }
+    .conseil-detail { font-size:12px; color:#94a3b8; line-height:1.6; }
+
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:10px 0; }
+    .fg { display:flex; flex-direction:column; gap:4px; }
+    .fg.full { grid-column:1 / -1; }
+    .fg label { font-size:12px; color:#94a3b8; }
+    .w-full { width:100%; }
+    .dlg-ob { font-size:13px; font-weight:600; color:#e8f0fe; margin-bottom:6px; }
+    .dlg-hint { font-size:11px; color:#64748b; margin-top:6px; line-height:1.5; }
+
     @media print {
       .btn-print, .alert-banner { display:none; }
       .kpi-grid { grid-template-columns:repeat(4,1fr); }
@@ -244,8 +432,28 @@ export class FiscalComponent implements OnInit {
   synthese     = signal<any>(null);
   exercice     = signal<string>('');
   loading      = signal(true);
+  saving       = signal(false);
 
-  constructor(private api: ApiService) {}
+  onglet          = signal<'declarations' | 'obligations' | 'conseils'>('declarations');
+  obligationsData = signal<any | null>(null);
+  conseils        = signal<any[] | null>(null);
+
+  dialogCompta = false;
+  obligationActive: any = null;
+  formCompta: any = {};
+  modeComptaOptions = [
+    { label: 'Provision (constater la dette fiscale)', value: 'PROVISION' },
+    { label: 'Paiement immédiat (provision + règlement)', value: 'PAIEMENT' },
+  ];
+  canauxOptions = [
+    { label: 'Caisse (571)', value: '571' },
+    { label: 'Banque (521)', value: '521' },
+    { label: 'Orange Money (5521)', value: '5521' },
+    { label: 'Wave (5522)', value: '5522' },
+    { label: 'Free Money (5523)', value: '5523' },
+  ];
+
+  constructor(private api: ApiService, private msg: MessageService) {}
 
   ngOnInit() {
     this.api.get<any>('/fiscal/declarations/').subscribe({
@@ -258,6 +466,66 @@ export class FiscalComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  chargerObligations() {
+    this.obligationsData.set(null);
+    this.api.get<any>('/fiscal/obligations/').subscribe({
+      next: res => this.obligationsData.set(res),
+      error: () => this.obligationsData.set({ identification: { complet: false },
+                                              message: 'Erreur de chargement.', obligations: [] }),
+    });
+  }
+
+  chargerConseils() {
+    this.conseils.set(null);
+    this.api.get<any>('/fiscal/conseils/').subscribe({
+      next: res => this.conseils.set(res.conseils || []),
+      error: () => this.conseils.set([]),
+    });
+  }
+
+  ouvrirComptabiliser(o: any) {
+    this.obligationActive = o;
+    this.formCompta = {
+      code:    o.code,
+      montant: o.montant && o.montant > o.deja_comptabilise ? o.montant - o.deja_comptabilise : o.montant || null,
+      mode:    'PROVISION',
+      canal:   '571',
+      date:    new Date().toISOString().split('T')[0],
+    };
+    this.dialogCompta = true;
+  }
+
+  comptabiliser() {
+    if (!this.formCompta.montant || this.formCompta.montant <= 0) {
+      this.msg.add({ severity: 'warn', summary: 'Montant requis', detail: 'Saisissez un montant supérieur à zéro.' });
+      return;
+    }
+    this.saving.set(true);
+    this.api.post<any>('/fiscal/comptabiliser/', this.formCompta).subscribe({
+      next: res => {
+        this.saving.set(false);
+        this.dialogCompta = false;
+        this.msg.add({ severity: 'success', summary: 'Comptabilisé',
+                       detail: `Pièce ${res.no_piece} enregistrée au journal.` });
+        this.chargerObligations();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: 'Erreur',
+                       detail: err?.error?.error || 'Comptabilisation impossible.' });
+      },
+    });
+  }
+
+  statutObligation(s: string) {
+    return { ESTIMATION: 'Estimation', EXONERE: 'Exonéré', A_SAISIR: 'À saisir',
+             BULLETINS: 'Données réelles', GERE_PAR_RH: 'Géré par le module RH' }[s] || s;
+  }
+
+  categorieLabel(c: string) {
+    return { FISCAL: '🏛️ Fiscal', COMPTABLE: '📒 Comptable', FINANCIER: '💰 Financier' }[c] || c;
   }
 
   statutLabel(s: string) {

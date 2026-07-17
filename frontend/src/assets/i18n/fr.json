@@ -136,7 +136,9 @@
     "legende_critique": "3 mois de retard ou plus",
     "legende_reliquat": "Un élève à jour sur ses mensualités échues mais devant encore le solde des mois à venir n'apparaît pas : ce n'est pas un retard, juste le reste de la somme annuelle à régler au fil de l'année.",
     "niveau_ok": "OK — Reliquat",
-    "niveau_ok_sub": "À jour, reste les mois à venir"
+    "niveau_ok_sub": "À jour, reste les mois à venir",
+    "conseils": "Conseils du système",
+    "conseils_tous": "Voir tous les conseils (module Fiscal)"
   },
   "eleves": {
     "title": "Élèves & Paiements",

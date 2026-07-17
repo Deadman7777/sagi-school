@@ -6,11 +6,13 @@ import { TableModule } from 'primeng/table';
 import { SkeletonModule } from 'primeng/skeleton';
 import { TranslateModule } from '@ngx-translate/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TagModule, TranslateModule, TableModule, SkeletonModule, DecimalPipe, DatePipe],
+  imports: [TagModule, TranslateModule, TableModule, SkeletonModule, DecimalPipe, DatePipe, RouterLink],
   template: `
     <!-- ══ VUE SUPER ADMIN ══ -->
     @if (isSuperAdmin()) {
@@ -208,6 +210,24 @@ import { DecimalPipe, DatePipe } from '@angular/common';
               </div>
             </div>
           </div>
+          @if (conseilsDash().length) {
+            <div class="card">
+              <div class="card-header">💡 {{ 'dashboard.conseils' | translate }}</div>
+              <div class="card-body">
+                @for (c of conseilsDash().slice(0, 4); track c.titre) {
+                  <div class="conseil-mini" [class.urgent]="c.niveau === 'URGENT'"
+                       [class.attention]="c.niveau === 'ATTENTION'">
+                    <div class="cm-titre">{{ c.titre }}</div>
+                    <div class="cm-detail">{{ c.detail }}</div>
+                  </div>
+                }
+                <div class="total-eleves">
+                  <a routerLink="/fiscal" style="color:#00d4aa;text-decoration:none">
+                    {{ 'dashboard.conseils_tous' | translate }} →</a>
+                </div>
+              </div>
+            </div>
+          }
           @if (d.prises_en_charge?.categories?.length) {
             <div class="card">
               <div class="card-header">🤝 Prises en charge</div>
@@ -419,6 +439,12 @@ import { DecimalPipe, DatePipe } from '@angular/common';
     .ok        .alert-num { color:#10b981; }
     .total-eleves { font-size:12px; color:#64748b; margin-top:12px; padding-top:8px; border-top:1px solid #2a3f5f; }
 
+    .conseil-mini { border-left:3px solid #0099ff; padding:6px 10px; margin-bottom:8px; background:#172338; border-radius:0 6px 6px 0; }
+    .conseil-mini.attention { border-left-color:#f59e0b; }
+    .conseil-mini.urgent    { border-left-color:#ef4444; }
+    .cm-titre  { font-size:12px; font-weight:600; color:#e8f0fe; }
+    .cm-detail { font-size:11px; color:#94a3b8; line-height:1.5; }
+
     .mode-row   { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .mode-info  { display:flex; flex-direction:column; gap:2px; }
     .mode-name  { font-size:13px; font-weight:500; color:#e8f0fe; }
@@ -440,9 +466,11 @@ export class DashboardComponent implements OnInit {
   alertes          = signal<any[]>([]);
   tresoCanaux      = signal<TresorerieCanaux | null>(null);
   auditLog         = signal<any[]>([]);
+  conseilsDash     = signal<any[]>([]);
 
   constructor(
     private dashService: DashboardService,
+    private api: ApiService,
     public auth: AuthService
   ) {}
 
@@ -479,6 +507,11 @@ export class DashboardComponent implements OnInit {
       });
       this.dashService.getAuditLog().subscribe({
         next:  res => this.auditLog.set(res),
+        error: () => {}
+      });
+      // Conseils fiscal/comptable/financier générés depuis les données du système
+      this.api.get<any>('/fiscal/conseils/').subscribe({
+        next:  res => this.conseilsDash.set(res?.conseils || []),
         error: () => {}
       });
     }
