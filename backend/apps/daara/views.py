@@ -10,7 +10,8 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 
 from core.tenant import get_tenant
-from .models import Sourate, Subdivision, NiveauDaara, ParcoursNongo, SuiviQuotidien
+from .models import (Sourate, Subdivision, NiveauDaara, ParcoursNongo,
+                     SuiviQuotidien, offsets_riwaya, nb_versets_bornes)
 from .serializers import (SourateSerializer, SubdivisionSerializer,
                           NiveauDaaraSerializer, ParcoursNongoSerializer,
                           SuiviQuotidienSerializer)
@@ -93,7 +94,7 @@ class SuiviQuotidienViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = SuiviQuotidien.objects.filter(
             tenant=get_tenant(self.request)
-        ).select_related('sourate_debut', 'sourate_fin')
+        ).select_related('sourate_debut', 'sourate_fin', 'parcours')
         parcours = self.request.query_params.get('parcours')
         if parcours:
             qs = qs.filter(parcours_id=parcours)
@@ -105,13 +106,7 @@ class SuiviQuotidienViewSet(viewsets.ModelViewSet):
 
 # ───────────────────────── Progression (calculée) ─────────────────────────
 
-def _offsets(riwaya):
-    """index global cumulé de début de chaque sourate (numero -> offset versets avant elle)."""
-    offset, cumul = {}, 0
-    for s in Sourate.objects.all().order_by('numero'):
-        offset[s.numero] = cumul
-        cumul += s.nb_versets(riwaya)
-    return offset, cumul
+_offsets = offsets_riwaya
 
 
 def _merge(intervals):
@@ -175,6 +170,37 @@ def compute_progression(parcours):
     hizb_ok, hizb_tot = _complets('HIZB')
     rub_ok,  rub_tot  = _complets('RUB')
 
+    # Position actuelle du NONGO : extrémité du dernier suivi dans le sens de
+    # mémorisation du parcours (FIN = An-Nas → Al-Baqara, donc borne basse).
+    position = None
+    dernier = (parcours.suivis.exclude(sourate_debut__isnull=True)
+               .exclude(sourate_fin__isnull=True)
+               .select_related('sourate_debut', 'sourate_fin').first())
+    if dernier:
+        g_deb = offset[dernier.sourate_debut.numero] + dernier.verset_debut
+        g_fin = offset[dernier.sourate_fin.numero]   + dernier.verset_fin
+        if parcours.sens == 'FIN':
+            sourate, verset, g_pos = ((dernier.sourate_debut, dernier.verset_debut, g_deb)
+                                      if g_deb <= g_fin else
+                                      (dernier.sourate_fin, dernier.verset_fin, g_fin))
+        else:
+            sourate, verset, g_pos = ((dernier.sourate_fin, dernier.verset_fin, g_fin)
+                                      if g_fin >= g_deb else
+                                      (dernier.sourate_debut, dernier.verset_debut, g_deb))
+        hizb_pos = next((num for num, d, f in _segments('HIZB', riwaya, offset, total)
+                         if d <= g_pos <= f), None)
+        juz_pos  = next((num for num, d, f in _segments('JUZ', riwaya, offset, total)
+                         if d <= g_pos <= f), None)
+        position = {
+            'sourate':        sourate.numero,
+            'sourate_nom_fr': sourate.nom_fr,
+            'sourate_nom_ar': sourate.nom_ar,
+            'verset':         verset,
+            'hizb':           hizb_pos,
+            'juz':            juz_pos,
+            'date':           str(dernier.date),
+        }
+
     return {
         'parcours': str(parcours.id),
         'riwaya': riwaya,
@@ -187,6 +213,7 @@ def compute_progression(parcours):
         'hizb_total': hizb_tot,
         'rub_complets': rub_ok,
         'rub_total': rub_tot,
+        'position': position,
     }
 
 
@@ -247,6 +274,12 @@ class RapportParentPDFView(APIView):
 
         suivis = []
         for s in parcours.suivis.select_related('sourate_debut', 'sourate_fin')[:25]:
+            # Nb de versets couverts, quelle que soit la méthode de saisie
+            # (les bornes sourate:verset sont dérivées à l'enregistrement en mode hizb).
+            nb = (nb_versets_bornes(parcours.riwaya,
+                                    s.sourate_debut.numero, s.verset_debut,
+                                    s.sourate_fin.numero,   s.verset_fin)
+                  if s.sourate_debut_id and s.sourate_fin_id else None)
             if s.mode == 'HIZB' and s.hizb_debut:
                 # Portion saisie par hizb → afficher les hizb, pas les bornes dérivées
                 suivis.append({
@@ -257,6 +290,7 @@ class RapportParentPDFView(APIView):
                     'fin_fr': f'Hizb {s.hizb_fin}',
                     'fin_ar': shape_ar(f'حزب {s.hizb_fin}'),
                     'vf': '',
+                    'nb': nb,
                     'qualite': s.get_qualite_display(),
                     'present': s.present,
                     'observation': s.observation,
@@ -270,6 +304,7 @@ class RapportParentPDFView(APIView):
                 'fin_fr': s.sourate_fin.nom_fr if s.sourate_fin_id else '—',
                 'fin_ar': shape_ar(s.sourate_fin.nom_ar) if s.sourate_fin_id else '',
                 'vf': s.verset_fin,
+                'nb': nb,
                 'qualite': s.get_qualite_display(),
                 'present': s.present,
                 'observation': s.observation,
@@ -285,6 +320,7 @@ class RapportParentPDFView(APIView):
             'date_sortie': parcours.date_sortie,
             'statut': parcours.get_statut_display(),
             'prog': prog,
+            'position_sourate_ar': shape_ar(prog['position']['sourate_nom_ar']) if prog.get('position') else '',
             'suivis': suivis,
             'titre_ar': shape_ar('تقرير حفظ القرآن الكريم'),
             'sous_titre_ar': shape_ar('متابعة النونغو'),
@@ -292,7 +328,8 @@ class RapportParentPDFView(APIView):
                 'infos': 'المعلومات', 'riwaya': 'الرواية', 'niveau': 'المستوى',
                 'statut': 'الحالة', 'progression': 'التقدّم', 'memorise': 'محفوظ',
                 'juz': 'جزء', 'suivi': 'المتابعة اليومية', 'portion': 'المقدار',
-                'hizb': 'حزب', 'rub': 'ربع',
+                'hizb': 'حزب', 'rub': 'ربع', 'position': 'الموضع الحالي',
+                'versets': 'آيات',
             }.items()},
             'font_body': 'DejaVuSans.ttf',
             'font_ar':   'Amiri-Regular.ttf',

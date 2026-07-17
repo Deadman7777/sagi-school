@@ -176,6 +176,9 @@ import { ElevesService } from '../../../core/services/eleves.service';
                         optionLabel="label" optionValue="numero" [filter]="true" filterBy="label"
                         [placeholder]="'daara.choisir' | translate" styleClass="w-full" />
             </div>
+            @if (nbVersetsHizb(); as nv) {
+              <div class="fg full nbv-live">📖 {{ nv }} {{ 'daara.versets' | translate }}</div>
+            }
           } @else {
             <div class="fg">
               <label>{{ 'daara.sourate_debut' | translate }}</label>
@@ -231,6 +234,9 @@ import { ElevesService } from '../../../core/services/eleves.service';
               } @else {
                 {{ s.sourate_debut_nom }} {{ s.verset_debut }} → {{ s.sourate_fin_nom }} {{ s.verset_fin }}
               }
+              @if (s.nb_versets) {
+                <span class="nbv">· {{ s.nb_versets }} {{ 'daara.versets' | translate }}</span>
+              }
             </td>
             <td><p-tag [value]="s.qualite" [severity]="s.qualite==='BIEN' ? 'success' : (s.qualite==='A_REVOIR' ? 'danger' : 'warn')" /></td>
             <td>{{ s.present ? '✓' : '✗' }}</td>
@@ -256,6 +262,14 @@ import { ElevesService } from '../../../core/services/eleves.service';
             <div>{{ pr.versets_memorises }} / {{ pr.total_versets }} {{ 'daara.versets' | translate }}</div>
             <div>{{ 'daara.hizb' | translate }} : {{ pr.hizb_complets }}/{{ pr.hizb_total }} · {{ 'daara.rub' | translate }} : {{ pr.rub_complets }}/{{ pr.rub_total }}</div>
             <div>{{ pr.nb_suivis }} {{ 'daara.entrees' | translate }} · {{ pr.riwaya }}</div>
+            @if (pr.position) {
+              <div class="pos-actuelle">📍 {{ 'daara.position_actuelle' | translate }} :
+                <strong>{{ 'daara.hizb' | translate }} {{ pr.position.hizb }}</strong>
+                · <strong>{{ pr.position.sourate }}. {{ pr.position.sourate_nom_fr }}</strong>
+                <span dir="rtl">({{ pr.position.sourate_nom_ar }})</span>
+                — {{ 'daara.verset' | translate }} {{ pr.position.verset }} · Juz {{ pr.position.juz }}
+              </div>
+            }
           </div>
           <p-button [label]="'daara.export_parent' | translate" icon="pi pi-file-pdf"
                     severity="help" [loading]="exporting()" (onClick)="exporterPdf()" />
@@ -379,6 +393,11 @@ import { ElevesService } from '../../../core/services/eleves.service';
     .prog-pct .big { font-size:34px; font-weight:700; color:#00d4aa; }
     .prog-pct .sub { font-size:12px; color:#94a3b8; }
     .prog-info { color:#cbd5e1; font-size:13px; display:flex; flex-direction:column; gap:4px; }
+    .pos-actuelle { background:#14321f; border:1px solid #1e5a3a; border-radius:6px;
+                    padding:6px 10px; color:#a7f3d0; margin-top:4px; }
+    .nbv { color:#94a3b8; font-size:12px; white-space:nowrap; }
+    .nbv-live { background:#1e2d45; border-radius:6px; padding:8px 10px; color:#7dd3fc;
+                font-size:13px; justify-content:center; }
     .juz-grid { display:grid; grid-template-columns:repeat(10,1fr); gap:6px; }
     .juz-cell { border-radius:6px; padding:8px 4px; text-align:center; color:#06281f; font-size:11px;
                 display:flex; flex-direction:column; }
@@ -533,6 +552,27 @@ export class MemorisationComponent implements OnInit {
       if (l?.[0]?.mode) this.formSuivi.mode = l[0].mode;
     });
     this.chargerHizbs(p.riwaya);
+  }
+
+  // Nombre exact de versets couverts par la plage de hizb saisie (même info
+  // que la saisie par sourate). Fin du hizb N = début du hizb N+1 moins 1.
+  nbVersetsHizb(): number | null {
+    const p = this.parcoursActif();
+    const h1 = this.formSuivi.hizb_debut, h2 = this.formSuivi.hizb_fin;
+    if (!p || !h1 || !h2 || !this.sourates().length || !this.hizbs().length) return null;
+    const [a, b] = h1 <= h2 ? [h1, h2] : [h2, h1];
+    const offsets = new Map<number, number>();
+    let total = 0;
+    for (const s of this.sourates()) {
+      offsets.set(s.numero, total);
+      total += p.riwaya === 'WARSH' ? s.nb_versets_warsh : s.nb_versets_hafs;
+    }
+    const glob = (h: any) => (offsets.get(h.sourate_numero) ?? 0) + h.verset_debut;
+    const deb = this.hizbs().find(h => h.numero === a);
+    if (!deb) return null;
+    const suivant = this.hizbs().find(h => h.numero === b + 1);
+    const gFin = suivant ? glob(suivant) - 1 : total;
+    return gFin - glob(deb) + 1;
   }
 
   chargerHizbs(riwaya: string) {

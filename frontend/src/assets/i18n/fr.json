@@ -53,7 +53,8 @@
     "idjie_titre": "Niveau d'apprentissage de l'alphabet",
     "idjie_aide": "Pour le niveau Idjie, on suit uniquement le palier atteint par l'élève dans l'apprentissage de l'alphabet arabe.",
     "idjie_niveau": "Niveau atteint",
-    "idjie_enregistre": "Niveau enregistré."
+    "idjie_enregistre": "Niveau enregistré.",
+    "position_actuelle": "Position actuelle"
   },
   "app": {
     "name": "SAGI SCHOOL",

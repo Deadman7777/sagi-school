@@ -53,7 +53,8 @@
     "idjie_titre": "Alphabet learning level",
     "idjie_aide": "For the Idjie level, we only track the stage the student has reached in learning the Arabic alphabet.",
     "idjie_niveau": "Level reached",
-    "idjie_enregistre": "Level saved."
+    "idjie_enregistre": "Level saved.",
+    "position_actuelle": "Current position"
   },
   "app": {
     "name": "SAGI SCHOOL",

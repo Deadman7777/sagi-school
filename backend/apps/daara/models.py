@@ -133,6 +133,30 @@ class ParcoursNongo(TenantModel):
         return f"Parcours {self.eleve} ({self.riwaya})"
 
 
+# Offsets globaux par riwaaya (cache par process : données de référence
+# figées, seedées une fois par init_coran).
+_OFFSETS_CACHE = {}
+
+
+def offsets_riwaya(riwaya):
+    """(offset par sourate, total versets) — offset[n] = nb de versets avant la sourate n."""
+    if riwaya not in _OFFSETS_CACHE:
+        offset, cumul = {}, 0
+        for s in Sourate.objects.order_by('numero'):
+            offset[s.numero] = cumul
+            cumul += s.nb_versets(riwaya)
+        _OFFSETS_CACHE[riwaya] = (offset, cumul)
+    return _OFFSETS_CACHE[riwaya]
+
+
+def nb_versets_bornes(riwaya, sourate_debut, verset_debut, sourate_fin, verset_fin):
+    """Nombre de versets couverts entre deux bornes inclusives (peu importe l'ordre)."""
+    offset, _ = offsets_riwaya(riwaya)
+    g1 = offset[sourate_debut] + verset_debut
+    g2 = offset[sourate_fin] + verset_fin
+    return abs(g2 - g1) + 1
+
+
 def bornes_hizb(riwaya, hizb_debut, hizb_fin):
     """Bornes (sourate_debut, verset_debut, sourate_fin, verset_fin) couvrant
     les hizb hizb_debut..hizb_fin inclus, pour une riwaaya donnée.

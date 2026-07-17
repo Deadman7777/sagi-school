@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import (Sourate, Subdivision, NiveauDaara, ParcoursNongo,
-                     SuiviQuotidien, bornes_hizb)
+                     SuiviQuotidien, bornes_hizb, nb_versets_bornes)
 
 
 class SourateSerializer(serializers.ModelSerializer):
@@ -45,6 +45,16 @@ class ParcoursNongoSerializer(serializers.ModelSerializer):
 class SuiviQuotidienSerializer(serializers.ModelSerializer):
     sourate_debut_nom = serializers.CharField(source='sourate_debut.nom_fr', read_only=True)
     sourate_fin_nom   = serializers.CharField(source='sourate_fin.nom_fr', read_only=True)
+    # Nombre de versets couverts par l'entrée — quelle que soit la méthode de
+    # saisie (les bornes sourate:verset sont dérivées à l'enregistrement en mode hizb).
+    nb_versets        = serializers.SerializerMethodField()
+
+    def get_nb_versets(self, obj):
+        if not obj.sourate_debut_id or not obj.sourate_fin_id:
+            return None
+        return nb_versets_bornes(obj.parcours.riwaya,
+                                 obj.sourate_debut.numero, obj.verset_debut,
+                                 obj.sourate_fin.numero,   obj.verset_fin)
 
     class Meta:
         model = SuiviQuotidien
