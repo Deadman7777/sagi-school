@@ -3,10 +3,14 @@ from django.urls import path, include, re_path
 from django.conf import settings
 
 from core.health import health
+from apps.licences.site_public import DemandeDemoView, PublicStatsView
 
 urlpatterns = [
     path('admin/',            admin.site.urls),
     path('api/health/',       health),
+    # Public : site vitrine sagi-school.com (demande de démo + compteurs agrégés)
+    path('api/public/demande-demo/', DemandeDemoView.as_view()),
+    path('api/public/stats/',        PublicStatsView.as_view()),
     path('api/auth/',         include('apps.users.urls')),
     path('api/tenants/',      include('apps.tenants.urls')),
     path('api/licences/',     include('apps.licences.urls')),
