@@ -19,7 +19,7 @@ class Licence(TimeStampedModel):
         'BASIC':        ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel'],
         'PRO':          ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel'],
         'AVANCE':       ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel', '/academique', '/rh', '/fiscal', '/gmrf'],
-        'TAXAWU_DAARA': ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/academique', '/suivi-mensuel'],
+        'TAXAWU_DAARA': ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/academique', '/suivi-mensuel', '/rh', '/fiscal', '/gmrf'],
     }
     STATUT_CHOICES = [
         ('ACTIVE',    'Active'),
