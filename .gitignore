@@ -22,3 +22,8 @@ backend/config/settings/production.py
 
 # Runtime logs
 backend/logs/
+
+# Données clients (écoles) — jamais dans le repo
+/*.xlsx
+/*.xls
+/*.pdf
