@@ -268,10 +268,12 @@ class Command(BaseCommand):
                     )
 
         # Rapport
+        solde_ini = solde_initial if solde_initial is not None else Decimal(0)
         self.stdout.write(self.style.MIGRATE_HEADING(f'\n═══ Exercice {annee} ═══'))
         self.stdout.write(f'  {len(mouvements)} mouvements | entrées {tot_e:,.0f} | '
-                          f'sorties {tot_s:,.0f} | solde initial {solde_initial:,.0f}')
-        calcule = solde_initial + tot_e - tot_s
+                          f'sorties {tot_s:,.0f} | solde initial {solde_ini:,.0f}'
+                          + ('' if solde_initial is not None else ' (pas de ligne SOLDE)'))
+        calcule = solde_ini + tot_e - tot_s
         self.stdout.write(f'  Solde caisse recalculé : {calcule:,.0f}'
                           + (f' | dernier SOLDE Excel : {dernier_solde:,.0f}'
                              if dernier_solde is not None else ''))
@@ -312,7 +314,7 @@ class Command(BaseCommand):
             return ligne[j] if j is not None and j < len(ligne) else None
 
         mouvements, anomalies = [], []
-        solde_initial = Decimal(0)
+        solde_initial = None      # None = pas de ligne SOLDE dans la feuille
         dernier_solde = None
         derniere_date = date(annee, 1, 1)
 
@@ -363,7 +365,7 @@ class Command(BaseCommand):
             tenant=tenant, annee_scolaire=str(annee),
             defaults=dict(
                 date_debut=date(annee, 1, 1), date_fin=date(annee, 12, 31),
-                nb_mensualites=12, solde_initial_caisse=solde_initial,
+                nb_mensualites=12, solde_initial_caisse=solde_initial or 0,
             ),
         )
         if not cree:
@@ -374,7 +376,10 @@ class Command(BaseCommand):
                     f'{annee} : {deja} écritures MIGRATION déjà présentes — '
                     'feuille ignorée (relancer après les avoir supprimées si besoin).'))
                 return None
-            exercice.solde_initial_caisse = solde_initial
+            # Ne pas écraser le solde saisi sur un exercice existant (ex. le
+            # comptage physique de l'exercice courant) sans ligne SOLDE.
+            if solde_initial is not None:
+                exercice.solde_initial_caisse = solde_initial
         if not o['sans_cloture']:
             exercice.cloture = True
             exercice.date_cloture = exercice.date_cloture or timezone.now()
