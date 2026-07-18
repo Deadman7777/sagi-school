@@ -784,7 +784,8 @@ chargerExercice() {
     next: res => {
       const list = res.results || res;
       if (list.length > 0) {
-        const e = list[0];
+        // Toujours l'exercice actif : jamais un exercice clôturé (historique migré)
+        const e = list.find((x: any) => !x.cloture) || list[0];
         this.exercice.set({
           ...e,
           solde_initial_caisse: +e.solde_initial_caisse,

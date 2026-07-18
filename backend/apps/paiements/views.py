@@ -19,7 +19,10 @@ class ExerciceViewSet(viewsets.ModelViewSet):
         tenant = get_tenant(self.request)
         if not tenant:
             return Exercice.objects.none()
-        return Exercice.objects.filter(tenant=tenant)
+        # Actifs d'abord puis du plus récent au plus ancien : les pages qui
+        # prennent le 1er de la liste (Paramètres) tombent sur l'exercice
+        # courant, pas sur un historique migré (ex. 2021 clôturé).
+        return Exercice.objects.filter(tenant=tenant).order_by('cloture', '-date_debut')
 
     def perform_create(self, serializer):
         tenant = get_tenant(self.request)
