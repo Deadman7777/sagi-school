@@ -125,3 +125,7 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='no-reply@sagi-school.
 
 # Destinataire des demandes de renouvellement de licence (Ma Licence)
 LICENCE_SUPPORT_EMAIL = config('LICENCE_SUPPORT_EMAIL', default='hadygesman@gmail.com')
+
+# Réception des sauvegardes des installations locales
+SAGI_BACKUPS_DIR = config('SAGI_BACKUPS_DIR',
+                          default='/var/backups/sagi-school/clients')

@@ -393,7 +393,8 @@
     "cert_cachet": "Zone cachet de l'établissement",
     "cert_mention_validite": "Mention de validité",
     "cert_texte_intro": "Texte d'introduction personnalisé (vide = texte standard)",
-    "cert_texte_conclusion": "Texte de conclusion personnalisé (vide = texte standard)"
+    "cert_texte_conclusion": "Texte de conclusion personnalisé (vide = texte standard)",
+    "sauvegarde": "Sauvegarde"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -913,5 +914,16 @@
     "lecture_seule": "Lecture seule",
     "vous_gerez": "Vous gérez :",
     "retour_gestion": "Retour à la gestion"
+  },
+  "sauvegarde": {
+    "titre": "Sauvegarde cloud",
+    "explication": "Vos données sont sauvegardées automatiquement chaque jour sur les serveurs sécurisés HADY GESMAN dès que l'ordinateur est connecté à Internet. En cas de panne de la machine, l'école peut être restaurée sur un nouveau poste.",
+    "derniere": "Dernière sauvegarde",
+    "aucune": "Aucune sauvegarde effectuée pour l'instant — elle se lancera automatiquement, ou cliquez sur « Sauvegarder maintenant ».",
+    "copies_locales": "Copies locales",
+    "taille": "Taille",
+    "maintenant": "Sauvegarder maintenant",
+    "ok_toast": "Sauvegarde effectuée",
+    "erreur_toast": "Échec de la sauvegarde"
   }
 }

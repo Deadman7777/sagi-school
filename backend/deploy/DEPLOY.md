@@ -486,3 +486,21 @@ Alerte UptimeRobot configurable sur un endpoint Django qui expose `df`.
 
 RTO cible (Recovery Time Objective) : ~2h.
 RPO cible (Recovery Point Objective) : ≤ 24h (backup quotidien).
+
+---
+
+## Annexe — Sauvegardes cloud des écoles locales
+
+Les installations locales (Electron) envoient chaque jour un `pg_dump -Fc`
+de leur base vers `POST /api/sauvegarde/recevoir/`, authentifié par la
+signature de leur clé de licence. Stockage :
+`/var/backups/sagi-school/clients/<école>-<hash>/` (rétention 30 dumps,
+dossier créé automatiquement — déjà couvert par le `mkdir` du §2).
+
+**Restaurer une école sur un nouveau poste** :
+1. Récupérer le dernier dump : `ls -t /var/backups/sagi-school/clients/<école>-*/ | head`
+2. Installer SAGI SCHOOL sur le nouveau poste (install_win.ps1 crée la base vide)
+3. Copier le dump puis :
+   `pg_restore -h localhost -U postgres -d sagi_school --clean --if-exists chemin\vers\sagi_XXXX.dump`
+4. Lancer l'application — wizard : mêmes identifiants Postgres, l'étape
+   école est ignorée (l'école existe déjà dans la base restaurée).

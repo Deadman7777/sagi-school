@@ -27,3 +27,7 @@ backend/logs/
 /*.xlsx
 /*.xls
 /*.pdf
+
+# Sauvegardes (dumps locaux + réception serveur)
+backend/backups/
+backend/backups_clients/

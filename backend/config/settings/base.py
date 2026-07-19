@@ -57,7 +57,12 @@ LOCAL_APPS = [
     'apps.academique',
     'apps.daara',
     'apps.gmrf',
+    'apps.sauvegarde',
 ]
+
+# Sauvegarde cloud des installations locales (apps.sauvegarde)
+SAGI_CLOUD_URL = config('SAGI_CLOUD_URL', default='https://app.sagi-school.com')
+SAGI_BACKUPS_DIR = config('SAGI_BACKUPS_DIR', default=str(BASE_DIR / 'backups_clients'))
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 

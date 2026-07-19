@@ -119,6 +119,22 @@ async function runMaintenance(backendDir) {
   } catch (e) {
     console.warn('[Maintenance] init_coran:', e.message);
   }
+  demarrerSauvegardeCloud(backendDir);
+}
+
+// Sauvegarde cloud : pg_dump + envoi au serveur HADY GESMAN au démarrage
+// puis toutes les 24 h. Non bloquant — hors ligne, le dump reste local et
+// l'envoi repart à la prochaine exécution.
+const SAUVEGARDE_INTERVALLE_MS = 24 * 60 * 60 * 1000;
+
+function demarrerSauvegardeCloud(backendDir) {
+  const lancer = () => {
+    runManageCommand(backendDir, ['sauvegarde_cloud'], 'sauvegarde_cloud')
+      .then(() => console.log('[Sauvegarde] OK'))
+      .catch(e => console.warn('[Sauvegarde]', e.message));
+  };
+  lancer();
+  setInterval(lancer, SAUVEGARDE_INTERVALLE_MS);
 }
 
 function initParametresFiscaux(backendDir) {

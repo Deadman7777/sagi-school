@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { AppModeService } from '../../core/services/app-mode.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
@@ -46,6 +47,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('certificat'); initCertConfig()">📜 {{ 'parametres.certificat' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
+      <button class="tab-btn" *ngIf="estLocal" [class.active]="onglet() === 'sauvegarde'"
+              (click)="onglet.set('sauvegarde'); chargerSauvegarde()">☁️ {{ 'parametres.sauvegarde' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'cloture'"
         (click)="onglet.set('cloture'); chargerVerification()">
         🔒 {{ 'cloture.title' | translate }}
@@ -344,6 +347,52 @@ import { MessageService } from 'primeng/api';
             <tr><td colspan="5" class="empty-msg">{{ 'parametres.aucun_utilisateur' | translate }}</td></tr>
           </ng-template>
         </p-table>
+      </div>
+    </div>
+
+    <!-- ══ ONGLET SAUVEGARDE CLOUD (mode local) ══ -->
+    <div *ngIf="onglet() === 'sauvegarde'">
+      <div class="form-card">
+        <div class="fc-title">☁️ {{ 'sauvegarde.titre' | translate }}</div>
+        <p style="font-size:13px;color:#94a3b8;margin-bottom:16px">
+          {{ 'sauvegarde.explication' | translate }}
+        </p>
+
+        <div class="statut-cloture"
+             [class.ok]="sauvegarde()?.statut?.statut === 'OK'"
+             [class.bloque]="sauvegarde()?.statut?.statut === 'ERREUR'"
+             *ngIf="sauvegarde()?.statut">
+          <span *ngIf="sauvegarde()!.statut.statut === 'OK'">
+            ✅ {{ 'sauvegarde.derniere' | translate }} :
+            {{ sauvegarde()!.statut.date | date:'dd/MM/yyyy HH:mm' }}
+            — {{ sauvegarde()!.statut.message }}
+          </span>
+          <span *ngIf="sauvegarde()!.statut.statut === 'ERREUR'">
+            ❌ {{ sauvegarde()!.statut.date | date:'dd/MM/yyyy HH:mm' }}
+            — {{ sauvegarde()!.statut.message }}
+          </span>
+        </div>
+        <div class="alerte-orange" *ngIf="sauvegarde() && !sauvegarde()?.statut">
+          ⚠️ {{ 'sauvegarde.aucune' | translate }}
+        </div>
+
+        <div class="kpi-row" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0"
+             *ngIf="sauvegarde()">
+          <div class="kpi-mini">
+            <div class="km-label">{{ 'sauvegarde.copies_locales' | translate }}</div>
+            <div class="km-val">{{ sauvegarde()!.nb_dumps_locaux }}</div>
+          </div>
+          <div class="kpi-mini">
+            <div class="km-label">{{ 'sauvegarde.taille' | translate }}</div>
+            <div class="km-val">{{ ((sauvegarde()!.statut?.taille || 0) / 1048576) | number:'1.1-1' }} Mo</div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <p-button [label]="'☁️ ' + ('sauvegarde.maintenant' | translate)"
+                    [loading]="sauvegardeEnCours()"
+                    (onClick)="declencherSauvegarde()" />
+        </div>
       </div>
     </div>
 
@@ -712,12 +761,43 @@ export class ParametresComponent implements OnInit {
   rolesDisponibles: any[] = [];
 
   private translate = inject(TranslateService);
+  private appMode = inject(AppModeService);
+
+  estLocal = this.appMode.isLocal();
+  sauvegarde        = signal<any>(null);
+  sauvegardeEnCours = signal(false);
 
   constructor(
     private api: ApiService,
     public auth: AuthService,
     private msg: MessageService
   ) {}
+
+  chargerSauvegarde() {
+    this.api.get<any>('/sauvegarde/statut/').subscribe({
+      next: res => this.sauvegarde.set(res),
+      error: err => console.error(err),
+    });
+  }
+
+  declencherSauvegarde() {
+    this.sauvegardeEnCours.set(true);
+    this.api.post<any>('/sauvegarde/declencher/', {}).subscribe({
+      next: () => {
+        this.sauvegardeEnCours.set(false);
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('sauvegarde.ok_toast') });
+        this.chargerSauvegarde();
+      },
+      error: err => {
+        this.sauvegardeEnCours.set(false);
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('sauvegarde.erreur_toast'),
+                       detail: err?.error?.message || '' });
+        this.chargerSauvegarde();
+      },
+    });
+  }
 
   ngOnInit() {
     this.rolesDisponibles = [

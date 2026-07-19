@@ -393,7 +393,8 @@
     "cert_cachet": "School stamp area",
     "cert_mention_validite": "Validity notice",
     "cert_texte_intro": "Custom introduction text (empty = standard text)",
-    "cert_texte_conclusion": "Custom closing text (empty = standard text)"
+    "cert_texte_conclusion": "Custom closing text (empty = standard text)",
+    "sauvegarde": "Backup"
   },
   "cloture": {
     "title": "Year Closing",
@@ -913,5 +914,16 @@
     "lecture_seule": "Read only",
     "vous_gerez": "Managing:",
     "retour_gestion": "Back to admin"
+  },
+  "sauvegarde": {
+    "titre": "Cloud backup",
+    "explication": "Your data is automatically backed up every day to HADY GESMAN secure servers whenever the computer is online. If the machine fails, the school can be restored on a new computer.",
+    "derniere": "Last backup",
+    "aucune": "No backup yet — it will run automatically, or click “Back up now”.",
+    "copies_locales": "Local copies",
+    "taille": "Size",
+    "maintenant": "Back up now",
+    "ok_toast": "Backup completed",
+    "erreur_toast": "Backup failed"
   }
 }

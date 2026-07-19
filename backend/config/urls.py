@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/academique/', include('apps.academique.urls')),
     path('api/daara/',      include('apps.daara.urls')),
     path('api/gmrf/',       include('apps.gmrf.urls')),
+    path('api/sauvegarde/', include('apps.sauvegarde.urls')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):
