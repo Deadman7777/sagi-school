@@ -61,7 +61,10 @@ LOCAL_APPS = [
 ]
 
 # Sauvegarde cloud des installations locales (apps.sauvegarde)
-SAGI_CLOUD_URL = config('SAGI_CLOUD_URL', default='https://app.sagi-school.com')
+# NB : c'est le host du BACKEND (api.), pas celui du SPA (app.). envoyer_dump
+# y ajoute /api/sauvegarde/recevoir/ ; app.sagi-school.com ne sert que le
+# frontend statique et renverrait un 405 nginx sur ce POST.
+SAGI_CLOUD_URL = config('SAGI_CLOUD_URL', default='https://api.sagi-school.com')
 SAGI_BACKUPS_DIR = config('SAGI_BACKUPS_DIR', default=str(BASE_DIR / 'backups_clients'))
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

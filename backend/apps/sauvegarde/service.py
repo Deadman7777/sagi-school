@@ -127,6 +127,9 @@ def envoyer_dump(chemin):
         (licence.tenant.nom or '')[:80].encode('utf-8')).decode('ascii')
     requete = urllib.request.Request(url, data=corps, method='POST', headers={
         'Content-Type': 'application/octet-stream',
+        # User-Agent explicite : sans lui, urllib s'annonce « Python-urllib »,
+        # signature bannie par la protection bot de Cloudflare (403 / erreur 1010).
+        'User-Agent': 'SAGI-SCHOOL-Backup/1.0 (+https://sagi-school.com)',
         'X-Cle-Licence': licence.cle_licence,
         'X-Ecole-B64': ecole_b64,
         'X-Empreinte': hashlib.sha256(corps).hexdigest(),
