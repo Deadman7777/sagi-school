@@ -103,6 +103,9 @@ interface PecForm {
         <p-select appendTo="body" [options]="filtresAlerte" [(ngModel)]="filtreAlerte"
                   (onChange)="filtrer()" [placeholder]="'eleves.toutes_alertes' | translate"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
+        <p-select appendTo="body" [options]="tris" [(ngModel)]="tri"
+                  (onChange)="filtrer()" placeholder="Trier par…"
+                  optionLabel="label" optionValue="value" styleClass="filter-drop" />
         <select class="ex-select" [(ngModel)]="exerciceSel" (ngModelChange)="changerExercice()">
           <option value="">{{ 'comptabilite.annee_active' | translate }}</option>
           @for (ex of exercices(); track ex.id) {
@@ -784,6 +787,7 @@ export class ElevesListeComponent implements OnInit {
   recherche    = '';
   filtreAlerte = '';
   filtreStatut = '';
+  tri          = 'numero';
   // Sélecteur d'exercice : '' = année active ; sinon id d'un exercice (clôturé
   // = consultation/fiches en lecture seule, création d'élève désactivée).
   exercices    = signal<any[]>([]);
@@ -820,6 +824,14 @@ export class ElevesListeComponent implements OnInit {
   editId: string | null = null;
   legendeVisible = false;
 
+  tris = [
+    { label: 'Tri : Matricule',        value: 'numero' },
+    { label: 'Tri : Nom (A → Z)',      value: 'nom' },
+    { label: 'Tri : Nom (Z → A)',      value: 'nom_desc' },
+    { label: 'Tri : Arrivée (récent)', value: 'arrivee_recent' },
+    { label: 'Tri : Arrivée (ancien)', value: 'arrivee_ancien' },
+    { label: 'Tri : Classe',           value: 'classe' },
+  ];
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
     { label: 'CRITIQUE',       value: 'CRITIQUE' },
@@ -940,7 +952,7 @@ export class ElevesListeComponent implements OnInit {
       next: res => {
         const data = Array.isArray(res) ? res : ((res as any).results || []);
         this.eleves.set(data);
-        this.elevesFiltres.set(data);
+        this.elevesFiltres.set(this.trier(data));
         this.loading.set(false);
       },
       error: () => this.loading.set(false)
@@ -965,7 +977,26 @@ export class ElevesListeComponent implements OnInit {
     if (this.recherche)    data = data.filter(e => e.nom_complet.toLowerCase().includes(this.recherche.toLowerCase()));
     if (this.filtreAlerte) data = data.filter(e => e.niveau_alerte === this.filtreAlerte as NiveauAlerte);
     if (this.filtreStatut) data = data.filter(e => e.statut === this.filtreStatut);
-    this.elevesFiltres.set(data);
+    this.elevesFiltres.set(this.trier(data));
+  }
+
+  // Tri côté client : on copie avant de trier pour ne pas muter le tableau
+  // du signal source (this.eleves()).
+  private trier(data: Eleve[]): Eleve[] {
+    const parNom  = (a: Eleve, b: Eleve) =>
+      (a.nom_complet || '').localeCompare(b.nom_complet || '', 'fr', { sensitivity: 'base' });
+    const parDate = (a: Eleve, b: Eleve) =>
+      (a.date_inscription || '').localeCompare(b.date_inscription || '');
+    const copie = [...data];
+    switch (this.tri) {
+      case 'nom':            return copie.sort(parNom);
+      case 'nom_desc':       return copie.sort((a, b) => parNom(b, a));
+      case 'arrivee_ancien': return copie.sort(parDate);
+      case 'arrivee_recent': return copie.sort((a, b) => parDate(b, a));
+      case 'classe':         return copie.sort((a, b) =>
+        (a.classe_nom || '').localeCompare(b.classe_nom || '', 'fr', { sensitivity: 'base' }) || parNom(a, b));
+      default:               return copie.sort((a, b) => a.numero - b.numero);
+    }
   }
 
   countStatut(s: string)      { return this.eleves().filter(e => e.statut === s).length; }
