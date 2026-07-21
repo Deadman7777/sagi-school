@@ -29,6 +29,11 @@ COLONNES = {
     'telephone_pere':   'Téléphone père',
     'nom_mere':         'Nom de la mère',
     'telephone_mere':   'Téléphone mère',
+    'nom_tuteur':       'Nom du tuteur',
+    'telephone_tuteur': 'Téléphone tuteur',
+    'lien_tuteur':      'Lien tuteur',
+    'etat_sante':       'État de santé (Sain/Suivi/Chronique)',
+    'observations_sante': 'Situation sanitaire',
     'date_inscription': "Date d'inscription (JJ/MM/AAAA)",
     'matricule':        'Matricule (vide = automatique)',
     # Reprise de soldes (migration) — voir apps.paiements.reprise
@@ -63,6 +68,16 @@ _SYNONYMES = {
     'mere':               'nom_mere',
     'telephone mere':     'telephone_mere',
     'tel mere':           'telephone_mere',
+    'nom du tuteur':      'nom_tuteur',
+    'tuteur':             'nom_tuteur',
+    'telephone tuteur':   'telephone_tuteur',
+    'tel tuteur':         'telephone_tuteur',
+    'lien tuteur':        'lien_tuteur',
+    'lien de parente':    'lien_tuteur',
+    'etat de sante':      'etat_sante',
+    'sante':              'etat_sante',
+    'situation sanitaire':'observations_sante',
+    'observations sante': 'observations_sante',
     "date d'inscription": 'date_inscription',
     'date inscription':   'date_inscription',
     'matricule':          'matricule',
@@ -169,6 +184,18 @@ def _genre(val):
     return '', f"genre « {val} » non reconnu (attendu G ou F) — laissé vide"
 
 
+def _etat_sante(val):
+    """-> ('SAIN'|'SUIVI'|'CHRONIQUE', avertissement | None). Vide = Sain."""
+    n = _norm(val)
+    if not n or n in ('sain', 'saine', 'ok', 'bon', 'bonne sante', 'rien', 'ras'):
+        return 'SAIN', None
+    if n in ('suivi', 'sous suivi', 'suivi medical', 'sous suivi medical', 'a suivre'):
+        return 'SUIVI', None
+    if n in ('chronique', 'maladie chronique', 'malade', 'maladie'):
+        return 'CHRONIQUE', None
+    return 'SAIN', f"état de santé « {val} » non reconnu (Sain/Suivi/Chronique) — considéré Sain"
+
+
 def generer_template(tenant):
     """Construit le classeur template et le rend en bytes (BytesIO)."""
     openpyxl = _openpyxl()
@@ -206,6 +233,9 @@ def generer_template(tenant):
         ('Section *', 'Obligatoire. Doit exister dans SAGI SCHOOL (liste ci-dessous).'),
         ('Classe', "Optionnel. Nom exact de la classe (ex. CI A) si l'école en utilise."),
         ('Téléphones', 'Chiffres uniquement, ex. 771234567. Optionnel.'),
+        ('Tuteur', "Optionnel. À renseigner si le tuteur diffère des parents (nom, téléphone, lien)."),
+        ('État de santé', 'Optionnel. Sain, Suivi (sous suivi médical) ou Chronique. Vide = Sain.'),
+        ('Situation sanitaire', 'Optionnel. Allergies, maladies, traitements en cours.'),
         ("Date d'inscription", "Optionnel. Vide = début de l'année scolaire (aucun prorata)."),
         ('Matricule', 'Laissez VIDE pour une génération automatique (recommandé).'),
         ('', ''),
@@ -330,6 +360,10 @@ def analyser(fichier, tenant, exercice):
         if nom_classe and not classe:
             avert.append(f'Classe « {nom_classe} » inconnue — élève importé sans classe')
 
+        etat_sante, warn_sante = _etat_sante(brut.get('etat_sante'))
+        if warn_sante:
+            avert.append(warn_sante)
+
         matricule = _texte(brut.get('matricule'))
         if matricule:
             if matricule in matricules_pris:
@@ -397,6 +431,11 @@ def analyser(fichier, tenant, exercice):
                 'telephone_pere':   _texte(brut.get('telephone_pere')),
                 'nom_mere':         _texte(brut.get('nom_mere')),
                 'telephone_mere':   _texte(brut.get('telephone_mere')),
+                'nom_tuteur':       _texte(brut.get('nom_tuteur')),
+                'telephone_tuteur': _texte(brut.get('telephone_tuteur')),
+                'lien_tuteur':      _texte(brut.get('lien_tuteur')),
+                'etat_sante':       etat_sante,
+                'observations_sante': _texte(brut.get('observations_sante')),
                 'date_inscription': date_insc,
                 'matricule':        matricule or None,
             },
