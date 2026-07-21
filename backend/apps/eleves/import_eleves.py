@@ -37,7 +37,11 @@ COLONNES = {
     'observations_sante': 'Situation sanitaire',
     'date_inscription': "Date d'inscription (JJ/MM/AAAA)",
     'matricule':        'Matricule (vide = automatique)',
-    # Reprise de soldes (migration) — voir apps.paiements.reprise
+    # Situation réelle à la migration (calculée depuis les frais de la classe
+    # + le prorata + le mois en cours) — prioritaire sur les colonnes détaillées
+    'a_jour':           'À jour ce mois (O/N)',
+    'dette_actuelle':   'Dette actuelle (montant)',
+    # Reprise de soldes détaillée (migration) — voir apps.paiements.reprise
     'rep_inscription':  'Inscription déjà payée (O/N)',
     'rep_mensualites':  'Mensualités déjà payées (nombre)',
     'rep_uniforme':     'Uniforme déjà payé (O/N)',
@@ -82,6 +86,12 @@ _SYNONYMES = {
     "date d'inscription": 'date_inscription',
     'date inscription':   'date_inscription',
     'matricule':          'matricule',
+    'a jour':                    'a_jour',
+    'a jour ce mois':            'a_jour',
+    'ajour':                     'a_jour',
+    'dette actuelle':            'dette_actuelle',
+    'dette':                     'dette_actuelle',
+    'dette en cours':            'dette_actuelle',
     'inscription deja payee':    'rep_inscription',
     'inscription payee':         'rep_inscription',
     'mensualites deja payees':   'rep_mensualites',
@@ -201,6 +211,35 @@ def _entier(val):
         return 0, f"nombre illisible « {val} » — considéré comme 0"
 
 
+def _montant(val):
+    """Cellule -> (float >= 0, avertissement | None). Vide = 0.0.
+    Tolère « 30 000 », « 30.000 » (séparateur de milliers) ; FCFA sans décimale."""
+    if val is None or val == '':
+        return 0.0, None
+    if isinstance(val, (int, float)):
+        return (float(val), None) if val >= 0 else (0.0, f"montant négatif « {val} » — ramené à 0")
+    txt = (str(val).strip()
+           .replace(' ', '').replace(' ', '').replace('\xa0', '')
+           .replace('.', '').replace(',', '.'))
+    try:
+        n = float(txt)
+    except ValueError:
+        return 0.0, f"montant illisible « {val} » — ignoré"
+    return (n, None) if n >= 0 else (0.0, f"montant négatif « {val} » — ramené à 0")
+
+
+def _mois_echus_import(exercice, date_insc, today):
+    """Mensualités échues à ce jour (mois courant inclus), plafonnées au nombre
+    dû au prorata de l'entrée. Réplique Eleve.mois_echus pour l'import (les
+    élèves importés sont en régime EXERCICE)."""
+    debut = exercice.date_debut
+    insc = date_insc or debut
+    mois_avant = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
+    nb_dues = max(0, exercice.nb_mensualites - mois_avant)
+    elapsed_incl = (today.year - debut.year) * 12 + (today.month - debut.month) + 1
+    return max(0, min(elapsed_incl - mois_avant, nb_dues))
+
+
 def _genre(val):
     """-> ('G'|'F'|'', avertissement | None)"""
     n = _norm(val)
@@ -268,8 +307,14 @@ def generer_template(tenant):
         ("Date d'inscription", "Optionnel. Vide = début de l'année scolaire (aucun prorata)."),
         ('Matricule', 'Laissez VIDE pour une génération automatique (recommandé).'),
         ('', ''),
-        ('Reprise de soldes (migration)', 'Uniquement si votre école a déjà encaissé des'
-         ' frais cette année AVANT de passer à SAGI SCHOOL. Sinon, laissez ces colonnes vides.'),
+        ('Situation à la migration (le plus simple)', 'Deux colonnes suffisent pour refléter '
+         "l'état réel de l'élève, calculé depuis les frais de sa classe et le mois en cours :"),
+        ('À jour ce mois (O/N)', "O = l'élève a tout réglé jusqu'au mois en cours (aucun arriéré)."),
+        ('Dette actuelle (montant)', "Montant exactement dû à ce jour, ex. 30000. Le payé est "
+         "reconstitué automatiquement. Prioritaire sur les colonnes détaillées ci-dessous."),
+        ('', ''),
+        ('Reprise détaillée (optionnelle)', 'À la place, si vous préférez détailler ce qui a déjà'
+         ' été encaissé AVANT SAGI SCHOOL. Ignorée si « À jour » / « Dette actuelle » est renseigné.'),
         ('Inscription / Uniforme / Fournitures déjà payés', 'O si déjà réglé, N ou vide sinon.'),
         ('Mensualités déjà payées', 'Nombre de mois déjà réglés depuis le début de l\'année'
          ' (ex. 3 = octobre, novembre, décembre payés). Vide = 0.'),
@@ -344,6 +389,7 @@ def analyser(fichier, tenant, exercice):
     )
 
     lignes, vus_fichier = [], set()
+    today = datetime.date.today()   # référence du mois courant pour « à jour »/dette
     no_ligne = 1  # la ligne d'en-têtes ; les données commencent après
     for row in rows:
         no_ligne += 1
@@ -408,7 +454,12 @@ def analyser(fichier, tenant, exercice):
             else:
                 matricules_pris.add(matricule)
 
-        # ── Reprise de soldes (migration) ────────────────────────────────
+        # ── Situation à la migration ─────────────────────────────────────
+        # Deux façons, par ordre de priorité :
+        #   1. « Dette actuelle » (montant) ou « À jour » (O) → reconstruit le
+        #      payé à ce jour = dû échu − dette, depuis les frais de la classe,
+        #      le prorata d'entrée et le mois en cours (dette 0 = à jour) ;
+        #   2. colonnes détaillées « déjà payé » (inscription/mensualités/…).
         rep_inscription, w1 = _oui_non(brut.get('rep_inscription'))
         rep_uniforme,    w2 = _oui_non(brut.get('rep_uniforme'))
         rep_fournitures, w3 = _oui_non(brut.get('rep_fournitures'))
@@ -422,8 +473,48 @@ def analyser(fichier, tenant, exercice):
                          f'{exercice.nb_mensualites} mensualités de l\'exercice — plafonné')
             rep_mensualites = exercice.nb_mensualites
 
+        a_jour, _wj = _oui_non(brut.get('a_jour'))
+        dette_val, wd = _montant(brut.get('dette_actuelle'))
+        dette_fournie = brut.get('dette_actuelle') not in (None, '')
+        a_jour_fourni = brut.get('a_jour') not in (None, '')
+        if wd:
+            avert.append(f'Dette actuelle : {wd}')
+        detaille_fourni = rep_inscription or rep_uniforme or rep_fournitures or rep_mensualites > 0
+
         montant_reprise = 0.0
-        if section:
+        reprise_payload = {'inscription': rep_inscription, 'nb_mensualites': rep_mensualites,
+                           'uniforme': rep_uniforme, 'fournitures': rep_fournitures}
+
+        if section is not None and (dette_fournie or a_jour):
+            if dette_fournie and a_jour_fourni:
+                avert.append('« À jour » et « Dette actuelle » renseignés — '
+                             '« Dette actuelle » prioritaire')
+            if detaille_fourni:
+                avert.append('Colonnes « déjà payé » ignorées au profit de '
+                             '« À jour » / « Dette actuelle »')
+            me = _mois_echus_import(exercice, date_insc, today)
+            fi = float(section.frais_inscription); fm = float(section.frais_mensualite)
+            fu = float(section.frais_uniforme);    ff = float(section.frais_fournitures)
+            du = fi + fu + ff + fm * me
+            dette = dette_val if dette_fournie else 0.0
+            if dette > du:
+                avert.append(f'Dette actuelle ({dette:.0f}) supérieure au dû à ce jour '
+                             f'({du:.0f}) — plafonnée')
+                dette = du
+            paye = du - dette
+            # Répartition : ponctuels réglés d'abord, la dette reste en arriérés
+            # de mensualités (c'est ce que lisent les alertes).
+            reste = paye
+            m_i = min(reste, fi); reste -= m_i
+            m_u = min(reste, fu); reste -= m_u
+            m_f = min(reste, ff); reste -= m_f
+            m_m = min(reste, fm * me)
+            reprise_payload = {'montants': {
+                'montant_inscription': round(m_i, 2), 'montant_mensualite': round(m_m, 2),
+                'montant_uniforme': round(m_u, 2), 'montant_fournitures': round(m_f, 2),
+            }}
+            montant_reprise = round(paye, 2)
+        elif section is not None:
             montant_reprise = float(
                 (section.frais_inscription if rep_inscription else 0)
                 + section.frais_mensualite * rep_mensualites
@@ -451,12 +542,7 @@ def analyser(fichier, tenant, exercice):
             'erreurs':        erreurs,
             'avertissements': avert,
             'montant_reprise': montant_reprise,
-            'reprise': {
-                'inscription':    rep_inscription,
-                'nb_mensualites': rep_mensualites,
-                'uniforme':       rep_uniforme,
-                'fournitures':    rep_fournitures,
-            },
+            'reprise': reprise_payload,
             'data': {
                 'nom_complet':      nom,
                 'genre':            genre,

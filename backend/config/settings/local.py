@@ -11,9 +11,13 @@ DATABASES = {
     }
 }
 
-INSTALLED_APPS += ['debug_toolbar']
-MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
-INTERNAL_IPS = ['127.0.0.1']
+import sys
+# La debug toolbar casse les tests (DEBUG forcé à False → E001) : on l'exclut
+# quand on lance « manage.py test ».
+if 'test' not in sys.argv:
+    INSTALLED_APPS += ['debug_toolbar']
+    MIDDLEWARE += ['debug_toolbar.middleware.DebugToolbarMiddleware']
+    INTERNAL_IPS = ['127.0.0.1']
 # Voir toutes les requêtes SQL dans la console
 # LOGGING = {
 #     'version': 1,

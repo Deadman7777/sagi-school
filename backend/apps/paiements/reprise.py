@@ -41,24 +41,38 @@ def _mois_reprise(exercice, nb):
 
 def creer_paiement_reprise(tenant, exercice, eleve, user=None, *,
                            inscription=False, nb_mensualites=0,
-                           uniforme=False, fournitures=False):
+                           uniforme=False, fournitures=False, montants=None):
     """Crée le paiement de reprise et ses écritures. Rend le Paiement,
-    ou None si tous les montants sont nuls. Les montants viennent des
-    frais de la section de l'élève (pas de prise en charge à l'import)."""
+    ou None si tous les montants sont nuls.
+
+    Deux modes :
+      - `montants` fourni (dict montant_inscription/mensualite/uniforme/
+        fournitures) → montants explicites, ex. reconstruits depuis « À jour »
+        ou « Dette actuelle » à l'import ;
+      - sinon → calcul depuis les frais de la section et les drapeaux
+        inscription/nb_mensualites/uniforme/fournitures.
+    """
     section = eleve.section
     if not section:
         return None
 
-    nb = min(int(nb_mensualites or 0), exercice.nb_mensualites)
-    montants = {
-        'montant_inscription': section.frais_inscription if inscription else 0,
-        'montant_mensualite':  section.frais_mensualite * nb,
-        'montant_uniforme':    section.frais_uniforme if uniforme else 0,
-        'montant_fournitures': section.frais_fournitures if fournitures else 0,
-    }
+    if montants is None:
+        nb = min(int(nb_mensualites or 0), exercice.nb_mensualites)
+        montants = {
+            'montant_inscription': section.frais_inscription if inscription else 0,
+            'montant_mensualite':  section.frais_mensualite * nb,
+            'montant_uniforme':    section.frais_uniforme if uniforme else 0,
+            'montant_fournitures': section.frais_fournitures if fournitures else 0,
+        }
     total = sum(montants.values())
     if total <= 0:
         return None
+
+    # Mois réglés = mensualités entières couvertes par le montant mensualité,
+    # pour que le suivi mensuel marque les bons mois.
+    frais_m = float(section.frais_mensualite) or 0
+    nb = (min(int(round(float(montants.get('montant_mensualite', 0)) / frais_m)),
+              exercice.nb_mensualites) if frais_m else 0)
 
     paiement = Paiement.objects.create(
         tenant=tenant, exercice=exercice, eleve=eleve,

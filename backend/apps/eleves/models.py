@@ -244,7 +244,9 @@ class Eleve(TenantModel):
 
     @property
     def reste_a_payer(self):
-        return self.total_attendu - self.total_paye
+        # float des deux côtés : total_attendu est un float, total_paye peut
+        # être un Decimal (agrégat SQL) → sinon TypeError float − Decimal.
+        return round(float(self.total_attendu) - float(self.total_paye), 2)
 
     def mois_echus(self, today=None):
         """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée
