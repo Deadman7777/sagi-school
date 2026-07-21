@@ -92,3 +92,14 @@ class MigrationSituationTests(TestCase):
         eleve = self._creer(ligne)
         self.assertEqual(float(eleve.total_paye), 0)           # rien payé
         self.assertEqual(float(eleve.reste_a_payer), 55000)
+
+    def test_telephone_multiple_ne_plante_pas(self):
+        # Deux numéros séparés par « / » (27 car. > champ 20) : garder le 1er,
+        # ne jamais dépasser la taille du champ (sinon 500 « value too long »).
+        ligne = self._analyser_une_ligne(nom_pere='Papa',
+                                         telephone_pere='77 687 66 10 / 76 011 82 29')
+        self.assertEqual(ligne['statut'], 'OK')
+        self.assertTrue(any('premier' in a for a in ligne['avertissements']))
+        # 1er numéro conservé, dans la limite du champ (max_length 20)
+        self.assertEqual(ligne['data']['telephone_pere'], '77 687 66 10')
+        self.assertLessEqual(len(ligne['data']['telephone_pere']), 20)

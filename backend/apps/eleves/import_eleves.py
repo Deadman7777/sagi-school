@@ -228,6 +228,24 @@ def _montant(val):
     return (n, None) if n >= 0 else (0.0, f"montant négatif « {val} » — ramené à 0")
 
 
+def _tel(val):
+    """Nettoie un téléphone : si plusieurs numéros (séparés par / ou ;),
+    garde le premier ; tronque à 20 caractères. Rend (str, avertissement|None)."""
+    t = _texte(val)
+    if not t:
+        return '', None
+    warn = None
+    for sep in ('/', ';'):
+        if sep in t:
+            t = t.split(sep)[0].strip()
+            warn = 'plusieurs numéros — seul le premier est conservé'
+            break
+    if len(t) > 20:
+        t = t[:20]
+        warn = 'numéro trop long — tronqué'
+    return t, warn
+
+
 def _mois_echus_import(exercice, date_insc, today):
     """Mensualités échues à ce jour (mois courant inclus), plafonnées au nombre
     dû au prorata de l'entrée. Réplique Eleve.mois_echus pour l'import (les
@@ -390,6 +408,9 @@ def analyser(fichier, tenant, exercice):
 
     lignes, vus_fichier = [], set()
     today = datetime.date.today()   # référence du mois courant pour « à jour »/dette
+    # Tailles max des champs texte → garde-fou anti « value too long » (500)
+    _maxlen = {f.name: f.max_length for f in Eleve._meta.get_fields()
+               if getattr(f, 'max_length', None)}
     no_ligne = 1  # la ligne d'en-têtes ; les données commencent après
     for row in rows:
         no_ligne += 1
@@ -534,6 +555,43 @@ def analyser(fichier, tenant, exercice):
             else:
                 vus_fichier.add(cle_doublon)
 
+        # Téléphones : plusieurs numéros « / » fréquents → garder le premier
+        tel_pere,   wtp = _tel(brut.get('telephone_pere'))
+        tel_mere,   wtm = _tel(brut.get('telephone_mere'))
+        tel_tuteur, wtt = _tel(brut.get('telephone_tuteur'))
+        for w, lbl in ((wtp, 'Téléphone père'), (wtm, 'Téléphone mère'),
+                       (wtt, 'Téléphone tuteur')):
+            if w:
+                avert.append(f'{lbl} : {w}')
+
+        data = {
+            'nom_complet':      nom,
+            'genre':            genre,
+            'date_naissance':   date_naiss,   # DRF sérialise les dates en ISO dans le rapport
+            'lieu_naissance':   _texte(brut.get('lieu_naissance')),
+            'section_id':       section.id if section else None,
+            'classe_id':        classe.id if classe else None,
+            'nom_pere':         _texte(brut.get('nom_pere')),
+            'telephone_pere':   tel_pere,
+            'nom_mere':         _texte(brut.get('nom_mere')),
+            'telephone_mere':   tel_mere,
+            'nom_tuteur':       _texte(brut.get('nom_tuteur')),
+            'telephone_tuteur': tel_tuteur,
+            'lien_tuteur':      _texte(brut.get('lien_tuteur')),
+            'etat_sante':       etat_sante,
+            'observations_sante': _texte(brut.get('observations_sante')),
+            'date_inscription': date_insc,
+            'date_inscription_jour_estime': jour_estime,
+            'matricule':        matricule or None,
+        }
+        # Garde-fou générique : tronquer toute valeur texte qui dépasse la
+        # taille de son champ (un import ne doit jamais faire un 500).
+        for champ, val in list(data.items()):
+            ml = _maxlen.get(champ)
+            if ml and isinstance(val, str) and len(val) > ml:
+                data[champ] = val[:ml]
+                avert.append(f'« {champ} » trop long ({len(val)}>{ml}) — tronqué')
+
         lignes.append({
             'ligne':          no_ligne,
             'nom_complet':    nom,
@@ -543,26 +601,7 @@ def analyser(fichier, tenant, exercice):
             'avertissements': avert,
             'montant_reprise': montant_reprise,
             'reprise': reprise_payload,
-            'data': {
-                'nom_complet':      nom,
-                'genre':            genre,
-                'date_naissance':   date_naiss,   # DRF sérialise les dates en ISO dans le rapport
-                'lieu_naissance':   _texte(brut.get('lieu_naissance')),
-                'section_id':       section.id if section else None,
-                'classe_id':        classe.id if classe else None,
-                'nom_pere':         _texte(brut.get('nom_pere')),
-                'telephone_pere':   _texte(brut.get('telephone_pere')),
-                'nom_mere':         _texte(brut.get('nom_mere')),
-                'telephone_mere':   _texte(brut.get('telephone_mere')),
-                'nom_tuteur':       _texte(brut.get('nom_tuteur')),
-                'telephone_tuteur': _texte(brut.get('telephone_tuteur')),
-                'lien_tuteur':      _texte(brut.get('lien_tuteur')),
-                'etat_sante':       etat_sante,
-                'observations_sante': _texte(brut.get('observations_sante')),
-                'date_inscription': date_insc,
-                'date_inscription_jour_estime': jour_estime,
-                'matricule':        matricule or None,
-            },
+            'data': data,
         })
 
     resume = {
