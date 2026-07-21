@@ -43,6 +43,8 @@ export interface Eleve {
   etat_sante: 'SAIN' | 'SUIVI' | 'CHRONIQUE';
   observations_sante: string;
   date_inscription: string;
+  date_inscription_jour_estime: boolean;
+  date_inscription_libelle: string;
   // Daara (Taxawu Daara) : passager = durée convenue en mois depuis l'entrée
   regime: 'EXERCICE' | 'PASSAGER';
   nb_mois_passager: number | null;

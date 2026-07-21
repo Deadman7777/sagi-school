@@ -206,6 +206,7 @@
     "services_aucun": "Aucun service actif. Créez-en dans Paramètres → Services.",
     "date_entree": "Date d'entrée",
     "date_entree_aide": "Sert au prorata des mensualités dues",
+    "jour_inconnu": "Jour inconnu (mois / année seulement)",
     "regime": "Type de ndongo",
     "regime_permanent": "Permanent (année scolaire)",
     "regime_passager": "Passager (durée convenue)",

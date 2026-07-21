@@ -12,6 +12,7 @@ faire tomber tout le module eleves.
 """
 import datetime
 import io
+import re
 import unicodedata
 
 
@@ -93,6 +94,34 @@ _SYNONYMES = {
 }
 
 _FORMATS_DATE = ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y')
+
+# Noms de mois FR (normalisés, sans accent) pour les dates « mois-année »
+# saisies quand le jour exact n'est pas connu (ex. « Juillet 2025 »).
+_MOIS_NOMS = {
+    'janvier': 1, 'jan': 1, 'fevrier': 2, 'fev': 2, 'mars': 3,
+    'avril': 4, 'avr': 4, 'mai': 5, 'juin': 6, 'juillet': 7, 'juil': 7,
+    'aout': 8, 'septembre': 9, 'sept': 9, 'sep': 9, 'octobre': 10, 'oct': 10,
+    'novembre': 11, 'nov': 11, 'decembre': 12, 'dec': 12,
+}
+
+
+def _mois_annee(val):
+    """« Juillet 2025 », « 07/2025 », « 2025-07 » → date au 1er du mois, ou None.
+    Sert quand le jour d'inscription n'est pas connu (le prorata n'utilise que
+    le mois et l'année)."""
+    txt = _norm(val)
+    if not txt:
+        return None
+    m = re.match(r'^([a-z]+)\.?\s+(\d{4})$', txt)          # « juillet 2025 »
+    if m and m.group(1) in _MOIS_NOMS:
+        return datetime.date(int(m.group(2)), _MOIS_NOMS[m.group(1)], 1)
+    m = re.match(r'^(\d{1,2})[/\-.](\d{4})$', txt)         # « 07/2025 »
+    if m and 1 <= int(m.group(1)) <= 12:
+        return datetime.date(int(m.group(2)), int(m.group(1)), 1)
+    m = re.match(r'^(\d{4})[/\-.](\d{1,2})$', txt)         # « 2025-07 »
+    if m and 1 <= int(m.group(2)) <= 12:
+        return datetime.date(int(m.group(1)), int(m.group(2)), 1)
+    return None
 
 
 def _openpyxl():
@@ -339,6 +368,14 @@ def analyser(fichier, tenant, exercice):
             erreurs.append(f'Date de naissance : {err}')
 
         date_insc, err = _date(brut.get('date_inscription'))
+        jour_estime = False
+        if date_insc is None and brut.get('date_inscription') not in (None, ''):
+            # jour non connu ? tolérer « Juillet 2025 » / « 07/2025 »
+            ma = _mois_annee(brut.get('date_inscription'))
+            if ma:
+                date_insc, jour_estime, err = ma, True, None
+                avert.append("Date d'inscription : jour non précisé — 1er du mois "
+                             "retenu (affiché « mois année »)")
         if err:
             erreurs.append(f"Date d'inscription : {err}")
         if date_insc is None:
@@ -437,6 +474,7 @@ def analyser(fichier, tenant, exercice):
                 'etat_sante':       etat_sante,
                 'observations_sante': _texte(brut.get('observations_sante')),
                 'date_inscription': date_insc,
+                'date_inscription_jour_estime': jour_estime,
                 'matricule':        matricule or None,
             },
         })

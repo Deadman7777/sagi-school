@@ -26,6 +26,7 @@ class ServiceSerializer(serializers.ModelSerializer):
 class EleveSerializer(serializers.ModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)
     classe_nom                   = serializers.SerializerMethodField()
+    date_inscription_libelle     = serializers.ReadOnlyField()
     total_theorique              = serializers.ReadOnlyField()
     total_attendu                = serializers.ReadOnlyField()
     montant_pec_inscription      = serializers.ReadOnlyField()

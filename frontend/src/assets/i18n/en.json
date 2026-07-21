@@ -206,6 +206,7 @@
     "services_aucun": "No active service. Create some in Settings → Services.",
     "date_entree": "Entry date",
     "date_entree_aide": "Used to prorate the monthly fees due",
+    "jour_inconnu": "Day unknown (month / year only)",
     "regime": "Ndongo type",
     "regime_permanent": "Permanent (school year)",
     "regime_passager": "Temporary (agreed duration)",

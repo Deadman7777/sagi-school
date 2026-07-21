@@ -355,7 +355,7 @@ interface PecForm {
             <div class="fiche-row"><span>Section</span><strong>{{ e.section_nom }}</strong></div>
             <div class="fiche-row"><span>Statut</span>
               <p-tag [value]="statutLabel(e.statut)" [severity]="statutSeverity(e.statut)" /></div>
-            <div class="fiche-row"><span>Date inscription</span><strong>{{ e.date_inscription || '—' }}</strong></div>
+            <div class="fiche-row"><span>Date inscription</span><strong>{{ e.date_inscription_libelle || '—' }}</strong></div>
             @if (e.regime === 'PASSAGER') {
               <div class="fiche-row"><span>{{ 'eleves.regime' | translate }}</span>
                 <p-tag [value]="('eleves.regime_passager' | translate) + ' — ' + e.nb_mois_passager + ' ' + ('eleves.mois' | translate)"
@@ -576,7 +576,15 @@ interface PecForm {
         </div>
         <div class="form-group">
           <label>{{ 'eleves.date_entree' | translate }} *</label>
-          <input pInputText type="date" [(ngModel)]="nouvelEleve.date_inscription" class="w-full" />
+          @if (jourInconnu) {
+            <input pInputText type="month" [(ngModel)]="moisInscription" (ngModelChange)="onMoisChange()" class="w-full" />
+          } @else {
+            <input pInputText type="date" [(ngModel)]="nouvelEleve.date_inscription" class="w-full" />
+          }
+          <label class="chk-jour">
+            <input type="checkbox" [(ngModel)]="jourInconnu" (ngModelChange)="onJourInconnuChange()" />
+            {{ 'eleves.jour_inconnu' | translate }}
+          </label>
           <small style="color:#64748b;font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
         </div>
         <!-- Daara : type de ndongo (permanent = exercice / passager = durée en mois) -->
@@ -718,6 +726,9 @@ interface PecForm {
     .search-input { flex:1; }
     .ta-sante { padding:8px 10px; border-radius:8px; border:1px solid var(--p-inputtext-border-color,#334155);
                 background:var(--p-inputtext-background,#1e293b); color:inherit; font:inherit; resize:vertical; }
+    .chk-jour { display:flex; align-items:center; gap:6px; margin-top:6px;
+                font-weight:400; font-size:12px; color:#94a3b8; cursor:pointer; }
+    .chk-jour input { width:auto; margin:0; }
     .ex-select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer; }
     .ex-select:hover { border-color:#00d4aa; }
     .readonly-banner-el { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:16px; }
@@ -827,6 +838,10 @@ export class ElevesListeComponent implements OnInit {
   filtreAlerte = '';
   filtreStatut = '';
   tri          = 'numero';
+  // Date d'entrée : jour inconnu → on ne saisit que le mois (input type=month,
+  // valeur AAAA-MM), stocké au 1er du mois avec le drapeau jour_estime.
+  jourInconnu     = false;
+  moisInscription = '';
   // Sélecteur d'exercice : '' = année active ; sinon id d'un exercice (clôturé
   // = consultation/fiches en lecture seule, création d'élève désactivée).
   exercices    = signal<any[]>([]);
@@ -1225,9 +1240,24 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  onJourInconnuChange() {
+    this.nouvelEleve.date_inscription_jour_estime = this.jourInconnu;
+    if (this.jourInconnu) {
+      const d = this.nouvelEleve.date_inscription || new Date().toISOString().split('T')[0];
+      this.moisInscription = d.slice(0, 7);                 // AAAA-MM
+      this.nouvelEleve.date_inscription = this.moisInscription + '-01';
+    }
+  }
+  onMoisChange() {
+    if (this.moisInscription) this.nouvelEleve.date_inscription = this.moisInscription + '-01';
+  }
+
   ouvrirDialog() {
     this.editId = null;
-    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE', etat_sante: 'SAIN' };
+    this.jourInconnu = false;
+    this.moisInscription = '';
+    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE',
+                         etat_sante: 'SAIN', date_inscription_jour_estime: false };
     this.dialogVisible = true;
   }
 
@@ -1241,6 +1271,7 @@ export class ElevesListeComponent implements OnInit {
       genre:            eleve.genre,
       date_naissance:   eleve.date_naissance,
       date_inscription: eleve.date_inscription,
+      date_inscription_jour_estime: eleve.date_inscription_jour_estime || false,
       regime:           eleve.regime || 'EXERCICE',
       nb_mois_passager: eleve.nb_mois_passager,
       lieu_naissance:   eleve.lieu_naissance,
@@ -1255,6 +1286,8 @@ export class ElevesListeComponent implements OnInit {
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
     };
+    this.jourInconnu = !!eleve.date_inscription_jour_estime;
+    this.moisInscription = this.jourInconnu ? (eleve.date_inscription || '').slice(0, 7) : '';
     this.dialogFicheVisible = false;
     this.dialogVisible = true;
   }

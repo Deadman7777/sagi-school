@@ -99,6 +99,10 @@ class Eleve(TenantModel):
                                              help_text='Allergies, maladies chroniques, traitements en cours…')
     date_inscription      = models.DateField(default=datetime.date.today,
                                               help_text="Date d'entrée — sert au prorata des mensualités dues")
+    # Jour d'inscription inconnu (données historiques) : la date est stockée au
+    # 1er du mois, mais on n'affiche que « Mois AAAA ». Le prorata n'utilise que
+    # le mois et l'année — le jour est donc sans effet sur les calculs.
+    date_inscription_jour_estime = models.BooleanField(default=False)
     regime                = models.CharField(max_length=10, choices=REGIME_CHOICES, default='EXERCICE')
     nb_mois_passager      = models.PositiveIntegerField(null=True, blank=True,
                                               help_text='Mensualités dues depuis la date d\'entrée (régime passager)')
@@ -130,6 +134,20 @@ class Eleve(TenantModel):
 
     def __str__(self):
         return self.nom_complet
+
+    MOIS_FR = ('', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+               'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre')
+
+    @property
+    def date_inscription_libelle(self):
+        """Affichage lisible : « Juillet 2025 » quand le jour est estimé
+        (données historiques), sinon « JJ/MM/AAAA »."""
+        d = self.date_inscription
+        if not d:
+            return ''
+        if self.date_inscription_jour_estime:
+            return f'{self.MOIS_FR[d.month].capitalize()} {d.year}'
+        return d.strftime('%d/%m/%Y')
 
     # ── Prise en charge ──────────────────────────────────────────────────
     @property
