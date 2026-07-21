@@ -37,6 +37,11 @@ export interface Eleve {
   telephone_pere: string;
   nom_mere: string;
   telephone_mere: string;
+  nom_tuteur: string;
+  telephone_tuteur: string;
+  lien_tuteur: string;
+  etat_sante: 'SAIN' | 'SUIVI' | 'CHRONIQUE';
+  observations_sante: string;
   date_inscription: string;
   // Daara (Taxawu Daara) : passager = durée convenue en mois depuis l'entrée
   regime: 'EXERCICE' | 'PASSAGER';

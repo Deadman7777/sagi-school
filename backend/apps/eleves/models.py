@@ -65,6 +65,12 @@ class Eleve(TenantModel):
         ('PASSAGER', 'Passager — durée convenue en mois'),
     ]
 
+    ETAT_SANTE_CHOICES = [
+        ('SAIN',      'Sain'),
+        ('SUIVI',     'Sous suivi médical'),
+        ('CHRONIQUE', 'Maladie chronique'),
+    ]
+
     exercice              = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='eleves')
     section               = models.ForeignKey(Section, null=True, on_delete=models.SET_NULL, related_name='eleves')
     # Classe précise de l'élève (CI A, CI B…) au sein de sa section. Une section à classe
@@ -81,6 +87,16 @@ class Eleve(TenantModel):
     telephone_pere        = models.CharField(max_length=20, blank=True)
     nom_mere              = models.CharField(max_length=200, blank=True)
     telephone_mere        = models.CharField(max_length=20, blank=True)
+    # Tuteur — peut différer des parents (famille d'accueil, oncle, marabout…)
+    nom_tuteur            = models.CharField(max_length=200, blank=True)
+    telephone_tuteur      = models.CharField(max_length=20, blank=True)
+    lien_tuteur           = models.CharField(max_length=100, blank=True,
+                                             help_text="Lien avec l'élève (oncle, grand-père, tuteur légal…)")
+    # Santé — état général + observations (allergies, traitements, maladies…)
+    etat_sante            = models.CharField(max_length=20, choices=ETAT_SANTE_CHOICES,
+                                             default='SAIN', blank=True)
+    observations_sante    = models.TextField(blank=True,
+                                             help_text='Allergies, maladies chroniques, traitements en cours…')
     date_inscription      = models.DateField(default=datetime.date.today,
                                               help_text="Date d'entrée — sert au prorata des mensualités dues")
     regime                = models.CharField(max_length=10, choices=REGIME_CHOICES, default='EXERCICE')

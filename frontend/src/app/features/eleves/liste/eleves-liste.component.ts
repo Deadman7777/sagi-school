@@ -386,6 +386,19 @@ interface PecForm {
             <div class="fiche-row"><span>Tél. père</span><strong class="mono">{{ e.telephone_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Mère</span><strong>{{ e.nom_mere || '—' }}</strong></div>
             <div class="fiche-row"><span>Tél. mère</span><strong class="mono">{{ e.telephone_mere || '—' }}</strong></div>
+            @if (e.nom_tuteur) {
+              <div class="fiche-row"><span>Tuteur</span><strong>{{ e.nom_tuteur }}{{ e.lien_tuteur ? ' (' + e.lien_tuteur + ')' : '' }}</strong></div>
+            }
+            @if (e.telephone_tuteur) {
+              <div class="fiche-row"><span>Tél. tuteur</span><strong class="mono">{{ e.telephone_tuteur }}</strong></div>
+            }
+          </div>
+          <div class="fiche-section">
+            <div class="fiche-title">Santé</div>
+            <div class="fiche-row"><span>État</span><strong>{{ etatSanteLabel(e.etat_sante) }}</strong></div>
+            @if (e.observations_sante) {
+              <div class="fiche-row"><span>Observations</span><strong>{{ e.observations_sante }}</strong></div>
+            }
           </div>
           <div class="fiche-section">
             <div class="fiche-title">Situation financière</div>
@@ -608,6 +621,30 @@ interface PecForm {
           <label>{{ 'eleves.telephone_mere' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.telephone_mere" class="w-full" placeholder="7X XXX XX XX" />
         </div>
+        <div class="form-group">
+          <label>{{ 'eleves.nom_tuteur' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nom_tuteur" class="w-full"
+                 [placeholder]="'eleves.nom_tuteur_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.telephone_tuteur' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.telephone_tuteur" class="w-full" placeholder="7X XXX XX XX" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.lien_tuteur' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.lien_tuteur" class="w-full"
+                 [placeholder]="'eleves.lien_tuteur_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.etat_sante' | translate }}</label>
+          <p-select appendTo="body" [options]="santeOptions" [(ngModel)]="nouvelEleve.etat_sante"
+                    optionLabel="label" optionValue="value" styleClass="w-full" />
+        </div>
+        <div class="form-group full">
+          <label>{{ 'eleves.observations_sante' | translate }}</label>
+          <textarea [(ngModel)]="nouvelEleve.observations_sante" rows="2" class="w-full ta-sante"
+                    [placeholder]="'eleves.observations_sante_ph' | translate"></textarea>
+        </div>
         <div class="form-group full" *ngIf="servicesActifs().length">
           <label>{{ 'eleves.services' | translate }}</label>
           <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="nouvelEleve.abonnements"
@@ -679,6 +716,8 @@ interface PecForm {
 
     .filters-bar { display:flex; gap:12px; margin-bottom:16px; }
     .search-input { flex:1; }
+    .ta-sante { padding:8px 10px; border-radius:8px; border:1px solid var(--p-inputtext-border-color,#334155);
+                background:var(--p-inputtext-background,#1e293b); color:inherit; font:inherit; resize:vertical; }
     .ex-select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer; }
     .ex-select:hover { border-color:#00d4aa; }
     .readonly-banner-el { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:16px; }
@@ -874,6 +913,13 @@ export class ElevesListeComponent implements OnInit {
       { label: this.translate.instant('eleves.regime_passager'),  value: 'PASSAGER' },
     ];
   }
+  get santeOptions() {
+    return [
+      { label: this.translate.instant('eleves.sante_sain'),      value: 'SAIN' },
+      { label: this.translate.instant('eleves.sante_suivi'),     value: 'SUIVI' },
+      { label: this.translate.instant('eleves.sante_chronique'), value: 'CHRONIQUE' },
+    ];
+  }
 
   ngOnInit() {
     this.chargerEleves();
@@ -1011,6 +1057,10 @@ export class ElevesListeComponent implements OnInit {
   }
   statutLabel(s: string) {
     return { INSCRIT:'Inscrit', ABANDONNE:'Abandonné', TRANSFERE:'Transféré', DIPLOME:'Diplômé' }[s] || s;
+  }
+  etatSanteLabel(s: string | undefined): string {
+    const cle = { SAIN:'eleves.sante_sain', SUIVI:'eleves.sante_suivi', CHRONIQUE:'eleves.sante_chronique' }[s || 'SAIN'];
+    return cle ? this.translate.instant(cle) : (s || '—');
   }
   statutSeverity(s: string): 'success' | 'danger' | 'warn' | 'info' | 'secondary' {
     return ({ INSCRIT:'success', ABANDONNE:'danger', TRANSFERE:'warn', DIPLOME:'info' } as any)[s] || 'secondary';
@@ -1177,7 +1227,7 @@ export class ElevesListeComponent implements OnInit {
 
   ouvrirDialog() {
     this.editId = null;
-    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE' };
+    this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE', etat_sante: 'SAIN' };
     this.dialogVisible = true;
   }
 
@@ -1198,6 +1248,11 @@ export class ElevesListeComponent implements OnInit {
       telephone_pere:   eleve.telephone_pere,
       nom_mere:         eleve.nom_mere,
       telephone_mere:   eleve.telephone_mere,
+      nom_tuteur:       eleve.nom_tuteur,
+      telephone_tuteur: eleve.telephone_tuteur,
+      lien_tuteur:      eleve.lien_tuteur,
+      etat_sante:       eleve.etat_sante || 'SAIN',
+      observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
     };
     this.dialogFicheVisible = false;
