@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path      = require('path');
 const http      = require('http');
 const fs        = require('fs');
+const os        = require('os');
 
 let mainWindow;
 let djangoProcess;
@@ -40,6 +41,41 @@ function getPython() {
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
   return '/usr/bin/python3.10';
+}
+
+// ─── Config applicative persistante (userData, survit aux mises à jour) ──────
+// Contient notamment { lanServer: bool } : ce poste écoute-t-il sur le réseau ?
+function getAppConfigPath() {
+  return path.join(app.getPath('userData'), 'app-config.json');
+}
+
+function readAppConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(getAppConfigPath(), 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeAppConfig(patch) {
+  const cfg = { ...readAppConfig(), ...patch };
+  try {
+    fs.writeFileSync(getAppConfigPath(), JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Electron] Écriture app-config échouée:', err.message);
+  }
+  return cfg;
+}
+
+// Première adresse IPv4 non-loopback (celle à donner aux autres postes du LAN)
+function getLanIp() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
+    }
+  }
+  return null;
 }
 
 function showSetupWindow() {
@@ -248,6 +284,11 @@ async function ensureProductionConfig() {
 
   const { win, payload } = await showSetupWindow();
   const { db: creds, install } = payload;
+  const lanServer = !!payload.lan_server;
+
+  // Mémoriser si ce poste doit être accessible depuis le réseau (lu à chaque
+  // démarrage par startDjango). Persiste dans userData, indépendant de production.py.
+  writeAppConfig({ lanServer });
 
   // Échapper les apostrophes pour les chaînes Python single-quoted
   const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -294,6 +335,23 @@ async function ensureProductionConfig() {
   }
 
   if (!win.isDestroyed()) win.close();
+
+  // Poste serveur : rappeler l'adresse que les autres postes devront ouvrir.
+  if (lanServer) {
+    const ip = getLanIp();
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Mode serveur réseau activé',
+      message: 'Ce poste partage désormais sa base avec le réseau local.',
+      detail: ip
+        ? `Sur les autres postes (comptable, secrétariat…), ouvrez cette adresse `
+          + `dans Chrome ou Edge :\n\n    http://${ip}:${DJANGO_PORT}\n\n`
+          + `⚠️ Vérifiez que le pare-feu Windows autorise le port ${DJANGO_PORT}, `
+          + `et que ce poste garde une adresse IP fixe (réservation sur la box).`
+        : `Impossible de détecter l'adresse IP réseau de ce poste. `
+          + `Ouvrez « http://<IP-de-ce-poste>:${DJANGO_PORT} » sur les autres postes.`,
+    });
+  }
 }
 
 function startDjango() {
@@ -301,8 +359,12 @@ function startDjango() {
   const managePy   = path.join(backendDir, 'manage.py');
   const python     = getPython();
 
+  // Bind : 127.0.0.1 (poste isolé) ou 0.0.0.0 (accessible au réseau local).
+  const bindHost = readAppConfig().lanServer ? '0.0.0.0' : '127.0.0.1';
+
   console.log('[Electron] Python:', python);
   console.log('[Electron] manage.py:', managePy);
+  console.log('[Electron] Bind Django:', bindHost);
 
   http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
     console.log('[Electron] Django déjà actif');
@@ -328,9 +390,9 @@ function startDjango() {
       // En dev ou Linux → runserver Django.
       const cmd = (!isDev && process.platform === 'win32')
         ? ['-m', 'waitress',
-           `--host=127.0.0.1`, `--port=${DJANGO_PORT}`,
+           `--host=${bindHost}`, `--port=${DJANGO_PORT}`,
            'config.wsgi:application']
-        : [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+        : [managePy, 'runserver', `${bindHost}:${DJANGO_PORT}`, '--noreload'];
 
       console.log('[Electron] Commande Django:', python, cmd.join(' '));
 
