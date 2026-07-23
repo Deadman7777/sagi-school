@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { PaiementsService } from '../../core/services/paiements.service';
 import { ElevesService } from '../../core/services/eleves.service';
 import { ComptabiliteService } from '../../core/services/comptabilite.service';
+import { GouvernanceService } from '../../core/services/gouvernance.service';
 import { Eleve } from '../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -632,6 +633,23 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
           </div>
+          @if (ressourcesGouv().length) {
+            <div class="form-group full">
+              <label>Financé par (ressource)</label>
+              <p-select appendTo="body" [options]="ressourcesGouv()" [(ngModel)]="nouvelleCharge.ressource_id"
+                        optionLabel="libelle" optionValue="id" styleClass="w-full" [showClear]="true"
+                        placeholder="— Trésorerie générale —" [filter]="true" />
+              <small style="color:#64748b;font-size:10px">Contrôle automatique du disponible sur l'enveloppe</small>
+            </div>
+          }
+          @if (projetsGouv().length) {
+            <div class="form-group full">
+              <label>Projet (analytique)</label>
+              <p-select appendTo="body" [options]="projetsGouv()" [(ngModel)]="nouvelleCharge.projet_id"
+                        optionLabel="libelle" optionValue="id" styleClass="w-full" [showClear]="true"
+                        placeholder="— Aucun —" [filter]="true" />
+            </div>
+          }
         </div>
         <ng-template pTemplate="footer">
           <p-button label="Annuler"       severity="secondary" (onClick)="dialogChargeVisible=false" />
@@ -792,7 +810,10 @@ export class PaiementsComponent implements OnInit {
   dialogModifChargeVisible = false;
   chargeModifier: any  = null;
   modifChargeForm      = { no_compte: '', libelle: '', montant: 0, date: '', compte_credit: '571' };
-  nouvelleCharge       = { no_compte: '661', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401' };
+  nouvelleCharge: any  = { no_compte: '661', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401', ressource_id: null, projet_id: null };
+  // Dimensions analytiques gouvernance (facultatives) — proposées à la saisie d'une charge.
+  ressourcesGouv = signal<any[]>([]);
+  projetsGouv    = signal<any[]>([]);
 
   // Comptes de charge chargés depuis le plan comptable (classe 6 uniquement, sans immobilisations)
   planChargesData = signal<any[]>([]);
@@ -856,6 +877,7 @@ export class PaiementsComponent implements OnInit {
   };
 
   private translate = inject(TranslateService);
+  private gouv = inject(GouvernanceService);
 
   modesPaiement: any[] = [];
 
@@ -1235,10 +1257,20 @@ export class PaiementsComponent implements OnInit {
       no_compte: '661', libelle: '', montant: 0,
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
+      ressource_id: null, projet_id: null,
     };
     this.compteSuggere = null;
     this.compteChargeVerrouille = false;
     this.dialogChargeVisible = true;
+    // Dimensions analytiques facultatives (gouvernance) — listes fraîches.
+    this.gouv.getRessources().subscribe({
+      next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),
+      error: () => this.ressourcesGouv.set([]),
+    });
+    this.gouv.getProjets(true).subscribe({
+      next: d => this.projetsGouv.set(d || []),
+      error: () => this.projetsGouv.set([]),
+    });
   }
 
   // ── Auto-remplissage du compte de charge d'après le libellé ───────────────

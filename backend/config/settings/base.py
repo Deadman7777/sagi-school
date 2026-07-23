@@ -57,6 +57,7 @@ LOCAL_APPS = [
     'apps.academique',
     'apps.daara',
     'apps.gmrf',
+    'apps.gouvernance',
     'apps.sauvegarde',
 ]
 

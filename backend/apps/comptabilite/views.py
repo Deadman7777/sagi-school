@@ -22,8 +22,12 @@ PLAN_COMPTABLE = {
     '12':    'Report à nouveau',
     '131':   'Résultat net — Bénéfice',
     '139':   'Résultat net — Perte',
-    '15':    'Provisions pour risques et charges',
+    '15':    'Provisions réglementées et fonds assimilés',
+    '151':   'Provisions réglementées',
     '16':    'Emprunts et dettes financières',
+    '19':    'Provisions pour risques et charges',
+    '191':   'Provisions pour litiges',
+    '198':   'Autres provisions pour risques et charges',
     # ── Classe 2 — Actif immobilisé ──
     '21':    'Immobilisations incorporelles',
     '211':   'Frais de développement capitalisés',
@@ -137,6 +141,8 @@ PLAN_COMPTABLE = {
     '5524':  'Wizall',
     '57':    'Caisse',
     '571':   'Caisse principale',
+    '5715':  'Petite caisse (menues dépenses)',
+    '585':   'Virements internes de fonds',
     # ── Classe 6 — Charges ──
     '60':    'Achats et variations de stocks',
     '601':   'Achats de marchandises',
@@ -179,6 +185,7 @@ PLAN_COMPTABLE = {
     '68':    'Dotations aux amortissements et provisions',
     '681':   'Dotations aux amortissements d\'exploitation',
     '691':   'Dotations aux provisions d\'exploitation',
+    '6911':  'Dotations aux provisions pour risques et charges',
     # ── Classe 7 — Produits ──
     '70':    'Ventes et produits',
     '706':   'Prestations de services — Scolarité',
@@ -194,6 +201,10 @@ PLAN_COMPTABLE = {
     '771':   'Intérêts de dépôts et prêts',
     '78':    'Transferts de charges',
     '781':   'Reprises d\'amortissements et provisions',
+    '791':   'Reprises de provisions d\'exploitation',
+    # ── Classe 8 — HAO (Hors Activités Ordinaires) ──
+    '851':   'Dotations aux provisions réglementées',
+    '861':   'Reprises de provisions réglementées',
 }
 
 
@@ -228,6 +239,31 @@ def get_exercice(tenant, request=None):
             if ex:
                 return ex
     return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+
+def resoudre_dimensions_depense(request, tenant, montant):
+    """Résout les dimensions analytiques (projet, ressource) d'une dépense et
+    contrôle le disponible de la ressource (Lot 2 gouvernance).
+
+    Import local pour éviter tout cycle comptabilite ↔ gouvernance. Retourne
+    (projet, ressource, err_response|None) : si err_response n'est pas None, la
+    vue appelante doit la renvoyer telle quelle (dépassement d'enveloppe, etc.)."""
+    from apps.gouvernance.models import Projet, Ressource
+    from apps.gouvernance import services as gouv_services
+
+    projet = ressource = None
+    pid = request.data.get('projet_id')
+    rid = request.data.get('ressource_id')
+    if pid:
+        projet = Projet.objects.filter(tenant=tenant, id=pid).first()
+    if rid:
+        ressource = Ressource.objects.filter(tenant=tenant, id=rid).first()
+        if ressource is None:
+            return None, None, Response({'error': 'Ressource introuvable'}, status=400)
+        ok, msg, _ = gouv_services.verifier_disponibilite(tenant, ressource, montant)
+        if not ok:
+            return None, None, Response({'error': msg}, status=400)
+    return projet, ressource, None
 
 
 def _compte_sort_key(no):
@@ -679,10 +715,17 @@ class BilanView(APIView):
                         exercice.solde_initial_mobile)
         _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
         _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
+        # HAO (classe 8) : produits (crédit) − charges (débit). Nécessaire pour que
+        # les provisions réglementées (dotation 85x / reprise 86x) impactent le
+        # résultat et laissent le bilan équilibré face à la provision 15x.
+        _8agg = entries.filter(no_compte__startswith='8').aggregate(d=Sum('debit'), c=Sum('credit'))
         resultat_net = round(
             float(_7agg['c'] or 0) - float(_7agg['d'] or 0) -
-            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)), 2)
-        total_capitaux = round(capital + resultat_net, 2)
+            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)) +
+            (float(_8agg['c'] or 0) - float(_8agg['d'] or 0)), 2)
+        # Provisions réglementées (15x SF_C) — ressources durables / capitaux propres.
+        prov_regl_t, prov_regl_d = _sum_sf_side(sfs, 'sf_c', ['15'], plan)
+        total_capitaux = round(capital + resultat_net + prov_regl_t, 2)
 
         # ── G — Dettes Financières (16x-19x SF_C) ───────────────────────
         dettes_fin_t, dettes_fin_d = _sum_sf_side(sfs, 'sf_c', ['16', '17', '18', '19'], plan)
@@ -1130,6 +1173,12 @@ class ChargeView(APIView):
         libelle_fourn = self.PLAN_FOURNISSEURS.get(compte_fournisseur,
                                                     f"Fournisseur ({compte_fournisseur})")
 
+        # Dimensions analytiques (gouvernance) : rattachement facultatif à un
+        # projet et/ou une ressource financière, avec contrôle du disponible.
+        projet, ressource, err = resoudre_dimensions_depense(request, tenant, montant)
+        if err:
+            return err
+
         # Écriture 1 — Constatation dette fournisseur : Débit 6xx/2xx / Crédit 401|404|481
         # Écriture 2 — Règlement                     : Débit 401|404|481 / Crédit 5xx
         ecritures = [
@@ -1147,7 +1196,8 @@ class ChargeView(APIView):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece, date_ecriture=date,
-                source='CHARGE', source_id=None, **e
+                source='CHARGE', source_id=None,
+                projet=projet, ressource=ressource, **e
             )
 
         return Response({'success': True, 'no_piece': no_piece,
@@ -1190,6 +1240,9 @@ class ChargeView(APIView):
                 source=source_piece, source_id=e.id,
                 no_compte=e.no_compte, debit=e.credit, credit=e.debit,
                 libelle=f"MODIF — {e.libelle}", ordre=e.ordre,
+                # La contre-écriture porte la même dimension : la consommation
+                # nette (débit−crédit) de la ressource/projet se dénoue à zéro.
+                projet=e.projet, ressource=e.ressource,
             )
 
         # 2 — Nouvelle charge avec les données modifiées
@@ -1220,6 +1273,25 @@ class ChargeView(APIView):
         libelle_fourn  = self.PLAN_FOURNISSEURS.get(compte_fournisseur,
                                                       f"Fournisseur ({compte_fournisseur})")
 
+        # Dimensions : fournies dans la requête, sinon reprises de l'écriture
+        # d'origine. Les contre-écritures ci-dessus ont déjà dénoué l'ancienne
+        # consommation, le contrôle de disponibilité porte donc sur le nouveau
+        # montant seul.
+        if 'ressource_id' in data_new or 'projet_id' in data_new:
+            projet_new, ressource_new, err = resoudre_dimensions_depense(request, tenant, montant_new)
+            if err:
+                return err
+        else:
+            # Report des dimensions d'origine. Les contre-écritures ci-dessus ont
+            # dénoué l'ancienne consommation → on revérifie le disponible pour le
+            # nouveau montant si une ressource est portée.
+            projet_new, ressource_new = entry.projet, entry.ressource
+            if ressource_new is not None:
+                from apps.gouvernance import services as gouv_services
+                ok, msg, _ = gouv_services.verifier_disponibilite(tenant, ressource_new, montant_new)
+                if not ok:
+                    return Response({'error': msg}, status=400)
+
         ecritures_new = [
             dict(ordre=1, no_compte=no_compte_new,      debit=montant_new, credit=0,
                  libelle=f"{libelle_compte} — {libelle_new}"),
@@ -1234,7 +1306,8 @@ class ChargeView(APIView):
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_new, date_ecriture=date_new,
-                source=source_piece, source_id=None, **e
+                source=source_piece, source_id=None,
+                projet=projet_new, ressource=ressource_new, **e
             )
 
         from core.models import log_audit
@@ -1281,6 +1354,8 @@ class ChargeView(APIView):
                 credit=e.debit,
                 libelle=f"Annulation {e.no_piece} — {e.libelle}",
                 ordre=e.ordre,
+                # Même dimension : la consommation nette de la ressource se dénoue.
+                projet=e.projet, ressource=e.ressource,
             )
 
         from core.models import log_audit
@@ -1656,6 +1731,14 @@ def _immo_reste_a_regler(immo):
 
 def _immo_to_dict(immo):
     reste = _immo_reste_a_regler(immo)
+    # Mode de financement déduit : ressource identifiée → son type ; sinon règlement
+    # direct (fonds propres / trésorerie).
+    if immo.ressource_id:
+        mode_financement = immo.ressource.get_type_ressource_display()
+        ressource_libelle = immo.ressource.libelle
+    else:
+        mode_financement = 'Fonds propres / trésorerie'
+        ressource_libelle = ''
     return {
         'id':                    str(immo.id),
         'no_bien':               immo.no_bien,
@@ -1680,6 +1763,13 @@ def _immo_to_dict(immo):
         'est_regle':             reste <= 0.01,
         'est_cede':              immo.est_cede,
         'est_amorti':            immo.est_amorti,
+        # Financement (Lot 3)
+        'mode_financement':      mode_financement,
+        'ressource_id':          str(immo.ressource_id) if immo.ressource_id else None,
+        'ressource_libelle':     ressource_libelle,
+        'montant_finance':       float(immo.valeur_entree) if immo.ressource_id else 0.0,
+        'projet_id':             str(immo.projet_id) if immo.projet_id else None,
+        'projet_libelle':        immo.projet.libelle if immo.projet_id else '',
     }
 
 
@@ -1695,7 +1785,7 @@ class ImmobilisationView(APIView):
             except Immobilisation.DoesNotExist:
                 return Response({'error': 'Non trouvé'}, status=404)
 
-        qs = Immobilisation.objects.filter(tenant=tenant)
+        qs = Immobilisation.objects.filter(tenant=tenant).select_related('ressource', 'projet')
         if not request.query_params.get('include_cede'):
             qs = qs.filter(est_cede=False)
 
@@ -1734,6 +1824,11 @@ class ImmobilisationView(APIView):
         if valeur <= 0 or duree <= 0:
             return Response({'error': 'Valeur et durée doivent être > 0'}, status=400)
 
+        # Dimensions analytiques (gouvernance) : projet/ressource + contrôle dispo.
+        projet, ressource, err = resoudre_dimensions_depense(request, tenant, valeur)
+        if err:
+            return err
+
         import re as _re
         last = Immobilisation.objects.filter(tenant=tenant).order_by('-no_bien').first()
         nums = _re.findall(r'\d+', last.no_bien if last else 'IMM-0000')
@@ -1764,6 +1859,8 @@ class ImmobilisationView(APIView):
             compte_fournisseur=compte_fournisseur,
             mode_reglement=mode_reglement,
             compte_tresorerie=compte_tresorerie,
+            ressource=ressource,
+            projet=projet,
         )
 
         from django.db.models import Max as _Max
@@ -1794,6 +1891,7 @@ class ImmobilisationView(APIView):
                 source='INVEST', source_id=immo.id,
                 no_compte=nc, debit=db, credit=cr,
                 libelle=lib, ordre=ordre,
+                projet=projet, ressource=ressource,
             )
 
         return Response(_immo_to_dict(immo), status=201)

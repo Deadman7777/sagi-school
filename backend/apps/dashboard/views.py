@@ -414,7 +414,8 @@ class DashboardTresorerieCanauView(APIView):
             tenant=tenant, exercice=exercice,
             no_compte__in=('571', '5521', '5522', '5523', '521'),
             credit__gt=0
-        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT')).values('no_compte').annotate(
+        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT',
+                              'TRANSFERT', 'ANNUL_TRANSFERT')).values('no_compte').annotate(
             montant=Sum('credit')
         )
         dec_by_compte = {d['no_compte']: float(d['montant'] or 0) for d in dec_qs}

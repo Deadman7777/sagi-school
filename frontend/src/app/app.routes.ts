@@ -22,6 +22,7 @@ export const routes: Routes = [
       { path: 'academique', loadComponent: () => import('./features/academique/academique.component').then(m => m.AcademiqueComponent) },
       { path: 'rh',           loadComponent: () => import('./features/rh/rh.component').then(m => m.RhComponent) },
       { path: 'gmrf',         loadComponent: () => import('./features/gmrf/gmrf.component').then(m => m.GmrfComponent) },
+      { path: 'gouvernance',  loadComponent: () => import('./features/gouvernance/gouvernance.component').then(m => m.GouvernanceComponent) },
       { path: 'licences',     loadComponent: () => import('./features/licences/licences.component').then(m => m.LicencesComponent) },
       { path: 'ma-licence',   loadComponent: () => import('./features/ma-licence/ma-licence.component').then(m => m.MaLicenceComponent) },
       { path: 'parametres',   loadComponent: () => import('./features/parametres/parametres.component').then(m => m.ParametresComponent) },

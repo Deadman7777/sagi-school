@@ -2,6 +2,7 @@ import { Component, NgModule, OnInit, computed, inject, signal } from '@angular/
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComptabiliteService } from '../../core/services/comptabilite.service';
+import { GouvernanceService } from '../../core/services/gouvernance.service';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -1094,7 +1095,11 @@ import { TooltipModule } from 'primeng/tooltip';
         <ng-template pTemplate="body" let-i>
           <tr>
             <td class="mono bold">{{ i.no_bien }}</td>
-            <td>{{ i.libelle }}</td>
+            <td>{{ i.libelle }}
+              <div *ngIf="i.ressource_libelle || i.projet_libelle" style="font-size:10px;color:#64748b">
+                💰 {{ i.mode_financement }}<span *ngIf="i.projet_libelle"> · 🎯 {{ i.projet_libelle }}</span>
+              </div>
+            </td>
             <td class="mono" style="font-size:10px">{{ i.no_compte_immobilisation }} — {{ i.libelle_compte_immo }}</td>
             <td>{{ i.date_entree }}</td>
             <td class="mono text-right">{{ i.valeur_entree | number:'1.0-0' }}</td>
@@ -1182,6 +1187,19 @@ import { TooltipModule } from 'primeng/tooltip';
         <label>Compte de trésorerie</label>
         <p-select appendTo="body" [options]="comptesCreditPC()" optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.compte_tresorerie" styleClass="w-full" />
+      </div>
+      <div class="form-group full" *ngIf="ressourcesGouv().length">
+        <label>Financé par (ressource)</label>
+        <p-select appendTo="body" [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
+                  [(ngModel)]="formImmo.ressource_id" styleClass="w-full" [showClear]="true"
+                  placeholder="— Fonds propres / trésorerie —" [filter]="true" />
+        <small style="color:#64748b;font-size:10px">Contrôle du disponible sur l'enveloppe</small>
+      </div>
+      <div class="form-group full" *ngIf="projetsGouv().length">
+        <label>Projet (analytique)</label>
+        <p-select appendTo="body" [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
+                  [(ngModel)]="formImmo.projet_id" styleClass="w-full" [showClear]="true"
+                  placeholder="— Aucun —" [filter]="true" />
       </div>
       <div class="form-group full" *ngIf="formImmo.valeur_entree && formImmo.duree_utilisation">
         <div style="background:#111827;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8">
@@ -1757,6 +1775,10 @@ comptesCredit = [
 
   private translate = inject(TranslateService);
   private msg       = inject(MessageService);
+  private gouv      = inject(GouvernanceService);
+  // Dimensions analytiques gouvernance (facultatives) pour le financement d'une immo.
+  ressourcesGouv = signal<any[]>([]);
+  projetsGouv    = signal<any[]>([]);
 
   getClasseLabel(digit: string): string {
     const labels: Record<string, string> = {
@@ -2059,8 +2081,18 @@ comptesCredit = [
       date_entree: today, mode_amortissement: 'LINEAIRE',
       no_compte_immobilisation: '231', no_compte_amortissement: '2831',
       compte_fournisseur: '404', mode_reglement: '', compte_tresorerie: '571',
+      ressource_id: null, projet_id: null,
     };
     this.dialogImmoVisible = true;
+    // Dimensions analytiques facultatives (gouvernance) — listes fraîches.
+    this.gouv.getRessources().subscribe({
+      next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),
+      error: () => this.ressourcesGouv.set([]),
+    });
+    this.gouv.getProjets(true).subscribe({
+      next: d => this.projetsGouv.set(d || []),
+      error: () => this.projetsGouv.set([]),
+    });
   }
 
   onImmoCompteChange() {
