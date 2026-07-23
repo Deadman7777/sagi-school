@@ -18,8 +18,8 @@ class Licence(TimeStampedModel):
         'ESSAI':        ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel'],
         'BASIC':        ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel'],
         'PRO':          ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel'],
-        'AVANCE':       ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel', '/academique', '/rh', '/fiscal', '/gmrf'],
-        'TAXAWU_DAARA': ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/academique', '/suivi-mensuel', '/rh', '/fiscal', '/gmrf'],
+        'AVANCE':       ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/suivi-mensuel', '/academique', '/rh', '/fiscal', '/gmrf', '/gouvernance'],
+        'TAXAWU_DAARA': ['/dashboard', '/eleves', '/paiements', '/comptabilite', '/academique', '/suivi-mensuel', '/rh', '/fiscal', '/gmrf', '/gouvernance'],
     }
     STATUT_CHOICES = [
         ('ACTIVE',    'Active'),

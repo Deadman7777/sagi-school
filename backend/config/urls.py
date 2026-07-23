@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/academique/', include('apps.academique.urls')),
     path('api/daara/',      include('apps.daara.urls')),
     path('api/gmrf/',       include('apps.gmrf.urls')),
+    path('api/gouvernance/', include('apps.gouvernance.urls')),
     path('api/sauvegarde/', include('apps.sauvegarde.urls')),
 ]
 

@@ -13,6 +13,17 @@ class JournalEntry(TenantModel):
     source        = models.CharField(max_length=20, blank=True)
     source_id     = models.UUIDField(null=True, blank=True)
     ordre         = models.IntegerField(default=0)
+    # Dimension analytique (Lot 0 gouvernance) : rattache la ligne à un projet.
+    # Nullable — toutes les écritures existantes et non ventilées restent valides.
+    # La traçabilité « par projet » se lit par agrégation sur ce champ, sans
+    # dupliquer les montants ailleurs (une seule source de vérité : le ledger).
+    projet        = models.ForeignKey('gouvernance.Projet', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='ecritures')
+    # Dimension analytique (Lot 2) : rattache la ligne à une ressource financière.
+    # Nullable — la consommation d'une ressource = agrégation des débits taggés ici
+    # (comptes 6xx/2xx), sans dupliquer les montants. Une seule source : le ledger.
+    ressource     = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='ecritures')
 
     class Meta:
         db_table = 'journal_entries'
@@ -141,6 +152,13 @@ class Immobilisation(TenantModel):
     compte_fournisseur       = models.CharField(max_length=5, choices=COMPTE_FOURN_CHOICES, default='404')
     mode_reglement           = models.CharField(max_length=20, choices=MODE_REGLEMENT_CHOICES, blank=True, default='')
     compte_tresorerie        = models.CharField(max_length=10, blank=True, default='')
+    # Financement (Lot 3 gouvernance) : l'immobilisation « connaît » sa ressource
+    # et son projet. Les écritures d'acquisition sont déjà taggées de la même
+    # dimension (traçabilité ledger) ; ces FK portent l'info sur le bien lui-même.
+    ressource                = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
+                                                 on_delete=models.SET_NULL, related_name='immobilisations')
+    projet                   = models.ForeignKey('gouvernance.Projet', null=True, blank=True,
+                                                 on_delete=models.SET_NULL, related_name='immobilisations')
 
     class Meta:
         db_table = 'immobilisations'
