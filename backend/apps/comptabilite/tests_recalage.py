@@ -79,14 +79,21 @@ class RecalageTresorerieTest(APITestCase):
         agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(d=Sum('debit'), c=Sum('credit'))
         self.assertEqual(agg['d'], agg['c'])
 
-    def test_dry_run_ne_modifie_rien(self):
+    def test_dry_run_ne_modifie_rien_et_rapport_correct(self):
         self._seed()
         n = JournalEntry.objects.filter(tenant=self.tenant).count()
+        out = StringIO()
         call_command('recaler_tresorerie_migration',
                      tenant_id=str(self.tenant.id), exercice='2026',
-                     caisse=17000, banque=10000, wave=15000, om=3000, free=0, stdout=StringIO())
+                     caisse=17000, banque=10000, wave=15000, om=3000, free=0,
+                     neutraliser_reprise=True, stdout=out)
         self.assertEqual(JournalEntry.objects.filter(tenant=self.tenant).count(), n)
         self.assertFalse(JournalEntry.objects.filter(source='RECAL_MIGRATION').exists())
+        # Le rapport affiche les produits après neutralisation en positif et juste
+        # (13 337 500 agrégats, sans la reprise 27 653 100), pas un montant négatif.
+        texte = out.getvalue()
+        self.assertIn('13,337,500', texte)
+        self.assertNotIn('-68,716,700', texte)
 
     def test_idempotent(self):
         self._seed()

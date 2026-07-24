@@ -102,11 +102,12 @@ class Command(BaseCommand):
         reprise_706 = Decimal(str(base.filter(
             source='PAIEMENT', source_id__in=rep_ids, no_compte='706', credit__gt=0
         ).aggregate(c=Sum('credit'))['c'] or 0))
-        prod_706 = net('706')
-        self.stdout.write(f"\n  Produits 706 actuels (net)         : {prod_706:,.0f} FCFA")
+        # net('706') est créditeur (négatif) ; on affiche les produits en positif.
+        produits_actuels = -net('706')
+        self.stdout.write(f"\n  Produits 706 actuels (crédit)       : {produits_actuels:,.0f} FCFA")
         self.stdout.write(f"  dont reprise élèves (à neutraliser) : {reprise_706:,.0f} FCFA")
         if o['neutraliser_reprise']:
-            self.stdout.write(f"  Produits 706 après neutralisation   : {prod_706 - reprise_706:,.0f} FCFA "
+            self.stdout.write(f"  Produits 706 après neutralisation   : {produits_actuels - reprise_706:,.0f} FCFA "
                               f"(= agrégats Excel + paiements récents)")
 
         if base.filter(source=SOURCE_RECAL).exists():
