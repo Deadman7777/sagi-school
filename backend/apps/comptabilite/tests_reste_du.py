@@ -82,6 +82,21 @@ class ResteDuShoumoulTest(APITestCase):
         agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(d=Sum('debit'), c=Sum('credit'))
         self.assertEqual(agg['d'], agg['c'])
 
+    def test_nouveau_non_a_jour_et_absent_du_fichier(self):
+        mamy = self._eleve('Mamy Daya CISSOKHO')   # nouveau, N dans le fichier → 85 000
+        absent = self._eleve('Mouhamed NDIAYE')     # absent du fichier → à jour, renouv dû
+        fichier = _fichier([('Mamy Daya CISSOKHO', 'N', 100000)])  # Mouhamed non listé
+
+        call_command('recaler_reste_du_shoumoul', fichier=fichier,
+                     tenant_id=str(self.tenant.id), exercice='2026',
+                     appliquer=True, stdout=StringIO())
+
+        mamy.refresh_from_db(); absent.refresh_from_db()
+        # Nouveau N : inscription due prime sur la dette → 85 000
+        self.assertEqual(mamy.reste_a_payer, 85000)
+        # Absent du fichier : traité à jour, renouvellement dû → 5×60 000 + 55 000
+        self.assertEqual(absent.reste_a_payer, 355000)
+
     def test_dry_run_ne_cree_rien(self):
         self._eleve('Keba FALL')
         fichier = _fichier([('Keba FALL', 'O', '')])

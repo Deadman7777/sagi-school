@@ -90,26 +90,29 @@ class Command(BaseCommand):
             key = _norm(e.nom_complet)
             st = statuts.get(key)
             if st is None:
-                alertes.append(f"{e.nom_complet} : absent du fichier, ignoré"); continue
-            vus.add(key)
-            a_jour, dette = st
+                # Ajouté au système après le fichier → traité à jour, renouvellement dû.
+                a_jour, dette = True, Decimal('0')
+                alertes.append(f"{e.nom_complet} : absent du fichier → traité à jour, renouvellement dû")
+            else:
+                vus.add(key)
+                a_jour, dette = st
 
             M = Decimal(str(e.frais_mensualite_effectif))
             nb_dues = e.nb_mensualites_dues or 1
             serv_mensuel = Decimal(str(e.montant_services_annuel)) / nb_dues
             mensuel = M + serv_mensuel
             attendu = Decimal(str(e.total_attendu))
-
             verse = RENOUV_VERSE.get(key, Decimal('0'))
-            if key in NOUVEAUX_INSCRIPTION:
-                du_annuel = NOUVEAUX_INSCRIPTION[key]        # reste inscription
-            else:
-                du_annuel = RENOUVELLEMENT - verse           # renouvellement dû
 
-            if not a_jour:
+            if key in NOUVEAUX_INSCRIPTION:
+                # Nouveaux : inscription au lieu du renouvellement. À jour → 5 mois +
+                # inscription due ; non à jour → l'inscription due EST le reste (Mamy Daya 85 000).
+                insc = NOUVEAUX_INSCRIPTION[key]
+                reste = (MOIS_RESTANTS * mensuel + insc) if a_jour else insc
+            elif not a_jour:
                 reste = dette                                # N → dette = reste complet
             else:
-                reste = MOIS_RESTANTS * mensuel + du_annuel  # O → 5 mois + renouv/inscr
+                reste = MOIS_RESTANTS * mensuel + (RENOUVELLEMENT - verse)  # O → 5 mois + renouv
             reste = max(min(reste, attendu), Decimal('0'))   # borné [0, attendu]
             paye = attendu - reste
             plan.append((e, mensuel, verse, a_jour, dette, paye, reste, attendu))
