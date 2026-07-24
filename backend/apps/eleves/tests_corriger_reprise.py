@@ -59,6 +59,17 @@ class CorrigerRepriseTest(APITestCase):
         agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(d=Sum('debit'), c=Sum('credit'))
         self.assertEqual(agg['d'], agg['c'])
 
+    def test_reste_a_payer_direct(self):
+        # total attendu = 775000. On fixe directement le reste réel = 100000
+        # (cas social) → déjà payé = 675000, sans mode ni trésorerie.
+        r = self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
+                             {'reste_a_payer': 100000}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.data['reste_a_payer'], 100000)
+        # Aucune écriture de trésorerie (571/5521/521) créée par la reprise
+        self.assertFalse(JournalEntry.objects.filter(
+            source='PAIEMENT', no_compte__in=('571', '521', '5521', '5522')).exists())
+
     def test_get_lit_la_reprise(self):
         self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
                          {'montant_mensualite': 120000}, format='json')

@@ -205,12 +205,24 @@ class EleveViewSet(viewsets.ModelViewSet):
             })
 
         d = request.data
-        montants = {
-            'montant_inscription': float(d.get('montant_inscription', 0) or 0),
-            'montant_mensualite':  float(d.get('montant_mensualite', 0) or 0),
-            'montant_uniforme': 0, 'montant_fournitures': 0,
-            'montant_divers':      float(d.get('montant_divers', 0) or 0),
-        }
+        # Mode simple (cas sociaux) : on saisit le RESTE À PAYER réel → le déjà payé
+        # est déduit (total attendu − reste). Aucun mode de paiement, aucune
+        # trésorerie touchée (règlement via bilan d'ouverture 890).
+        if d.get('reste_a_payer') is not None and d.get('reste_a_payer') != '':
+            reste = float(d.get('reste_a_payer') or 0)
+            paye = max(float(eleve.total_attendu) - reste, 0.0)
+            montants = {
+                'montant_inscription': 0, 'montant_mensualite': 0,
+                'montant_uniforme': 0, 'montant_fournitures': 0,
+                'montant_divers': paye,
+            }
+        else:
+            montants = {
+                'montant_inscription': float(d.get('montant_inscription', 0) or 0),
+                'montant_mensualite':  float(d.get('montant_mensualite', 0) or 0),
+                'montant_uniforme': 0, 'montant_fournitures': 0,
+                'montant_divers':      float(d.get('montant_divers', 0) or 0),
+            }
         with transaction.atomic():
             if reprise:
                 JournalEntry.objects.filter(tenant=tenant, exercice=exercice,

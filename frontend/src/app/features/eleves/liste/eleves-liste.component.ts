@@ -536,30 +536,23 @@ interface PecForm {
           <span>{{ eleveSelectionne()!.section_nom }}</span>
         </div>
         <p style="font-size:12px;color:var(--text-3);margin:8px 0">
-          Ajuste les montants déjà réglés avant la migration. Le reste à payer se recalcule ;
-          le produit réel (706) n'est pas modifié en cas de migration.
+          Saisis le <strong>reste à payer réel</strong> de l'élève (cas sociaux inclus).
+          Aucun mode de paiement, la <strong>trésorerie n'est pas touchée</strong>, le produit réel (706) est préservé.
         </p>
         <div class="form-grid">
           <div class="form-group full">
-            <label>Inscription déjà payée (FCFA)</label>
-            <p-inputNumber [(ngModel)]="formReprise.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
-          <div class="form-group full">
-            <label>Mensualités déjà payées (FCFA)</label>
-            <p-inputNumber [(ngModel)]="formReprise.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
-          </div>
-          <div class="form-group full">
-            <label>Services déjà payés (FCFA)</label>
-            <p-inputNumber [(ngModel)]="formReprise.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+            <label>Reste à payer réel (FCFA)</label>
+            <p-inputNumber [(ngModel)]="formReprise.reste_a_payer" [min]="0" mode="decimal"
+                           styleClass="w-full" placeholder="Ce que l'élève doit vraiment (0 = soldé)" />
           </div>
         </div>
         <div class="pec-preview">
           <div class="pv-row"><span>Total attendu</span>
             <strong>{{ formReprise.total_attendu | number:'1.0-0' }} FCFA</strong></div>
-          <div class="pv-row"><span>Déjà payé (saisi)</span>
-            <strong style="color:#00d4aa">{{ (formReprise.montant_inscription + formReprise.montant_mensualite + formReprise.montant_divers) | number:'1.0-0' }} FCFA</strong></div>
-          <div class="pv-row"><span>Reste à payer (estimé)</span>
-            <strong style="color:#ef4444">{{ (formReprise.total_attendu - (formReprise.montant_inscription + formReprise.montant_mensualite + formReprise.montant_divers)) | number:'1.0-0' }} FCFA</strong></div>
+          <div class="pv-row"><span>Déjà payé (déduit)</span>
+            <strong style="color:#00d4aa">{{ (formReprise.total_attendu - (formReprise.reste_a_payer || 0)) | number:'1.0-0' }} FCFA</strong></div>
+          <div class="pv-row"><span>Reste à payer</span>
+            <strong style="color:#ef4444">{{ (formReprise.reste_a_payer || 0) | number:'1.0-0' }} FCFA</strong></div>
         </div>
       }
       <ng-template pTemplate="footer">
@@ -1228,19 +1221,16 @@ export class ElevesListeComponent implements OnInit {
 
   // ── Correction du déjà payé (reprise) ─────────────────────────────────
   dialogRepriseVisible = false;
-  formReprise = { montant_inscription: 0, montant_mensualite: 0, montant_divers: 0, total_attendu: 0 };
+  formReprise = { reste_a_payer: 0, total_attendu: 0 };
 
   ouvrirReprise(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
-    this.formReprise = { montant_inscription: 0, montant_mensualite: 0, montant_divers: 0,
-                         total_attendu: eleve.total_attendu || 0 };
+    this.formReprise = { reste_a_payer: eleve.reste_a_payer || 0, total_attendu: eleve.total_attendu || 0 };
     this.dialogRepriseVisible = true;
     this.elevesService.getReprise(eleve.id).subscribe({
       next: (d: any) => this.formReprise = {
-        montant_inscription: d.montant_inscription || 0,
-        montant_mensualite:  d.montant_mensualite  || 0,
-        montant_divers:      d.montant_divers       || 0,
-        total_attendu:       d.total_attendu        || 0,
+        reste_a_payer: d.reste_a_payer ?? (eleve.reste_a_payer || 0),
+        total_attendu: d.total_attendu || 0,
       },
       error: () => {},
     });
@@ -1251,9 +1241,7 @@ export class ElevesListeComponent implements OnInit {
     if (!e) return;
     this.saving.set(true);
     this.elevesService.corrigerReprise(e.id, {
-      montant_inscription: this.formReprise.montant_inscription || 0,
-      montant_mensualite:  this.formReprise.montant_mensualite  || 0,
-      montant_divers:      this.formReprise.montant_divers       || 0,
+      reste_a_payer: this.formReprise.reste_a_payer || 0,
     }).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: 'Déjà payé corrigé', detail: e.nom_complet });
