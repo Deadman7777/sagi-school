@@ -4,7 +4,7 @@ from .views import (JournalView, GrandLivreView, BalanceView,
                     TableauFluxView, HistoriqueExercicesView, ChargeView,
                     NotesAnnexesView, PlanComptableView, BudgetView,
                     BudgetComptabiliserView, ImmobilisationView, AmortirView,
-                    ReglerImmobilisationView)
+                    ReglerImmobilisationView, ImportChargesView)
 from .pdf_views import ExportPDFView
 
 urlpatterns = [
@@ -31,4 +31,5 @@ urlpatterns = [
     path('immobilisations/<str:pk>/',     ImmobilisationView.as_view()),
     path('immobilisations/<str:pk>/amortir/', AmortirView.as_view()),
     path('immobilisations/<str:pk>/regler/',  ReglerImmobilisationView.as_view()),
+    path('import-charges/',                    ImportChargesView.as_view()),
 ]
