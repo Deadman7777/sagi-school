@@ -1,22 +1,24 @@
-"""Reconstruit le « déjà payé » / reste dû par élève (Complexe Shoumoul, 2026).
+"""Reconstruit le « déjà payé » / reste dû réel par élève (Complexe Shoumoul, 2026).
 
-Modèle Shoumoul : le renouvellement (55 000/an, en janvier) remplace l'inscription
-pour les élèves déjà présents. Tous les élèves sont à jour de leurs mensualités
-jan→juil (7 mois) ; il leur reste août→déc (5 mois) + le renouvellement pour ceux
-qui ne l'ont pas versé.
+Modèle validé avec le directeur :
+  - À jour (col « À jour ce mois » = O) → reste = 5 mois (août→déc) ×
+    (mensualité + services de l'élève) + renouvellement dû.
+  - Non à jour (N) → reste = sa « Dette actuelle » (elle vaut le reste complet).
+  - Renouvellement 55 000/an (remplace l'inscription) ; versé selon la liste.
+  - 3 nouveaux paient l'inscription 185 000 (au lieu du renouvellement) :
+    Goundo Momi Keita (soldé), Aïssatou Keïta (soldé), Mamy Daya CISSOKHO
+    (reste 85 000).
 
-Par élève :
-  - déjà payé = 7 × mensualité + renouvellement versé
-  - reste dû  = (nb_mensualites − 7) × mensualité + (55 000 − renouvellement versé)
+Le reste voulu est atteint en réglant le « déjà payé » de la reprise à
+`total_attendu − reste`. 706 (13 410 500) inchangé : les reprises reconstruites
+sont neutralisées en 890. Le reste dû par élève devient juste (objectif
+prioritaire) ; le déjà payé ne colle pas au cash (journal de caisse incomplet).
 
-Le produit 706 (13 410 500, agrégats Excel + récents) n'est PAS modifié : les
-reprises par élève sont neutralisées en 890 (706 D / 890 C) pour ne pas doubler.
+  python manage.py recaler_reste_du_shoumoul --fichier "C:\\...\\import_eleves_sagi_NV.xlsx"
+      [--tenant_id UUID] [--exercice 2026] [--appliquer]
 
-  python manage.py recaler_reste_du_shoumoul [--tenant_id UUID] [--exercice 2026]
-      [--renouvellement 55000] [--mois-payes 7] [--appliquer]
-
-Sans --appliquer : rapport par élève. Idempotent (remet à plat les reprises
-existantes avant de reconstruire).
+Sans --appliquer : rapport par élève + alertes. Idempotent (remet à plat les
+reprises existantes avant de reconstruire).
 """
 import unicodedata
 from decimal import Decimal
@@ -30,109 +32,113 @@ from apps.paiements.models import Exercice, Paiement
 from apps.comptabilite.models import JournalEntry
 from apps.paiements.reprise import creer_paiement_reprise
 
+RENOUVELLEMENT = Decimal('55000')
+MOIS_PAYES = 7            # jan→juil
+MOIS_RESTANTS = 5         # août→déc
+
 
 def _norm(s):
     s = unicodedata.normalize('NFKD', str(s or '')).encode('ascii', 'ignore').decode()
     return ' '.join(s.lower().split())
 
 
-# Renouvellement versé (55 000 = complet). Clés = noms normalisés.
-RENOUV_VERSE = {
-    _norm('Aïssata Kébé'): 55000,
-    _norm('Maryam Mamadou BA'): 55000,
-    _norm('Sokhna Mariama Bousso BADIANE'): 55000,
-    _norm('Mouhamed Salih BADIANE'): 55000,
-    _norm('El Hadji Mamadou Moustapha NGOM'): 55000,
-    _norm('Papa Sélé Mbaye'): 55000,
-    _norm('Fanta Mbaye'): 55000,
-    _norm('Keba FALL'): 55000,
-    _norm('Adjia Fatou TRAORE'): 55000,
-    _norm('Fatou Kiné TRAORE'): 55000,
-    _norm('Khady Mountapha DIOP'): 55000,
-    _norm('Abdoulaye NDIAYE'): 27500,
-    _norm('Mouhamed Abdallah NDIAYE'): 27500,
-    _norm('Diariatoulah TALL'): 32500,
-}
+# Renouvellement versé (noms corrigés d'après la base).
+RENOUV_VERSE = {_norm(n): Decimal(str(v)) for n, v in {
+    'Aïssata Kébé': 55000, 'Maryam Mamadou BA': 55000,
+    'Sokhna Mariama Bousso BADIANE': 55000, 'Mouhamed Salih BADIANE': 55000,
+    'El Hadji Mouhamadou Moustapha NGOM': 55000, 'Papa Sélé Mbaye': 55000,
+    'Fanta MBAYE': 55000, 'Keba FALL': 55000, 'Adjia Fatou TRAORE': 55000,
+    'Fatou Kiné TRAORE': 55000, 'Khady Mountakha DIOP': 55000,
+    'Abdoulaye NDIAYE': 27500, 'Mouhamed Abdallah NDIAYE': 27500,
+    'Diariatoulah TALL': 32500,
+}.items()}
+
+# Nouveaux élèves : inscription 185 000 au lieu du renouvellement (reste dû).
+NOUVEAUX_INSCRIPTION = {_norm(n): Decimal(str(v)) for n, v in {
+    'Goundo Momi Keita': 0, 'Aïssatou Keïta': 0, 'Mamy Daya CISSOKHO': 85000,
+}.items()}
 
 
 class Command(BaseCommand):
-    help = "Reconstruit le déjà payé / reste dû par élève (modèle Shoumoul)."
+    help = "Reconstruit le reste dû réel par élève (modèle Shoumoul)."
 
     def add_arguments(self, parser):
+        parser.add_argument('--fichier', required=True,
+                            help="Excel élèves (colonnes À jour / Dette actuelle).")
         parser.add_argument('--tenant_id')
         parser.add_argument('--exercice')
-        parser.add_argument('--renouvellement', type=Decimal, default=Decimal('55000'))
-        parser.add_argument('--mois-payes', type=int, default=7)
         parser.add_argument('--appliquer', action='store_true')
 
     def handle(self, *args, **o):
         from apps.eleves.models import Eleve
         tenant = self._tenant(o.get('tenant_id'))
         ex = self._exercice(tenant, o.get('exercice'))
-        renouv = o['renouvellement']
-        mois_payes = o['mois_payes']
-        mois_restants = max(ex.nb_mensualites - mois_payes, 0)
+        statuts = self._lire_fichier(o['fichier'])   # {norm_nom: (a_jour bool, dette Decimal)}
 
         self.stdout.write(self.style.MIGRATE_HEADING(
-            f"\n═══ Reconstruction reste dû par élève — {tenant.nom} — {ex.annee_scolaire} ═══"))
-        self.stdout.write(f"  Renouvellement {renouv:,.0f} · {mois_payes} mois payés / "
-                          f"{mois_restants} restants · {ex.nb_mensualites} mensualités\n")
+            f"\n═══ Reconstruction reste dû — {tenant.nom} — {ex.annee_scolaire} ═══\n"))
 
-        eleves = list(Eleve.objects.filter(tenant=tenant, exercice=ex).select_related('section'))
-        matched = set()
-        plan, total_paye, total_reste, alertes = [], Decimal('0'), Decimal('0'), []
+        eleves = list(Eleve.objects.filter(tenant=tenant, exercice=ex)
+                      .select_related('section').prefetch_related('abonnements__service'))
+        plan, alertes = [], []
+        total_reste = Decimal('0')
+        vus = set()
 
         for e in eleves:
             if not e.section:
-                alertes.append(f"{e.nom_complet} : sans section, ignoré")
-                continue
-            M = Decimal(str(e.frais_mensualite_effectif))
-            verse = Decimal('0')
+                alertes.append(f"{e.nom_complet} : sans section, ignoré"); continue
             key = _norm(e.nom_complet)
-            if key in RENOUV_VERSE:
-                verse = Decimal(str(RENOUV_VERSE[key]))
-                matched.add(key)
+            st = statuts.get(key)
+            if st is None:
+                alertes.append(f"{e.nom_complet} : absent du fichier, ignoré"); continue
+            vus.add(key)
+            a_jour, dette = st
+
+            M = Decimal(str(e.frais_mensualite_effectif))
+            nb_dues = e.nb_mensualites_dues or 1
+            serv_mensuel = Decimal(str(e.montant_services_annuel)) / nb_dues
+            mensuel = M + serv_mensuel
             attendu = Decimal(str(e.total_attendu))
-            # Reste voulu = 5 mois + renouvellement dû, borné au total attendu
-            # (un élève ne peut pas devoir plus que son dû prorata).
-            reste = min(mois_restants * M + (renouv - verse), attendu)
-            paye = attendu - reste                      # ce que la reprise doit refléter
-            plan.append((e, M, verse, paye, reste, attendu))
-            total_paye += paye
+
+            verse = RENOUV_VERSE.get(key, Decimal('0'))
+            if key in NOUVEAUX_INSCRIPTION:
+                du_annuel = NOUVEAUX_INSCRIPTION[key]        # reste inscription
+            else:
+                du_annuel = RENOUVELLEMENT - verse           # renouvellement dû
+
+            if not a_jour:
+                reste = dette                                # N → dette = reste complet
+            else:
+                reste = MOIS_RESTANTS * mensuel + du_annuel  # O → 5 mois + renouv/inscr
+            reste = max(min(reste, attendu), Decimal('0'))   # borné [0, attendu]
+            paye = attendu - reste
+            plan.append((e, mensuel, verse, a_jour, dette, paye, reste, attendu))
             total_reste += reste
-            # Contrôle : le modèle attend total_attendu = renouv + nb×M (+ 0 autre)
-            attendu_modele = renouv + ex.nb_mensualites * M
-            if abs(attendu - attendu_modele) > 1:
-                alertes.append(f"{e.nom_complet} : total attendu {attendu:,.0f} ≠ modèle "
-                               f"{attendu_modele:,.0f} (55k + {ex.nb_mensualites}×{M:,.0f})")
 
-        # Noms de la liste non trouvés
-        for key in RENOUV_VERSE:
-            if key not in matched:
-                alertes.append(f"Renouvellement : « {key} » non apparié à un élève")
+        for key in statuts:
+            if key not in vus:
+                alertes.append(f"Fichier : « {key} » non trouvé dans la base")
+        for key in list(RENOUV_VERSE) + list(NOUVEAUX_INSCRIPTION):
+            if key not in vus:
+                alertes.append(f"Liste renouvellement/inscription : « {key} » non apparié")
 
-        self.stdout.write("  Élève                                 mensualité   renouv   déjà payé     reste dû")
-        for e, M, verse, paye, reste, attendu in plan[:80]:
-            self.stdout.write(f"    {e.nom_complet[:34]:<34} {M:>10,.0f} {verse:>8,.0f} "
-                              f"{paye:>11,.0f} {reste:>12,.0f}")
-        if len(plan) > 80:
-            self.stdout.write(f"    … (+{len(plan) - 80} élèves)")
-
+        self.stdout.write("  Élève                               mensuel  renouv àjour   reste dû")
+        for e, mensuel, verse, a_jour, dette, paye, reste, attendu in plan:
+            self.stdout.write(f"    {e.nom_complet[:33]:<33} {mensuel:>8,.0f} {verse:>7,.0f} "
+                              f"{'O' if a_jour else 'N':>4}  {reste:>11,.0f}")
         self.stdout.write(self.style.MIGRATE_LABEL(
-            f"\n  {len(plan)} élèves · déjà payé total {total_paye:,.0f} · reste dû total {total_reste:,.0f}"))
+            f"\n  {len(plan)} élèves · reste dû total {total_reste:,.0f}"))
         if alertes:
-            self.stdout.write(self.style.WARNING("\n  ⚠ Points à vérifier :"))
-            for a in alertes[:40]:
+            self.stdout.write(self.style.WARNING("\n  ⚠ À vérifier :"))
+            for a in alertes:
                 self.stdout.write(self.style.WARNING(f"    - {a}"))
 
         if not o['appliquer']:
             self.stdout.write(self.style.MIGRATE_LABEL(
-                "\n  DRY-RUN — aucune modification. Relancer avec --appliquer pour reconstruire."))
+                "\n  DRY-RUN — aucune modification. --appliquer pour reconstruire."))
             return
 
-        # ── Application ──
         with transaction.atomic():
-            # 1. Remise à plat des reprises existantes (fiches + écritures) + neutralisation RECAL-REP
             anciennes = Paiement.objects.filter(tenant=tenant, exercice=ex, mode_paiement='REPRISE')
             ids = list(anciennes.values_list('id', flat=True))
             JournalEntry.objects.filter(tenant=tenant, exercice=ex, source='PAIEMENT',
@@ -140,25 +146,44 @@ class Command(BaseCommand):
             JournalEntry.objects.filter(tenant=tenant, exercice=ex, no_piece='RECAL-REP').delete()
             anciennes.delete()
 
-            # 2. Recréation par élève (écritures standard 411/706/890)
-            for e, M, verse, paye, reste, attendu in plan:
+            for e, mensuel, verse, a_jour, dette, paye, reste, attendu in plan:
                 if paye <= 0:
                     continue
-                # Renouvellement d'abord (remplace l'inscription), le reste en mensualités.
-                inscription = min(verse, paye)
+                M = Decimal(str(e.frais_mensualite_effectif))
+                mens = min(MOIS_PAYES * M, paye)             # mensualités « payées »
                 montants = {
-                    'montant_inscription': float(inscription),
-                    'montant_mensualite':  float(paye - inscription),
+                    'montant_inscription': 0,
+                    'montant_mensualite':  float(mens),
                     'montant_uniforme':    0,
                     'montant_fournitures': 0,
+                    'montant_divers':      float(paye - mens),  # services + inscription absorbés
                 }
-                creer_paiement_reprise(tenant, ex, e, montants=montants)
+                # creer_paiement_reprise n'accepte pas montant_divers → on l'injecte après.
+                p = creer_paiement_reprise(tenant, ex, e, montants={
+                    'montant_inscription': 0, 'montant_mensualite': float(mens),
+                    'montant_uniforme': 0, 'montant_fournitures': 0})
+                if p and montants['montant_divers'] > 0:
+                    p.montant_divers = Decimal(str(montants['montant_divers']))
+                    p.save(update_fields=['montant_divers'])
+                    # ajuste les écritures (créance + produit) du delta divers
+                    delta = Decimal(str(montants['montant_divers']))
+                    JournalEntry.objects.filter(tenant=tenant, exercice=ex, source='PAIEMENT',
+                                                source_id=p.id, no_compte='411', debit__gt=0).update(
+                        debit=Decimal(str(mens)) + delta)
+                    JournalEntry.objects.filter(tenant=tenant, exercice=ex, source='PAIEMENT',
+                                                source_id=p.id, no_compte='706').update(
+                        credit=Decimal(str(mens)) + delta)
+                    JournalEntry.objects.filter(tenant=tenant, exercice=ex, source='PAIEMENT',
+                                                source_id=p.id, no_compte='890').update(
+                        debit=Decimal(str(mens)) + delta)
+                    JournalEntry.objects.filter(tenant=tenant, exercice=ex, source='PAIEMENT',
+                                                source_id=p.id, no_compte='411', credit__gt=0).update(
+                        credit=Decimal(str(mens)) + delta)
 
-            # 3. Neutraliser le 706 des nouvelles reprises (706 = agrégats Excel, pas de double)
-            neuf_ids = list(Paiement.objects.filter(
-                tenant=tenant, exercice=ex, mode_paiement='REPRISE').values_list('id', flat=True))
+            neuf = list(Paiement.objects.filter(tenant=tenant, exercice=ex,
+                                                mode_paiement='REPRISE').values_list('id', flat=True))
             r706 = Decimal(str(JournalEntry.objects.filter(
-                tenant=tenant, exercice=ex, source='PAIEMENT', source_id__in=neuf_ids,
+                tenant=tenant, exercice=ex, source='PAIEMENT', source_id__in=neuf,
                 no_compte='706', credit__gt=0).aggregate(c=Sum('credit'))['c'] or 0))
             if r706 > 0:
                 JournalEntry.objects.bulk_create([
@@ -173,8 +198,26 @@ class Command(BaseCommand):
                 ])
 
         self.stdout.write(self.style.SUCCESS(
-            f"\n  ✓ Reconstruit : {len(plan)} élèves. Reste dû total {total_reste:,.0f}. "
+            f"\n  ✓ Reconstruit : {len(plan)} élèves · reste dû total {total_reste:,.0f}. "
             f"706 inchangé (reprises neutralisées en 890)."))
+
+    def _lire_fichier(self, chemin):
+        import openpyxl
+        try:
+            wb = openpyxl.load_workbook(chemin, data_only=True, read_only=True)
+        except Exception as e:
+            raise CommandError(f"Fichier illisible : {e}")
+        ws = wb['Élèves'] if 'Élèves' in wb.sheetnames else wb.active
+        out = {}
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i == 0 or not row or not row[0]:
+                continue
+            nom = row[0]
+            a_jour = str(row[17] if len(row) > 17 else '').strip().upper() != 'N'
+            dette = row[18] if len(row) > 18 else None
+            dette = Decimal(str(dette)) if dette not in (None, '') else Decimal('0')
+            out[_norm(nom)] = (a_jour, dette)
+        return out
 
     def _tenant(self, tid):
         if tid:
