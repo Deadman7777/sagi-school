@@ -29,6 +29,9 @@ MODE_CHOICES = [
     ('FREE_MONEY',   'Free Money'),
     ('VIREMENT',     'Virement'),
     ('CHEQUE',       'Chèque'),
+    # Règlement réparti sur plusieurs modes à la fois (voir modes_reglement).
+    # mode_paiement vaut 'MIXTE' à titre indicatif ; le détail fait foi.
+    ('MIXTE',        'Multi-mode'),
     # Migration : montants réglés avant la bascule sur SAGI SCHOOL.
     # Comptabilisé au 890 (bilan d'ouverture), jamais en trésorerie —
     # ne doit pas apparaître dans les formulaires de saisie de paiement.
@@ -57,6 +60,10 @@ class Paiement(TenantModel):
     # Ex. [{"nom": "Cantine", "montant": 10000}]. Le montant est inclus dans montant_divers.
     services_regles     = models.JSONField(default=list, blank=True)
     mode_paiement       = models.CharField(max_length=20, choices=MODE_CHOICES, default='ESPECE')
+    # Ventilation du règlement sur plusieurs modes (multi-mode). Vide → règlement
+    # simple via mode_paiement. Ex. [{"mode": "ESPECE", "montant": 30000},
+    # {"mode": "WAVE", "montant": 20000}, {"mode": "ORANGE_MONEY", "montant": 10000}].
+    modes_reglement     = models.JSONField(default=list, blank=True)
     observations        = models.TextField(blank=True)
     saisi_par           = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)
 

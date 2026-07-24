@@ -217,7 +217,7 @@
   <tr>
     <td style="width:30%">
       <div class="lbl">Mode de paiement</div>
-      <div class="val">{{ mode_label }}</div>
+      <div class="val">{{ mode_label }}{% for mr in modes_reglement %}<br/><span style="font-size:8px;color:#555">↳ {{ mr.mode_label }} : {{ mr.montant|floatformat:0 }} FCFA</span>{% endfor %}</div>
     </td>
     <td style="width:30%">
       <div class="lbl">Caissier / Agent</div>

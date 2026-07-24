@@ -266,6 +266,23 @@ def resoudre_dimensions_depense(request, tenant, montant):
     return projet, ressource, None
 
 
+def lignes_reglement_depense(data, montant, compte_defaut, libelle_base, ordre_debut):
+    """Lignes de crédit trésorerie d'un décaissement (charge, immobilisation…).
+
+    Si `data['modes_reglement']` est fourni (multi-mode), le règlement est ventilé
+    par mode (571/5521/5522/521…) via le helper trésorerie ; sinon on retombe sur
+    une ligne unique créditant `compte_defaut` (compat ascendante des formulaires).
+    Peut lever ValueError si la ventilation est incohérente (Σ ≠ montant).
+    """
+    from .tresorerie import normaliser_ventilation, lignes_tresorerie
+    modes = data.get('modes_reglement')
+    if modes:
+        ventilation = normaliser_ventilation(modes, montant)
+        return lignes_tresorerie(ventilation, 'credit', libelle_base, ordre_debut)
+    return [dict(ordre=ordre_debut, no_compte=compte_defaut, debit=0,
+                 credit=float(montant), libelle=f"Règlement {libelle_base}")]
+
+
 def _compte_sort_key(no):
     """Tri SYSCOHADA Révisé : regroupement hiérarchique par classe.
     Ex : 10 < 101 < 102 < 11 < 111 < 12 < ... < 706 < 706.1 < 707
@@ -1180,7 +1197,12 @@ class ChargeView(APIView):
             return err
 
         # Écriture 1 — Constatation dette fournisseur : Débit 6xx/2xx / Crédit 401|404|481
-        # Écriture 2 — Règlement                     : Débit 401|404|481 / Crédit 5xx
+        # Écriture 2 — Règlement                     : Débit 401|404|481 / Crédit 5xx (ventilé)
+        try:
+            tresor = lignes_reglement_depense(
+                data, montant, compte_tresorerie, f"{libelle_fourn} — {libelle}", ordre_debut=4)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         ecritures = [
             dict(ordre=1, no_compte=no_compte,         debit=montant, credit=0,
                  libelle=f"{libelle_compte} — {libelle}"),
@@ -1188,8 +1210,7 @@ class ChargeView(APIView):
                  libelle=f"{libelle_fourn} — {libelle}"),
             dict(ordre=3, no_compte=compte_fournisseur, debit=montant, credit=0,
                  libelle=f"Règlement {libelle_fourn} — {libelle}"),
-            dict(ordre=4, no_compte=compte_tresorerie,  debit=0,       credit=montant,
-                 libelle=f"Règlement {libelle_fourn} — {libelle}"),
+            *tresor,
         ]
 
         for e in ecritures:
@@ -1292,6 +1313,12 @@ class ChargeView(APIView):
                 if not ok:
                     return Response({'error': msg}, status=400)
 
+        try:
+            tresor_new = lignes_reglement_depense(
+                data_new, montant_new, compte_tresorerie_new,
+                f"{libelle_fourn} — {libelle_new}", ordre_debut=4)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         ecritures_new = [
             dict(ordre=1, no_compte=no_compte_new,      debit=montant_new, credit=0,
                  libelle=f"{libelle_compte} — {libelle_new}"),
@@ -1299,8 +1326,7 @@ class ChargeView(APIView):
                  libelle=f"{libelle_fourn} — {libelle_new}"),
             dict(ordre=3, no_compte=compte_fournisseur,  debit=montant_new, credit=0,
                  libelle=f"Règlement {libelle_fourn} — {libelle_new}"),
-            dict(ordre=4, no_compte=compte_tresorerie_new, debit=0, credit=montant_new,
-                 libelle=f"Règlement {libelle_fourn} — {libelle_new}"),
+            *tresor_new,
         ]
         for e in ecritures_new:
             JournalEntry.objects.create(
@@ -1838,7 +1864,10 @@ class ImmobilisationView(APIView):
         no_immo            = data.get('no_compte_immobilisation', '231')
         no_amort           = data.get('no_compte_amortissement',  '2831')
         compte_fournisseur = data.get('compte_fournisseur', '404')
+        modes_reglement    = data.get('modes_reglement')  # multi-mode éventuel
         mode_reglement     = data.get('mode_reglement', '')
+        if modes_reglement:
+            mode_reglement = 'MIXTE'
         compte_tresorerie  = data.get('compte_tresorerie', '571') if mode_reglement else ''
 
         # Comptes fournisseurs valides pour acquisition d'immobilisation (SYSCOHADA)
@@ -1877,12 +1906,27 @@ class ImmobilisationView(APIView):
             (compte_fournisseur, 0,     valeur, f"{lib_fourn} — {libelle}",                2),
         ]
 
-        # Écriture de règlement : Débit 404|481 / Crédit 5xx (uniquement si règlement immédiat)
+        # Écriture de règlement : Débit 404|481 / Crédit 5xx (uniquement si règlement immédiat).
+        # Multi-mode : la jambe de trésorerie est ventilée par mode (571/5521/5522/521…).
         if mode_reglement:
-            ecritures += [
-                (compte_fournisseur, valeur, 0,      f"Règlement {lib_fourn} — {libelle}",        3),
-                (compte_tresorerie,  0,      valeur, f"Règlement par {mode_reglement} — {libelle}", 4),
-            ]
+            ecritures.append(
+                (compte_fournisseur, valeur, 0, f"Règlement {lib_fourn} — {libelle}", 3))
+            if modes_reglement:
+                try:
+                    tresor = lignes_reglement_depense(
+                        data, valeur, compte_tresorerie or '571',
+                        f"{lib_fourn} — {libelle}", ordre_debut=4)
+                except ValueError as exc:
+                    immo.delete()
+                    return Response({'error': str(exc)}, status=400)
+                ecritures += [
+                    (t['no_compte'], t['debit'], t['credit'], t['libelle'], t['ordre'])
+                    for t in tresor
+                ]
+            else:
+                ecritures.append(
+                    (compte_tresorerie, 0, valeur,
+                     f"Règlement par {mode_reglement} — {libelle}", 4))
 
         for nc, db, cr, lib, ordre in ecritures:
             JournalEntry.objects.create(
