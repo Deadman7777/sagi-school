@@ -118,11 +118,19 @@ class DashboardKPIView(APIView):
             })
 
         paiements      = Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF')
-        total_recettes = sum_paiements(paiements)
-        # Charges directes (CHARGE) + comptabilisations de budget (BUDGET) :
-        # même suivi au tableau de bord quelle que soit l'origine de la charge.
+        # Total recettes = PRODUITS RÉELS du grand livre (classe 70), pas la somme
+        # des fiches de paiement : en migration, les reprises créditent 706 à leur
+        # montant théorique puis sont neutralisées en 890 → le net 70 reste juste.
+        # Pour une école normale, chaque paiement crédite 706 → net 70 = somme des
+        # paiements (équivalent).
+        produits_agg   = JournalEntry.objects.filter(
+            tenant=tenant, exercice=exercice, no_compte__startswith='70'
+        ).aggregate(c=Sum('credit'), d=Sum('debit'))
+        total_recettes = max(0.0, float(produits_agg['c'] or 0) - float(produits_agg['d'] or 0))
+        # Charges directes (CHARGE) + budget comptabilisé (BUDGET) + reprises
+        # d'historique migrées (MIGRATION) : mêmes charges au tableau de bord.
         charges_agg    = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice, source__in=('CHARGE', 'BUDGET'),
+            tenant=tenant, exercice=exercice, source__in=('CHARGE', 'BUDGET', 'MIGRATION'),
         ).filter(
             Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
         ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))
