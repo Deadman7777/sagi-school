@@ -156,57 +156,57 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
     <!-- Aucune licence -->
     <div class="empty-state" *ngIf="!licence() && !loading()">
       <div style="font-size:48px">🔑</div>
-      <div style="color:#64748b;margin-top:12px">{{ 'ma_licence.aucune_licence' | translate }}</div>
-      <div style="color:#64748b;font-size:12px;margin-top:4px">{{ 'ma_licence.contacter_activer' | translate }}</div>
+      <div style="color:var(--text-3);margin-top:12px">{{ 'ma_licence.aucune_licence' | translate }}</div>
+      <div style="color:var(--text-3);font-size:12px;margin-top:4px">{{ 'ma_licence.contacter_activer' | translate }}</div>
     </div>
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
     .licence-wrap { max-width:700px; }
     .statut-card { display:flex; align-items:center; gap:20px; border:2px solid; border-radius:16px; padding:24px 28px; margin-bottom:16px; }
     .statut-card.active { border-color:#10b981; background:rgba(16,185,129,0.06); }
     .statut-card.expire { border-color:#ef4444; background:rgba(239,68,68,0.06); }
     .statut-icon { font-size:40px; }
     .statut-info { flex:1; }
-    .statut-label { font-size:18px; font-weight:700; color:#e8f0fe; }
-    .statut-type  { font-size:13px; color:#64748b; margin-top:2px; }
+    .statut-label { font-size:18px; font-weight:700; color:var(--text); }
+    .statut-type  { font-size:13px; color:var(--text-3); margin-top:2px; }
     .statut-jours { text-align:center; }
     .jours-val    { font-size:36px; font-weight:700; font-family:monospace; }
-    .jours-label  { font-size:11px; color:#64748b; }
+    .jours-label  { font-size:11px; color:var(--text-3); }
     .details-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
-    .detail-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px 16px; }
-    .dc-label     { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
-    .dc-value     { font-size:14px; font-weight:600; color:#e8f0fe; }
+    .detail-card  { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+    .dc-label     { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+    .dc-value     { font-size:14px; font-weight:600; color:var(--text); }
     .dc-value.cle { font-family:monospace; font-size:12px; color:#f0c040; letter-spacing:1px; word-break:break-all; }
     .mono         { font-family:monospace; }
-    .progress-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:16px 18px; margin-bottom:16px; }
-    .pc-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px; color:#94a3b8; }
-    .progress-track { height:8px; background:#0b0f1a; border-radius:4px; overflow:hidden; }
+    .progress-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:16px; }
+    .pc-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:10px; color:var(--text-2); }
+    .progress-track { height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
     .progress-fill  { height:100%; border-radius:4px; transition:width 0.8s ease; }
-    .pc-footer { display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-top:6px; font-family:monospace; }
+    .pc-footer { display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); margin-top:6px; font-family:monospace; }
     .alerte-banner { display:flex; align-items:center; gap:14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:16px 18px; margin-bottom:16px; }
     .ab-icon { font-size:24px; flex-shrink:0; }
-    .ab-text { flex:1; font-size:13px; color:#e8f0fe; }
-    .ab-text div { font-size:12px; color:#94a3b8; margin-top:4px; }
-    .contact-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:16px 18px; }
-    .cc-title { font-size:13px; font-weight:600; color:#e8f0fe; margin-bottom:12px; }
+    .ab-text { flex:1; font-size:13px; color:var(--text); }
+    .ab-text div { font-size:12px; color:var(--text-2); margin-top:4px; }
+    .contact-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+    .cc-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px; }
     .cc-body  { display:flex; flex-direction:column; gap:8px; }
     .cc-row   { display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .cc-row:last-child { border-bottom:none; }
-    .cc-row span:first-child { color:#64748b; }
+    .cc-row span:first-child { color:var(--text-3); }
     .cc-link  { color:#93c5fd; text-decoration:none; }
     .cc-link:hover { text-decoration:underline; }
     .cc-phones { display:flex; gap:14px; }
     .empty-state { text-align:center; padding:60px; }
-    .rd-info  { font-size:13px; color:#94a3b8; margin:0 0 14px; }
-    .renouv-info { background:rgba(11,15,26,0.4); border:1px solid #2a3f5f; border-radius:8px; padding:10px 14px; }
+    .rd-info  { font-size:13px; color:var(--text-2); margin:0 0 14px; }
+    .renouv-info { background:rgba(11,15,26,0.4); border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
     .ri-row   { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
-    .ri-row span:first-child { color:#64748b; }
+    .ri-row span:first-child { color:var(--text-3); }
     .rd-field { margin-top:14px; display:flex; flex-direction:column; gap:6px; }
-    .rd-field label { font-size:12px; color:#94a3b8; }
-    .rd-textarea { width:100%; background:#0b0f1a; border:1px solid #2a3f5f; border-radius:8px; color:#e8f0fe; padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; }
+    .rd-field label { font-size:12px; color:var(--text-2); }
+    .rd-textarea { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; }
     .rd-textarea:focus { outline:none; border-color:#3b82f6; }
     .rd-tel   { display:flex; align-items:center; gap:14px; font-size:13px; margin-top:14px; }
   `]

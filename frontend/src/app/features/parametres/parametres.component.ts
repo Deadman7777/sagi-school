@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppModeService } from '../../core/services/app-mode.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
@@ -30,6 +31,13 @@ import { MessageService } from 'primeng/api';
       <div>
         <h2 class="page-title">{{ 'parametres.title' | translate }}</h2>
         <span class="page-sub">{{ 'parametres.configuration' | translate }}</span>
+      </div>
+      <div class="theme-switch">
+        <span class="theme-lbl">🎨 {{ 'parametres.theme' | translate }}</span>
+        <button class="theme-opt" [class.active]="theme.theme() === 'dark'"
+                (click)="theme.set('dark')">🌙 {{ 'parametres.theme_sombre' | translate }}</button>
+        <button class="theme-opt" [class.active]="theme.theme() === 'light'"
+                (click)="theme.set('light')">☀️ {{ 'parametres.theme_clair' | translate }}</button>
       </div>
     </div>
 
@@ -95,16 +103,16 @@ import { MessageService } from 'primeng/api';
           <div class="form-group full">
             <label>{{ 'parametres.logo' | translate }}</label>
             <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-              <div style="width:90px;height:90px;border:1px dashed #2a3f5f;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#0f1729;overflow:hidden">
+              <div style="width:90px;height:90px;border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);overflow:hidden">
                 @if (ecole()?.logo) {
                   <img [src]="ecole()!.logo" style="max-width:100%;max-height:100%;object-fit:contain" alt="logo" />
                 } @else {
-                  <span style="font-size:11px;color:#475569">{{ 'parametres.logo_aucun' | translate }}</span>
+                  <span style="font-size:11px;color:var(--text-5)">{{ 'parametres.logo_aucun' | translate }}</span>
                 }
               </div>
               <div style="display:flex;flex-direction:column;gap:6px">
                 <input type="file" accept="image/*" (change)="onLogoSelected($event)" />
-                <small style="color:#64748b;font-size:11px">{{ 'parametres.logo_aide' | translate }}</small>
+                <small style="color:var(--text-3);font-size:11px">{{ 'parametres.logo_aide' | translate }}</small>
                 @if (ecole()?.logo) {
                   <p-button [label]="'common.supprimer' | translate" severity="danger" size="small"
                             [outlined]="true" (onClick)="retirerLogo()" />
@@ -227,7 +235,7 @@ import { MessageService } from 'primeng/api';
         <p-button [label]="'parametres.ajouter_service' | translate" severity="success" size="small"
                   (onClick)="ouvrirDialogService()" />
       </div>
-      <p style="font-size:12px;color:#64748b;margin:4px 0 12px">{{ 'parametres.services_aide' | translate }}</p>
+      <p style="font-size:12px;color:var(--text-3);margin:4px 0 12px">{{ 'parametres.services_aide' | translate }}</p>
 
       <div class="sections-list">
         <div class="section-card" *ngFor="let sv of services()">
@@ -264,7 +272,7 @@ import { MessageService } from 'primeng/api';
                       (onClick)="supprimerService(sv)" />
           </div>
         </div>
-        <div *ngIf="services().length === 0" style="color:#64748b;font-size:13px;padding:8px">
+        <div *ngIf="services().length === 0" style="color:var(--text-3);font-size:13px;padding:8px">
           {{ 'parametres.services_vide' | translate }}
         </div>
       </div>
@@ -274,7 +282,7 @@ import { MessageService } from 'primeng/api';
     <div *ngIf="onglet() === 'certificat'">
       <div class="form-card">
         <div class="fc-title">📜 {{ 'parametres.cert_titre' | translate }}</div>
-        <p style="color:#94a3b8;font-size:12px;margin:0 0 14px">{{ 'parametres.cert_aide' | translate }}</p>
+        <p style="color:var(--text-2);font-size:12px;margin:0 0 14px">{{ 'parametres.cert_aide' | translate }}</p>
         <div class="form-grid">
           @for (k of certElements; track k) {
             <div class="form-group" style="flex-direction:row;align-items:center;gap:8px">
@@ -354,7 +362,7 @@ import { MessageService } from 'primeng/api';
     <div *ngIf="onglet() === 'sauvegarde'">
       <div class="form-card">
         <div class="fc-title">☁️ {{ 'sauvegarde.titre' | translate }}</div>
-        <p style="font-size:13px;color:#94a3b8;margin-bottom:16px">
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">
           {{ 'sauvegarde.explication' | translate }}
         </p>
 
@@ -428,20 +436,20 @@ import { MessageService } from 'primeng/api';
 
     <!-- Élèves -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
-      <div style="background:#0b0f1a;border:1px solid #2a3f5f;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{{ 'cloture.total_eleves' | translate }}</div>
-        <div style="font-size:20px;font-weight:700;color:#e8f0fe;font-family:monospace">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">{{ 'cloture.total_eleves' | translate }}</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text);font-family:monospace">
           {{ verification()!.stats.eleves_total }}
         </div>
       </div>
-      <div style="background:#0b0f1a;border:1px solid #2a3f5f;border-radius:8px;padding:12px"
-           [style.border-color]="verification()!.stats.eleves_impayes > 0 ? '#f59e0b' : '#2a3f5f'">
-        <div style="font-size:11px;color:#64748b;margin-bottom:4px">{{ 'cloture.eleves_impayes' | translate }}</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px"
+           [style.border-color]="verification()!.stats.eleves_impayes > 0 ? '#f59e0b' : 'var(--border)'">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:4px">{{ 'cloture.eleves_impayes' | translate }}</div>
         <div style="font-size:20px;font-weight:700;font-family:monospace"
              [style.color]="verification()!.stats.eleves_impayes > 0 ? '#f59e0b' : '#10b981'">
           {{ verification()!.stats.eleves_impayes }}
         </div>
-        <div style="font-size:11px;color:#64748b" *ngIf="verification()!.stats.eleves_impayes > 0">
+        <div style="font-size:11px;color:var(--text-3)" *ngIf="verification()!.stats.eleves_impayes > 0">
           {{ verification()!.stats.montant_impaye | number:'1.0-0' }} FCFA impayés
         </div>
       </div>
@@ -471,7 +479,7 @@ import { MessageService } from 'primeng/api';
 
     <!-- Option nouvel exercice -->
     <div class="option-row" *ngIf="verification()!.peut_cloturer">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#94a3b8">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-2)">
         <input type="checkbox" [(ngModel)]="creerSuivant" style="width:16px;height:16px">
         {{ 'parametres.creer_auto' | translate }}
       </label>
@@ -568,7 +576,7 @@ import { MessageService } from 'primeng/api';
         <label>{{ 'parametres.service_periode' | translate }}</label>
         <p-select appendTo="body" [options]="periodeUniqueOptions" [(ngModel)]="newService.mois_unique"
                   optionLabel="label" optionValue="value" styleClass="w-full" />
-        <small style="color:#64748b;font-size:10px">{{ 'parametres.service_periode_aide' | translate }}</small>
+        <small style="color:var(--text-3);font-size:10px">{{ 'parametres.service_periode_aide' | translate }}</small>
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="serviceDialogVisible=false" />
@@ -580,7 +588,7 @@ import { MessageService } from 'primeng/api';
     <!-- Dialog composition de l'inscription -->
     <p-dialog [header]="'🧩 ' + ('parametres.composition_titre' | translate) + (sectionCompo ? ' — ' + sectionCompo.nom : '')"
               [(visible)]="compositionDialogVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
-      <p style="font-size:12px;color:#64748b;margin:0 0 12px">{{ 'parametres.composition_aide' | translate }}</p>
+      <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.composition_aide' | translate }}</p>
       <div class="compo-row" *ngFor="let r of compoRows; let i = index">
         <input pInputText [(ngModel)]="r.libelle" class="w-full"
                [placeholder]="'parametres.element_libelle' | translate" />
@@ -606,8 +614,8 @@ import { MessageService } from 'primeng/api';
     <p-dialog [header]="'🔑 ' + ('parametres.changer_mdp_titre' | translate)" [(visible)]="mdpDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
       <div *ngIf="userSelectionne">
-        <div style="font-size:13px;color:#94a3b8;margin-bottom:16px">
-          {{ 'parametres.utilisateur_label' | translate }} : <strong style="color:#e8f0fe">{{ userSelectionne.nom }}</strong>
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:16px">
+          {{ 'parametres.utilisateur_label' | translate }} : <strong style="color:var(--text)">{{ userSelectionne.nom }}</strong>
         </div>
         <div class="form-group">
           <label>{{ 'parametres.nouveau_mdp' | translate }}</label>
@@ -624,65 +632,70 @@ import { MessageService } from 'primeng/api';
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .theme-switch { display:flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:5px 8px; }
+    .theme-lbl { font-size:12px; color:var(--text-3); margin-right:2px; }
+    .theme-opt { background:transparent; border:1px solid transparent; color:var(--text-2); border-radius:7px; padding:5px 10px; font-size:12px; cursor:pointer; transition:.15s; }
+    .theme-opt:hover { background:var(--surface-hover); }
+    .theme-opt.active { background:var(--surface-hover); border-color:var(--border); color:var(--text); font-weight:600; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
 
-    .tabs-bar { display:flex; gap:4px; margin-bottom:20px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
-    .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:13px; cursor:pointer; transition:all 0.15s; font-family:inherit; }
-    .tab-btn:hover  { background:#1a2235; color:#e8f0fe; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
+    .tabs-bar { display:flex; gap:4px; margin-bottom:20px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; }
+    .tab-btn { flex:1; padding:8px 12px; border:none; border-radius:7px; background:transparent; color:var(--text-3); font-size:13px; cursor:pointer; transition:all 0.15s; font-family:inherit; }
+    .tab-btn:hover  { background:var(--surface-hover); color:var(--text); }
+    .tab-btn.active { background:var(--surface); color:#00d4aa; font-weight:600; border:1px solid var(--border); }
 
-    .form-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:20px 24px; }
-    .cert-textarea { background:#0f1729; border:1px solid #2a3f5f; border-radius:6px; color:#e8f0fe;
+    .form-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; }
+    .cert-textarea { background:var(--surface-2); border:1px solid var(--border); border-radius:6px; color:var(--text);
                      padding:8px 10px; font-family:inherit; font-size:13px; resize:vertical; }
-    .fc-title  { font-size:14px; font-weight:600; color:#e8f0fe; margin-bottom:16px; }
+    .fc-title  { font-size:14px; font-weight:600; color:var(--text); margin-bottom:16px; }
 
     .form-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .form-group   { display:flex; flex-direction:column; gap:6px; }
     .form-group.full { grid-column:1/-1; }
-    .form-group label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
-    .form-input { background:#0b0f1a; border:1px solid #2a3f5f; border-radius:8px; padding:9px 14px; color:#e8f0fe; font-family:inherit; font-size:13px; outline:none; }
+    .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; }
+    .form-input { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 14px; color:var(--text); font-family:inherit; font-size:13px; outline:none; }
     .form-input:focus { border-color:#00d4aa; }
 
-    .form-actions { display:flex; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid #2a3f5f; }
+    .form-actions { display:flex; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
 
-    .total-tresorerie { display:flex; justify-content:space-between; align-items:center; background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:12px 16px; margin-top:16px; font-size:13px; color:#94a3b8; }
+    .total-tresorerie { display:flex; justify-content:space-between; align-items:center; background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:12px 16px; margin-top:16px; font-size:13px; color:var(--text-2); }
     .tt-val { font-size:18px; font-weight:700; color:#00d4aa; font-family:monospace; }
 
     .section-header-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 
     .sections-list { display:flex; flex-direction:column; gap:14px; }
-    .section-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:18px 20px; }
+    .section-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
     .sc-name { font-size:15px; font-weight:600; color:#00d4aa; margin-bottom:14px; }
     .sc-frais-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .sc-frais { display:flex; flex-direction:column; gap:6px; }
-    .sc-frais span { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
+    .sc-frais span { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; }
     .compo-link { font-size:11px; color:#00d4aa; cursor:pointer; user-select:none; }
     .compo-link:hover { text-decoration:underline; }
     .compo-row { display:grid; grid-template-columns:1fr 140px 40px; gap:8px; align-items:center; margin-bottom:8px; }
-    .compo-total { margin-top:14px; padding-top:10px; border-top:1px solid #2a3f5f; font-size:13px; color:#94a3b8; text-align:right; }
+    .compo-total { margin-top:14px; padding-top:10px; border-top:1px solid var(--border); font-size:13px; color:var(--text-2); text-align:right; }
     .sc-frais.total { grid-column:3/4; }
     .sc-total { font-size:16px; font-weight:700; color:#00d4aa; font-family:monospace; padding:8px 0; }
-    .sc-actions { display:flex; justify-content:flex-end; margin-top:14px; padding-top:12px; border-top:1px solid #2a3f5f; }
+    .sc-actions { display:flex; justify-content:flex-end; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
 
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
 
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
 
     .mono  { font-family:monospace; font-size:12px; }
-    .bold  { font-weight:600; color:#e8f0fe; }
-    .empty-msg { text-align:center; padding:40px; color:#64748b; }
+    .bold  { font-weight:600; color:var(--text); }
+    .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
 
     .alerte-rouge  { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:13px; color:#ef4444; margin-bottom:8px; }
     .alerte-orange { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:10px 14px; font-size:13px; color:#f59e0b; margin-bottom:8px; }
     .statut-cloture { border-radius:8px; padding:12px 16px; font-size:13px; font-weight:600; margin-bottom:16px; }
     .statut-cloture.ok     { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; }
     .statut-cloture.bloque { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444; }
-    .option-row { padding:12px 0; border-top:1px solid #2a3f5f; margin-bottom:12px; }
-    .kpi-mini { border:1px solid #2a3f5f; border-radius:8px; padding:12px; text-align:center; }
-    .km-label { font-size:10px; color:#64748b; text-transform:uppercase; margin-bottom:4px; }
+    .option-row { padding:12px 0; border-top:1px solid var(--border); margin-bottom:12px; }
+    .kpi-mini { border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+    .km-label { font-size:10px; color:var(--text-3); text-transform:uppercase; margin-bottom:4px; }
     .km-val   { font-weight:700; font-family:monospace; }
   `]
 })
@@ -762,6 +775,7 @@ export class ParametresComponent implements OnInit {
 
   private translate = inject(TranslateService);
   private appMode = inject(AppModeService);
+  theme = inject(ThemeService);
 
   estLocal = this.appMode.isLocal();
   sauvegarde        = signal<any>(null);

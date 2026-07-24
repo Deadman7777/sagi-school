@@ -367,36 +367,36 @@ import { ElevesService } from '../../../core/services/eleves.service';
   `,
   styles: [`
     .sub-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
-    .sub-tab { background:#1e2d45; color:#cbd5e1; border:1px solid #2a3f5f; border-radius:8px;
+    .sub-tab { background:var(--surface); color:var(--text-6); border:1px solid var(--border); border-radius:8px;
                padding:8px 14px; cursor:pointer; font-size:13px; }
     .sub-tab.active { background:#00d4aa; color:#06281f; border-color:#00d4aa; font-weight:600; }
-    .nongo-bar { background:#14321f; border:1px solid #1e5a3a; border-radius:8px; padding:8px 12px;
+    .nongo-bar { background:var(--pos-bg); border:1px solid #1e5a3a; border-radius:8px; padding:8px 12px;
                  margin-bottom:12px; color:#a7f3d0; font-size:13px; }
     .toolbar { margin-bottom:12px; }
     .actions { display:flex; gap:6px; }
     .link-btn { background:none; border:none; color:#7dd3fc; cursor:pointer; font-size:13px; padding:2px 4px; }
     .link-btn.danger { color:#fca5a5; }
-    .empty { text-align:center; color:#64748b; padding:18px; }
-    .card-form { background:#16233a; border:1px solid #2a3f5f; border-radius:10px; padding:16px; margin-bottom:16px; }
-    .card-form h4, h4 { color:#e8f0fe; margin:0 0 12px; font-size:14px; }
-    .idjie-hint { color:#94a3b8; font-size:12px; margin:-6px 0 12px; }
+    .empty { text-align:center; color:var(--text-3); padding:18px; }
+    .card-form { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:16px; }
+    .card-form h4, h4 { color:var(--text); margin:0 0 12px; font-size:14px; }
+    .idjie-hint { color:var(--text-2); font-size:12px; margin:-6px 0 12px; }
     .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
     .fg { display:flex; flex-direction:column; gap:4px; }
     .fg.full { grid-column:1 / -1; }
     .fg.sm { max-width:120px; }
     .fg.check { flex-direction:row; align-items:center; gap:8px; }
-    .fg label { font-size:12px; color:#94a3b8; }
+    .fg label { font-size:12px; color:var(--text-2); }
     .w-full { width:100%; }
-    .prog-head { display:flex; align-items:center; gap:24px; background:#16233a; border:1px solid #2a3f5f;
+    .prog-head { display:flex; align-items:center; gap:24px; background:var(--surface-2); border:1px solid var(--border);
                  border-radius:10px; padding:18px; margin-bottom:16px; flex-wrap:wrap; }
     .prog-pct { text-align:center; }
     .prog-pct .big { font-size:34px; font-weight:700; color:#00d4aa; }
-    .prog-pct .sub { font-size:12px; color:#94a3b8; }
-    .prog-info { color:#cbd5e1; font-size:13px; display:flex; flex-direction:column; gap:4px; }
-    .pos-actuelle { background:#14321f; border:1px solid #1e5a3a; border-radius:6px;
+    .prog-pct .sub { font-size:12px; color:var(--text-2); }
+    .prog-info { color:var(--text-6); font-size:13px; display:flex; flex-direction:column; gap:4px; }
+    .pos-actuelle { background:var(--pos-bg); border:1px solid #1e5a3a; border-radius:6px;
                     padding:6px 10px; color:#a7f3d0; margin-top:4px; }
-    .nbv { color:#94a3b8; font-size:12px; white-space:nowrap; }
-    .nbv-live { background:#1e2d45; border-radius:6px; padding:8px 10px; color:#7dd3fc;
+    .nbv { color:var(--text-2); font-size:12px; white-space:nowrap; }
+    .nbv-live { background:var(--surface); border-radius:6px; padding:8px 10px; color:#7dd3fc;
                 font-size:13px; justify-content:center; }
     .juz-grid { display:grid; grid-template-columns:repeat(10,1fr); gap:6px; }
     .juz-cell { border-radius:6px; padding:8px 4px; text-align:center; color:#06281f; font-size:11px;
@@ -627,7 +627,7 @@ export class MemorisationComponent implements OnInit {
   couleurJuz(pct: number): string {
     if (pct >= 100) return '#00d4aa';
     if (pct > 0)    return `rgba(0,212,170,${0.25 + 0.6 * pct / 100})`;
-    return '#1e2d45';
+    return 'var(--surface)';
   }
   exporterPdf() {
     const p = this.parcoursActif();

@@ -291,6 +291,9 @@
   },
   "parametres": {
     "title": "الإعدادات",
+    "theme": "السمة",
+    "theme_sombre": "داكن",
+    "theme_clair": "فاتح",
     "infos_ecole": "معلومات المدرسة",
     "exercice": "السنة الدراسية",
     "sections": "رسوم الأقسام",

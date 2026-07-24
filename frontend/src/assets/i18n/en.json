@@ -291,6 +291,9 @@
   },
   "parametres": {
     "title": "Settings",
+    "theme": "Theme",
+    "theme_sombre": "Dark",
+    "theme_clair": "Light",
     "infos_ecole": "School Info",
     "exercice": "School Year",
     "sections": "Section Fees",

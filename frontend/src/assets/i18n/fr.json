@@ -291,6 +291,9 @@
   },
   "parametres": {
     "title": "Paramètres",
+    "theme": "Thème",
+    "theme_sombre": "Sombre",
+    "theme_clair": "Clair",
     "infos_ecole": "Infos École",
     "exercice": "Exercice",
     "sections": "Frais Sections",

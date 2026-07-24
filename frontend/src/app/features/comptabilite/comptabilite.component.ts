@@ -114,7 +114,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     <div class="table-card" *ngIf="onglet() === 'journal'">
       <!-- Filtre source -->
       <div style="display:flex;gap:10px;padding:10px 16px 0;align-items:center">
-        <span style="font-size:11px;color:#64748b;text-transform:uppercase">Filtrer :</span>
+        <span style="font-size:11px;color:var(--text-3);text-transform:uppercase">Filtrer :</span>
         <button class="src-btn" [class.active]="filtreSource === ''"     (click)="filtrerJournal('')">Tout</button>
         <button class="src-btn paie" [class.active]="filtreSource === 'PAIE'"    (click)="filtrerJournal('PAIE')">💰 Paie</button>
         <button class="src-btn pmt"  [class.active]="filtreSource === 'PAIEMENT'" (click)="filtrerJournal('PAIEMENT')">🎓 Scolarité</button>
@@ -124,7 +124,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <button class="src-btn amt"  [class.active]="filtreSource === 'AMORT'"   (click)="filtrerJournal('AMORT')">📉 Amortissements</button>
         <button class="src-btn bgt"  [class.active]="filtreSource === 'BUDGET'"  (click)="filtrerJournal('BUDGET')">🎯 Budget mensuel</button>
         <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:#64748b">{{ journal().length }} écritures</span>
+          <span style="font-size:11px;color:var(--text-3)">{{ journal().length }} écritures</span>
           <button class="src-btn" (click)="chargerJournal()" style="border-color:#00d4aa;color:#00d4aa">↻ Actualiser</button>
         </span>
       </div>
@@ -154,7 +154,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
             <td class="mono">{{ e.date | date:'dd/MM/yyyy' }}</td>
             <td class="mono">{{ e.no_piece }}</td>
             <td class="mono bold">{{ e.no_compte }}</td>
-            <td style="font-size:11px;color:#64748b">{{ e.libelle_compte }}</td>
+            <td style="font-size:11px;color:var(--text-3)">{{ e.libelle_compte }}</td>
             <td style="font-size:11px">{{ e.libelle }}</td>
             <td class="mono success">{{ e.debit  > 0 ? (e.debit  | number:'1.0-0') : '—' }}</td>
             <td class="mono info">   {{ e.credit > 0 ? (e.credit | number:'1.0-0') : '—' }}</td>
@@ -200,9 +200,9 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       <tr>
         <th rowspan="2">N° Compte</th>
         <th rowspan="2">Libellé</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.so_ouverture'    | translate }}</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.mouvements'      | translate }}</th>
-        <th colspan="2" style="text-align:center;background:#1a2235">{{ 'comptabilite.solde_cloture_col'| translate }}</th>
+        <th colspan="2" style="text-align:center;background:var(--surface-hover)">{{ 'comptabilite.so_ouverture'    | translate }}</th>
+        <th colspan="2" style="text-align:center;background:var(--surface-hover)">{{ 'comptabilite.mouvements'      | translate }}</th>
+        <th colspan="2" style="text-align:center;background:var(--surface-hover)">{{ 'comptabilite.solde_cloture_col'| translate }}</th>
       </tr>
       <tr>
         <th>Débit</th><th>Crédit</th>
@@ -769,7 +769,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <div class="cr-row"><span>Nombre de paiements enregistrés</span><span class="mono">{{ notesAnnexes().note1.nb_paiements }}</span></div>
         <div class="cr-row"><span>CAHT de l'exercice</span><span class="mono success">{{ notesAnnexes().caht | number:'1.0-0' }} FCFA</span></div>
         <div class="cr-row"><span>Seuil SMT (services)</span><span class="mono">{{ notesAnnexes().seuil_smt | number:'1.0-0' }} FCFA</span></div>
-        <div style="margin-top:12px;font-size:11px;color:#64748b">Répartition par section :</div>
+        <div style="margin-top:12px;font-size:11px;color:var(--text-3)">Répartition par section :</div>
         <div class="cr-row" *ngFor="let s of notesAnnexes().note1.sections">
           <span style="padding-left:12px">└ {{ s.nom }}</span><span class="mono">{{ s.nb }} élèves</span>
         </div>
@@ -818,8 +818,8 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
   <div class="table-card" *ngIf="onglet() === 'plan'">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px">
       <div style="display:flex;gap:8px;align-items:center">
-        <span style="color:#e8f0fe;font-weight:600">Plan comptable SYSCOHADA Révisé</span>
-        <span style="font-size:11px;color:#64748b">({{ planComptable().length }} comptes)</span>
+        <span style="color:var(--text);font-weight:600">Plan comptable SYSCOHADA Révisé</span>
+        <span style="font-size:11px;color:var(--text-3)">({{ planComptable().length }} comptes)</span>
       </div>
       <div style="display:flex;gap:8px">
         <p-select appendTo="body" [options]="classesFiltres" [(ngModel)]="filtreClasse"
@@ -891,7 +891,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     <div class="budget-header">
       <div>
         <h3 class="budget-title">🎯 Budget Prévisionnel — {{ budget()?.exercice }}</h3>
-        <span style="font-size:12px;color:#64748b">Charges fixes et variables · Prévision vs Réalisé</span>
+        <span style="font-size:12px;color:var(--text-3)">Charges fixes et variables · Prévision vs Réalisé</span>
       </div>
       <p-button label="+ Ligne budget" severity="success" [disabled]="estLectureSeule()" (onClick)="ouvrirDialogBudget()" />
     </div>
@@ -924,8 +924,8 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     <!-- Comparaison mensuelle budgétisé / réalisé -->
     <div class="budget-mensuel-card" *ngIf="budget()?.mois_totaux?.length">
       <div class="bm-head">
-        <h4 style="margin:0;color:#e8f0fe">📅 Suivi mensuel — Budgétisé vs Réalisé</h4>
-        <span style="font-size:11px;color:#64748b">Toutes lignes confondues · l'écart négatif signale un dépassement</span>
+        <h4 style="margin:0;color:var(--text)">📅 Suivi mensuel — Budgétisé vs Réalisé</h4>
+        <span style="font-size:11px;color:var(--text-3)">Toutes lignes confondues · l'écart négatif signale un dépassement</span>
       </div>
       <div style="overflow-x:auto">
         <table class="budget-tbl bm-tbl">
@@ -1101,7 +1101,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
           <tr>
             <td class="mono bold">{{ i.no_bien }}</td>
             <td>{{ i.libelle }}
-              <div *ngIf="i.ressource_libelle || i.projet_libelle" style="font-size:10px;color:#64748b">
+              <div *ngIf="i.ressource_libelle || i.projet_libelle" style="font-size:10px;color:var(--text-3)">
                 💰 {{ i.mode_financement }}<span *ngIf="i.projet_libelle"> · 🎯 {{ i.projet_libelle }}</span>
               </div>
             </td>
@@ -1188,7 +1188,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       <div class="form-group full">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <label style="margin:0">Mode de règlement</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
             <input type="checkbox" [(ngModel)]="formImmo.multi_mode" (change)="onToggleMultiImmo()" />
             Multi-mode
           </label>
@@ -1215,7 +1215,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
           <button type="button" (click)="ajouterModeImmo()"
-                  style="background:transparent;border:1px dashed #2a3f5f;color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
+                  style="background:transparent;border:1px dashed var(--border);color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
           <span style="font-size:12px;font-family:monospace"
                 [style.color]="immoReste() === 0 ? '#00d4aa' : '#f59e0b'">
             Reste : {{ immoReste() | number:'1.0-0' }} FCFA
@@ -1227,7 +1227,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <p-select appendTo="body" [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
                   [(ngModel)]="formImmo.ressource_id" styleClass="w-full" [showClear]="true"
                   placeholder="— Fonds propres / trésorerie —" [filter]="true" />
-        <small style="color:#64748b;font-size:10px">Contrôle du disponible sur l'enveloppe</small>
+        <small style="color:var(--text-3);font-size:10px">Contrôle du disponible sur l'enveloppe</small>
       </div>
       <div class="form-group full" *ngIf="projetsGouv().length">
         <label>Projet (analytique)</label>
@@ -1236,13 +1236,13 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
                   placeholder="— Aucun —" [filter]="true" />
       </div>
       <div class="form-group full" *ngIf="formImmo.valeur_entree && formImmo.duree_utilisation">
-        <div style="background:#111827;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8">
+        <div style="background:var(--surface-2);border-radius:6px;padding:10px;font-size:11px;color:var(--text-2)">
           Taux : <strong style="color:#00d4aa">{{ (100 / formImmo.duree_utilisation) | number:'1.2-2' }} %</strong> &nbsp;|&nbsp;
           Annuité : <strong style="color:#00d4aa">{{ (formImmo.valeur_entree / formImmo.duree_utilisation) | number:'1.0-0' }} FCFA</strong>
         </div>
       </div>
       <div class="form-group full" *ngIf="formImmo.compte_fournisseur">
-        <div style="background:#0f2027;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8;border-left:3px solid #00745a">
+        <div style="background:var(--surface-2);border-radius:6px;padding:10px;font-size:11px;color:var(--text-2);border-left:3px solid #00745a">
           <strong style="color:#00d4aa">Écritures générées :</strong><br>
           <span>Débit {{ formImmo.no_compte_immobilisation }} / Crédit {{ formImmo.compte_fournisseur }} (constatation)</span>
           <span *ngIf="formImmo.mode_reglement">
@@ -1264,7 +1264,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     @if (immoAAmortir()) {
       <div class="employe-banner" style="margin-bottom:14px">
         <div class="eb-name">{{ immoAAmortir()!.no_bien }} — {{ immoAAmortir()!.libelle }}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:4px">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">
           VNC actuelle : <strong style="color:#10b981">{{ immoAAmortir()!.valeur_nette_comptable | number:'1.0-0' }} FCFA</strong>
         </div>
       </div>
@@ -1272,7 +1272,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <div class="form-group full">
           <label>Montant de la dotation (FCFA)</label>
           <p-inputNumber [(ngModel)]="formAmortir.montant" [min]="1" mode="decimal" styleClass="w-full" />
-          <span style="font-size:10px;color:#64748b">Annuité théorique : {{ immoAAmortir()!.annuite_amortissement | number:'1.0-0' }} FCFA</span>
+          <span style="font-size:10px;color:var(--text-3)">Annuité théorique : {{ immoAAmortir()!.annuite_amortissement | number:'1.0-0' }} FCFA</span>
         </div>
         <div class="form-group full">
           <label>Date d'écriture</label>
@@ -1293,7 +1293,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     @if (immoARegler()) {
       <div class="employe-banner" style="margin-bottom:14px">
         <div class="eb-name">{{ immoARegler()!.no_bien }} — {{ immoARegler()!.libelle }}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:4px">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">
           Reste dû : <strong style="color:#ef4444">{{ immoARegler()!.reste_a_regler | number:'1.0-0' }} FCFA</strong>
           &nbsp;·&nbsp; Fournisseur : <strong>{{ immoARegler()!.compte_fournisseur }}</strong>
         </div>
@@ -1303,7 +1303,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
           <label>Montant du règlement (FCFA)</label>
           <p-inputNumber [(ngModel)]="formRegler.montant" [min]="1" [max]="immoARegler()!.reste_a_regler"
                          mode="decimal" styleClass="w-full" />
-          <span style="font-size:10px;color:#64748b">Règlement partiel autorisé (plafonné au reste dû).</span>
+          <span style="font-size:10px;color:var(--text-3)">Règlement partiel autorisé (plafonné au reste dû).</span>
         </div>
         <div class="form-group">
           <label>Mode de règlement</label>
@@ -1320,7 +1320,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
           <input pInputText type="date" [(ngModel)]="formRegler.date" class="w-full" />
         </div>
         <div class="form-group full">
-          <div style="background:#0f2027;border-radius:6px;padding:10px;font-size:11px;color:#94a3b8;border-left:3px solid #00745a">
+          <div style="background:var(--surface-2);border-radius:6px;padding:10px;font-size:11px;color:var(--text-2);border-left:3px solid #00745a">
             <strong style="color:#00d4aa">Écriture générée :</strong><br>
             Débit {{ immoARegler()!.compte_fournisseur }} / Crédit {{ formRegler.compte_tresorerie }} (règlement)
           </div>
@@ -1350,7 +1350,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       @let lb = ligneAComptabiliser()!;
       <div class="employe-banner" style="margin-bottom:14px">
         <div class="eb-name">{{ lb.no_compte }} — {{ lb.libelle }}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:4px">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px">
           Prévu : <strong style="color:#0099ff">{{ lb.total_prevu | number:'1.0-0' }} FCFA</strong> ·
           Réalisé : <strong style="color:#10b981">{{ lb.total_realise | number:'1.0-0' }} FCFA</strong>
         </div>
@@ -1374,7 +1374,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
       </div>
-      <div style="background:#111827;border-radius:6px;padding:8px 12px;font-size:11px;color:#64748b;margin-top:10px">
+      <div style="background:var(--surface-2);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--text-3);margin-top:10px">
         Écritures générées : Débit {{ lb.no_compte }} / Crédit 401 (fournisseur) + Débit 401 / Crédit {{ formCompta.compte_credit }} (règlement)
       </div>
     }
@@ -1389,7 +1389,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
   <p-dialog [header]="'📜 Écritures — ' + (ligneEcritures()?.no_compte || '')"
             [(visible)]="dialogEcrituresVisible" [modal]="true" [style]="{width:'680px'}" [draggable]="false">
     @if (ligneEcritures(); as lb) {
-      <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:12px">
         {{ lb.libelle }} — les écritures comptabilisées depuis le budget.
         Modifier/annuler passe par des contre-écritures (conformité SYSCOHADA), la charge disparaît des listes.
       </div>
@@ -1426,7 +1426,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     @if (ecritureModifier) {
       <div class="form-grid">
         <div class="form-group full">
-          <div style="background:#1a1a2e;border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:#94a3b8">
+          <div style="background:var(--surface-4);border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:var(--text-2)">
             Original : <strong style="color:#f59e0b">{{ ecritureModifier.no_piece }}</strong> —
             {{ ecritureModifier.libelle }} · {{ ecritureModifier.montant | number:'1.0-0' }} FCFA
           </div>
@@ -1482,7 +1482,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <p-select appendTo="body" [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
                   [(ngModel)]="formBudget.projet_id" styleClass="w-full" [showClear]="true"
                   placeholder="— Budget général —" [filter]="true" />
-        <small style="color:#64748b;font-size:10px">Un même compte peut être budgété par projet ; le réalisé se compare par projet.</small>
+        <small style="color:var(--text-3);font-size:10px">Un même compte peut être budgété par projet ; le réalisé se compare par projet.</small>
       </div>
       <div class="form-group" *ngIf="ressourcesGouv().length">
         <label>Ressource de financement</label>
@@ -1494,7 +1494,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     <!-- Répartition mensuelle -->
     <div style="margin-top:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600">Montants mensuels (FCFA)</span>
+        <span style="font-size:11px;color:var(--text-3);text-transform:uppercase;font-weight:600">Montants mensuels (FCFA)</span>
         <p-button label="Répliquer Jan sur tous" severity="secondary" size="small" (onClick)="repliquerMontant()" />
       </div>
       <div class="mois-grid">
@@ -1513,78 +1513,78 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
-    .btn-export  { background:transparent; border:1px solid #2a3f5f; color:#94a3b8; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
+    .btn-export  { background:transparent; border:1px solid var(--border); color:var(--text-2); border-radius:8px; padding:7px 14px; cursor:pointer; font-size:13px; }
     .btn-export:hover { border-color:#00d4aa; color:#00d4aa; }
     .header-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
     .ex-selector { display:flex; align-items:center; gap:6px; }
-    .ex-selector label { font-size:12px; color:#94a3b8; }
-    .ex-selector select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
+    .ex-selector label { font-size:12px; color:var(--text-2); }
+    .ex-selector select { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13px; cursor:pointer; }
     .ex-selector select:hover { border-color:#00d4aa; }
     .readonly-banner { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:14px; }
 
     /* ── Onglets primaires ── */
-    .tabs-bar { display:flex; gap:3px; margin-bottom:8px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; scrollbar-color:#2a3f5f transparent; }
+    .tabs-bar { display:flex; gap:3px; margin-bottom:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
     .tabs-bar::-webkit-scrollbar { height:3px; }
-    .tabs-bar::-webkit-scrollbar-thumb { background:#2a3f5f; border-radius:2px; }
-    .tab-btn { flex-shrink:0; padding:7px 13px; border:1px solid transparent; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
-    .tab-btn:hover  { background:#1a2235; color:#e8f0fe; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border-color:#2a3f5f; }
-    .tab-etafi .etafi-count { display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; min-width:16px; height:16px; padding:0 4px; background:#2a3f5f; color:#94a3b8; border-radius:8px; transition:all 0.15s; }
-    .tab-etafi.active .etafi-count { background:#00d4aa; color:#0b0f1a; }
+    .tabs-bar::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+    .tab-btn { flex-shrink:0; padding:7px 13px; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--text-3); font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+    .tab-btn:hover  { background:var(--surface-hover); color:var(--text); }
+    .tab-btn.active { background:var(--surface); color:#00d4aa; font-weight:600; border-color:var(--border); }
+    .tab-etafi .etafi-count { display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; min-width:16px; height:16px; padding:0 4px; background:var(--border); color:var(--text-2); border-radius:8px; transition:all 0.15s; }
+    .tab-etafi.active .etafi-count { background:#00d4aa; color:var(--bg); }
 
     /* ── Sous-barre ETAFI ── */
     .etafi-bar { display:flex; align-items:center; gap:14px; background:linear-gradient(135deg,#0d1829,#12233d); border:1px solid rgba(0,212,170,0.25); border-radius:10px; padding:9px 16px; margin-bottom:16px; flex-wrap:wrap; }
     .etafi-bar-label { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:1.5px; white-space:nowrap; flex-shrink:0; border-right:1px solid rgba(0,212,170,0.2); padding-right:14px; }
     .etafi-sub-tabs { display:flex; gap:5px; flex-wrap:wrap; }
-    .etafi-btn { padding:5px 13px; border:1px solid #2a3f5f; border-radius:6px; background:transparent; color:#94a3b8; font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
-    .etafi-btn:hover  { background:rgba(0,212,170,0.05); color:#e8f0fe; border-color:rgba(0,212,170,0.3); }
+    .etafi-btn { padding:5px 13px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text-2); font-size:12px; cursor:pointer; transition:all 0.15s; font-family:inherit; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; }
+    .etafi-btn:hover  { background:rgba(0,212,170,0.05); color:var(--text); border-color:rgba(0,212,170,0.3); }
     .etafi-btn.active { background:rgba(0,212,170,0.12); color:#00d4aa; border-color:#00d4aa; font-weight:600; }
 
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
-    .totaux-row td { background:#111827 !important; color:#e8f0fe !important; border-top:2px solid #2a3f5f !important; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .totaux-row td { background:var(--surface-2) !important; color:var(--text) !important; border-top:2px solid var(--border) !important; }
 
     .mono    { font-family:monospace; font-size:12px; }
-    .bold    { font-weight:600; color:#e8f0fe; }
+    .bold    { font-weight:600; color:var(--text); }
     .success { color:#10b981; }
     .info    { color:#0099ff; }
     .danger  { color:#ef4444; }
-    .empty-msg { color:#64748b; }
+    .empty-msg { color:var(--text-3); }
     .text-right  { text-align:right !important; }
     .text-center { text-align:center !important; }
 
     .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-    .card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:14px; }
-    .card-header { padding:12px 18px; border-bottom:1px solid #2a3f5f; font-size:13px; font-weight:600; color:#e8f0fe; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:14px; }
+    .card-header { padding:12px 18px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text); }
     .card-body   { padding:16px 18px; }
 
     .cr-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:13px; }
-    .cr-row span:first-child { color:#94a3b8; }
-    .cr-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:700; font-size:13px; color:#e8f0fe; border-top:2px solid #2a3f5f; margin-top:4px; }
-    .bold-row span { font-weight:600 !important; color:#e8f0fe !important; }
+    .cr-row span:first-child { color:var(--text-2); }
+    .cr-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:700; font-size:13px; color:var(--text); border-top:2px solid var(--border); margin-top:4px; }
+    .bold-row span { font-weight:600 !important; color:var(--text) !important; }
 
-    .resultat-net { display:flex; justify-content:space-between; align-items:center; border:2px solid; border-radius:12px; padding:16px 24px; font-size:16px; font-weight:700; color:#e8f0fe; }
+    .resultat-net { display:flex; justify-content:space-between; align-items:center; border:2px solid; border-radius:12px; padding:16px 24px; font-size:16px; font-weight:700; color:var(--text); }
     .resultat-net .mono { font-size:24px; }
 
-    .bilan-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-size:13px; font-weight:600; color:#e8f0fe; }
+    .bilan-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; font-size:13px; font-weight:600; color:var(--text); }
     .equilibre-badge { font-size:12px; padding:4px 12px; border-radius:20px; background:rgba(16,185,129,0.15); color:#10b981; }
     .bilan-section        { font-size:11px; color:#00d4aa; text-transform:uppercase; letter-spacing:1px; margin:14px 0 4px; font-weight:600; border-bottom:1px solid rgba(0,212,170,0.2); padding-bottom:4px; }
-    .bilan-subsection     { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin:8px 0 2px; }
-    .bilan-total-masse    { display:flex; justify-content:space-between; padding:6px 0; font-size:12px; font-weight:700; color:#e8f0fe; background:rgba(0,0,0,0.15); margin:2px -18px; padding:6px 18px; }
-    .italic-row span:first-child { font-style:italic; color:#475569; }
+    .bilan-subsection     { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.5px; margin:8px 0 2px; }
+    .bilan-total-masse    { display:flex; justify-content:space-between; padding:6px 0; font-size:12px; font-weight:700; color:var(--text); background:rgba(0,0,0,0.15); margin:2px -18px; padding:6px 18px; }
+    .italic-row span:first-child { font-style:italic; color:var(--text-5); }
     ::ng-deep .synthetic-row td { background:rgba(0,212,170,0.06) !important; border-top:1px solid rgba(0,212,170,0.25) !important; }
-    .systeme-badge   { display:inline-block; font-size:11px; padding:4px 12px; border-radius:20px; background:rgba(100,116,139,0.2); color:#64748b; }
+    .systeme-badge   { display:inline-block; font-size:11px; padding:4px 12px; border-radius:20px; background:rgba(100,116,139,0.2); color:var(--text-3); }
     .systeme-badge.sn { background:rgba(0,212,170,0.15); color:#00d4aa; }
-    .sig-row      { display:flex; justify-content:space-between; padding:5px 0; font-size:12px; color:#94a3b8; border-bottom:1px solid rgba(42,63,95,0.2); }
-    .sig-label    { color:#94a3b8; padding-left:16px; }
-    .sig-subtotal { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; font-weight:700; color:#e8f0fe; border-top:1px solid #2a3f5f; margin-top:4px; }
+    .sig-row      { display:flex; justify-content:space-between; padding:5px 0; font-size:12px; color:var(--text-2); border-bottom:1px solid rgba(42,63,95,0.2); }
+    .sig-label    { color:var(--text-2); padding-left:16px; }
+    .sig-subtotal { display:flex; justify-content:space-between; padding:8px 0; font-size:13px; font-weight:700; color:var(--text); border-top:1px solid var(--border); margin-top:4px; }
 
-    .flux-header { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600; color:#0099ff; margin-bottom:14px; }
-    .flux-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:700; font-size:13px; border-top:2px solid #2a3f5f; margin-top:4px; }
+    .flux-header { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-size:13px; font-weight:600; color:#0099ff; margin-bottom:14px; }
+    .flux-total { display:flex; justify-content:space-between; padding:10px 0 0; font-weight:700; font-size:13px; border-top:2px solid var(--border); margin-top:4px; }
 
-    .tresorerie-box { background:#0f1a2e; border:2px solid #00d4aa; border-radius:12px; padding:18px 20px; margin-bottom:16px; }
-    .tb-row   { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(0,212,170,0.15); font-size:13px; color:#94a3b8; }
+    .tresorerie-box { background:var(--surface-3); border:2px solid #00d4aa; border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+    .tb-row   { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(0,212,170,0.15); font-size:13px; color:var(--text-2); }
     .tb-final { display:flex; justify-content:space-between; padding:12px 0 0; font-size:16px; font-weight:700; color:#00d4aa; }
     .tb-final .mono { font-size:20px; }
 
@@ -1592,66 +1592,66 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     .bm-item  { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end; }
     .bm-bar-wrap { width:100%; flex:1; display:flex; align-items:flex-end; }
     .bm-bar   { width:100%; background:linear-gradient(to top,#00d4aa,#0099ff); border-radius:4px 4px 0 0; min-height:4px; }
-    .bm-label { font-size:10px; color:#64748b; }
-    .bm-val   { font-size:9px; color:#94a3b8; font-family:monospace; }
+    .bm-label { font-size:10px; color:var(--text-3); }
+    .bm-val   { font-size:9px; color:var(--text-2); font-family:monospace; }
 
     .exercice-actif { background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.3); border-radius:10px; padding:16px 20px; margin-bottom:16px; display:flex; align-items:center; gap:16px; }
     .ea-badge  { font-size:11px; padding:3px 10px; border-radius:20px; background:rgba(0,212,170,0.15); color:#00d4aa; flex-shrink:0; }
-    .ea-annee  { font-size:16px; font-weight:700; color:#e8f0fe; }
-    .ea-dates  { font-size:12px; color:#64748b; font-family:monospace; margin-left:auto; }
-    .section-title-hist { font-size:14px; font-weight:600; color:#e8f0fe; margin-bottom:12px; }
-    .src-btn { border:1px solid #2a3f5f; border-radius:6px; background:transparent; color:#64748b; font-size:11px; padding:4px 10px; cursor:pointer; }
-    .src-btn.active, .src-btn:hover { background:#1e2d45; color:#e8f0fe; }
+    .ea-annee  { font-size:16px; font-weight:700; color:var(--text); }
+    .ea-dates  { font-size:12px; color:var(--text-3); font-family:monospace; margin-left:auto; }
+    .section-title-hist { font-size:14px; font-weight:600; color:var(--text); margin-bottom:12px; }
+    .src-btn { border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text-3); font-size:11px; padding:4px 10px; cursor:pointer; }
+    .src-btn.active, .src-btn:hover { background:var(--surface); color:var(--text); }
     .src-btn.paie.active  { color:#38bdf8; border-color:#38bdf8; }
     .src-btn.pmt.active   { color:#10b981; border-color:#10b981; }
-    .src-btn.chg.active   { color:#94a3b8; border-color:#94a3b8; }
+    .src-btn.chg.active   { color:var(--text-2); border-color:var(--text-2); }
     .src-btn.ava.active   { color:#f59e0b; border-color:#f59e0b; }
     .src-btn.inv.active   { color:#7c3aed; border-color:#7c3aed; }
     .src-btn.amt.active   { color:#ef4444; border-color:#ef4444; }
     .src-btn.bgt.active   { color:#00d4aa; border-color:#00d4aa; }
     /* Plan comptable */
     .compte-inactif td   { opacity:0.45; }
-    .classe-header-row   { background:#0b1220 !important; }
+    .classe-header-row   { background:var(--surface-2) !important; }
     .classe-header-row td{ padding:8px 10px !important; border-bottom:2px solid #00d4aa !important; }
-    .classe-badge  { display:inline-block; background:#00d4aa; color:#0b0f1a; font-weight:900;
+    .classe-badge  { display:inline-block; background:#00d4aa; color:var(--bg); font-weight:900;
                      font-size:12px; width:22px; height:22px; line-height:22px; text-align:center;
                      border-radius:4px; margin-right:10px; }
-    .compte-parent td { color:#e8f0fe !important; font-weight:600; }
-    .compte-niveau1 td{ color:#94a3b8 !important; }
-    .compte-niveau2 td{ color:#64748b !important; font-size:11px; }
+    .compte-parent td { color:var(--text) !important; font-weight:600; }
+    .compte-niveau1 td{ color:var(--text-2) !important; }
+    .compte-niveau2 td{ color:var(--text-3) !important; font-size:11px; }
     .badge-sys    { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; }
     .badge-custom { font-size:10px; color:#00d4aa; margin-left:4px; }
     .text-center  { text-align:center; }
     /* Budget */
-    .budget-card   { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:20px; }
+    .budget-card   { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
     .budget-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .budget-title  { font-size:16px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
+    .budget-title  { font-size:16px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .budget-table-wrap { overflow-x:auto; margin-top:14px; }
     .budget-tbl    { width:100%; border-collapse:collapse; font-size:11px; }
-    .budget-tbl th { background:#111827; color:#64748b; font-size:10px; text-transform:uppercase; padding:6px 8px; text-align:left; white-space:nowrap; border-bottom:2px solid #2a3f5f; }
-    .budget-tbl td { padding:5px 8px; border-bottom:1px solid rgba(42,63,95,0.3); color:#94a3b8; vertical-align:middle; }
+    .budget-tbl th { background:var(--surface-2); color:var(--text-3); font-size:10px; text-transform:uppercase; padding:6px 8px; text-align:left; white-space:nowrap; border-bottom:2px solid var(--border); }
+    .budget-tbl td { padding:5px 8px; border-bottom:1px solid rgba(42,63,95,0.3); color:var(--text-2); vertical-align:middle; }
     .mois-col      { width:70px; text-align:right; }
     .total-col     { width:90px; text-align:right; font-weight:700; }
     .realise-col   { color:#00d4aa; }
     .pct-col       { width:60px; text-align:center; }
     .mois-cell     { text-align:right; }
-    .prevu-val     { display:block; color:#e8f0fe; }
+    .prevu-val     { display:block; color:var(--text); }
     .realise-small { display:block; font-size:9px; color:#00d4aa; }
-    .total-prevu   { color:#e8f0fe; }
+    .total-prevu   { color:var(--text); }
     .over-budget   { color:#ef4444; }
     /* Comparaison mensuelle budget */
-    .budget-mensuel-card { background:#16213e; border:1px solid #2a3f5f; border-radius:10px; padding:14px 16px; margin-bottom:16px; }
+    .budget-mensuel-card { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:16px; }
     .bm-head       { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
     .bm-tbl .num   { text-align:right; }
     .bm-tbl th.num { text-align:right; }
-    .bm-total td   { border-top:2px solid #2a3f5f; color:#e8f0fe; }
-    .bm-bar        { height:8px; background:#111827; border-radius:4px; overflow:hidden; }
+    .bm-total td   { border-top:2px solid var(--border); color:var(--text); }
+    .bm-bar        { height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
     .bm-fill       { height:100%; background:#00d4aa; border-radius:4px; transition:width .3s; }
     .bm-fill.bm-over { background:#ef4444; }
     .ligne-depasse { background:rgba(239,68,68,0.04); }
     .mois-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
     .mois-input-cell { display:flex; flex-direction:column; gap:4px; }
-    .mois-input-cell label { font-size:10px; color:#64748b; text-align:center; }
+    .mois-input-cell label { font-size:10px; color:var(--text-3); text-align:center; }
     .mois-inp { width:100%; }
     .btn-row { display:flex; gap:4px; }
   `]

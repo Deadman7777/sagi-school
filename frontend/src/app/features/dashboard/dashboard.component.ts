@@ -88,7 +88,7 @@ import { ApiService } from '../../core/services/api.service';
           <div class="empty-sa">
             <div style="font-size:32px">✅</div>
             <div style="color:#10b981;margin-top:8px;font-weight:600">{{ 'dashboard.aucune_danger' | translate }}</div>
-            <div style="color:#64748b;font-size:12px">{{ 'dashboard.toutes_regle' | translate }}</div>
+            <div style="color:var(--text-3);font-size:12px">{{ 'dashboard.toutes_regle' | translate }}</div>
           </div>
         }
       } @else {
@@ -250,11 +250,11 @@ import { ApiService } from '../../core/services/api.service';
               <div class="card-body" style="padding:0">
                 <table style="width:100%;border-collapse:collapse;font-size:11px">
                   <thead>
-                    <tr style="background:#111827">
-                      <th style="padding:6px 12px;color:#64748b;text-align:left;font-weight:500">Canal</th>
-                      <th style="padding:6px 8px;color:#64748b;text-align:right">Encaissements</th>
-                      <th style="padding:6px 8px;color:#64748b;text-align:right">Décaissements</th>
-                      <th style="padding:6px 12px;color:#64748b;text-align:right">Solde</th>
+                    <tr style="background:var(--surface-2)">
+                      <th style="padding:6px 12px;color:var(--text-3);text-align:left;font-weight:500">Canal</th>
+                      <th style="padding:6px 8px;color:var(--text-3);text-align:right">Encaissements</th>
+                      <th style="padding:6px 8px;color:var(--text-3);text-align:right">Décaissements</th>
+                      <th style="padding:6px 12px;color:var(--text-3);text-align:right">Solde</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -262,12 +262,12 @@ import { ApiService } from '../../core/services/api.service';
                       <tr style="border-bottom:1px solid rgba(42,63,95,0.4)">
                         <td style="padding:8px 12px">
                           <span style="margin-right:6px">{{ canalIcon(c.canal) }}</span>
-                          <span style="color:#e8f0fe;font-weight:500">{{ c.libelle }}</span>
+                          <span style="color:var(--text);font-weight:500">{{ c.libelle }}</span>
                           @if (c.nb > 0) {
-                            <span style="color:#64748b;font-size:10px;margin-left:6px">{{ c.nb }} op.</span>
+                            <span style="color:var(--text-3);font-size:10px;margin-left:6px">{{ c.nb }} op.</span>
                           }
                           @if (c.solde_initial > 0) {
-                            <div style="color:#64748b;font-size:10px;margin-top:2px">
+                            <div style="color:var(--text-3);font-size:10px;margin-top:2px">
                               Init : {{ c.solde_initial | number:'1.0-0' }}
                             </div>
                           }
@@ -286,8 +286,8 @@ import { ApiService } from '../../core/services/api.service';
                     }
                   </tbody>
                   <tfoot>
-                    <tr style="background:#111827;border-top:2px solid #2a3f5f">
-                      <td style="padding:8px 12px;color:#94a3b8;font-weight:600;font-size:11px">TOTAL</td>
+                    <tr style="background:var(--surface-2);border-top:2px solid var(--border)">
+                      <td style="padding:8px 12px;color:var(--text-2);font-weight:600;font-size:11px">TOTAL</td>
                       <td style="padding:8px;text-align:right;color:#10b981;font-family:monospace;font-weight:700">
                         {{ tc.totaux.encaissements | number:'1.0-0' }}
                       </td>
@@ -301,14 +301,14 @@ import { ApiService } from '../../core/services/api.service';
                     </tr>
                   </tfoot>
                 </table>
-                <div style="padding:8px 12px;font-size:10px;color:#64748b;border-top:1px solid #2a3f5f">
-                  Solde initial global : <strong style="color:#94a3b8">{{ tc.totaux.solde_initial | number:'1.0-0' }} FCFA</strong>
+                <div style="padding:8px 12px;font-size:10px;color:var(--text-3);border-top:1px solid var(--border)">
+                  Solde initial global : <strong style="color:var(--text-2)">{{ tc.totaux.solde_initial | number:'1.0-0' }} FCFA</strong>
                   &nbsp;·&nbsp; Exercice {{ tc.exercice }}
                 </div>
               </div>
             } @else {
               <div class="card-body">
-                <div class="empty-msg" style="padding:20px;text-align:center;color:#64748b;font-size:12px">
+                <div class="empty-msg" style="padding:20px;text-align:center;color:var(--text-3);font-size:12px">
                   Chargement...
                 </div>
               </div>
@@ -337,9 +337,9 @@ import { ApiService } from '../../core/services/api.service';
                            [severity]="e.action === 'DELETE' || e.action === 'ANNULER' ? 'danger' : e.action === 'VALIDATE' ? 'success' : 'info'"
                            [style]="{'font-size':'10px'}" />
                   </td>
-                  <td style="font-size:11px; color:#94a3b8">{{ e.modele }}</td>
+                  <td style="font-size:11px; color:var(--text-2)">{{ e.modele }}</td>
                   <td style="font-size:11px">{{ e.utilisateur }}</td>
-                  <td style="font-size:11px; color:#64748b">{{ e.description }}</td>
+                  <td style="font-size:11px; color:var(--text-3)">{{ e.description }}</td>
                 </tr>
               </ng-template>
             </p-table>
@@ -400,64 +400,64 @@ import { ApiService } from '../../core/services/api.service';
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
 
     .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
     .exercice-bar { background:rgba(0,153,255,0.1); border:1px solid rgba(0,153,255,0.2); border-radius:8px; padding:8px 16px; font-size:12px; color:#0099ff; }
-    .kpi-card { background:#1e2d45; border:1px solid #2a3f5f; border-top:2px solid var(--acc,#00d4aa); border-radius:12px; padding:18px 20px; position:relative; animation:fadeIn 0.3s ease; }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-top:2px solid var(--acc,#00d4aa); border-radius:12px; padding:18px 20px; position:relative; animation:fadeIn 0.3s ease; }
     @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
     .kpi-icon  { position:absolute; top:14px; right:14px; font-size:22px; opacity:.2; }
-    .kpi-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+    .kpi-label { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
     .kpi-value { font-size:26px; font-weight:700; font-family:monospace; }
-    .kpi-sub   { font-size:11px; color:#64748b; margin-top:4px; }
+    .kpi-sub   { font-size:11px; color:var(--text-3); margin-top:4px; }
 
-    .info-banner { background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:10px 16px; font-size:13px; color:#94a3b8; margin-bottom:16px; }
+    .info-banner { background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:10px 16px; font-size:13px; color:var(--text-2); margin-bottom:16px; }
     .info-banner strong { color:#00d4aa; }
 
     .empty-sa { text-align:center; padding:40px; }
 
     .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-    .card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:16px; }
-    .card-header { padding:12px 18px; border-bottom:1px solid #2a3f5f; font-size:13px; font-weight:600; color:#e8f0fe; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px; }
+    .card-header { padding:12px 18px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text); }
     .card-body   { padding:16px 18px; }
 
-    .alerte-legende { padding:12px 18px; border-bottom:1px solid #2a3f5f; background:#172338; font-size:12px; color:#94a3b8; }
+    .alerte-legende { padding:12px 18px; border-bottom:1px solid var(--border); background:var(--surface-2); font-size:12px; color:var(--text-2); }
     .alerte-legende .al-intro { margin-bottom:8px; }
     .alerte-legende .al-tags  { display:flex; flex-wrap:wrap; gap:18px; margin-bottom:8px; }
     .alerte-legende .al-tags span { display:inline-flex; align-items:center; gap:6px; }
-    .alerte-legende .al-note  { color:#64748b; font-style:italic; }
+    .alerte-legende .al-note  { color:var(--text-3); font-style:italic; }
 
     .alert-row { display:flex; align-items:center; gap:16px; padding:10px 0; border-bottom:1px solid rgba(42,63,95,0.4); }
     .alert-num  { font-size:32px; font-weight:700; font-family:monospace; min-width:48px; }
     .alert-title { font-size:13px; font-weight:600; }
-    .alert-sub   { font-size:11px; color:#64748b; }
+    .alert-sub   { font-size:11px; color:var(--text-3); }
     .critique .alert-num { color:#dc2626; }
     .urgent   .alert-num { color:#ef4444; }
     .attention .alert-num { color:#f59e0b; }
     .reliquat .alert-num { color:#0099ff; }
     .ok        .alert-num { color:#10b981; }
-    .total-eleves { font-size:12px; color:#64748b; margin-top:12px; padding-top:8px; border-top:1px solid #2a3f5f; }
+    .total-eleves { font-size:12px; color:var(--text-3); margin-top:12px; padding-top:8px; border-top:1px solid var(--border); }
 
-    .conseil-mini { border-left:3px solid #0099ff; padding:6px 10px; margin-bottom:8px; background:#172338; border-radius:0 6px 6px 0; }
+    .conseil-mini { border-left:3px solid #0099ff; padding:6px 10px; margin-bottom:8px; background:var(--surface-2); border-radius:0 6px 6px 0; }
     .conseil-mini.attention { border-left-color:#f59e0b; }
     .conseil-mini.urgent    { border-left-color:#ef4444; }
-    .cm-titre  { font-size:12px; font-weight:600; color:#e8f0fe; }
-    .cm-detail { font-size:11px; color:#94a3b8; line-height:1.5; }
+    .cm-titre  { font-size:12px; font-weight:600; color:var(--text); }
+    .cm-detail { font-size:11px; color:var(--text-2); line-height:1.5; }
 
     .mode-row   { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
     .mode-info  { display:flex; flex-direction:column; gap:2px; }
-    .mode-name  { font-size:13px; font-weight:500; color:#e8f0fe; }
-    .mode-nb    { font-size:11px; color:#64748b; }
+    .mode-name  { font-size:13px; font-weight:500; color:var(--text); }
+    .mode-nb    { font-size:11px; color:var(--text-3); }
     .mode-total { font-family:monospace; font-size:13px; color:#00d4aa; }
 
     .mono   { font-family:monospace; font-size:12px; }
-    .bold   { font-weight:600; color:#e8f0fe; }
+    .bold   { font-weight:600; color:var(--text); }
     .danger { color:#ef4444; }
 
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
   `]
 })
 export class DashboardComponent implements OnInit {

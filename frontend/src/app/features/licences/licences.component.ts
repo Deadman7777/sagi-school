@@ -381,19 +381,19 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
 
     .kpi-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:20px; }
     .kpi-card {
-      background:#1e2d45; border:1px solid #2a3f5f;
+      background:var(--surface); border:1px solid var(--border);
       border-top:2px solid var(--acc,#00d4aa);
       border-radius:10px; padding:14px 16px; position:relative;
     }
     .kpi-icon  { position:absolute; top:10px; right:10px; font-size:18px; opacity:.2; }
-    .kpi-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .kpi-label { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .kpi-value { font-size:22px; font-weight:700; font-family:monospace; }
-    .kpi-sub   { font-size:10px; color:#64748b; }
+    .kpi-sub   { font-size:10px; color:var(--text-3); }
 
     .alerte-expiration {
       background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3);
@@ -401,34 +401,34 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     }
     .ae-title { font-size:13px; font-weight:600; color:#f59e0b; margin-bottom:10px; }
     .ae-row   { display:flex; align-items:center; gap:16px; padding:6px 0; border-bottom:1px solid rgba(245,158,11,0.1); font-size:12px; }
-    .ae-ecole { flex:1; font-weight:600; color:#e8f0fe; }
-    .ae-type  { color:#64748b; }
+    .ae-ecole { flex:1; font-weight:600; color:var(--text); }
+    .ae-type  { color:var(--text-3); }
     .ae-jours { font-weight:700; font-family:monospace; }
-    .ae-date  { color:#64748b; font-family:monospace; }
+    .ae-date  { color:var(--text-3); font-family:monospace; }
 
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
 
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
 
     .mono { font-family:monospace; font-size:12px; }
-    .bold { font-weight:600; color:#e8f0fe; }
+    .bold { font-weight:600; color:var(--text); }
     .cle  { font-size:11px; color:#f0c040; letter-spacing:1px; }
-    .empty-msg { text-align:center; padding:40px; color:#64748b; }
+    .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
 
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:6px; }
     .form-group.full { grid-column:1/-1; }
-    .form-group label { font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
-    .separator { grid-column:1/-1; font-size:12px; font-weight:600; color:#00d4aa; padding:8px 0 4px; border-top:1px solid #2a3f5f; margin-top:4px; }
+    .form-group label { font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; }
+    .separator { grid-column:1/-1; font-size:12px; font-weight:600; color:#00d4aa; padding:8px 0 4px; border-top:1px solid var(--border); margin-top:4px; }
 
     .tarif-bar { display:flex; justify-content:space-between; align-items:center; background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:10px 16px; margin-top:14px; }
     .tarif-val { font-size:18px; font-weight:700; color:#00d4aa; font-family:monospace; }
 
-    .renouv-info { background:#0b0f1a; border-radius:8px; padding:12px; }
-    .ri-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid #1e2d45; }
-    .ri-row span:first-child { color:#64748b; }
+    .renouv-info { background:var(--bg); border-radius:8px; padding:12px; }
+    .ri-row { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid var(--surface); }
+    .ri-row span:first-child { color:var(--text-3); }
   `]
 })
 export class LicencesComponent implements OnInit {

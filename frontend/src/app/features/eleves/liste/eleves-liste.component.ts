@@ -300,7 +300,7 @@ interface PecForm {
                   <p-tag [value]="typePecLabel(e.type_pec)"
                          [severity]="typePecSeverity(e.type_pec)" />
                 } @else {
-                  <span style="color:#64748b;font-size:11px">—</span>
+                  <span style="color:var(--text-3);font-size:11px">—</span>
                 }
               </td>
               <td class="mono text-right">
@@ -404,7 +404,7 @@ interface PecForm {
             <div class="fiche-title">Situation financière</div>
             @if (e.montant_pec_annuel > 0) {
               <div class="fiche-row"><span>Total théorique</span>
-                <strong class="mono" style="color:#64748b">{{ e.total_theorique | number:'1.0-0' }} FCFA</strong></div>
+                <strong class="mono" style="color:var(--text-3)">{{ e.total_theorique | number:'1.0-0' }} FCFA</strong></div>
               <div class="fiche-row"><span>Prise en charge</span>
                 <strong class="mono" style="color:#ef4444">- {{ e.montant_pec_annuel | number:'1.0-0' }} FCFA</strong></div>
             }
@@ -438,7 +438,7 @@ interface PecForm {
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
       @if (eleveSelectionne()) {
         <div style="margin-bottom:14px">
-          <strong style="color:#e8f0fe">{{ eleveSelectionne()!.nom_complet }}</strong>
+          <strong style="color:var(--text)">{{ eleveSelectionne()!.nom_complet }}</strong>
         </div>
         <div class="form-group">
           <label>Nouveau statut</label>
@@ -585,7 +585,7 @@ interface PecForm {
             <input type="checkbox" [(ngModel)]="jourInconnu" (ngModelChange)="onJourInconnuChange()" />
             {{ 'eleves.jour_inconnu' | translate }}
           </label>
-          <small style="color:#64748b;font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
+          <small style="color:var(--text-3);font-size:10px">{{ 'eleves.date_entree_aide' | translate }}</small>
         </div>
         <!-- Daara : type de ndongo (permanent = exercice / passager = durée en mois) -->
         @if (estDaara()) {
@@ -599,7 +599,7 @@ interface PecForm {
               <label>{{ 'eleves.nb_mois' | translate }} *</label>
               <p-inputNumber [(ngModel)]="nouvelEleve.nb_mois_passager" [min]="1" [max]="36"
                              [showButtons]="true" styleClass="w-full" inputStyleClass="w-full" />
-              <small style="color:#64748b;font-size:10px">{{ 'eleves.nb_mois_aide' | translate }}</small>
+              <small style="color:var(--text-3);font-size:10px">{{ 'eleves.nb_mois_aide' | translate }}</small>
             </div>
           }
         }
@@ -609,7 +609,7 @@ interface PecForm {
                  [placeholder]="'eleves.lieu_naissance_ph' | translate" />
         </div>
         <div class="form-group full" style="margin-top:2px">
-          <small style="color:#64748b;font-size:11px">⚑ {{ 'eleves.parent_obligatoire' | translate }}</small>
+          <small style="color:var(--text-3);font-size:11px">⚑ {{ 'eleves.parent_obligatoire' | translate }}</small>
         </div>
         <div class="form-group">
           <label>{{ 'eleves.nom_pere' | translate }}</label>
@@ -670,8 +670,8 @@ interface PecForm {
     <p-dialog [header]="'🔖 ' + ('eleves.services' | translate)" [(visible)]="dialogServicesVisible"
               [modal]="true" [style]="{width:'440px'}" [draggable]="false">
       <div *ngIf="eleveSelectionne() as e">
-        <div style="font-size:13px;color:#94a3b8;margin-bottom:14px">
-          <strong style="color:#e8f0fe">{{ e.nom_complet }}</strong> — {{ e.section_nom }}
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:14px">
+          <strong style="color:var(--text)">{{ e.nom_complet }}</strong> — {{ e.section_nom }}
         </div>
         <div class="form-group" *ngIf="servicesActifs().length; else aucunService">
           <label>{{ 'eleves.services_choix' | translate }}</label>
@@ -680,7 +680,7 @@ interface PecForm {
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
         </div>
         <ng-template #aucunService>
-          <div style="color:#64748b;font-size:13px">{{ 'eleves.services_aucun' | translate }}</div>
+          <div style="color:var(--text-3);font-size:13px">{{ 'eleves.services_aucun' | translate }}</div>
         </ng-template>
       </div>
       <ng-template pTemplate="footer">
@@ -694,30 +694,30 @@ interface PecForm {
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
 
     .kpi-row { display:flex; gap:10px; flex-wrap:wrap; }
-    .kpi-mini { background:#1e2d45; border:1px solid #2a3f5f; border-radius:8px; padding:10px 14px;
+    .kpi-mini { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px;
                 text-align:center; cursor:pointer; min-width:90px; }
     .kpi-mini:hover { border-color:#00d4aa; }
     .kpi-mini.success { border-color:#10b981; }
     .kpi-mini.danger  { border-color:#ef4444; }
     .kpi-mini.warn    { border-color:#f59e0b; }
     .kpi-mini.info    { border-color:#0099ff; }
-    .km-val   { display:block; font-size:22px; font-weight:700; color:#e8f0fe; font-family:monospace; }
-    .km-label { display:block; font-size:10px; color:#64748b; text-transform:uppercase; margin-top:2px; }
+    .km-val   { display:block; font-size:22px; font-weight:700; color:var(--text); font-family:monospace; }
+    .km-label { display:block; font-size:10px; color:var(--text-3); text-transform:uppercase; margin-top:2px; }
 
     /* Panel stats financières */
-    .stats-panel { background:#111827; border:1px solid #2a3f5f; border-radius:10px;
+    .stats-panel { background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
                    padding:14px 18px; margin-bottom:14px; }
     .stats-panel-title { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase;
                          letter-spacing:.5px; margin-bottom:12px; }
     .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-    .stat-item { background:#1e2d45; border-radius:8px; padding:10px 12px; }
-    .stat-label { display:block; font-size:10px; color:#64748b; text-transform:uppercase;
+    .stat-item { background:var(--surface); border-radius:8px; padding:10px 12px; }
+    .stat-label { display:block; font-size:10px; color:var(--text-3); text-transform:uppercase;
                   letter-spacing:.3px; margin-bottom:4px; }
-    .stat-val { display:block; font-size:15px; font-weight:700; color:#e8f0fe; font-family:monospace; }
+    .stat-val { display:block; font-size:15px; font-weight:700; color:var(--text); font-family:monospace; }
     .stat-val.success { color:#10b981; }
     .stat-val.danger  { color:#ef4444; }
     .stat-val.warn    { color:#f59e0b; }
@@ -727,76 +727,76 @@ interface PecForm {
     .ta-sante { padding:8px 10px; border-radius:8px; border:1px solid var(--p-inputtext-border-color,#334155);
                 background:var(--p-inputtext-background,#1e293b); color:inherit; font:inherit; resize:vertical; }
     .chk-jour { display:flex; align-items:center; gap:6px; margin-top:6px;
-                font-weight:400; font-size:12px; color:#94a3b8; cursor:pointer; }
+                font-weight:400; font-size:12px; color:var(--text-2); cursor:pointer; }
     .chk-jour input { width:auto; margin:0; }
-    .ex-select { background:#1e2d45; color:#e8f0fe; border:1px solid #2a3f5f; border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer; }
+    .ex-select { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer; }
     .ex-select:hover { border-color:#00d4aa; }
     .readonly-banner-el { background:rgba(240,192,64,0.1); border:1px solid rgba(240,192,64,0.35); color:#f0c040; border-radius:8px; padding:8px 14px; font-size:13px; margin-bottom:16px; }
 
     .alerte-aide { margin-bottom:14px; }
-    .aide-toggle { background:none; border:none; color:#94a3b8; font-size:12px; cursor:pointer; padding:2px 0; }
-    .aide-toggle:hover { color:#e8f0fe; }
+    .aide-toggle { background:none; border:none; color:var(--text-2); font-size:12px; cursor:pointer; padding:2px 0; }
+    .aide-toggle:hover { color:var(--text); }
     .aide-corps { display:flex; flex-wrap:wrap; gap:18px; margin-top:8px; padding:12px 14px;
-                  background:#172338; border:1px solid #2a3f5f; border-radius:8px;
-                  font-size:12px; color:#94a3b8; }
+                  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+                  font-size:12px; color:var(--text-2); }
     .aide-corps span { display:inline-flex; align-items:center; gap:6px; }
     ::ng-deep .filter-drop { min-width:160px; }
 
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
     .table-toolbar { display:flex; justify-content:space-between; align-items:center;
-                     padding:12px 16px; border-bottom:1px solid #2a3f5f; }
-    .tbl-count { color:#e8f0fe; font-weight:600; font-size:13px; }
+                     padding:12px 16px; border-bottom:1px solid var(--border); }
+    .tbl-count { color:var(--text); font-weight:600; font-size:13px; }
 
     ::ng-deep .p-datatable .p-datatable-thead > tr > th {
-      background:#111827 !important; color:#64748b !important;
-      font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important;
+      background:var(--surface-2) !important; color:var(--text-3) !important;
+      font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important;
     }
     ::ng-deep .p-datatable .p-datatable-tbody > tr {
-      background:#1e2d45 !important; color:#94a3b8 !important;
+      background:var(--surface) !important; color:var(--text-2) !important;
       border-bottom:1px solid rgba(42,63,95,0.4) !important;
     }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
 
     .mono    { font-family:monospace; font-size:12px; }
-    .bold    { font-weight:600; color:#e8f0fe; }
+    .bold    { font-weight:600; color:var(--text); }
     .success { color:#10b981; }
     .danger  { color:#ef4444; }
-    .empty-msg { text-align:center; padding:40px; color:#64748b; }
+    .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
     .btn-row { display:flex; gap:2px; }
     .text-right { text-align:right; }
 
     /* Fiche */
     .fiche-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-    .fiche-section { background:#111827; border-radius:8px; padding:12px; }
+    .fiche-section { background:var(--surface-2); border-radius:8px; padding:12px; }
     .fiche-title { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase;
                    margin-bottom:8px; letter-spacing:.5px; }
     .fiche-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0;
                  border-bottom:1px solid rgba(42,63,95,0.3); font-size:11px; }
-    .fiche-row span { color:#64748b; }
-    .fiche-row strong { color:#e8f0fe; }
+    .fiche-row span { color:var(--text-3); }
+    .fiche-row strong { color:var(--text); }
 
     /* Formulaires */
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:5px; }
     .form-group.full { grid-column:1/-1; }
-    .form-group label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; }
+    .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .w-full { width:100%; }
 
     /* Dialog PEC */
     .pec-eleve-header { display:flex; align-items:center; gap:10px; margin-bottom:16px;
-                        padding:10px 14px; background:#111827; border-radius:8px; }
-    .pec-eleve-header strong { color:#e8f0fe; font-size:14px; }
-    .pec-eleve-header span { color:#64748b; font-size:12px; }
+                        padding:10px 14px; background:var(--surface-2); border-radius:8px; }
+    .pec-eleve-header strong { color:var(--text); font-size:14px; }
+    .pec-eleve-header span { color:var(--text-3); font-size:12px; }
 
-    .pec-preview { background:#111827; border:1px solid #2a3f5f; border-radius:8px;
+    .pec-preview { background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
                    padding:14px; margin-top:16px; }
     .pec-preview-title { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase;
                          letter-spacing:.5px; margin-bottom:10px; }
     .pec-preview-grid { display:flex; flex-direction:column; gap:6px; }
     .pv-row { display:flex; justify-content:space-between; align-items:center;
               padding:5px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; }
-    .pv-row span { color:#94a3b8; }
-    .pv-row.highlight { border-top:1px solid #2a3f5f; margin-top:4px; padding-top:8px;
+    .pv-row span { color:var(--text-2); }
+    .pv-row.highlight { border-top:1px solid var(--border); margin-top:4px; padding-top:8px;
                         border-bottom:none; }
   `]
 })
