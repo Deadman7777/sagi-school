@@ -13,11 +13,12 @@ import { SelectModule } from 'primeng/select';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
+import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -997,6 +998,8 @@ import { TooltipModule } from 'primeng/tooltip';
                         pTooltip="Comptabiliser (créer écriture charge)" (onClick)="ouvrirComptabiliserBudget(l)" />
               <p-button icon="pi pi-list" [rounded]="true" [text]="true" severity="info"
                         pTooltip="Écritures comptabilisées (modifier / annuler)" (onClick)="ouvrirEcrituresBudget(l)" />
+              <p-button icon="pi pi-paperclip" [rounded]="true" [text]="true" severity="info"
+                        pTooltip="Pièces justificatives" (onClick)="ouvrirPieces('BUDGET', l.id, l.libelle)" />
               <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                         pTooltip="Modifier" (onClick)="ouvrirModifierBudget(l)" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
@@ -1118,6 +1121,8 @@ import { TooltipModule } from 'primeng/tooltip';
               <div class="btn-row">
                 <p-button *ngIf="!i.est_regle" icon="pi pi-money-bill" [rounded]="true" [text]="true" severity="success"
                           pTooltip="Régler (remboursement fournisseur)" (onClick)="ouvrirDialogRegler(i)" />
+                <p-button icon="pi pi-paperclip" [rounded]="true" [text]="true" severity="info"
+                          pTooltip="Pièces justificatives" (onClick)="ouvrirPieces('IMMOBILISATION', i.id, i.no_bien)" />
                 <p-button icon="pi pi-calculator" [rounded]="true" [text]="true" severity="info"
                           pTooltip="Enregistrer dotation" [disabled]="i.est_amorti"
                           (onClick)="ouvrirDialogAmortir(i)" />
@@ -1178,15 +1183,42 @@ import { TooltipModule } from 'primeng/tooltip';
         <p-select appendTo="body" [options]="comptesFournisseursPC()" optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.compte_fournisseur" styleClass="w-full" />
       </div>
-      <div class="form-group">
-        <label>Mode de règlement</label>
-        <p-select appendTo="body" [options]="modesReglementImmo" optionLabel="label" optionValue="value"
+      <div class="form-group full">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <label style="margin:0">Mode de règlement</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+            <input type="checkbox" [(ngModel)]="formImmo.multi_mode" (change)="onToggleMultiImmo()" />
+            Multi-mode
+          </label>
+        </div>
+        <p-select *ngIf="!formImmo.multi_mode" appendTo="body" [options]="modesReglementImmo"
+                  optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.mode_reglement" styleClass="w-full" />
       </div>
-      <div class="form-group" *ngIf="formImmo.mode_reglement">
+      <div class="form-group" *ngIf="!formImmo.multi_mode && formImmo.mode_reglement">
         <label>Compte de trésorerie</label>
         <p-select appendTo="body" [options]="comptesCreditPC()" optionLabel="label" optionValue="value"
                   [(ngModel)]="formImmo.compte_tresorerie" styleClass="w-full" />
+      </div>
+      <div class="form-group full" *ngIf="formImmo.multi_mode">
+        <div *ngFor="let m of formImmo.modes_reglement; let i = index"
+             style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+          <p-select appendTo="body" [options]="modesTresorerie" [(ngModel)]="m.mode"
+                    optionLabel="label" optionValue="value" placeholder="Mode..."
+                    styleClass="w-full" [style]="{flex:'1'}" />
+          <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
+                 style="width:120px;text-align:right" />
+          <button type="button" (click)="retirerModeImmo(i)" [disabled]="formImmo.modes_reglement.length <= 1"
+                  style="background:#3a1e2d;border:1px solid #5f2a3f;color:#f87171;border-radius:6px;width:30px;height:34px;cursor:pointer">✕</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+          <button type="button" (click)="ajouterModeImmo()"
+                  style="background:transparent;border:1px dashed #2a3f5f;color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
+          <span style="font-size:12px;font-family:monospace"
+                [style.color]="immoReste() === 0 ? '#00d4aa' : '#f59e0b'">
+            Reste : {{ immoReste() | number:'1.0-0' }} FCFA
+          </span>
+        </div>
       </div>
       <div class="form-group full" *ngIf="ressourcesGouv().length">
         <label>Financé par (ressource)</label>
@@ -1300,6 +1332,15 @@ import { TooltipModule } from 'primeng/tooltip';
     </ng-template>
   </p-dialog>
 
+  <!-- Dialog Pièces justificatives (GED) — charges, immos, budget -->
+  <p-dialog [header]="'📎 Pièces justificatives — ' + piecesTitre()"
+            [(visible)]="dialogPiecesVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+    <app-pieces-justificatives [objetType]="piecesObjetType()" [objetId]="piecesObjetId()" />
+    <ng-template pTemplate="footer">
+      <p-button label="Fermer" severity="secondary" (onClick)="dialogPiecesVisible=false" />
+    </ng-template>
+  </p-dialog>
+
   <!-- Dialog Comptabiliser Budget -->
   <p-dialog header="Comptabiliser une charge budgétée"
             [(visible)]="dialogComptaVisible" [modal]="true" [style]="{width:'440px'}" [draggable]="false">
@@ -1361,6 +1402,8 @@ import { TooltipModule } from 'primeng/tooltip';
             <td>{{ c.libelle }}</td>
             <td class="mono" style="text-align:right">{{ c.montant | number:'1.0-0' }}</td>
             <td>
+              <p-button icon="pi pi-paperclip" [rounded]="true" [text]="true" severity="info"
+                        pTooltip="Pièces justificatives" (onClick)="ouvrirPieces('CHARGE', c.id, c.no_piece)" />
               <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                         pTooltip="Modifier (contre-écritures + nouvelle écriture)" (onClick)="ouvrirModifEcriture(c)" />
               <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
@@ -1665,6 +1708,19 @@ export class ComptabiliteComponent implements OnInit {
   dialogReglerVisible = false;
   immoARegler        = signal<any | null>(null);
   formImmo: any      = {};
+
+  // GED — dialog pièces justificatives (charges / immos / budget).
+  dialogPiecesVisible = false;
+  piecesObjetType    = signal<string>('');
+  piecesObjetId      = signal<string>('');
+  piecesTitre        = signal<string>('');
+
+  ouvrirPieces(objetType: string, objetId: string, titre: string) {
+    this.piecesObjetType.set(objetType);
+    this.piecesObjetId.set(objetId);
+    this.piecesTitre.set(titre);
+    this.dialogPiecesVisible = true;
+  }
   formAmortir: any   = {};
   formRegler: any    = {};
 
@@ -1762,6 +1818,15 @@ modesReglementImmo = [
     { label: 'Wave',         value: 'Wave' },
     { label: 'Orange Money', value: 'Orange Money' },
     { label: 'Free Money',   value: 'Free Money' },
+];
+// Codes normalisés (mode → compte SYSCOHADA) pour la ventilation multi-mode.
+modesTresorerie = [
+    { label: 'Espèces',      value: 'ESPECE' },
+    { label: 'Wave',         value: 'WAVE' },
+    { label: 'Orange Money', value: 'ORANGE_MONEY' },
+    { label: 'Free Money',   value: 'FREE_MONEY' },
+    { label: 'Virement',     value: 'VIREMENT' },
+    { label: 'Chèque',       value: 'CHEQUE' },
 ];
 // Modes de paiement effectifs (sans l'option « à crédit ») pour le règlement d'un bien
 modesReglementPaye = this.modesReglementImmo.filter(m => m.value !== '');
@@ -2076,12 +2141,13 @@ comptesCredit = [
   ouvrirDialogImmo(i?: any) {
     this.editImmoMode = !!i;
     const today = new Date().toISOString().split('T')[0];
-    this.formImmo = i ? { ...i } : {
+    this.formImmo = i ? { ...i, multi_mode: false, modes_reglement: [] } : {
       libelle: '', valeur_entree: 0, duree_utilisation: 5,
       date_entree: today, mode_amortissement: 'LINEAIRE',
       no_compte_immobilisation: '231', no_compte_amortissement: '2831',
       compte_fournisseur: '404', mode_reglement: '', compte_tresorerie: '571',
       ressource_id: null, projet_id: null,
+      multi_mode: false, modes_reglement: [] as { mode: string; montant: number }[],
     };
     this.dialogImmoVisible = true;
     // Dimensions analytiques facultatives (gouvernance) — listes fraîches.
@@ -2105,8 +2171,36 @@ comptesCredit = [
     }
   }
 
+  // ── Immobilisation multi-mode ──────────────────────────────────────────
+  onToggleMultiImmo() {
+    if (this.formImmo.multi_mode && (this.formImmo.modes_reglement || []).length === 0) {
+      this.formImmo.modes_reglement = [{ mode: 'ESPECE', montant: Number(this.formImmo.valeur_entree) || 0 }];
+    }
+  }
+  ajouterModeImmo() {
+    this.formImmo.modes_reglement.push({ mode: '', montant: Math.max(0, this.immoReste()) });
+  }
+  retirerModeImmo(i: number) {
+    this.formImmo.modes_reglement.splice(i, 1);
+  }
+  immoReste(): number {
+    const somme = (this.formImmo.modes_reglement || [])
+      .reduce((s: number, m: any) => s + (Number(m.montant) || 0), 0);
+    return Math.round(((Number(this.formImmo.valeur_entree) || 0) - somme) * 100) / 100;
+  }
+
   sauvegarderImmo() {
     if (!this.formImmo.libelle || !this.formImmo.valeur_entree) return;
+    if (this.formImmo.multi_mode) {
+      if (this.formImmo.modes_reglement.some((m: any) => !m.mode || Number(m.montant) <= 0)) {
+        this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Chaque ligne de mode doit avoir un moyen et un montant > 0.' });
+        return;
+      }
+      if (this.immoReste() !== 0) {
+        this.msg.add({ severity: 'warn', summary: 'Ventilation incomplète', detail: `La ventilation doit couvrir la valeur (reste : ${this.immoReste()} FCFA).` });
+        return;
+      }
+    }
     this.savingImmo.set(true);
     const obs = this.editImmoMode
       ? this.compta.modifierImmobilisation(this.formImmo.id, this.formImmo)

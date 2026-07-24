@@ -374,6 +374,7 @@ class PieceJustificative(TenantModel):
         ('CHARGE',         'Charge / dépense'),
         ('PAIEMENT',       'Paiement / recette'),
         ('IMMOBILISATION', 'Immobilisation'),
+        ('BUDGET',         'Ligne de budget'),
         ('FINANCEMENT',    'Financement (GMRF)'),
         ('PRET',           'Prêt'),
         ('NATT',           'NATT / Tontine'),

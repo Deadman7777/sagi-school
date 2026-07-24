@@ -177,3 +177,24 @@ class ChargeMultiModeTest(_BaseAPITest):
         np = r.data['no_piece']
         self.assertEqual(
             self._entries(no_piece=np, no_compte='521', credit=25000).count(), 1)
+
+
+class GedBudgetTest(_BaseAPITest):
+    """Lot D — rattachement d'une pièce justificative à une ligne de budget."""
+    DATA_URI = 'data:application/pdf;base64,JVBERi0xLjQK'
+
+    def test_piece_attachable_a_une_ligne_budget(self):
+        from apps.comptabilite.models import BudgetLigne
+        bl = BudgetLigne.objects.create(
+            tenant=self.tenant, exercice=self.exercice, no_compte='6011', libelle='Fournitures')
+        r = self.client.post('/api/gouvernance/pieces/', {
+            'objet_type': 'BUDGET', 'objet_id': str(bl.id),
+            'type_piece': 'FACTURE', 'nom': 'devis.pdf', 'contenu': self.DATA_URI,
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+        r2 = self.client.get(
+            f'/api/gouvernance/pieces/?objet_type=BUDGET&objet_id={bl.id}')
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(len(r2.data), 1)
+        self.assertEqual(r2.data[0]['nom'], 'devis.pdf')

@@ -18,13 +18,14 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 
 @Component({
   selector: 'app-paiements',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, CheckboxModule, TooltipModule],
+            InputNumberModule, CheckboxModule, TooltipModule, PiecesJustificativesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -606,15 +607,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               </td>
               <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
               <td>
-                <!-- Les écritures de paie se corrigent dans le module RH, pas ici -->
-                @if (c.source !== 'PAIE') {
-                  <div style="display:flex;gap:4px">
+                <div style="display:flex;gap:4px">
+                  <p-button icon="pi pi-paperclip" [rounded]="true" [text]="true" severity="info"
+                            pTooltip="Pièces justificatives" (onClick)="ouvrirPieces('CHARGE', c.id, c.no_piece)" />
+                  <!-- Les écritures de paie se corrigent dans le module RH, pas ici -->
+                  @if (c.source !== 'PAIE') {
                     <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                               pTooltip="Modifier (contre-écritures + nouvelle charge)" (onClick)="demanderModificationCharge(c)" />
                     <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
                               pTooltip="Annuler (contre-écritures SYSCOHADA)" (onClick)="supprimerCharge(c)" />
-                  </div>
-                }
+                  }
+                </div>
               </td>
             </tr>
           </ng-template>
@@ -659,9 +662,35 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                       optionLabel="label" optionValue="value" styleClass="w-full" />
           </div>
           <div class="form-group full">
-            <label>Réglé via</label>
-            <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <label style="margin:0">Réglé via</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+                <input type="checkbox" [(ngModel)]="nouvelleCharge.multi_mode" (change)="onToggleMultiCharge()" />
+                Multi-mode
+              </label>
+            </div>
+            <p-select *ngIf="!nouvelleCharge.multi_mode" appendTo="body" [options]="comptesCredit"
+                      [(ngModel)]="nouvelleCharge.compte_credit"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
+            <div *ngIf="nouvelleCharge.multi_mode" style="margin-top:6px">
+              <div *ngFor="let m of nouvelleCharge.modes_reglement; let i = index"
+                   style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+                <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="m.mode"
+                          optionLabel="label" optionValue="value" placeholder="Mode..."
+                          styleClass="w-full" [style]="{flex:'1'}" />
+                <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
+                       style="width:120px;text-align:right" />
+                <button type="button" class="mode-x" (click)="retirerModeCharge(i)"
+                        [disabled]="nouvelleCharge.modes_reglement.length <= 1">✕</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <button type="button" class="mode-add" (click)="ajouterModeCharge()">+ Ajouter un mode</button>
+                <span style="font-size:12px;font-family:monospace"
+                      [style.color]="chargeReste() === 0 ? '#00d4aa' : '#f59e0b'">
+                  Reste : {{ chargeReste() | number:'1.0-0' }} FCFA
+                </span>
+              </div>
+            </div>
           </div>
           @if (ressourcesGouv().length) {
             <div class="form-group full">
@@ -685,6 +714,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <p-button label="Annuler"       severity="secondary" (onClick)="dialogChargeVisible=false" />
           <p-button label="Enregistrer"   severity="danger"
                     [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
+        </ng-template>
+      </p-dialog>
+
+      <!-- Dialog Pièces justificatives (GED) d'une charge -->
+      <p-dialog [header]="'📎 Pièces justificatives — ' + piecesTitre()"
+                [(visible)]="dialogPiecesVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+        <app-pieces-justificatives [objetType]="piecesObjetType()" [objetId]="piecesObjetId()" />
+        <ng-template pTemplate="footer">
+          <p-button label="Fermer" severity="secondary" (onClick)="dialogPiecesVisible=false" />
         </ng-template>
       </p-dialog>
 
@@ -1327,12 +1365,43 @@ export class PaiementsComponent implements OnInit {
     return this.charges().reduce((s, c) => s + (c.montant || 0), 0);
   }
 
+  // ── Charge multi-mode ───────────────────────────────────────────────────
+  onToggleMultiCharge() {
+    if (this.nouvelleCharge.multi_mode && this.nouvelleCharge.modes_reglement.length === 0) {
+      this.nouvelleCharge.modes_reglement = [{ mode: 'ESPECE', montant: Number(this.nouvelleCharge.montant) || 0 }];
+    }
+  }
+  ajouterModeCharge() {
+    this.nouvelleCharge.modes_reglement.push({ mode: '', montant: Math.max(0, this.chargeReste()) });
+  }
+  retirerModeCharge(i: number) {
+    this.nouvelleCharge.modes_reglement.splice(i, 1);
+  }
+  chargeReste(): number {
+    const somme = (this.nouvelleCharge.modes_reglement || [])
+      .reduce((s: number, m: any) => s + (Number(m.montant) || 0), 0);
+    return Math.round(((Number(this.nouvelleCharge.montant) || 0) - somme) * 100) / 100;
+  }
+
+  // ── GED — pièces justificatives (charges) ───────────────────────────────
+  dialogPiecesVisible = false;
+  piecesObjetType = signal<string>('');
+  piecesObjetId   = signal<string>('');
+  piecesTitre     = signal<string>('');
+  ouvrirPieces(objetType: string, objetId: string, titre: string) {
+    this.piecesObjetType.set(objetType);
+    this.piecesObjetId.set(objetId);
+    this.piecesTitre.set(titre);
+    this.dialogPiecesVisible = true;
+  }
+
   ouvrirDialogCharge() {
     this.nouvelleCharge = {
       no_compte: '661', libelle: '', montant: 0,
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
       ressource_id: null, projet_id: null,
+      multi_mode: false, modes_reglement: [] as { mode: string; montant: number }[],
     };
     this.compteSuggere = null;
     this.compteChargeVerrouille = false;
@@ -1425,6 +1494,16 @@ export class PaiementsComponent implements OnInit {
     if (!this.nouvelleCharge.montant || this.nouvelleCharge.montant <= 0) {
       this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être > 0.' });
       return;
+    }
+    if (this.nouvelleCharge.multi_mode) {
+      if (this.nouvelleCharge.modes_reglement.some((m: any) => !m.mode || Number(m.montant) <= 0)) {
+        this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Chaque ligne de mode doit avoir un moyen et un montant > 0.' });
+        return;
+      }
+      if (this.chargeReste() !== 0) {
+        this.msg.add({ severity: 'warn', summary: 'Ventilation incomplète', detail: `La ventilation doit couvrir le montant (reste : ${this.chargeReste()} FCFA).` });
+        return;
+      }
     }
     this.savingCharge.set(true);
     this.compta.creerCharge(this.nouvelleCharge).subscribe({
