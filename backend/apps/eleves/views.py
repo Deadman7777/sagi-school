@@ -176,6 +176,73 @@ class EleveViewSet(viewsets.ModelViewSet):
         return Response({'resume': rapport['resume'], 'crees': len(a_creer),
                          'reprises': reprises, 'montant_reprise': montant_reprise})
 
+    @action(detail=True, methods=['get', 'post'], url_path='corriger-reprise')
+    def corriger_reprise(self, request, pk=None):
+        """Lit (GET) ou corrige (POST) le « déjà payé » de reprise d'un élève.
+
+        POST : recrée la reprise avec les montants corrigés. Si l'exercice a des
+        agrégats migrés (source MIGRATION sur les produits 70), la reprise est
+        automatiquement neutralisée en 890 (le produit est déjà dans l'agrégat)."""
+        from django.db import transaction
+        from apps.paiements.models import Paiement
+        from apps.paiements.reprise import creer_paiement_reprise
+
+        tenant   = get_tenant(request)
+        eleve    = self.get_object()
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+        reprise = Paiement.objects.filter(tenant=tenant, exercice=exercice, eleve=eleve,
+                                          mode_paiement='REPRISE').first()
+
+        if request.method == 'GET':
+            return Response({
+                'montant_inscription': float(reprise.montant_inscription) if reprise else 0,
+                'montant_mensualite':  float(reprise.montant_mensualite)  if reprise else 0,
+                'montant_divers':      float(reprise.montant_divers)      if reprise else 0,
+                'total_attendu':       float(eleve.total_attendu),
+                'reste_a_payer':       float(eleve.reste_a_payer),
+            })
+
+        d = request.data
+        montants = {
+            'montant_inscription': float(d.get('montant_inscription', 0) or 0),
+            'montant_mensualite':  float(d.get('montant_mensualite', 0) or 0),
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_divers':      float(d.get('montant_divers', 0) or 0),
+        }
+        with transaction.atomic():
+            if reprise:
+                JournalEntry.objects.filter(tenant=tenant, exercice=exercice,
+                                            source='PAIEMENT', source_id=reprise.id).delete()
+                reprise.delete()
+            a_migration = JournalEntry.objects.filter(
+                tenant=tenant, exercice=exercice, source='MIGRATION',
+                no_compte__startswith='70', credit__gt=0).exists()
+            p = None
+            if sum(montants.values()) > 0:
+                p = creer_paiement_reprise(tenant, exercice, eleve, user=request.user, montants=montants)
+            if a_migration and p:
+                r706 = float(JournalEntry.objects.filter(
+                    tenant=tenant, exercice=exercice, source='PAIEMENT', source_id=p.id,
+                    no_compte='706', credit__gt=0).aggregate(c=Sum('credit'))['c'] or 0)
+                if r706 > 0:
+                    JournalEntry.objects.bulk_create([
+                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
+                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
+                                     no_compte='706', debit=r706, credit=0, ordre=1,
+                                     libelle=f"Neutralisation reprise corrigée — {eleve.nom_complet}"),
+                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
+                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
+                                     no_compte='890', debit=0, credit=r706, ordre=2,
+                                     libelle=f"Contrepartie reprise corrigée — {eleve.nom_complet}"),
+                    ])
+        eleve.refresh_from_db()
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Eleve', str(eleve.id),
+                  f"Correction du déjà payé (reprise) — {eleve.nom_complet}")
+        return Response({'success': True, 'reste_a_payer': float(eleve.reste_a_payer)})
+
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):
         """Recherche ultra-légère pour l'autocomplétion — pas d'annotation paiements.

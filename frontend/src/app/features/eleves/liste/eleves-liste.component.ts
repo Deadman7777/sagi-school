@@ -185,6 +185,9 @@ interface PecForm {
                             severity="secondary" pTooltip="Prise en charge" (onClick)="ouvrirPriseEnCharge(eleve)" />
                   <p-button icon="pi pi-bookmark" [rounded]="true" [text]="true"
                             severity="help" pTooltip="Services / Activités" (onClick)="ouvrirServices(eleve)" />
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
+                            severity="contrast" pTooltip="Corriger le déjà payé (reprise)"
+                            (onClick)="ouvrirReprise(eleve)" />
                 </div>
               </td>
             </tr>
@@ -521,6 +524,47 @@ interface PecForm {
       <ng-template pTemplate="footer">
         <p-button label="Annuler" severity="secondary" (onClick)="dialogPECVisible=false" />
         <p-button label="Enregistrer" severity="success" [loading]="saving()" (onClick)="sauvegarderPEC()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog : corriger le déjà payé (reprise migrée) -->
+    <p-dialog header="Corriger le déjà payé (reprise)" [(visible)]="dialogRepriseVisible"
+              [modal]="true" [style]="{width:'460px'}" [draggable]="false">
+      @if (eleveSelectionne()) {
+        <div class="pec-eleve-header">
+          <strong>{{ eleveSelectionne()!.nom_complet }}</strong>
+          <span>{{ eleveSelectionne()!.section_nom }}</span>
+        </div>
+        <p style="font-size:12px;color:var(--text-3);margin:8px 0">
+          Ajuste les montants déjà réglés avant la migration. Le reste à payer se recalcule ;
+          le produit réel (706) n'est pas modifié en cas de migration.
+        </p>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Inscription déjà payée (FCFA)</label>
+            <p-inputNumber [(ngModel)]="formReprise.montant_inscription" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group full">
+            <label>Mensualités déjà payées (FCFA)</label>
+            <p-inputNumber [(ngModel)]="formReprise.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+          <div class="form-group full">
+            <label>Services déjà payés (FCFA)</label>
+            <p-inputNumber [(ngModel)]="formReprise.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
+          </div>
+        </div>
+        <div class="pec-preview">
+          <div class="pv-row"><span>Total attendu</span>
+            <strong>{{ formReprise.total_attendu | number:'1.0-0' }} FCFA</strong></div>
+          <div class="pv-row"><span>Déjà payé (saisi)</span>
+            <strong style="color:#00d4aa">{{ (formReprise.montant_inscription + formReprise.montant_mensualite + formReprise.montant_divers) | number:'1.0-0' }} FCFA</strong></div>
+          <div class="pv-row"><span>Reste à payer (estimé)</span>
+            <strong style="color:#ef4444">{{ (formReprise.total_attendu - (formReprise.montant_inscription + formReprise.montant_mensualite + formReprise.montant_divers)) | number:'1.0-0' }} FCFA</strong></div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Annuler" severity="secondary" (onClick)="dialogRepriseVisible=false" />
+        <p-button label="Enregistrer" severity="success" [loading]="saving()" (onClick)="sauvegarderReprise()" />
       </ng-template>
     </p-dialog>
 
@@ -1179,6 +1223,48 @@ export class ElevesListeComponent implements OnInit {
         this.chargerEleves();
       },
       error: () => this.saving.set(false),
+    });
+  }
+
+  // ── Correction du déjà payé (reprise) ─────────────────────────────────
+  dialogRepriseVisible = false;
+  formReprise = { montant_inscription: 0, montant_mensualite: 0, montant_divers: 0, total_attendu: 0 };
+
+  ouvrirReprise(eleve: Eleve) {
+    this.eleveSelectionne.set(eleve);
+    this.formReprise = { montant_inscription: 0, montant_mensualite: 0, montant_divers: 0,
+                         total_attendu: eleve.total_attendu || 0 };
+    this.dialogRepriseVisible = true;
+    this.elevesService.getReprise(eleve.id).subscribe({
+      next: (d: any) => this.formReprise = {
+        montant_inscription: d.montant_inscription || 0,
+        montant_mensualite:  d.montant_mensualite  || 0,
+        montant_divers:      d.montant_divers       || 0,
+        total_attendu:       d.total_attendu        || 0,
+      },
+      error: () => {},
+    });
+  }
+
+  sauvegarderReprise() {
+    const e = this.eleveSelectionne();
+    if (!e) return;
+    this.saving.set(true);
+    this.elevesService.corrigerReprise(e.id, {
+      montant_inscription: this.formReprise.montant_inscription || 0,
+      montant_mensualite:  this.formReprise.montant_mensualite  || 0,
+      montant_divers:      this.formReprise.montant_divers       || 0,
+    }).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success', summary: 'Déjà payé corrigé', detail: e.nom_complet });
+        this.dialogRepriseVisible = false;
+        this.saving.set(false);
+        this.chargerEleves();
+      },
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Erreur', detail: err?.error?.error || 'Correction impossible' });
+        this.saving.set(false);
+      },
     });
   }
 
