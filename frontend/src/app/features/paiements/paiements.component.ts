@@ -130,13 +130,13 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     <p-dialog header="⚠️ Confirmer l'annulation" [(visible)]="confirmAnnulVisible"
               [modal]="true" [style]="{width:'440px'}" [draggable]="false">
       <div *ngIf="paiementAnnuler" style="padding:8px 0">
-        <div style="background:#1a1a2e;border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
-          <div style="font-size:13px;color:#e8f0fe;font-weight:600">{{ paiementAnnuler.no_piece }}</div>
-          <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+        <div style="background:var(--surface-4);border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
+          <div style="font-size:13px;color:var(--text);font-weight:600">{{ paiementAnnuler.no_piece }}</div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:4px">
             {{ paiementAnnuler.eleve_nom }} · {{ paiementAnnuler.total | number:'1.0-0' }} FCFA
           </div>
         </div>
-        <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0">
+        <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin:0">
           Cette opération va générer des <strong style="color:#f59e0b">contre-écritures SYSCOHADA</strong>
           pour neutraliser toutes les écritures comptables liées à ce paiement.
           <br><br>
@@ -158,11 +158,11 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               [modal]="true" [style]="{width:'520px'}" [draggable]="false">
       <div *ngIf="paiementModifier" style="padding:4px 0">
         <!-- Info paiement original -->
-        <div style="background:#1a1a2e;border-radius:8px;padding:12px;margin-bottom:16px;border-left:4px solid #f59e0b">
+        <div style="background:var(--surface-4);border-radius:8px;padding:12px;margin-bottom:16px;border-left:4px solid #f59e0b">
           <div style="font-size:12px;color:#f59e0b;font-weight:600;margin-bottom:4px">
             Original : {{ paiementModifier.no_piece }}
           </div>
-          <div style="font-size:11px;color:#94a3b8">
+          <div style="font-size:11px;color:var(--text-2)">
             {{ paiementModifier.eleve_nom }} · {{ paiementModifier.total | number:'1.0-0' }} FCFA · {{ paiementModifier.mode_paiement }}
           </div>
         </div>
@@ -298,7 +298,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
 
       <!-- Spinner chargement données élève -->
       @if (loadingSaisie()) {
-        <div style="text-align:center;padding:10px;color:#64748b;font-size:12px">⏳ Chargement des données...</div>
+        <div style="text-align:center;padding:10px;color:var(--text-3);font-size:12px">⏳ Chargement des données...</div>
       }
 
       <!-- Alerte ABANDONNÉ -->
@@ -315,7 +315,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
           ({{ saisieDonnees()!.prise_en_charge }})
           — Montants réduits automatiquement.
           @if (saisieDonnees()?.obs_prise_en_charge) {
-            <span style="color:#64748b"> · {{ saisieDonnees()!.obs_prise_en_charge }}</span>
+            <span style="color:var(--text-3)"> · {{ saisieDonnees()!.obs_prise_en_charge }}</span>
           }
         </div>
       }
@@ -394,13 +394,13 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         @if (typePaiement === 'MENSUALITE') {
           @if (saisieDonnees()?.mois_ecole?.length) {
             <div class="form-group full" style="margin-bottom:10px">
-              <label>Mois concerné(s) <span style="color:#64748b;font-weight:400">— cocher plusieurs pour anticiper</span></label>
+              <label>Mois concerné(s) <span style="color:var(--text-3);font-weight:400">— cocher plusieurs pour anticiper</span></label>
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
                 @for (m of saisieDonnees()!.mois_ecole; track m.num) {
                   <button type="button" [disabled]="!m.du"
-                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.paye ? '#14321f' : '#1e2d45')"
-                    [style.color]="moisSelected(m.num) ? '#06281f' : (m.du ? '#e8f0fe' : '#475569')"
-                    style="border:1px solid #2a3f5f;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer"
+                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.paye ? 'var(--pos-bg)' : 'var(--surface)')"
+                    [style.color]="moisSelected(m.num) ? '#06281f' : (m.du ? 'var(--text)' : 'var(--text-5)')"
+                    style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer"
                     (click)="toggleMois(m.num)">
                     {{ m.label }}{{ m.paye ? ' ✓' : '' }}
                   </button>
@@ -438,7 +438,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               @for (sv of form.services; track sv.id) {
                 <div style="display:flex;align-items:center;gap:8px">
                   <p-checkbox [(ngModel)]="sv.inclus" [binary]="true" />
-                  <span style="flex:1;font-size:13px;color:#e8f0fe">{{ sv.nom }}</span>
+                  <span style="flex:1;font-size:13px;color:var(--text)">{{ sv.nom }}</span>
                   <p-inputNumber [(ngModel)]="sv.montant" [min]="0" mode="decimal"
                                  [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
                 </div>
@@ -457,7 +457,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <div class="form-group" style="margin-top:12px">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <label style="margin:0">Mode de paiement *</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
               <input type="checkbox" [(ngModel)]="form.multi_mode" (change)="onToggleMultiMode()" />
               Multi-mode (plusieurs moyens)
             </label>
@@ -514,7 +514,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <div class="recu-header">
           <div class="recu-titre">{{ recuData().tenant_nom }}</div>
           <div class="recu-no">N° {{ recuData().no_piece }}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px">
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">
             {{ recuData().date }} &nbsp;|&nbsp; Année {{ recuData().annee_scolaire }}
           </div>
         </div>
@@ -538,7 +538,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         }
         <div class="recu-total"><span>Total encaissé</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
         <div class="recu-row" style="margin-top:4px"><span>Mode</span><span>{{ recuData().mode_label }}</span></div>
-        <div *ngFor="let mr of recuData().modes_reglement" class="recu-row" style="font-size:11px;color:#94a3b8">
+        <div *ngFor="let mr of recuData().modes_reglement" class="recu-row" style="font-size:11px;color:var(--text-2)">
           <span style="padding-left:10px">↳ {{ mr.mode_label }}</span><span>{{ mr.montant | number:'1.0-0' }} FCFA</span>
         </div>
         <div class="recu-row"><span>Caissier</span><span>{{ recuData().saisi_par }}</span></div>
@@ -557,7 +557,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       </div>
       <ng-template pTemplate="footer">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-          <span style="font-size:12px;color:#64748b">Format :</span>
+          <span style="font-size:12px;color:var(--text-3)">Format :</span>
           <p-select appendTo="body" [options]="formatsRecu" [(ngModel)]="recuFormat"
                     optionLabel="label" optionValue="value" styleClass="w-40" />
           <p-button label="📄 Télécharger PDF" severity="success"
@@ -575,8 +575,8 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       <div class="table-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:16px 16px 0">
           <div>
-            <h3 style="margin:0;color:#e8f0fe">💸 Charges de l'exercice</h3>
-            <span style="color:#64748b;font-size:12px">
+            <h3 style="margin:0;color:var(--text)">💸 Charges de l'exercice</h3>
+            <span style="color:var(--text-3);font-size:12px">
               Total : {{ totalCharges() | number:'1.0-0' }} FCFA
             </span>
           </div>
@@ -636,7 +636,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
             <input pInputText [(ngModel)]="nouvelleCharge.libelle" class="w-full"
                   (ngModelChange)="onLibelleChargeChange()"
                   placeholder="Ex : Facture eau juillet..." />
-            <small style="color:#64748b;font-size:10px">Le compte de charge se remplit automatiquement d'après le libellé</small>
+            <small style="color:var(--text-3);font-size:10px">Le compte de charge se remplit automatiquement d'après le libellé</small>
           </div>
           <div class="form-group full">
             <label>Compte de charge *</label>
@@ -664,7 +664,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
           <div class="form-group full">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <label style="margin:0">Réglé via</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
                 <input type="checkbox" [(ngModel)]="nouvelleCharge.multi_mode" (change)="onToggleMultiCharge()" />
                 Multi-mode
               </label>
@@ -698,7 +698,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               <p-select appendTo="body" [options]="ressourcesGouv()" [(ngModel)]="nouvelleCharge.ressource_id"
                         optionLabel="libelle" optionValue="id" styleClass="w-full" [showClear]="true"
                         placeholder="— Trésorerie générale —" [filter]="true" />
-              <small style="color:#64748b;font-size:10px">Contrôle automatique du disponible sur l'enveloppe</small>
+              <small style="color:var(--text-3);font-size:10px">Contrôle automatique du disponible sur l'enveloppe</small>
             </div>
           }
           @if (projetsGouv().length) {
@@ -731,7 +731,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
                 [modal]="true" [style]="{width:'460px'}" [draggable]="false">
         <div *ngIf="chargeModifier" class="form-grid">
           <div class="form-group full">
-            <div style="background:#1a1a2e;border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:#94a3b8">
+            <div style="background:var(--surface-4);border-radius:6px;padding:10px;border-left:4px solid #f59e0b;font-size:12px;color:var(--text-2)">
               Original : <strong style="color:#f59e0b">{{ chargeModifier.no_piece }}</strong> —
               {{ chargeModifier.libelle }} · {{ chargeModifier.montant | number:'1.0-0' }} FCFA
             </div>
@@ -770,88 +770,88 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
 
     .modes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
-    .mode-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; }
-    .mode-name  { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .mode-card  { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
+    .mode-name  { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .mode-total { font-size:20px; font-weight:700; font-family:monospace; color:#00d4aa; }
-    .mode-nb    { font-size:11px; color:#64748b; margin-top:2px; }
+    .mode-nb    { font-size:11px; color:var(--text-3); margin-top:2px; }
     .mode-x     { background:#3a1e2d; border:1px solid #5f2a3f; color:#f87171; border-radius:6px; width:30px; height:34px; cursor:pointer; flex:none; }
     .mode-x:disabled { opacity:.4; cursor:not-allowed; }
-    .mode-add   { background:transparent; border:1px dashed #2a3f5f; color:#4fc3f7; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+    .mode-add   { background:transparent; border:1px dashed var(--border); color:#4fc3f7; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
 
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
 
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:#1a2235 !important; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
 
     .mono        { font-family:monospace; font-size:12px; }
-    .bold        { font-weight:600; color:#e8f0fe; }
+    .bold        { font-weight:600; color:var(--text); }
     .success     { color:#10b981; }
     .annule-val  { color:#ef4444; text-decoration:line-through; opacity:0.7; }
     .btn-row     { display:flex; gap:4px; align-items:center; }
-    .empty-msg   { text-align:center; padding:40px; color:#64748b; }
+    .empty-msg   { text-align:center; padding:40px; color:var(--text-3); }
     ::ng-deep .ligne-annulee td { opacity:0.55 !important; background:rgba(239,68,68,0.04) !important; }
 
-    .eleve-info { background:#0f2010; border:1px solid #2a5c2a; border-radius:8px; padding:12px; margin-bottom:14px; }
+    .eleve-info { background:var(--pos-bg); border:1px solid #2a5c2a; border-radius:8px; padding:12px; margin-bottom:14px; }
     .ei-row { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid rgba(42,95,42,0.3); }
     .ei-row:last-child { border-bottom:none; }
-    .ei-row span:first-child { color:#64748b; }
-    .ei-row span:last-child  { font-weight:500; color:#e8f0fe; font-family:monospace; }
+    .ei-row span:first-child { color:var(--text-3); }
+    .ei-row span:last-child  { font-weight:500; color:var(--text); font-family:monospace; }
 
     .montants-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:6px; }
-    .form-group label { font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; }
+    .form-group label { font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; }
 
     .total-bar { display:flex; justify-content:space-between; align-items:center; background:rgba(0,212,170,0.1); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:10px 16px; margin-top:14px; }
     .total-val { font-size:20px; font-weight:700; color:#00d4aa; font-family:monospace; }
 
-    .recu { color:#e8f0fe; }
+    .recu { color:var(--text); }
     .recu-header { text-align:center; margin-bottom:16px; }
     .recu-titre { font-size:16px; font-weight:700; color:#00d4aa; }
-    .recu-no    { font-size:12px; color:#64748b; font-family:monospace; margin-top:4px; }
+    .recu-no    { font-size:12px; color:var(--text-3); font-family:monospace; margin-top:4px; }
     .recu-row   { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px solid rgba(42,63,95,0.3); }
-    .recu-row span:first-child { color:#64748b; }
-    .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid #2a3f5f; margin-top:4px; }
-    .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid #2a3f5f; }
+    .recu-row span:first-child { color:var(--text-3); }
+    .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid var(--border); margin-top:4px; }
+    .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid var(--border); }
     .fee-hint { font-size:10px; color:#00d4aa; margin-left:6px; font-weight:400; font-style:italic; }
     /* Recherche élève */
     .search-eleve-wrap { margin-bottom:14px; }
-    .search-label      { display:block; font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
-    .search-hint       { font-size:10px; color:#475569; text-transform:none; margin-left:6px; }
-    .search-input-field{ background:#111827; border:1px solid #2a3f5f; color:#e8f0fe; border-radius:6px; padding:9px 12px; font-size:13px; outline:none; }
+    .search-label      { display:block; font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
+    .search-hint       { font-size:10px; color:var(--text-5); text-transform:none; margin-left:6px; }
+    .search-input-field{ background:var(--surface-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:9px 12px; font-size:13px; outline:none; }
     .search-input-field:focus { border-color:#00d4aa; }
     .search-spinner    { position:absolute; right:12px; top:10px; color:#00d4aa; font-size:14px; animation:spin 1s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
-    .suggestions-list  { border:1px solid #2a3f5f; border-radius:6px; background:#1e2d45; margin-top:4px; max-height:260px; overflow-y:auto; }
+    .suggestions-list  { border:1px solid var(--border); border-radius:6px; background:var(--surface); margin-top:4px; max-height:260px; overflow-y:auto; }
     .suggestion-item   { padding:10px 14px; cursor:pointer; border-bottom:1px solid rgba(42,63,95,0.5); }
     .suggestion-item:last-child { border-bottom:none; }
-    .suggestion-item:hover { background:#263450; }
+    .suggestion-item:hover { background:var(--surface-2); }
     .si-top    { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:3px; }
-    .si-nom    { color:#e8f0fe; font-size:13px; font-weight:600; }
-    .si-matricule { font-family:monospace; font-size:11px; background:#0b1220; color:#00d4aa; padding:1px 6px; border-radius:3px; }
-    .si-bottom { font-size:11px; color:#64748b; display:flex; gap:8px; flex-wrap:wrap; }
+    .si-nom    { color:var(--text); font-size:13px; font-weight:600; }
+    .si-matricule { font-family:monospace; font-size:11px; background:var(--surface-2); color:#00d4aa; padding:1px 6px; border-radius:3px; }
+    .si-bottom { font-size:11px; color:var(--text-3); display:flex; gap:8px; flex-wrap:wrap; }
     .badge-statut { font-size:9px; padding:1px 5px; border-radius:3px; font-weight:600; }
     .badge-statut.rouge  { background:#ef4444; color:white; }
     .badge-statut.orange { background:#f59e0b; color:white; }
     .badge-statut.violet { background:#7c3aed; color:white; }
-    .search-empty { font-size:12px; color:#64748b; padding:10px 14px; border:1px solid #2a3f5f; border-radius:6px; margin-top:4px; text-align:center; }
-    .eleve-selected { display:flex; justify-content:space-between; align-items:center; background:#0f2240; border:1px solid #00d4aa; border-radius:6px; padding:10px 14px; }
+    .search-empty { font-size:12px; color:var(--text-3); padding:10px 14px; border:1px solid var(--border); border-radius:6px; margin-top:4px; text-align:center; }
+    .eleve-selected { display:flex; justify-content:space-between; align-items:center; background:var(--surface-2); border:1px solid #00d4aa; border-radius:6px; padding:10px 14px; }
     .es-info    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .es-nom     { color:#e8f0fe; font-size:13px; font-weight:700; }
-    .es-section { font-size:11px; color:#64748b; }
-    .btn-changer{ background:transparent; border:1px solid #475569; color:#94a3b8; border-radius:5px; padding:4px 10px; font-size:11px; cursor:pointer; }
+    .es-nom     { color:var(--text); font-size:13px; font-weight:700; }
+    .es-section { font-size:11px; color:var(--text-3); }
+    .btn-changer{ background:transparent; border:1px solid var(--text-5); color:var(--text-2); border-radius:5px; padding:4px 10px; font-size:11px; cursor:pointer; }
     .btn-changer:hover { border-color:#ef4444; color:#ef4444; }
-    .type-btn { flex:1; padding:10px; border:1px solid #2a3f5f; border-radius:8px; background:#111827; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.2s; }
-    .type-btn:hover { border-color:#00d4aa; color:#e8f0fe; }
+    .type-btn { flex:1; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); color:var(--text-3); cursor:pointer; font-size:13px; transition:all 0.2s; }
+    .type-btn:hover { border-color:#00d4aa; color:var(--text); }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
     .active-mens  { background:rgba(0,212,170,0.15);  border-color:#00d4aa; color:#00d4aa; font-weight:600; }
     .tabs-bar { display:flex; gap:4px; margin-bottom:16px; }
-    .tab-btn  { padding:8px 18px; border:1px solid #2a3f5f; border-radius:8px; background:transparent; color:#64748b; cursor:pointer; font-size:13px; transition:all 0.15s; }
-    .tab-btn:hover  { border-color:#00d4aa; color:#e8f0fe; }
+    .tab-btn  { padding:8px 18px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text-3); cursor:pointer; font-size:13px; transition:all 0.15s; }
+    .tab-btn:hover  { border-color:#00d4aa; color:var(--text); }
     .tab-btn.active { background:rgba(0,212,170,0.1); border-color:#00d4aa; color:#00d4aa; font-weight:600; }
     .danger { color:#ef4444; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }

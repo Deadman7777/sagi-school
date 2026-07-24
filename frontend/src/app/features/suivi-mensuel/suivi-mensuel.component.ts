@@ -36,8 +36,8 @@ import { Eleve } from '../../core/models/eleve.model';
 @if (!loading() && globalData().length === 0) {
   <div class="empty-state">
     <div style="font-size:32px">📅</div>
-    <div style="color:#64748b;margin-top:8px">Aucun exercice actif ou aucun paiement enregistré.</div>
-    <div style="font-size:11px;color:#475569;margin-top:4px">Créez un exercice et enregistrez des paiements pour voir les données.</div>
+    <div style="color:var(--text-3);margin-top:8px">Aucun exercice actif ou aucun paiement enregistré.</div>
+    <div style="font-size:11px;color:var(--text-5);margin-top:4px">Créez un exercice et enregistrez des paiements pour voir les données.</div>
   </div>
 }
 @if (!loading()) {
@@ -227,7 +227,7 @@ import { Eleve } from '../../core/models/eleve.model';
 @if (onglet() === 'creances') {
   <div class="table-card">
     <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
-      <span style="color:#e8f0fe;font-weight:600">
+      <span style="color:var(--text);font-weight:600">
         ⚠️ {{ creances().length }} élèves avec solde impayé
       </span>
       <span class="teal bold mono">
@@ -324,11 +324,11 @@ import { Eleve } from '../../core/models/eleve.model';
           <td class="mono tr success">{{ m.total > 0 ? (m.total | number:'1.0-0') : '—' }}</td>
           <td class="mono tr danger">{{ m.charges > 0 ? (m.charges | number:'1.0-0') : '—' }}</td>
           <td class="mono tr warn-txt">{{ m.investissements > 0 ? (m.investissements | number:'1.0-0') : '—' }}</td>
-          <td class="mono tr" style="color:#94a3b8">
+          <td class="mono tr" style="color:var(--text-2)">
             {{ m.decaissements > 0 ? (m.decaissements | number:'1.0-0') : '—' }}
           </td>
           <td class="mono tr bold"
-              [style.color]="m.marge > 0 ? '#10b981' : m.marge < 0 ? '#ef4444' : '#64748b'">
+              [style.color]="m.marge > 0 ? '#10b981' : m.marge < 0 ? '#ef4444' : 'var(--text-3)'">
             {{ (m.total > 0 || m.decaissements > 0) ? (m.marge | number:'1.0-0') : '—' }}
           </td>
           <td class="mono tr" style="color:#a855f7">
@@ -342,7 +342,7 @@ import { Eleve } from '../../core/models/eleve.model';
           <td class="mono tr bold success">{{ totalGlobal() | number:'1.0-0' }}</td>
           <td class="mono tr bold danger">{{ totalCharges() | number:'1.0-0' }}</td>
           <td class="mono tr bold warn-txt">{{ totalInvestissements() | number:'1.0-0' }}</td>
-          <td class="mono tr bold" style="color:#94a3b8">{{ totalDecaissements() | number:'1.0-0' }}</td>
+          <td class="mono tr bold" style="color:var(--text-2)">{{ totalDecaissements() | number:'1.0-0' }}</td>
           <td class="mono tr bold" [style.color]="margeGlobale() >= 0 ? '#10b981' : '#ef4444'">
             {{ margeGlobale() | number:'1.0-0' }}
           </td>
@@ -371,7 +371,7 @@ import { Eleve } from '../../core/models/eleve.model';
       <ng-template let-e pTemplate="item">
         <div style="padding:6px 0">
           <div style="font-weight:600">{{ e.nom_complet }}</div>
-          <div style="font-size:11px;color:#64748b">
+          <div style="font-size:11px;color:var(--text-3)">
             {{ e.section_nom }} —
             Reste : <span style="color:#ef4444">{{ e.reste_a_payer | number:'1.0-0' }} FCFA</span>
           </div>
@@ -461,7 +461,7 @@ import { Eleve } from '../../core/models/eleve.model';
   @if (!eleveDetail()) {
     <div class="empty-state">
       <div style="font-size:40px">👤</div>
-      <div style="color:#64748b;margin-top:12px">Recherchez un élève pour voir son historique</div>
+      <div style="color:var(--text-3);margin-top:12px">Recherchez un élève pour voir son historique</div>
     </div>
   }
 }
@@ -469,76 +469,76 @@ import { Eleve } from '../../core/models/eleve.model';
 `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
-    .btn-refresh { background:transparent; border:1px solid #2a3f5f; color:#64748b; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
+    .btn-refresh { background:transparent; border:1px solid var(--border); color:var(--text-3); padding:6px 14px; border-radius:6px; cursor:pointer; font-size:12px; }
     .btn-refresh:hover { color:#00d4aa; border-color:#00d4aa; }
     /* KPIs */
     .kpi-grid  { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
-    .kpi-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:14px; border-top:3px solid var(--acc); }
+    .kpi-card  { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; border-top:3px solid var(--acc); }
     .kpi-icon  { font-size:20px; margin-bottom:6px; }
-    .kpi-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-label { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; }
     .kpi-value { font-size:20px; font-weight:700; font-family:monospace; margin:4px 0 6px; }
-    .kpi-sub   { font-size:10px; color:#64748b; }
-    .progress-mini { height:4px; background:#0b0f1a; border-radius:2px; overflow:hidden; }
+    .kpi-sub   { font-size:10px; color:var(--text-3); }
+    .progress-mini { height:4px; background:var(--bg); border-radius:2px; overflow:hidden; }
     .pm-fill   { height:100%; border-radius:2px; transition:width .4s; }
     /* Onglets */
-    .tabs-bar  { display:flex; gap:4px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
-    .tab-btn   { flex:1; padding:7px 10px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
+    .tabs-bar  { display:flex; gap:4px; margin-bottom:16px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; }
+    .tab-btn   { flex:1; padding:7px 10px; border:none; border-radius:7px; background:transparent; color:var(--text-3); font-size:12px; cursor:pointer; }
+    .tab-btn.active { background:var(--surface); color:#00d4aa; font-weight:600; border:1px solid var(--border); }
     .badge-count { display:inline-block; background:#ef4444; color:white; border-radius:10px; padding:1px 6px; font-size:10px; margin-left:4px; }
     /* Graphique barres */
-    .bar-section { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
+    .bar-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:16px; }
     .bs-header   { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
-    .bs-title    { font-size:12px; color:#64748b; }
+    .bs-title    { font-size:12px; color:var(--text-3); }
     .bs-total    { font-size:12px; color:#00d4aa; font-family:monospace; font-weight:600; }
     .bars-wrap   { display:flex; gap:6px; align-items:flex-end; height:130px; }
     .bar-item    { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end; }
-    .bar-amount  { font-size:8px; color:#64748b; font-family:monospace; text-align:center; word-break:break-all; min-height:16px; }
+    .bar-amount  { font-size:8px; color:var(--text-3); font-family:monospace; text-align:center; word-break:break-all; min-height:16px; }
     .bar-track   { width:100%; flex:1; display:flex; align-items:flex-end; max-height:90px; }
-    .bar-fill    { width:100%; background:#2a3f5f; border-radius:4px 4px 0 0; min-height:3px; transition:height .5s ease; }
+    .bar-fill    { width:100%; background:var(--border); border-radius:4px 4px 0 0; min-height:3px; transition:height .5s ease; }
     .bar-fill-active { background:linear-gradient(to top,#00d4aa,#0099ff); }
-    .bar-label   { font-size:10px; color:#94a3b8; font-weight:500; }
-    .bar-nb      { font-size:9px; color:#64748b; min-height:12px; }
+    .bar-label   { font-size:10px; color:var(--text-2); font-weight:500; }
+    .bar-nb      { font-size:9px; color:var(--text-3); min-height:12px; }
     .nb-active   { color:#00d4aa; }
-    .bar-active .bar-amount { color:#e8f0fe; }
+    .bar-active .bar-amount { color:var(--text); }
     /* Tableau */
-    .table-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-bottom:16px; }
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
-    ::ng-deep .p-datatable .p-datatable-tfoot > tr { background:#111827 !important; }
+    .table-card  { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    ::ng-deep .p-datatable .p-datatable-tfoot > tr { background:var(--surface-2) !important; }
     .row-empty td { opacity:.4; }
-    .row-active td.bold { color:#e8f0fe; }
+    .row-active td.bold { color:var(--text); }
     /* Taux bar */
     .taux-row      { display:flex; align-items:center; gap:8px; }
-    .taux-bar-track{ flex:1; height:8px; background:#0b0f1a; border-radius:4px; overflow:hidden; }
+    .taux-bar-track{ flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
     .taux-bar-fill { height:100%; border-radius:4px; transition:width .4s; }
     .taux-val      { font-size:11px; font-family:monospace; width:40px; text-align:right; }
     /* Élève */
     .search-zone { margin-bottom:20px; }
-    .eleve-card  { display:flex; align-items:center; gap:20px; background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:18px 20px; margin-bottom:14px; }
+    .eleve-card  { display:flex; align-items:center; gap:20px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:14px; }
     .ec-avatar   { width:52px; height:52px; border-radius:12px; background:linear-gradient(135deg,#00d4aa,#0099ff); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:700; color:#000; flex-shrink:0; }
     .ec-info     { flex:1; }
-    .ec-nom      { font-size:16px; font-weight:700; color:#e8f0fe; }
-    .ec-section  { font-size:12px; color:#64748b; margin-top:2px; }
+    .ec-nom      { font-size:16px; font-weight:700; color:var(--text); }
+    .ec-section  { font-size:12px; color:var(--text-3); margin-top:2px; }
     .ec-stats    { display:flex; gap:24px; }
     .ecs         { text-align:center; }
-    .ecs-label   { font-size:10px; color:#64748b; text-transform:uppercase; }
-    .ecs-val     { font-size:15px; font-weight:700; font-family:monospace; color:#e8f0fe; margin-top:2px; }
-    .progress-card  { background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
-    .pc-header      { display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px; color:#94a3b8; }
-    .progress-track { height:10px; background:#0b0f1a; border-radius:5px; overflow:hidden; }
+    .ecs-label   { font-size:10px; color:var(--text-3); text-transform:uppercase; }
+    .ecs-val     { font-size:15px; font-weight:700; font-family:monospace; color:var(--text); margin-top:2px; }
+    .progress-card  { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+    .pc-header      { display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px; color:var(--text-2); }
+    .progress-track { height:10px; background:var(--bg); border-radius:5px; overflow:hidden; }
     .progress-fill  { height:100%; border-radius:5px; transition:width .5s ease; }
     /* Utils */
     .mono      { font-family:monospace; font-size:12px; }
-    .bold      { font-weight:600; color:#e8f0fe; }
-    .small-txt { font-size:11px; color:#64748b; }
+    .bold      { font-weight:600; color:var(--text); }
+    .small-txt { font-size:11px; color:var(--text-3); }
     .teal      { color:#00d4aa; }
     .success   { color:#10b981; }
     .danger    { color:#ef4444; }
     .warn-txt  { color:#f59e0b; }
     .tr        { text-align:right; }
-    .empty-msg   { text-align:center; padding:40px; color:#64748b; }
+    .empty-msg   { text-align:center; padding:40px; color:var(--text-3); }
     .empty-state { text-align:center; padding:60px; }
     .w-full { width:100%; }
   `]

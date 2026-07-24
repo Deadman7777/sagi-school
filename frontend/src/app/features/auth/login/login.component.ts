@@ -57,17 +57,17 @@ import { MessageModule } from 'primeng/message';
     </div>
   `,
   styles: [`
-    .login-wrap { min-height:100vh; background:#0b0f1a; display:flex; align-items:center; justify-content:center; }
-    .login-card { width:400px; background:#111827; border:1px solid #1e2d45; border-radius:16px; padding:36px 32px; }
+    .login-wrap { min-height:100vh; background:var(--bg); display:flex; align-items:center; justify-content:center; }
+    .login-card { width:400px; background:var(--surface-2); border:1px solid var(--surface); border-radius:16px; padding:36px 32px; }
     .langue-selector { display:flex; justify-content:flex-end; gap:6px; margin-bottom:20px; }
-    .langue-btn { background:transparent; border:1px solid #1e2d45; border-radius:6px; padding:3px 8px; cursor:pointer; font-size:15px; }
+    .langue-btn { background:transparent; border:1px solid var(--surface); border-radius:6px; padding:3px 8px; cursor:pointer; font-size:15px; }
     .langue-btn.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
     .login-logo { text-align:center; margin-bottom:28px; }
     .logo-main { display:block; font-size:22px; font-weight:700; color:#00d4aa; }
-    .logo-sub  { display:block; font-size:12px; color:#64748b; margin-top:4px; }
+    .logo-sub  { display:block; font-size:12px; color:var(--text-3); margin-top:4px; }
     .form-group { margin-bottom:16px; }
-    .form-group label { display:block; font-size:12px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
-    ::ng-deep .p-inputtext { background:#1a2235 !important; border-color:#2a3f5f !important; color:#e8f0fe !important; }
+    .form-group label { display:block; font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+    ::ng-deep .p-inputtext { background:var(--surface-hover) !important; border-color:var(--border) !important; color:var(--text) !important; }
     ::ng-deep .p-inputtext:focus { border-color:#00d4aa !important; box-shadow:none !important; }
     .w-full { width:100% !important; }
   `]

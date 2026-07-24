@@ -240,15 +240,15 @@ const MOIS_OPTIONS = [
             [modal]="true" [style]="{width:'440px'}" [draggable]="false">
     @if (bulletinAnnuler !== null) {
     <div style="padding:8px 0">
-      <div style="background:#1a1a2e;border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
-        <div style="font-size:13px;color:#e8f0fe;font-weight:600">
+      <div style="background:var(--surface-4);border-radius:8px;padding:14px;margin-bottom:16px;border-left:4px solid #ef4444">
+        <div style="font-size:13px;color:var(--text);font-weight:600">
           {{ bulletinAnnuler!.employe_nom }} — {{ bulletinAnnuler!.periode }}
         </div>
-        <div style="font-size:12px;color:#94a3b8;margin-top:4px">
+        <div style="font-size:12px;color:var(--text-2);margin-top:4px">
           Net à payer : {{ bulletinAnnuler!.net_a_payer | number:'1.0-0' }} FCFA
         </div>
       </div>
-      <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0">
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin:0">
         Cette opération va générer des <strong style="color:#f59e0b">contre-écritures SYSCOHADA</strong>
         pour annuler toutes les écritures de paie (661, 422, IPRES, IR, net à payer).
         <br><br>
@@ -336,7 +336,7 @@ const MOIS_OPTIONS = [
                   optionLabel="label" optionValue="value" styleClass="param-input"
                   (onChange)="sauvegarderRegime()" />
       </div>
-      <div style="font-size:11px;color:#64748b;margin-top:6px">
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px">
         {{ (regimePaie === 'SIMPLIFIE' ? 'rh.regime_aide_simplifie' : 'rh.regime_aide_complet') | translate }}
       </div>
     </div>
@@ -477,7 +477,7 @@ const MOIS_OPTIONS = [
               <tr>
                 <td class="mono">{{ t.min | number:'1.0-0' }}</td>
                 <td class="mono">{{ t.max ? (t.max | number:'1.0-0') : '∞' }}</td>
-                <td class="mono bold" [style.color]="t.taux > 0 ? '#f59e0b' : '#64748b'">{{ t.taux }} %</td>
+                <td class="mono bold" [style.color]="t.taux > 0 ? '#f59e0b' : 'var(--text-3)'">{{ t.taux }} %</td>
               </tr>
             }
           </tbody>
@@ -667,7 +667,7 @@ const MOIS_OPTIONS = [
           <p-select [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
                     [(ngModel)]="formBulletin.ressource_id" styleClass="w-full" [showClear]="true"
                     placeholder="— Trésorerie générale —" [filter]="true" />
-          <small style="color:#64748b;font-size:10px">Contrôle du disponible sur le coût employeur (661 + 6641)</small>
+          <small style="color:var(--text-3);font-size:10px">Contrôle du disponible sur le coût employeur (661 + 6641)</small>
         </div>
         <div class="form-group full" *ngIf="projetsGouv().length">
           <label>Projet (analytique)</label>
@@ -675,7 +675,7 @@ const MOIS_OPTIONS = [
                     [(ngModel)]="formBulletin.projet_id" styleClass="w-full" [showClear]="true"
                     placeholder="— Aucun —" [filter]="true" />
         </div>
-        <div class="form-group full" style="font-size:11px;color:#64748b">
+        <div class="form-group full" style="font-size:11px;color:var(--text-3)">
           ℹ️ {{ 'rh.avances_auto_info' | translate }}
         </div>
       </div>
@@ -779,7 +779,7 @@ const MOIS_OPTIONS = [
     <div class="form-group">
       <div style="display:flex;align-items:center;justify-content:space-between">
         <label style="margin:0">{{ 'rh.avance_mode' | translate }}</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
           <input type="checkbox" [(ngModel)]="formAvance.multi_mode" (change)="onToggleMultiRH(formAvance, formAvance.montant)" />
           Multi-mode
         </label>
@@ -798,7 +798,7 @@ const MOIS_OPTIONS = [
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <button type="button" (click)="ajouterModeRH(formAvance)"
-                style="background:transparent;border:1px dashed #2a3f5f;color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
+                style="background:transparent;border:1px dashed var(--border);color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
         <span style="font-size:12px;font-family:monospace" [style.color]="resteRH(formAvance, formAvance.montant) === 0 ? '#00d4aa' : '#f59e0b'">
           Reste : {{ resteRH(formAvance, formAvance.montant) | number:'1.0-0' }} FCFA
         </span>
@@ -927,97 +927,97 @@ const MOIS_OPTIONS = [
 `,
   styles: [`
     .page-header  { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title   { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub     { font-size:12px; color:#64748b; }
+    .page-title   { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub     { font-size:12px; color:var(--text-3); }
     .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
-    .kpi-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:16px; border-top:3px solid var(--acc); }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; border-top:3px solid var(--acc); }
     .kpi-icon  { font-size:24px; margin-bottom:8px; }
-    .kpi-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-label { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; }
     .kpi-value { font-size:24px; font-weight:700; font-family:monospace; margin:4px 0; }
-    .kpi-sub   { font-size:11px; color:#64748b; }
-    .tabs-bar  { display:flex; gap:3px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
-    .tab-btn   { flex:1; padding:7px 8px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
-    .table-card    { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
+    .kpi-sub   { font-size:11px; color:var(--text-3); }
+    .tabs-bar  { display:flex; gap:3px; margin-bottom:16px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; }
+    .tab-btn   { flex:1; padding:7px 8px; border:none; border-radius:7px; background:transparent; color:var(--text-3); font-size:12px; cursor:pointer; }
+    .tab-btn.active { background:var(--surface); color:#00d4aa; font-weight:600; border:1px solid var(--border); }
+    .table-card    { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
     .table-toolbar { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; }
-    .tbl-count     { color:#e8f0fe; font-weight:600; font-size:13px; }
-    .filter-bar    { display:flex; gap:10px; padding:8px 16px 12px; background:#151f30; }
+    .tbl-count     { color:var(--text); font-weight:600; font-size:13px; }
+    .filter-bar    { display:flex; gap:10px; padding:8px 16px 12px; background:var(--surface-2); }
     .filter-sel    { width:200px; }
-    .filter-input  { background:#1e2d45; border:1px solid #2a3f5f; color:#e8f0fe; border-radius:6px; padding:7px 10px; font-size:12px; width:100px; }
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr  { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    .filter-input  { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 10px; font-size:12px; width:100px; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr  { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
     .mono      { font-family:monospace; font-size:12px; }
-    .bold      { font-weight:600; color:#e8f0fe; }
-    .small-txt { font-size:11px; color:#64748b; }
-    .fcfa      { font-size:10px; color:#64748b; }
+    .bold      { font-weight:600; color:var(--text); }
+    .small-txt { font-size:11px; color:var(--text-3); }
+    .fcfa      { font-size:10px; color:var(--text-3); }
     .success-txt { color:#10b981; }
     .danger-txt  { color:#ef4444; }
     .warn-txt    { color:#f59e0b; }
     .success { color:#10b981; }
     .danger  { color:#ef4444; }
     .warn    { color:#f59e0b; }
-    .empty-msg { text-align:center; padding:40px; color:#64748b; }
+    .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
     .btn-row { display:flex; gap:4px; }
     .badge-cadre { font-size:9px; background:#7c3aed; color:white; padding:1px 5px; border-radius:3px; margin-left:6px; vertical-align:middle; }
     /* Paramètres */
-    .params-card   { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; padding:20px; }
+    .params-card   { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
     .params-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .params-title  { font-size:16px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .params-sub    { font-size:12px; color:#64748b; }
+    .params-title  { font-size:16px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .params-sub    { font-size:12px; color:var(--text-3); }
     .params-grid   { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:16px; }
-    .params-section { background:#111827; border:1px solid #2a3f5f; border-radius:8px; padding:14px; }
+    .params-section { background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:14px; }
     .ps-title      { font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
-    .ps-row        { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; color:#94a3b8; }
+    .ps-row        { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-bottom:1px solid rgba(42,63,95,0.3); font-size:12px; color:var(--text-2); }
     .ps-row > span:first-child { flex:1 1 auto; min-width:0; }
-    .ps-val        { font-family:monospace; font-weight:600; color:#e8f0fe; }
+    .ps-val        { font-family:monospace; font-weight:600; color:var(--text); }
     .param-input   { width:130px; flex:0 0 auto; max-width:100%; }
     :host ::ng-deep .param-input .p-inputnumber,
     :host ::ng-deep .param-input input { width:100%; box-sizing:border-box; }
     .params-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
     .tranches-section { margin-top:16px; }
     .tranches-table { width:auto; border-collapse:collapse; }
-    .tranches-table th { background:#111827; color:#64748b; font-size:10px; text-transform:uppercase; padding:6px 12px; text-align:left; }
-    .tranches-table td { padding:5px 12px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:11px; color:#94a3b8; }
+    .tranches-table th { background:var(--surface-2); color:var(--text-3); font-size:10px; text-transform:uppercase; padding:6px 12px; text-align:left; }
+    .tranches-table td { padding:5px 12px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:11px; color:var(--text-2); }
     /* Forms */
     .form-grid      { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group     { display:flex; flex-direction:column; gap:5px; }
-    .form-group label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.3px; }
+    .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .form-group.full { grid-column:1/-1; }
-    .form-separator { grid-column:1/-1; font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; border-bottom:1px solid #2a3f5f; padding-bottom:6px; margin-top:4px; }
+    .form-separator { grid-column:1/-1; font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:6px; margin-top:4px; }
     .w-full { width:100%; }
-    .toggle-label { display:flex; align-items:center; gap:8px; font-size:12px; color:#94a3b8; cursor:pointer; }
+    .toggle-label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-2); cursor:pointer; }
     .toggle-cb    { width:16px; height:16px; cursor:pointer; }
     /* Employe banner */
-    .employe-banner { background:#111827; border:1px solid #2a3f5f; border-radius:8px; padding:12px; margin-bottom:4px; }
-    .eb-name    { font-size:14px; font-weight:700; color:#e8f0fe; }
-    .eb-sub     { font-size:11px; color:#64748b; margin-top:3px; }
+    .employe-banner { background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:4px; }
+    .eb-name    { font-size:14px; font-weight:700; color:var(--text); }
+    .eb-sub     { font-size:11px; color:var(--text-3); margin-top:3px; }
     .eb-salaire { font-size:12px; color:#00d4aa; margin-top:4px; font-family:monospace; }
     /* Dialog bulletin */
     .dialog-two-col { display:grid; grid-template-columns:1fr 380px; gap:20px; align-items:start; }
     .bulletin-form  { }
     /* Preview panel */
-    .preview-panel  { background:#0f1a2e; border:1px solid #2a3f5f; border-radius:8px; padding:14px; }
+    .preview-panel  { background:var(--surface-3); border:1px solid var(--border); border-radius:8px; padding:14px; }
     .preview-title  { font-size:12px; font-weight:700; color:#00d4aa; text-transform:uppercase; margin-bottom:12px; }
-    .net-highlight  { background:#002a1e; border:2px solid #00d4aa; border-radius:6px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
-    .nh-label { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; }
+    .net-highlight  { background:var(--pos-bg); border:2px solid #00d4aa; border-radius:6px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+    .nh-label { font-size:10px; font-weight:700; color:var(--text-3); text-transform:uppercase; }
     .nh-val   { font-size:18px; font-weight:700; color:#00d4aa; font-family:monospace; }
     .preview-section { margin-bottom:10px; }
     .pv-sec-title { font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:5px; border-bottom:1px solid rgba(42,63,95,0.5); padding-bottom:3px; }
-    .pv-row   { display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; padding:3px 0; }
+    .pv-row   { display:flex; justify-content:space-between; font-size:11px; color:var(--text-2); padding:3px 0; }
     .pv-total { display:flex; justify-content:space-between; font-size:11px; font-weight:700; padding:5px 0 0; border-top:1px solid rgba(42,63,95,0.5); margin-top:3px; }
-    .pv-cout  { font-size:11px; color:#94a3b8; margin-top:10px; text-align:right; }
+    .pv-cout  { font-size:11px; color:var(--text-2); margin-top:10px; text-align:right; }
     /* Detail dialog */
-    .detail-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #2a3f5f; }
+    .detail-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
     .detail-grid   { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .dg-title  { font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:6px; }
-    .dg-row    { display:flex; justify-content:space-between; font-size:11px; color:#94a3b8; padding:4px 0; border-bottom:1px solid rgba(42,63,95,0.2); }
+    .dg-row    { display:flex; justify-content:space-between; font-size:11px; color:var(--text-2); padding:4px 0; border-bottom:1px solid rgba(42,63,95,0.2); }
     .dg-total  { display:flex; justify-content:space-between; font-size:12px; font-weight:700; padding:6px 0 0; border-top:1px solid rgba(42,63,95,0.5); margin-top:3px; }
-    .net-box-detail { background:#002a1e; border:2px solid #00d4aa; border-radius:8px; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
+    .net-box-detail { background:var(--pos-bg); border:2px solid #00d4aa; border-radius:8px; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
     .nbd-val  { font-size:20px; font-weight:700; color:#00d4aa; font-family:monospace; }
-    .cout-box { text-align:right; font-size:11px; color:#64748b; margin-top:8px; }
+    .cout-box { text-align:right; font-size:11px; color:var(--text-3); margin-top:8px; }
     /* Confirm */
-    .confirm-msg    { color:#94a3b8; margin-bottom:12px; line-height:1.5; }
-    .confirm-detail { background:#0f1a2e; border:1px solid #2a3f5f; border-radius:6px; padding:10px 14px; font-size:12px; color:#94a3b8; }
+    .confirm-msg    { color:var(--text-2); margin-bottom:12px; line-height:1.5; }
+    .confirm-detail { background:var(--surface-3); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:12px; color:var(--text-2); }
   `]
 })
 export class RhComponent implements OnInit {

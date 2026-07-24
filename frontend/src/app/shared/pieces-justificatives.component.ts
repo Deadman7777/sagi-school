@@ -56,15 +56,15 @@ interface Piece {
     .pj-btn { display:flex; align-items:center; gap:6px; padding:6px 12px; background:#1565c0;
               color:#fff; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; }
     .pj-btn.disabled { opacity:.5; cursor:not-allowed; }
-    .pj-empty { font-size:12px; color:#64748b; margin:2px 0; }
+    .pj-empty { font-size:12px; color:var(--text-3); margin:2px 0; }
     .pj-err { font-size:12px; color:#f87171; margin:2px 0; }
     .pj-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
-    .pj-item { display:flex; align-items:center; gap:8px; background:#1e2d45; border:1px solid #2a3f5f;
+    .pj-item { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border);
                border-radius:6px; padding:5px 8px; font-size:12px; }
     .pj-type { color:#4fc3f7; font-size:10px; text-transform:uppercase; letter-spacing:.5px; flex:none; }
-    .pj-nom { color:#e0e6ed; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .pj-taille { color:#64748b; flex:none; font-family:monospace; }
-    .pj-ic { background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:2px 4px; }
+    .pj-nom { color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pj-taille { color:var(--text-3); flex:none; font-family:monospace; }
+    .pj-ic { background:transparent; border:none; color:var(--text-2); cursor:pointer; font-size:14px; padding:2px 4px; }
     .pj-ic.danger { color:#f87171; }
   `],
 })

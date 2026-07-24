@@ -174,10 +174,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <!-- Évaluations disponibles + création rapide -->
       <div *ngIf="classeNotes && matiereNotes" style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600">
+          <span style="font-size:11px;color:var(--text-3);text-transform:uppercase;font-weight:600">
             Évaluations — {{ trimestreNotes || 'Tous trimestres' }}
           </span>
-          <span style="font-size:11px;color:#2a3f5f">{{ evaluations().length }} évaluation(s)</span>
+          <span style="font-size:11px;color:var(--border)">{{ evaluations().length }} évaluation(s)</span>
         </div>
         <div class="evals-list" *ngIf="evaluations().length > 0">
           <div class="eval-card" *ngFor="let e of evaluations()"
@@ -196,12 +196,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
       <!-- Grille de saisie notes — s'affiche dès qu'une évaluation est sélectionnée -->
       <div class="table-card" *ngIf="evalSelectionnee">
-        <div style="padding:12px 16px;border-bottom:1px solid #2a3f5f;display:flex;justify-content:space-between;align-items:center">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
           <div>
-            <span style="color:#e8f0fe;font-weight:600">
+            <span style="color:var(--text);font-weight:600">
               {{ evalSelectionnee.matiere_nom }} · {{ evalSelectionnee.type_eval_nom }}{{ evalSelectionnee.titre ? ' — ' + evalSelectionnee.titre : '' }}
             </span>
-            <span style="color:#64748b;font-size:11px;margin-left:8px">
+            <span style="color:var(--text-3);font-size:11px;margin-left:8px">
               {{ evalSelectionnee.trimestre }} · /{{ evalSelectionnee.note_max }} ·
               {{ elevesNotes().length }} élève(s)
             </span>
@@ -288,7 +288,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <td class="bold">{{ r.eleve_nom }}</td>
               <td class="mono" *ngFor="let m of r.matieres" style="text-align:center">
                 <div>{{ m.moyenne !== null ? m.moyenne : '—' }}</div>
-                <div *ngIf="m.rang_matiere" style="font-size:10px;color:#64748b">{{ m.rang_matiere }}e</div>
+                <div *ngIf="m.rang_matiere" style="font-size:10px;color:var(--text-3)">{{ m.rang_matiere }}e</div>
               </td>
               <td class="mono bold" style="color:#00d4aa">{{ r.moy_generale }}</td>
               <td>{{ r.appreciation_generale }}</td>
@@ -306,28 +306,28 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     <!-- ANALYSE PERFORMANCE -->
     <div *ngIf="onglet()==='analyse'">
       @if (loadingAnalyse()) {
-        <div class="empty-msg" style="padding:40px; text-align:center; color:#64748b">Chargement...</div>
+        <div class="empty-msg" style="padding:40px; text-align:center; color:var(--text-3)">Chargement...</div>
       } @else if (analyse()) {
         <!-- KPI distribution -->
         <div class="analyse-grid" style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px">
-          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #f59e0b">
-            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Excellent ≥16</div>
+          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #f59e0b">
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Excellent ≥16</div>
             <div style="font-size:22px; font-weight:700; color:#f59e0b">{{ analyse()!.distribution.excellent }}</div>
           </div>
-          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #10b981">
-            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Bien ≥14</div>
+          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #10b981">
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Bien ≥14</div>
             <div style="font-size:22px; font-weight:700; color:#10b981">{{ analyse()!.distribution.bien }}</div>
           </div>
-          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #0099ff">
-            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Assez bien ≥12</div>
+          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #0099ff">
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Assez bien ≥12</div>
             <div style="font-size:22px; font-weight:700; color:#0099ff">{{ analyse()!.distribution.assez_bien }}</div>
           </div>
-          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #a855f7">
-            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Passable ≥10</div>
+          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #a855f7">
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Passable ≥10</div>
             <div style="font-size:22px; font-weight:700; color:#a855f7">{{ analyse()!.distribution.passable }}</div>
           </div>
-          <div class="kpi-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:14px; text-align:center; border-top:3px solid #ef4444">
-            <div style="font-size:11px; color:#64748b; margin-bottom:4px">Insuffisant &lt;10</div>
+          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #ef4444">
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Insuffisant &lt;10</div>
             <div style="font-size:22px; font-weight:700; color:#ef4444">{{ analyse()!.distribution.insuffisant }}</div>
           </div>
         </div>
@@ -335,20 +335,20 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <!-- Évolution par trimestre -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
 
-          <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden">
-            <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">📈 Évolution par trimestre</div>
+          <div class="table-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden">
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">📈 Évolution par trimestre</div>
             <table style="width:100%; border-collapse:collapse">
               <thead><tr>
-                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Trimestre</th>
-                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
-                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Élèves</th>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Trimestre</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Moyenne</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Élèves</th>
               </tr></thead>
               <tbody>
                 @for (t of analyse()!.evolution; track t.trimestre) {
                   <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
                     <td style="padding:8px 12px; font-weight:600; color:#00d4aa">{{ t.trimestre }}</td>
-                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#e8f0fe">{{ t.moyenne }}/20</td>
-                    <td style="padding:8px 12px; text-align:right; color:#64748b">{{ t.nb_eleves }}</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:var(--text)">{{ t.moyenne }}/20</td>
+                    <td style="padding:8px 12px; text-align:right; color:var(--text-3)">{{ t.nb_eleves }}</td>
                   </tr>
                 }
               </tbody>
@@ -356,22 +356,22 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           </div>
 
           <!-- Top classes -->
-          <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden">
-            <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">🏫 Top Classes — {{ analyse()!.trimestre_ref }}</div>
+          <div class="table-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden">
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">🏫 Top Classes — {{ analyse()!.trimestre_ref }}</div>
             <table style="width:100%; border-collapse:collapse">
               <thead><tr>
-                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Rang</th>
-                <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Classe</th>
-                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
-                <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Effectif</th>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Rang</th>
+                <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Classe</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Moyenne</th>
+                <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Effectif</th>
               </tr></thead>
               <tbody>
                 @for (c of analyse()!.top_classes; track c.rang) {
                   <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
                     <td style="padding:8px 12px; color:#f59e0b; font-weight:700">{{ c.rang }}</td>
-                    <td style="padding:8px 12px; color:#e8f0fe">{{ c.classe }}</td>
+                    <td style="padding:8px 12px; color:var(--text)">{{ c.classe }}</td>
                     <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa">{{ c.moyenne }}/20</td>
-                    <td style="padding:8px 12px; text-align:right; color:#64748b">{{ c.nb }}</td>
+                    <td style="padding:8px 12px; text-align:right; color:var(--text-3)">{{ c.nb }}</td>
                   </tr>
                 }
               </tbody>
@@ -380,21 +380,21 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
 
         <!-- Top élèves -->
-        <div class="table-card" style="background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; margin-top:16px">
-          <div style="padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe">🏆 Top 10 Élèves — {{ analyse()!.trimestre_ref }}</div>
+        <div class="table-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-top:16px">
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">🏆 Top 10 Élèves — {{ analyse()!.trimestre_ref }}</div>
           <table style="width:100%; border-collapse:collapse">
             <thead><tr>
-              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Rang</th>
-              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Élève</th>
-              <th style="padding:8px 12px; text-align:left; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Classe</th>
-              <th style="padding:8px 12px; text-align:right; font-size:11px; color:#64748b; border-bottom:1px solid #2a3f5f">Moyenne</th>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Rang</th>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Élève</th>
+              <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Classe</th>
+              <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Moyenne</th>
             </tr></thead>
             <tbody>
               @for (e of analyse()!.top_eleves; track e.rang) {
                 <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
-                  <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : '#64748b' }}">{{ e.rang }}</td>
-                  <td style="padding:8px 12px; font-weight:600; color:#e8f0fe">{{ e.nom }}</td>
-                  <td style="padding:8px 12px; color:#64748b">{{ e.classe }}</td>
+                  <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : 'var(--text-3)' }}">{{ e.rang }}</td>
+                  <td style="padding:8px 12px; font-weight:600; color:var(--text)">{{ e.nom }}</td>
+                  <td style="padding:8px 12px; color:var(--text-3)">{{ e.classe }}</td>
                   <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa; font-weight:700">{{ e.moyenne }}/20</td>
                 </tr>
               }
@@ -402,7 +402,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           </table>
         </div>
       } @else {
-        <div style="text-align:center; padding:60px; color:#64748b">Aucune donnée disponible. Calculez d'abord les moyennes.</div>
+        <div style="text-align:center; padding:60px; color:var(--text-3)">Aucune donnée disponible. Calculez d'abord les moyennes.</div>
       }
     </div>
 
@@ -429,7 +429,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
 
       <!-- Compteur -->
-      <div style="font-size:11px;color:#64748b;margin-bottom:10px" *ngIf="!loadingHistorique()">
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:10px" *ngIf="!loadingHistorique()">
         {{ historiqueFiltres().length }} bulletin(s) trouvé(s)
       </div>
 
@@ -459,18 +459,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <ng-template pTemplate="body" let-b>
               <tr>
                 <td class="bold">{{ b.eleve_nom }}</td>
-                <td style="color:#94a3b8">{{ b.classe }}</td>
+                <td style="color:var(--text-2)">{{ b.classe }}</td>
                 <td>
                   <p-tag [value]="b.trimestre"
                          [severity]="b.trimestre==='T1' ? 'info' : b.trimestre==='T2' ? 'warn' : 'success'" />
                 </td>
-                <td class="mono" style="color:#64748b">{{ b.annee_scolaire }}</td>
+                <td class="mono" style="color:var(--text-3)">{{ b.annee_scolaire }}</td>
                 <td style="text-align:center">
                   <span class="mono bold" [style.color]="b.moy_generale >= 10 ? '#10b981' : '#ef4444'">
                     {{ b.moy_generale }}
                   </span>
                 </td>
-                <td style="text-align:center;color:#64748b">{{ b.nb_matieres }}</td>
+                <td style="text-align:center;color:var(--text-3)">{{ b.nb_matieres }}</td>
                 <td style="text-align:center">
                   <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="danger"
                             (onClick)="telechargerBulletinHistorique(b)"
@@ -591,49 +591,49 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
-    .page-title  { font-size:20px; font-weight:600; color:#e8f0fe; margin:0 0 4px; }
-    .page-sub    { font-size:12px; color:#64748b; }
-    .tabs-bar { display:flex; gap:3px; margin-bottom:16px; background:#111827; border:1px solid #2a3f5f; border-radius:10px; padding:4px; }
-    .tab-btn { flex:1; padding:7px 8px; border:none; border-radius:7px; background:transparent; color:#64748b; font-size:12px; cursor:pointer; }
-    .tab-btn.active { background:#1e2d45; color:#00d4aa; font-weight:600; border:1px solid #2a3f5f; }
+    .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .page-sub    { font-size:12px; color:var(--text-3); }
+    .tabs-bar { display:flex; gap:3px; margin-bottom:16px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:4px; }
+    .tab-btn { flex:1; padding:7px 8px; border:none; border-radius:7px; background:transparent; color:var(--text-3); font-size:12px; cursor:pointer; }
+    .tab-btn.active { background:var(--surface); color:#00d4aa; font-weight:600; border:1px solid var(--border); }
     .param-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-    .param-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
-    .pc-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #2a3f5f; font-weight:600; color:#e8f0fe; font-size:13px; }
-    .pc-filter { padding:8px 16px; border-bottom:1px solid #2a3f5f; }
+    .param-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .pc-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text); font-size:13px; }
+    .pc-filter { padding:8px 16px; border-bottom:1px solid var(--border); }
     .pc-body { padding:8px 0; max-height:300px; overflow-y:auto; }
-    .pc-item { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:13px; color:#94a3b8; }
-    .pc-item:hover { background:#1a2235; }
+    .pc-item { display:flex; justify-content:space-between; align-items:center; padding:8px 16px; border-bottom:1px solid rgba(42,63,95,0.3); font-size:13px; color:var(--text-2); }
+    .pc-item:hover { background:var(--surface-hover); }
     .pc-right { display:flex; align-items:center; gap:2px; }
     .pc-actions { display:flex; align-items:center; gap:2px; }
-    .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#1e2d45; border:1px solid #2a3f5f; border-radius:10px; padding:12px 16px; margin-bottom:16px; }
-    .periode-label { font-weight:600; color:#e8f0fe; font-size:13px; }
-    .periode-hint { font-size:11px; color:#64748b; }
+    .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
+    .periode-label { font-weight:600; color:var(--text); font-size:13px; }
+    .periode-hint { font-size:11px; color:var(--text-3); }
     ::ng-deep .periode-select { min-width:150px; }
     ::ng-deep .periode-nb { width:110px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
     .filters-bar { display:flex; gap:8px; flex-wrap:wrap; }
     .filter-drop { min-width:160px; }
     .evals-list { display:flex; gap:8px; flex-wrap:wrap; }
-    .eval-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:8px; padding:10px 14px; cursor:pointer; transition:all 0.2s; }
+    .eval-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; cursor:pointer; transition:all 0.2s; }
     .eval-card:hover { border-color:#00d4aa; }
     .eval-card.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
-    .ec-titre { font-size:13px; font-weight:600; color:#e8f0fe; }
-    .ec-info  { font-size:11px; color:#64748b; margin-top:4px; }
-    .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
-    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:#111827 !important; color:#64748b !important; font-size:11px !important; text-transform:uppercase !important; border-color:#2a3f5f !important; }
-    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:#1e2d45 !important; color:#94a3b8 !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
+    .ec-titre { font-size:13px; font-weight:600; color:var(--text); }
+    .ec-info  { font-size:11px; color:var(--text-3); margin-top:4px; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
+    ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
     .mono  { font-family:monospace; font-size:12px; }
-    .bold  { font-weight:600; color:#e8f0fe; }
-    .empty-msg { text-align:center; padding:20px; color:#64748b; font-size:12px; }
+    .bold  { font-weight:600; color:var(--text); }
+    .empty-msg { text-align:center; padding:20px; color:var(--text-3); font-size:12px; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:6px; }
-    .form-group label { font-size:12px; color:#94a3b8; text-transform:uppercase; }
+    .form-group label { font-size:12px; color:var(--text-2); text-transform:uppercase; }
     .form-group.full { grid-column:1/-1; }
     .w-full { width:100%; }
-    .stats-classe { display:flex; gap:16px; padding:12px 16px; border-bottom:1px solid #2a3f5f; }
+    .stats-classe { display:flex; gap:16px; padding:12px 16px; border-bottom:1px solid var(--border); }
     .sc-item { display:flex; flex-direction:column; gap:2px; font-size:12px; }
-    .sc-item span { color:#64748b; }
-    .sc-item strong { color:#e8f0fe; font-family:monospace; }
+    .sc-item span { color:var(--text-3); }
+    .sc-item strong { color:var(--text); font-family:monospace; }
   `]
 })
 export class AcademiqueComponent implements OnInit {

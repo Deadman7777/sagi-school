@@ -737,41 +737,41 @@ interface Transfert {
   styles: [`
     .gouv { padding: 4px; }
     .head h1 { margin:0; font-size:1.5rem; }
-    .sub { margin:4px 0 0; color:#6b7280; font-size:.9rem; }
+    .sub { margin:4px 0 0; color:var(--text-4); font-size:.9rem; }
     .tabs { display:flex; gap:6px; margin:16px 0; border-bottom:1px solid var(--surface-border,#e5e7eb); }
-    .tab { background:none; border:none; padding:10px 16px; cursor:pointer; font-size:.95rem; color:#6b7280; border-bottom:3px solid transparent; }
+    .tab { background:none; border:none; padding:10px 16px; cursor:pointer; font-size:.95rem; color:var(--text-4); border-bottom:3px solid transparent; }
     .tab.active { color:var(--primary-color,#00d4aa); border-bottom-color:var(--primary-color,#00d4aa); font-weight:600; }
     .barre { display:flex; align-items:center; gap:14px; margin-bottom:14px; }
-    .hint { color:#6b7280; font-size:.83rem; }
+    .hint { color:var(--text-4); font-size:.83rem; }
     .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
     .kpi { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:10px; padding:12px 16px; display:flex; flex-direction:column; }
-    .kpi .lbl { font-size:.8rem; color:#6b7280; }
+    .kpi .lbl { font-size:.8rem; color:var(--text-4); }
     .kpi .val { font-size:1.35rem; font-weight:700; }
     .canaux { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
     .canal { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:8px; padding:8px 14px; display:flex; flex-direction:column; min-width:120px; }
-    .c-lbl { font-size:.78rem; color:#6b7280; }
+    .c-lbl { font-size:.78rem; color:var(--text-4); }
     .c-solde { font-size:1.05rem; font-weight:700; }
     .c-solde.neg { color:#e24c4c; }
     .r { text-align:right; }
     .actions { text-align:right; white-space:nowrap; }
-    .resp { font-size:.78rem; color:#6b7280; }
+    .resp { font-size:.78rem; color:var(--text-4); }
     tr.inactif { opacity:.5; }
     .vide { text-align:center; color:#9ca3af; padding:24px; }
     .form-grid { display:grid; grid-template-columns:160px 1fr; gap:12px 14px; align-items:center; }
     .form-grid textarea, .form-grid .row2 { grid-column:2; }
     .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .ged-head { display:flex; gap:10px; margin-bottom:14px; align-items:center; }
-    .solde-info { margin:12px 0 0; color:#6b7280; font-size:.85rem; }
+    .solde-info { margin:12px 0 0; color:var(--text-4); font-size:.85rem; }
     .solde-info.warn { color:#d97706; font-weight:600; }
     :host ::ng-deep .ml { margin-left:8px; }
     .affect-head { margin-bottom:12px; padding:8px 12px; background:var(--surface-100,#f3f4f6); border-radius:8px; font-size:.9rem; }
     .affect-add { margin:12px 0; text-align:right; }
     .trac-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:8px; }
-    .trac-col h4 { margin:0 0 8px; font-size:.85rem; text-transform:uppercase; color:#6b7280; }
+    .trac-col h4 { margin:0 0 8px; font-size:.85rem; text-transform:uppercase; color:var(--text-4); }
     .trac-src { margin:0; font-size:.9rem; }
     .trac-montant { margin:4px 0 0; font-size:1.3rem; font-weight:700; }
     .trac-line { display:flex; justify-content:space-between; font-size:.88rem; padding:3px 0; border-bottom:1px dashed var(--surface-border,#e5e7eb); }
-    .trac-h { margin:16px 0 8px; font-size:.85rem; text-transform:uppercase; color:#6b7280; }
+    .trac-h { margin:16px 0 8px; font-size:.85rem; text-transform:uppercase; color:var(--text-4); }
     .trac-col.card { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:10px; padding:14px 16px; }
     .tt { color:#9ca3af; font-style:normal; font-size:.82rem; }
     .alertes { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
@@ -779,7 +779,7 @@ interface Transfert {
     .alerte.warn { background:#fffbeb; border-left-color:#d97706; }
     .alerte.danger { background:#fef2f2; border-left-color:#e24c4c; }
     .bar-row { display:grid; grid-template-columns:130px 1fr auto; align-items:center; gap:10px; padding:5px 0; font-size:.85rem; }
-    .bar-lbl { color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .bar-lbl { color:var(--text-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .bar-track { background:var(--surface-100,#f1f5f9); height:12px; border-radius:6px; overflow:hidden; }
     .bar-fill { display:block; height:100%; background:#00d4aa; border-radius:6px; }
     .bar-fill.alt { background:#6366f1; }
