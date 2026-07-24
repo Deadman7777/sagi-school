@@ -21,9 +21,8 @@ import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 
 interface PecForm {
   prise_en_charge: string | null;
-  type_pec: TypePEC | null;
-  taux_pec_inscription: number;
-  taux_pec_mensualite: number;
+  pec_inscription: number;
+  pec_mensualite: number;
   obs_prise_en_charge: string;
 }
 
@@ -277,8 +276,8 @@ interface PecForm {
               <th>Section</th>
               <th>Motif</th>
               <th>Type PEC</th>
-              <th class="text-right">Taux inscr.</th>
-              <th class="text-right">Taux mens.</th>
+              <th class="text-right">PEC inscr.</th>
+              <th class="text-right">PEC mens.</th>
               <th class="text-right">PEC mensuel</th>
               <th class="text-right">PEC annuel</th>
               <th class="text-right">Reste à payer</th>
@@ -304,10 +303,10 @@ interface PecForm {
                 }
               </td>
               <td class="mono text-right">
-                {{ e.taux_pec_inscription > 0 ? (e.taux_pec_inscription + ' %') : '—' }}
+                {{ e.pec_inscription > 0 ? ((e.pec_inscription | number:'1.0-0') + ' F') : '—' }}
               </td>
               <td class="mono text-right">
-                {{ e.taux_pec_mensualite > 0 ? (e.taux_pec_mensualite + ' %') : '—' }}
+                {{ e.pec_mensualite > 0 ? ((e.pec_mensualite | number:'1.0-0') + ' F') : '—' }}
               </td>
               <td class="mono text-right" style="color:#f59e0b">
                 {{ e.montant_pec_mensualite_mensuel > 0 ? ((e.montant_pec_mensualite_mensuel | number:'1.0-0') + ' FCFA') : '—' }}
@@ -361,23 +360,19 @@ interface PecForm {
                 <p-tag [value]="('eleves.regime_passager' | translate) + ' — ' + e.nb_mois_passager + ' ' + ('eleves.mois' | translate)"
                        severity="info" /></div>
             }
-            @if (e.prise_en_charge || e.type_pec) {
+            @if (e.prise_en_charge || e.pec_inscription > 0 || e.pec_mensualite > 0) {
               <div class="fiche-row"><span>Motif PEC</span>
                 <p-tag [value]="pecLabel(e.prise_en_charge)" [severity]="pecSeverity(e.prise_en_charge)" /></div>
-              @if (e.type_pec) {
-                <div class="fiche-row"><span>Type PEC</span>
-                  <p-tag [value]="typePecLabel(e.type_pec)" [severity]="typePecSeverity(e.type_pec)" /></div>
-                @if (e.taux_pec_inscription > 0) {
-                  <div class="fiche-row"><span>Taux inscription</span>
-                    <strong style="color:#00d4aa">{{ e.taux_pec_inscription }} %</strong></div>
-                }
-                @if (e.taux_pec_mensualite > 0) {
-                  <div class="fiche-row"><span>Taux mensualités</span>
-                    <strong style="color:#00d4aa">{{ e.taux_pec_mensualite }} %</strong></div>
-                }
-                <div class="fiche-row"><span>PEC annuel</span>
-                  <strong style="color:#ef4444">{{ e.montant_pec_annuel | number:'1.0-0' }} FCFA</strong></div>
+              @if (e.pec_inscription > 0) {
+                <div class="fiche-row"><span>PEC inscription</span>
+                  <strong style="color:#00d4aa">{{ e.pec_inscription | number:'1.0-0' }} FCFA</strong></div>
               }
+              @if (e.pec_mensualite > 0) {
+                <div class="fiche-row"><span>PEC mensualité</span>
+                  <strong style="color:#00d4aa">{{ e.pec_mensualite | number:'1.0-0' }} FCFA / mois</strong></div>
+              }
+              <div class="fiche-row"><span>PEC annuel</span>
+                <strong style="color:#ef4444">{{ e.montant_pec_annuel | number:'1.0-0' }} FCFA</strong></div>
             }
           </div>
           <div class="fiche-section">
@@ -471,33 +466,19 @@ interface PecForm {
                       placeholder="Aucune prise en charge" [showClear]="true" />
           </div>
 
-          <!-- Type PEC -->
-          <div class="form-group full">
-            <label>Type de prise en charge</label>
-            <p-select appendTo="body" [options]="typesPEC" [(ngModel)]="formPEC.type_pec"
-                      optionLabel="label" optionValue="value" styleClass="w-full"
-                      placeholder="Sélectionner le type" [showClear]="true" />
+          <!-- Montant PEC inscription -->
+          <div class="form-group">
+            <label>Montant PEC inscription (FCFA)</label>
+            <p-inputNumber [(ngModel)]="formPEC.pec_inscription" [min]="0" mode="decimal"
+                           styleClass="w-full" placeholder="0" />
           </div>
 
-          <!-- Taux inscription — si INSCRIPTION ou TOTALE -->
-          @if (formPEC.type_pec === 'INSCRIPTION' || formPEC.type_pec === 'TOTALE') {
-            <div class="form-group">
-              <label>Taux prise en charge inscription (%)</label>
-              <p-inputNumber [(ngModel)]="formPEC.taux_pec_inscription"
-                             [min]="0" [max]="100" [step]="5" mode="decimal"
-                             styleClass="w-full" placeholder="0 – 100" />
-            </div>
-          }
-
-          <!-- Taux mensualité — si MENSUALITES ou TOTALE -->
-          @if (formPEC.type_pec === 'MENSUALITES' || formPEC.type_pec === 'TOTALE') {
-            <div class="form-group">
-              <label>Taux prise en charge mensualités (%)</label>
-              <p-inputNumber [(ngModel)]="formPEC.taux_pec_mensualite"
-                             [min]="0" [max]="100" [step]="5" mode="decimal"
-                             styleClass="w-full" placeholder="0 – 100" />
-            </div>
-          }
+          <!-- Montant PEC mensualité (par mois) -->
+          <div class="form-group">
+            <label>Montant PEC mensualité (FCFA / mois)</label>
+            <p-inputNumber [(ngModel)]="formPEC.pec_mensualite" [min]="0" mode="decimal"
+                           styleClass="w-full" placeholder="0" />
+          </div>
 
           <!-- Observations -->
           <div class="form-group full">
@@ -508,7 +489,7 @@ interface PecForm {
         </div>
 
         <!-- Simulation financière -->
-        @if (formPEC.type_pec && previewPEC()) {
+        @if (previewPEC()) {
           @let pv = previewPEC()!;
           <div class="pec-preview">
             <div class="pec-preview-title">Simulation impact financier</div>
@@ -853,22 +834,19 @@ export class ElevesListeComponent implements OnInit {
   formPEC: PecForm = this.pecFormVide();
 
   elevesPEC = computed(() =>
-    this.eleves().filter(e => e.prise_en_charge || e.type_pec)
+    this.eleves().filter(e => e.prise_en_charge || e.pec_inscription > 0 || e.pec_mensualite > 0)
   );
 
   previewPEC = computed(() => {
     const eleve = this.eleveSelectionne();
     const form  = this.formPEC;
-    if (!eleve || !form.type_pec) return null;
+    if (!eleve) return null;
     const section = this.sections().find(s => s.id === eleve.section);
     if (!section) return null;
-    const tauxI   = (form.taux_pec_inscription || 0) / 100;
-    const tauxM   = (form.taux_pec_mensualite   || 0) / 100;
-    const type    = form.type_pec;
-    const inscr   = (type === 'INSCRIPTION' || type === 'TOTALE')
-                    ? Math.round(section.frais_inscription * tauxI) : 0;
-    const mens    = (type === 'MENSUALITES'  || type === 'TOTALE')
-                    ? Math.round(section.frais_mensualite  * tauxM) : 0;
+    // Montants directs, plafonnés aux frais.
+    const inscr = Math.min(form.pec_inscription || 0, section.frais_inscription);
+    const mens  = Math.min(form.pec_mensualite  || 0, section.frais_mensualite);
+    if (!inscr && !mens) return null;
     const annuel  = inscr + mens * 10;
     const restant = Math.max((section.total_annuel || 0) - annuel, 0);
     return { inscr, mens, annuel, restant };
@@ -1208,9 +1186,8 @@ export class ElevesListeComponent implements OnInit {
     this.eleveSelectionne.set(eleve);
     this.formPEC = {
       prise_en_charge:      eleve.prise_en_charge || null,
-      type_pec:             eleve.type_pec        || null,
-      taux_pec_inscription: eleve.taux_pec_inscription || 0,
-      taux_pec_mensualite:  eleve.taux_pec_mensualite  || 0,
+      pec_inscription:      eleve.pec_inscription || 0,
+      pec_mensualite:       eleve.pec_mensualite  || 0,
       obs_prise_en_charge:  eleve.obs_prise_en_charge  || '',
     };
     this.dialogPECVisible = true;
@@ -1222,9 +1199,8 @@ export class ElevesListeComponent implements OnInit {
     this.saving.set(true);
     const payload: Partial<Eleve> = {
       prise_en_charge:      this.formPEC.prise_en_charge || undefined,
-      type_pec:             this.formPEC.type_pec        || undefined,
-      taux_pec_inscription: this.formPEC.taux_pec_inscription,
-      taux_pec_mensualite:  this.formPEC.taux_pec_mensualite,
+      pec_inscription:      this.formPEC.pec_inscription || 0,
+      pec_mensualite:       this.formPEC.pec_mensualite  || 0,
       obs_prise_en_charge:  this.formPEC.obs_prise_en_charge,
     } as Partial<Eleve>;
     this.elevesService.updateEleve(e.id, payload).subscribe({
@@ -1353,8 +1329,7 @@ export class ElevesListeComponent implements OnInit {
   }
 
   private pecFormVide(): PecForm {
-    return { prise_en_charge: null, type_pec: null,
-             taux_pec_inscription: 0, taux_pec_mensualite: 0,
+    return { prise_en_charge: null, pec_inscription: 0, pec_mensualite: 0,
              obs_prise_en_charge: '' };
   }
 }

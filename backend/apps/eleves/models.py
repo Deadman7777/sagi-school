@@ -110,13 +110,18 @@ class Eleve(TenantModel):
     # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
     obs_prise_en_charge   = models.TextField(blank=True)
-    # Prise en charge — type et taux détaillés
+    # Prise en charge — MONTANTS directs (plus simple à saisir). Le dû se calcule
+    # « frais − PEC ». S'ils sont > 0, ils priment sur les anciens taux.
+    pec_inscription       = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                                help_text="Montant pris en charge sur l'inscription (FCFA)")
+    pec_mensualite        = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                                help_text="Montant pris en charge par mois (FCFA)")
+    # Anciens taux — conservés pour compatibilité / migration.
     type_pec              = models.CharField(max_length=20, choices=TYPE_PEC_CHOICES, blank=True, null=True)
     taux_pec_inscription  = models.DecimalField(max_digits=5, decimal_places=2, default=0,
                                                  help_text='% réduction sur frais inscription')
     taux_pec_mensualite   = models.DecimalField(max_digits=5, decimal_places=2, default=0,
                                                  help_text='% réduction sur mensualités')
-    # Conservé pour compatibilité (ancienne valeur globale)
     taux_prise_en_charge  = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     class Meta:
@@ -152,8 +157,11 @@ class Eleve(TenantModel):
     # ── Prise en charge ──────────────────────────────────────────────────
     @property
     def montant_pec_inscription(self):
-        if not self.section or not self.type_pec:
+        if not self.section:
             return 0.0
+        # Montant direct prioritaire (plafonné aux frais), sinon ancien taux.
+        if self.pec_inscription:
+            return round(min(float(self.pec_inscription), float(self.section.frais_inscription)), 2)
         if self.type_pec in ('INSCRIPTION', 'TOTALE'):
             return round(float(self.section.frais_inscription) * float(self.taux_pec_inscription) / 100, 2)
         return 0.0
@@ -161,8 +169,10 @@ class Eleve(TenantModel):
     @property
     def montant_pec_mensualite_mensuel(self):
         """Réduction sur une mensualité (montant mensuel)."""
-        if not self.section or not self.type_pec:
+        if not self.section:
             return 0.0
+        if self.pec_mensualite:
+            return round(min(float(self.pec_mensualite), float(self.section.frais_mensualite)), 2)
         if self.type_pec in ('MENSUALITES', 'TOTALE'):
             return round(float(self.section.frais_mensualite) * float(self.taux_pec_mensualite) / 100, 2)
         return 0.0
@@ -206,9 +216,7 @@ class Eleve(TenantModel):
         if not self.section:
             return 0.0
         base = float(self.section.frais_mensualite)
-        if self.type_pec in ('MENSUALITES', 'TOTALE') and self.taux_pec_mensualite:
-            return round(base * (1 - float(self.taux_pec_mensualite) / 100), 2)
-        return base
+        return round(max(base - self.montant_pec_mensualite_mensuel, 0.0), 2)
 
     @property
     def montant_services_annuel(self):
