@@ -173,6 +173,12 @@ class AvanceSalaire(TenantModel):
     no_piece      = models.CharField(max_length=30, blank=True)
     statut        = models.CharField(max_length=15, choices=STATUT_CHOICES, default='EN_ATTENTE')
     observations  = models.TextField(blank=True)
+    # Dimensions analytiques (gouvernance) + ventilation multi-mode du décaissement.
+    projet          = models.ForeignKey('gouvernance.Projet', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='avances_salaire')
+    ressource       = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='avances_salaire')
+    modes_reglement = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'avances_salaire'
@@ -242,6 +248,12 @@ class BulletinPaie(TenantModel):
     date_validation        = models.DateTimeField(null=True, blank=True)
     date_paiement          = models.DateTimeField(null=True, blank=True)
     mode_paiement_effectif = models.CharField(max_length=15, choices=MODE_PAIEMENT_CHOICES, default='CAISSE')
+    # Dimensions analytiques (gouvernance) + ventilation multi-mode du net à payer.
+    projet          = models.ForeignKey('gouvernance.Projet', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='bulletins_paie')
+    ressource       = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='bulletins_paie')
+    modes_reglement = models.JSONField(default=list, blank=True)
 
     avances = models.ManyToManyField(AvanceSalaire, blank=True, related_name='bulletins')
 

@@ -18,13 +18,14 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 
 @Component({
   selector: 'app-paiements',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, CheckboxModule, TooltipModule],
+            InputNumberModule, CheckboxModule, TooltipModule, PiecesJustificativesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -452,12 +453,39 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <span class="total-val">{{ totalForm() | number:'1.0-0' }} FCFA</span>
         </div>
 
-        <!-- Mode paiement -->
+        <!-- Mode(s) de paiement -->
         <div class="form-group" style="margin-top:12px">
-          <label>Mode de paiement *</label>
-          <p-select [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <label style="margin:0">Mode de paiement *</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+              <input type="checkbox" [(ngModel)]="form.multi_mode" (change)="onToggleMultiMode()" />
+              Multi-mode (plusieurs moyens)
+            </label>
+          </div>
+
+          <p-select *ngIf="!form.multi_mode" [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
                     optionLabel="label" optionValue="value"
                     placeholder="Choisir le mode..." styleClass="w-full" />
+
+          <div *ngIf="form.multi_mode" style="margin-top:6px">
+            <div *ngFor="let m of form.modes_reglement; let i = index"
+                 style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+              <p-select [options]="modesPaiement" [(ngModel)]="m.mode"
+                        optionLabel="label" optionValue="value" placeholder="Mode..."
+                        styleClass="w-full" [style]="{flex:'1'}" />
+              <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
+                     style="width:130px;text-align:right" />
+              <button type="button" class="mode-x" (click)="retirerModeLigne(i)"
+                      [disabled]="form.modes_reglement.length <= 1" title="Retirer">✕</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+              <button type="button" class="mode-add" (click)="ajouterModeLigne()">+ Ajouter un mode</button>
+              <span style="font-size:12px;font-family:monospace"
+                    [style.color]="resteAVentiler() === 0 ? '#00d4aa' : '#f59e0b'">
+                Reste à ventiler : {{ resteAVentiler() | number:'1.0-0' }} FCFA
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="form-group" style="margin-top:10px">
@@ -510,6 +538,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         }
         <div class="recu-total"><span>Total encaissé</span><span>{{ recuData().total | number:'1.0-0' }} FCFA</span></div>
         <div class="recu-row" style="margin-top:4px"><span>Mode</span><span>{{ recuData().mode_label }}</span></div>
+        <div *ngFor="let mr of recuData().modes_reglement" class="recu-row" style="font-size:11px;color:#94a3b8">
+          <span style="padding-left:10px">↳ {{ mr.mode_label }}</span><span>{{ mr.montant | number:'1.0-0' }} FCFA</span>
+        </div>
         <div class="recu-row"><span>Caissier</span><span>{{ recuData().saisi_par }}</span></div>
 
         <!-- Suivi -->
@@ -576,15 +607,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               </td>
               <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
               <td>
-                <!-- Les écritures de paie se corrigent dans le module RH, pas ici -->
-                @if (c.source !== 'PAIE') {
-                  <div style="display:flex;gap:4px">
+                <div style="display:flex;gap:4px">
+                  <p-button icon="pi pi-paperclip" [rounded]="true" [text]="true" severity="info"
+                            pTooltip="Pièces justificatives" (onClick)="ouvrirPieces('CHARGE', c.id, c.no_piece)" />
+                  <!-- Les écritures de paie se corrigent dans le module RH, pas ici -->
+                  @if (c.source !== 'PAIE') {
                     <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                               pTooltip="Modifier (contre-écritures + nouvelle charge)" (onClick)="demanderModificationCharge(c)" />
                     <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger"
                               pTooltip="Annuler (contre-écritures SYSCOHADA)" (onClick)="supprimerCharge(c)" />
-                  </div>
-                }
+                  }
+                </div>
               </td>
             </tr>
           </ng-template>
@@ -629,9 +662,35 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                       optionLabel="label" optionValue="value" styleClass="w-full" />
           </div>
           <div class="form-group full">
-            <label>Réglé via</label>
-            <p-select appendTo="body" [options]="comptesCredit" [(ngModel)]="nouvelleCharge.compte_credit"
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <label style="margin:0">Réglé via</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+                <input type="checkbox" [(ngModel)]="nouvelleCharge.multi_mode" (change)="onToggleMultiCharge()" />
+                Multi-mode
+              </label>
+            </div>
+            <p-select *ngIf="!nouvelleCharge.multi_mode" appendTo="body" [options]="comptesCredit"
+                      [(ngModel)]="nouvelleCharge.compte_credit"
                       optionLabel="label" optionValue="value" styleClass="w-full" />
+            <div *ngIf="nouvelleCharge.multi_mode" style="margin-top:6px">
+              <div *ngFor="let m of nouvelleCharge.modes_reglement; let i = index"
+                   style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+                <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="m.mode"
+                          optionLabel="label" optionValue="value" placeholder="Mode..."
+                          styleClass="w-full" [style]="{flex:'1'}" />
+                <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
+                       style="width:120px;text-align:right" />
+                <button type="button" class="mode-x" (click)="retirerModeCharge(i)"
+                        [disabled]="nouvelleCharge.modes_reglement.length <= 1">✕</button>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <button type="button" class="mode-add" (click)="ajouterModeCharge()">+ Ajouter un mode</button>
+                <span style="font-size:12px;font-family:monospace"
+                      [style.color]="chargeReste() === 0 ? '#00d4aa' : '#f59e0b'">
+                  Reste : {{ chargeReste() | number:'1.0-0' }} FCFA
+                </span>
+              </div>
+            </div>
           </div>
           @if (ressourcesGouv().length) {
             <div class="form-group full">
@@ -655,6 +714,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <p-button label="Annuler"       severity="secondary" (onClick)="dialogChargeVisible=false" />
           <p-button label="Enregistrer"   severity="danger"
                     [loading]="savingCharge()" (onClick)="sauvegarderCharge()" />
+        </ng-template>
+      </p-dialog>
+
+      <!-- Dialog Pièces justificatives (GED) d'une charge -->
+      <p-dialog [header]="'📎 Pièces justificatives — ' + piecesTitre()"
+                [(visible)]="dialogPiecesVisible" [modal]="true" [style]="{width:'520px'}" [draggable]="false">
+        <app-pieces-justificatives [objetType]="piecesObjetType()" [objetId]="piecesObjetId()" />
+        <ng-template pTemplate="footer">
+          <p-button label="Fermer" severity="secondary" (onClick)="dialogPiecesVisible=false" />
         </ng-template>
       </p-dialog>
 
@@ -710,6 +778,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .mode-name  { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
     .mode-total { font-size:20px; font-weight:700; font-family:monospace; color:#00d4aa; }
     .mode-nb    { font-size:11px; color:#64748b; margin-top:2px; }
+    .mode-x     { background:#3a1e2d; border:1px solid #5f2a3f; color:#f87171; border-radius:6px; width:30px; height:34px; cursor:pointer; flex:none; }
+    .mode-x:disabled { opacity:.4; cursor:not-allowed; }
+    .mode-add   { background:transparent; border:1px dashed #2a3f5f; color:#4fc3f7; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
 
     .table-card { background:#1e2d45; border:1px solid #2a3f5f; border-radius:12px; overflow:hidden; }
 
@@ -873,6 +944,9 @@ export class PaiementsComponent implements OnInit {
     mois_regles:         [] as number[],
     services:            [] as { id: string; nom: string; tarif: number; montant: number; inclus: boolean }[],
     mode_paiement:       '',
+    // Paiement multi-mode : un même règlement réparti sur plusieurs modes.
+    multi_mode:          false,
+    modes_reglement:     [] as { mode: string; montant: number }[],
     observations:        '',
   };
 
@@ -1062,7 +1136,8 @@ export class PaiementsComponent implements OnInit {
     this.form = {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
-      mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '', observations: '',
+      mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '',
+      multi_mode: false, modes_reglement: [], observations: '',
     };
   }
 
@@ -1076,6 +1151,31 @@ export class PaiementsComponent implements OnInit {
     return Object.entries(this.modifForm)
       .filter(([k]) => k.startsWith('montant_'))
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+  }
+
+  // ── Paiement multi-mode ────────────────────────────────────────────────
+  onToggleMultiMode() {
+    if (this.form.multi_mode && this.form.modes_reglement.length === 0) {
+      // Amorce : une ligne pré-remplie avec le mode déjà choisi et le total.
+      this.form.modes_reglement = [{
+        mode: this.form.mode_paiement || '',
+        montant: this.totalForm(),
+      }];
+    }
+  }
+
+  ajouterModeLigne() {
+    this.form.modes_reglement.push({ mode: '', montant: Math.max(0, this.resteAVentiler()) });
+  }
+
+  retirerModeLigne(i: number) {
+    this.form.modes_reglement.splice(i, 1);
+  }
+
+  /** Montant restant à répartir entre les modes (0 = ventilation complète). */
+  resteAVentiler(): number {
+    const somme = this.form.modes_reglement.reduce((s, m) => s + (Number(m.montant) || 0), 0);
+    return Math.round((this.totalForm() - somme) * 100) / 100;
   }
 
   ouvrirDialog() {
@@ -1093,13 +1193,23 @@ export class PaiementsComponent implements OnInit {
       this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.select_eleve') });
       return;
     }
-    if (!this.form.mode_paiement) {
-      this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.choisir_mode') });
-      return;
-    }
     if (this.totalForm() <= 0) {
       this.msg.add({ severity:'warn', summary: this.translate.instant('common.requis'), detail: this.translate.instant('paiements.montant_invalide') });
       return;
+    }
+    if (!this.form.multi_mode && !this.form.mode_paiement) {
+      this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.choisir_mode') });
+      return;
+    }
+    if (this.form.multi_mode) {
+      if (this.form.modes_reglement.some(m => !m.mode || Number(m.montant) <= 0)) {
+        this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: 'Chaque ligne de mode doit avoir un moyen et un montant > 0.' });
+        return;
+      }
+      if (this.resteAVentiler() !== 0) {
+        this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: `La ventilation doit couvrir exactement le total (reste : ${this.resteAVentiler()} FCFA).` });
+        return;
+      }
     }
     this.saving.set(true);
     // Services inclus : itemisés dans services_regles ; leur montant est ajouté au montant_divers
@@ -1114,7 +1224,10 @@ export class PaiementsComponent implements OnInit {
       montant_divers:      Number(this.form.montant_divers || 0) + servicesTotal,
       mois_regles:         this.form.mois_regles,
       services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant) })),
-      mode_paiement:       this.form.mode_paiement,
+      mode_paiement:       this.form.multi_mode ? 'MIXTE' : this.form.mode_paiement,
+      modes_reglement:     this.form.multi_mode
+        ? this.form.modes_reglement.map(m => ({ mode: m.mode, montant: Number(m.montant) }))
+        : [],
       observations:        this.form.observations,
       eleve:    this.eleveSelectionne.id,
       exercice: this.exerciceId,
@@ -1252,12 +1365,43 @@ export class PaiementsComponent implements OnInit {
     return this.charges().reduce((s, c) => s + (c.montant || 0), 0);
   }
 
+  // ── Charge multi-mode ───────────────────────────────────────────────────
+  onToggleMultiCharge() {
+    if (this.nouvelleCharge.multi_mode && this.nouvelleCharge.modes_reglement.length === 0) {
+      this.nouvelleCharge.modes_reglement = [{ mode: 'ESPECE', montant: Number(this.nouvelleCharge.montant) || 0 }];
+    }
+  }
+  ajouterModeCharge() {
+    this.nouvelleCharge.modes_reglement.push({ mode: '', montant: Math.max(0, this.chargeReste()) });
+  }
+  retirerModeCharge(i: number) {
+    this.nouvelleCharge.modes_reglement.splice(i, 1);
+  }
+  chargeReste(): number {
+    const somme = (this.nouvelleCharge.modes_reglement || [])
+      .reduce((s: number, m: any) => s + (Number(m.montant) || 0), 0);
+    return Math.round(((Number(this.nouvelleCharge.montant) || 0) - somme) * 100) / 100;
+  }
+
+  // ── GED — pièces justificatives (charges) ───────────────────────────────
+  dialogPiecesVisible = false;
+  piecesObjetType = signal<string>('');
+  piecesObjetId   = signal<string>('');
+  piecesTitre     = signal<string>('');
+  ouvrirPieces(objetType: string, objetId: string, titre: string) {
+    this.piecesObjetType.set(objetType);
+    this.piecesObjetId.set(objetId);
+    this.piecesTitre.set(titre);
+    this.dialogPiecesVisible = true;
+  }
+
   ouvrirDialogCharge() {
     this.nouvelleCharge = {
       no_compte: '661', libelle: '', montant: 0,
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
       ressource_id: null, projet_id: null,
+      multi_mode: false, modes_reglement: [] as { mode: string; montant: number }[],
     };
     this.compteSuggere = null;
     this.compteChargeVerrouille = false;
@@ -1350,6 +1494,16 @@ export class PaiementsComponent implements OnInit {
     if (!this.nouvelleCharge.montant || this.nouvelleCharge.montant <= 0) {
       this.msg.add({ severity: 'warn', summary: 'Montant invalide', detail: 'Le montant doit être > 0.' });
       return;
+    }
+    if (this.nouvelleCharge.multi_mode) {
+      if (this.nouvelleCharge.modes_reglement.some((m: any) => !m.mode || Number(m.montant) <= 0)) {
+        this.msg.add({ severity: 'warn', summary: 'Champ requis', detail: 'Chaque ligne de mode doit avoir un moyen et un montant > 0.' });
+        return;
+      }
+      if (this.chargeReste() !== 0) {
+        this.msg.add({ severity: 'warn', summary: 'Ventilation incomplète', detail: `La ventilation doit couvrir le montant (reste : ${this.chargeReste()} FCFA).` });
+        return;
+      }
     }
     this.savingCharge.set(true);
     this.compta.creerCharge(this.nouvelleCharge).subscribe({

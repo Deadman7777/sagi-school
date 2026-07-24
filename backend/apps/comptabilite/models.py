@@ -82,9 +82,24 @@ class BudgetLigne(TenantModel):
     m11 = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     m12 = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
+    # Dimensions analytiques (gouvernance) : budget ventilable par projet et
+    # rattachable à une ressource de financement. Le réalisé se compare par
+    # projet via le tag `projet` du grand livre. Nullables → budget « général ».
+    projet    = models.ForeignKey('gouvernance.Projet', null=True, blank=True,
+                                  on_delete=models.SET_NULL, related_name='budget_lignes')
+    ressource = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
+                                  on_delete=models.SET_NULL, related_name='budget_lignes')
+
     class Meta:
         db_table = 'budget_lignes'
-        unique_together = ['tenant', 'exercice', 'no_compte']
+        constraints = [
+            # Une ligne par (compte, projet) et par exercice : budget analytique.
+            # L'unicité de la ligne « générale » (projet vide) est garantie côté
+            # applicatif par update_or_create — portable sur toute version PostgreSQL.
+            models.UniqueConstraint(
+                fields=['tenant', 'exercice', 'no_compte', 'projet'],
+                name='uniq_budget_compte_projet'),
+        ]
         ordering = ['no_compte']
 
     def __str__(self):

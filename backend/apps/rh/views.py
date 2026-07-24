@@ -68,13 +68,36 @@ class EmployeViewSet(viewsets.ModelViewSet):
         count    = AvanceSalaire.objects.filter(tenant=tenant).count() + 1
         no_piece = f"AVA-{employe.matricule}-{count:04d}"
 
+        montant_dec = Decimal(str(montant_raw))
+
+        # Dimensions analytiques (gouvernance) + multi-mode. Une avance (D 421,
+        # créance sur le salarié) n'est pas une charge → elle ne consomme pas la
+        # ressource ; on garde le rattachement pour la traçabilité, sans contrôle.
+        from apps.gouvernance.models import Projet, Ressource
+        from .services import _ventiler_reglement
+        projet = ressource = None
+        pid = request.data.get('projet_id')
+        rid = request.data.get('ressource_id')
+        if pid:
+            projet = Projet.objects.filter(tenant=tenant, id=pid).first()
+        if rid:
+            ressource = Ressource.objects.filter(tenant=tenant, id=rid).first()
+            if ressource is None:
+                return Response({'error': 'Ressource introuvable'}, status=status.HTTP_400_BAD_REQUEST)
+        modes_reglement = request.data.get('modes_reglement') or []
+        try:
+            _ventiler_reglement(modes_reglement, montant_dec)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         avance = AvanceSalaire.objects.create(
             tenant=tenant, employe=employe,
-            montant=Decimal(str(montant_raw)),
+            montant=montant_dec,
             date_avance=date_avance,
             mode_paiement=mode,
             no_piece=no_piece,
             observations=request.data.get('observations', ''),
+            projet=projet, ressource=ressource, modes_reglement=modes_reglement,
         )
         generer_ecriture_avance(avance, tenant)
         return Response(AvanceSalaireSerializer(avance).data, status=status.HTTP_201_CREATED)
@@ -181,6 +204,36 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             return Response({'error': f"Erreur interne : {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Dimensions analytiques (gouvernance) + multi-mode + contrôle du disponible.
+        # Le coût employeur (661 + 6641) consomme la ressource → on le contrôle.
+        from apps.gouvernance.models import Projet, Ressource
+        from apps.gouvernance import services as gouv_services
+        from .services import _ventiler_reglement
+        pid = request.data.get('projet_id')
+        rid = request.data.get('ressource_id')
+        projet = Projet.objects.filter(tenant=tenant, id=pid).first() if pid else None
+        ressource = None
+        if rid:
+            ressource = Ressource.objects.filter(tenant=tenant, id=rid).first()
+            if ressource is None:
+                bulletin.delete()
+                return Response({'error': 'Ressource introuvable'}, status=status.HTTP_400_BAD_REQUEST)
+            ok, msg, _ = gouv_services.verifier_disponibilite(
+                tenant, ressource, bulletin.cout_total_employeur)
+            if not ok:
+                bulletin.delete()
+                return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+        modes_reglement = request.data.get('modes_reglement') or []
+        try:
+            _ventiler_reglement(modes_reglement, bulletin.net_a_payer)
+        except ValueError as exc:
+            bulletin.delete()
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        bulletin.projet = projet
+        bulletin.ressource = ressource
+        bulletin.modes_reglement = modes_reglement
+        bulletin.save(update_fields=['projet', 'ressource', 'modes_reglement'])
 
         return Response(BulletinPaieSerializer(bulletin).data, status=status.HTTP_201_CREATED)
 

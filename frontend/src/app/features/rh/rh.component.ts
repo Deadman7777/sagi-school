@@ -16,6 +16,7 @@ import { TooltipModule }     from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { GouvernanceService } from '../../core/services/gouvernance.service';
 import {
   Employe, BulletinPaie, AvanceSalaire, ParametresFiscaux,
   RhService
@@ -661,6 +662,19 @@ const MOIS_OPTIONS = [
           <p-select [options]="modesPaiement" [(ngModel)]="formBulletin.mode_paiement_effectif"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
+        <div class="form-group full" *ngIf="ressourcesGouv().length">
+          <label>Financé par (ressource)</label>
+          <p-select [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
+                    [(ngModel)]="formBulletin.ressource_id" styleClass="w-full" [showClear]="true"
+                    placeholder="— Trésorerie générale —" [filter]="true" />
+          <small style="color:#64748b;font-size:10px">Contrôle du disponible sur le coût employeur (661 + 6641)</small>
+        </div>
+        <div class="form-group full" *ngIf="projetsGouv().length">
+          <label>Projet (analytique)</label>
+          <p-select [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
+                    [(ngModel)]="formBulletin.projet_id" styleClass="w-full" [showClear]="true"
+                    placeholder="— Aucun —" [filter]="true" />
+        </div>
         <div class="form-group full" style="font-size:11px;color:#64748b">
           ℹ️ {{ 'rh.avances_auto_info' | translate }}
         </div>
@@ -763,9 +777,44 @@ const MOIS_OPTIONS = [
       <input pInputText type="date" [(ngModel)]="formAvance.date_avance" class="w-full" />
     </div>
     <div class="form-group">
-      <label>{{ 'rh.avance_mode' | translate }}</label>
-      <p-select [options]="modesPaiement" optionLabel="label" optionValue="value"
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <label style="margin:0">{{ 'rh.avance_mode' | translate }}</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#94a3b8;cursor:pointer">
+          <input type="checkbox" [(ngModel)]="formAvance.multi_mode" (change)="onToggleMultiRH(formAvance, formAvance.montant)" />
+          Multi-mode
+        </label>
+      </div>
+      <p-select *ngIf="!formAvance.multi_mode" [options]="modesPaiement" optionLabel="label" optionValue="value"
                 [(ngModel)]="formAvance.mode_paiement" styleClass="w-full" />
+    </div>
+    <div class="form-group full" *ngIf="formAvance.multi_mode">
+      <div *ngFor="let m of formAvance.modes_reglement; let i = index"
+           style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+        <p-select [options]="modesTresorerie" [(ngModel)]="m.mode" optionLabel="label" optionValue="value"
+                  placeholder="Mode..." styleClass="w-full" [style]="{flex:'1'}" />
+        <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant" style="width:120px;text-align:right" />
+        <button type="button" (click)="retirerModeRH(formAvance, i)" [disabled]="formAvance.modes_reglement.length <= 1"
+                style="background:#3a1e2d;border:1px solid #5f2a3f;color:#f87171;border-radius:6px;width:30px;height:34px;cursor:pointer">✕</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <button type="button" (click)="ajouterModeRH(formAvance)"
+                style="background:transparent;border:1px dashed #2a3f5f;color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
+        <span style="font-size:12px;font-family:monospace" [style.color]="resteRH(formAvance, formAvance.montant) === 0 ? '#00d4aa' : '#f59e0b'">
+          Reste : {{ resteRH(formAvance, formAvance.montant) | number:'1.0-0' }} FCFA
+        </span>
+      </div>
+    </div>
+    <div class="form-group full" *ngIf="ressourcesGouv().length">
+      <label>Financé par (ressource)</label>
+      <p-select [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
+                [(ngModel)]="formAvance.ressource_id" styleClass="w-full" [showClear]="true"
+                placeholder="— Trésorerie générale —" [filter]="true" />
+    </div>
+    <div class="form-group full" *ngIf="projetsGouv().length">
+      <label>Projet (analytique)</label>
+      <p-select [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
+                [(ngModel)]="formAvance.projet_id" styleClass="w-full" [showClear]="true"
+                placeholder="— Aucun —" [filter]="true" />
     </div>
     <div class="form-group full">
       <label>{{ 'rh.obs_avance' | translate }}</label>
@@ -977,6 +1026,50 @@ export class RhComponent implements OnInit {
   private msg       = inject(MessageService);
   private translate = inject(TranslateService);
   private auth      = inject(AuthService);
+  private gouv      = inject(GouvernanceService);
+
+  // Dimensions analytiques (gouvernance) + codes de mode pour la ventilation.
+  ressourcesGouv = signal<any[]>([]);
+  projetsGouv    = signal<any[]>([]);
+  modesTresorerie = [
+    { label: 'Caisse (espèces)', value: 'CAISSE' }, { label: 'Banque (virement)', value: 'BANQUE' },
+    { label: 'Wave', value: 'WAVE' }, { label: 'Orange Money', value: 'ORANGE_MONEY' },
+    { label: 'Free Money', value: 'FREE_MONEY' }, { label: 'Wizall', value: 'WIZALL' },
+  ];
+
+  private chargerDimensionsGouv() {
+    this.gouv.getRessources().subscribe({
+      next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),
+      error: () => this.ressourcesGouv.set([]),
+    });
+    this.gouv.getProjets(true).subscribe({
+      next: d => this.projetsGouv.set(d || []),
+      error: () => this.projetsGouv.set([]),
+    });
+  }
+
+  // ── Ventilation multi-mode RH (avance + bulletin) ───────────────────────
+  onToggleMultiRH(form: any, base: number) {
+    if (form.multi_mode && (form.modes_reglement || []).length === 0) {
+      form.modes_reglement = [{ mode: form.mode_paiement || 'CAISSE', montant: base || 0 }];
+    }
+  }
+  ajouterModeRH(form: any) {
+    form.modes_reglement.push({ mode: '', montant: Math.max(0, this.resteRH(form, form.__base || 0)) });
+  }
+  retirerModeRH(form: any, i: number) { form.modes_reglement.splice(i, 1); }
+  resteRH(form: any, base: number): number {
+    const somme = (form.modes_reglement || []).reduce((s: number, m: any) => s + (Number(m.montant) || 0), 0);
+    return Math.round(((Number(base) || 0) - somme) * 100) / 100;
+  }
+  private validerMultiRH(form: any, base: number): string | null {
+    if (!form.multi_mode) return null;
+    if (form.modes_reglement.some((m: any) => !m.mode || Number(m.montant) <= 0))
+      return 'Chaque ligne de mode doit avoir un moyen et un montant > 0.';
+    if (this.resteRH(form, base) !== 0)
+      return `La ventilation doit couvrir le montant (reste : ${this.resteRH(form, base)} FCFA).`;
+    return null;
+  }
 
   // — State —
   onglet          = signal('employes');
@@ -1179,8 +1272,10 @@ export class RhComponent implements OnInit {
       opposition_saisie:   0,
       autres_retenues:     0,
       mode_paiement_effectif: emp?.mode_paiement ?? 'CAISSE',
+      projet_id: null, ressource_id: null,
     };
     this.dialogBulletinVisible = true;
+    this.chargerDimensionsGouv();
   }
 
   fermerDialogBulletin() {
@@ -1316,6 +1411,8 @@ export class RhComponent implements OnInit {
       opposition_saisie:      this.formBulletin.opposition_saisie    || 0,
       autres_retenues:        this.formBulletin.autres_retenues      || 0,
       mode_paiement_effectif: this.formBulletin.mode_paiement_effectif,
+      projet_id:              this.formBulletin.projet_id ?? null,
+      ressource_id:           this.formBulletin.ressource_id ?? null,
     };
   }
 
@@ -1329,8 +1426,11 @@ export class RhComponent implements OnInit {
       date_avance: today,
       mode_paiement: emp?.mode_paiement ?? 'CAISSE',
       observations: '',
+      projet_id: null, ressource_id: null,
+      multi_mode: false, modes_reglement: [] as { mode: string; montant: number }[],
     };
     this.dialogAvanceVisible = true;
+    this.chargerDimensionsGouv();
   }
 
   sauvegarderAvance() {
@@ -1338,12 +1438,19 @@ export class RhComponent implements OnInit {
       this.msg.add({ severity: 'warn', summary: this.t('common.requis'), detail: 'Employé et montant obligatoires' });
       return;
     }
+    const err = this.validerMultiRH(this.formAvance, this.formAvance.montant);
+    if (err) { this.msg.add({ severity: 'warn', summary: this.t('common.requis'), detail: err }); return; }
     this.saving.set(true);
     this.rh.creerAvance(this.formAvance.employe_id, {
       montant:      this.formAvance.montant,
       date_avance:  this.formAvance.date_avance,
       mode_paiement: this.formAvance.mode_paiement,
       observations: this.formAvance.observations,
+      projet_id:    this.formAvance.projet_id,
+      ressource_id: this.formAvance.ressource_id,
+      modes_reglement: this.formAvance.multi_mode
+        ? this.formAvance.modes_reglement.map((m: any) => ({ mode: m.mode, montant: Number(m.montant) }))
+        : [],
     }).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.t('common.succes'), detail: this.t('rh.avance_creee') });

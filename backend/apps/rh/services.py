@@ -52,6 +52,30 @@ def _compte_paiement(mode):
     return COMPTES_PAIEMENT.get(mode, '571')
 
 
+def _ventiler_reglement(modes_reglement, total):
+    """Ventile un décaissement RH sur plusieurs modes → [(compte, montant)].
+
+    Retourne None si aucune ventilation (règlement simple). Lève ValueError si
+    la somme des montants ne correspond pas au total."""
+    if not modes_reglement:
+        return None
+    lignes, somme = [], Decimal('0')
+    for i, m in enumerate(modes_reglement):
+        mode = (m or {}).get('mode')
+        if not mode:
+            raise ValueError(f"Ligne de règlement {i + 1} : mode manquant.")
+        montant = _d((m or {}).get('montant', 0))
+        if montant <= 0:
+            raise ValueError(f"Ligne de règlement {i + 1} : montant invalide.")
+        lignes.append((_compte_paiement(mode), montant))
+        somme += montant
+    if abs(somme - _d(total)) > Decimal('0.01'):
+        raise ValueError(
+            f"La ventilation des modes ({somme:,.0f}) ne correspond pas au "
+            f"total ({_d(total):,.0f} FCFA).")
+    return lignes
+
+
 class PaieCalculateur:
 
     @staticmethod
@@ -280,22 +304,26 @@ def generer_ecriture_avance(avance, tenant):
     ref   = avance.no_piece or f"AVA-{avance.employe.matricule}-{avance.id.hex[:6].upper()}"
     date  = avance.date_avance
     label = f"Avance sur salaire {avance.employe.nom_complet}"
-    cpt   = _compte_paiement(avance.mode_paiement)
+    projet = getattr(avance, 'projet', None)
+    ressource = getattr(avance, 'ressource', None)
 
-    JournalEntry.objects.bulk_create([
-        JournalEntry(
+    def je(compte, debit, credit, ordre):
+        return JournalEntry(
             tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-            no_compte='421', libelle=label,
-            debit=avance.montant, credit=0,
-            source='AVANCE', source_id=avance.id, ordre=1,
-        ),
-        JournalEntry(
-            tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-            no_compte=cpt, libelle=label,
-            debit=0, credit=avance.montant,
-            source='AVANCE', source_id=avance.id, ordre=2,
-        ),
-    ])
+            no_compte=compte, libelle=label, debit=debit, credit=credit,
+            source='AVANCE', source_id=avance.id, ordre=ordre,
+            projet=projet, ressource=ressource,
+        )
+
+    # D 421 (avance versée) / C trésorerie — ventilée par mode si multi-mode.
+    rows = [je('421', avance.montant, 0, 1)]
+    ventilation = _ventiler_reglement(getattr(avance, 'modes_reglement', None), avance.montant)
+    if ventilation:
+        for i, (compte, montant) in enumerate(ventilation, start=2):
+            rows.append(je(compte, 0, montant, i))
+    else:
+        rows.append(je(_compte_paiement(avance.mode_paiement), 0, avance.montant, 2))
+    JournalEntry.objects.bulk_create(rows)
 
 
 def annuler_ecriture_avance(avance, tenant):
@@ -313,21 +341,20 @@ def annuler_ecriture_avance(avance, tenant):
     ref   = f"ANN-{avance.no_piece or avance.id.hex[:8].upper()}"
     date  = datetime.date.today()
     label = f"Annulation avance {avance.employe.nom_complet}"
-    cpt   = _compte_paiement(avance.mode_paiement)
 
+    # Extourne les écritures RÉELLES (débit↔crédit) en conservant projet/ressource
+    # → gère le multi-mode et dénoue la consommation de la ressource.
+    originales = JournalEntry.objects.filter(
+        tenant=tenant, source='AVANCE', source_id=avance.id).order_by('ordre')
     JournalEntry.objects.bulk_create([
         JournalEntry(
             tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-            no_compte=cpt, libelle=label,
-            debit=avance.montant, credit=0,
-            source='ANNUL_AVANCE', source_id=avance.id, ordre=1,
-        ),
-        JournalEntry(
-            tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-            no_compte='421', libelle=label,
-            debit=0, credit=avance.montant,
-            source='ANNUL_AVANCE', source_id=avance.id, ordre=2,
-        ),
+            no_compte=e.no_compte, libelle=label,
+            debit=e.credit, credit=e.debit,
+            source='ANNUL_AVANCE', source_id=avance.id, ordre=i,
+            projet=e.projet, ressource=e.ressource,
+        )
+        for i, e in enumerate(originales, start=1)
     ])
 
 
@@ -345,6 +372,8 @@ def generer_ecritures_paie(bulletin, tenant):
     emp   = bulletin.employe.nom_complet
     sid   = bulletin.id
     ordre = [0]
+    projet    = getattr(bulletin, 'projet', None)
+    ressource = getattr(bulletin, 'ressource', None)
 
     def entry(compte, libelle, debit=Decimal('0'), credit=Decimal('0')):
         ordre[0] += 1
@@ -354,6 +383,7 @@ def generer_ecritures_paie(bulletin, tenant):
             no_compte=compte, libelle=libelle,
             debit=_d(debit), credit=_d(credit),
             source='PAIE', source_id=sid, ordre=ordre[0],
+            projet=projet, ressource=ressource,
         )
 
     rows = []
@@ -416,12 +446,18 @@ def generer_ecritures_paie(bulletin, tenant):
             entry('4421', f"CFCE {emp}", credit=bulletin.cfce),
         ]
 
-    # — Étape 4 : net à payer —
-    cpt = _compte_paiement(bulletin.mode_paiement_effectif)
-    rows += [
-        entry('422', f"Net à payer {emp} {bulletin.mois:02d}/{bulletin.annee}", debit=bulletin.net_a_payer),
-        entry(cpt,   f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}", credit=bulletin.net_a_payer),
-    ]
+    # — Étape 4 : net à payer (jambe de trésorerie ventilée par mode) —
+    rows.append(entry('422', f"Net à payer {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                      debit=bulletin.net_a_payer))
+    ventilation = _ventiler_reglement(getattr(bulletin, 'modes_reglement', None), bulletin.net_a_payer)
+    if ventilation:
+        for compte, montant in ventilation:
+            rows.append(entry(compte, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                              credit=montant))
+    else:
+        cpt = _compte_paiement(bulletin.mode_paiement_effectif)
+        rows.append(entry(cpt, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                          credit=bulletin.net_a_payer))
 
     JournalEntry.objects.bulk_create(rows)
 
@@ -472,6 +508,8 @@ def annuler_ecritures_paie(bulletin, tenant):
             source='ANNUL_PAIE',
             source_id=bulletin.id,
             ordre=i,
+            projet=e.projet,
+            ressource=e.ressource,
         ))
     JournalEntry.objects.bulk_create(contre_ecritures)
 

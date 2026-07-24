@@ -83,29 +83,38 @@ class PaiementViewSet(viewsets.ModelViewSet):
         montant = float(paiement.total)
         eleve_nom = paiement.eleve.nom_complet
 
-        compte_reglement, libelle_compte = {
-            'ESPECE':       ('571', 'Caisse'),
-            'WAVE':         ('5521', 'WAVE'),
-            'ORANGE_MONEY': ('5522', 'Orange Money'),
-            'FREE_MONEY':   ('5523', 'Free Money'),
-            'VIREMENT':     ('521', 'Banque'),
-            'CHEQUE':       ('521', 'Banque'),
-        }.get(paiement.mode_paiement, ('571', 'Caisse'))
+        # Ventilation multi-mode du règlement (encaissement → débit trésorerie).
+        from apps.comptabilite.tresorerie import normaliser_ventilation, lignes_tresorerie
+        from rest_framework.exceptions import ValidationError
+        try:
+            ventilation = normaliser_ventilation(
+                paiement.modes_reglement, montant, paiement.mode_paiement)
+        except ValueError as exc:
+            paiement.delete()
+            raise ValidationError(str(exc))
+
+        # Persister la ventilation normalisée + refléter le multi-mode.
+        paiement.modes_reglement = [
+            {'mode': v['mode'], 'montant': float(v['montant'])} for v in ventilation]
+        if len(ventilation) > 1:
+            paiement.mode_paiement = 'MIXTE'
+        paiement.save(update_fields=['modes_reglement', 'mode_paiement'])
 
         libelle = f"{eleve_nom} - {no_piece}"
         date = paiement.date_paiement
 
-        # Écriture 1 — Constatation créance : Débit 411 / Crédit 706
-        # Écriture 2 — Règlement           : Débit 5xx / Crédit 411
+        # Écriture 1-2 — Constatation créance : D 411 / C 706
+        # Écriture 3…  — Règlement : une ligne de débit trésorerie par mode
+        # Écriture finale — Solde de la créance : C 411
+        tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=3)
         ecritures = [
-            dict(ordre=1, no_compte='411',           debit=montant, credit=0,
+            dict(ordre=1, no_compte='411', debit=montant, credit=0,
                  libelle=f"Créance scolarité — {libelle}"),
-            dict(ordre=2, no_compte='706',           debit=0,       credit=montant,
+            dict(ordre=2, no_compte='706', debit=0, credit=montant,
                  libelle=f"Créance scolarité — {libelle}"),
-            dict(ordre=3, no_compte=compte_reglement, debit=montant, credit=0,
-                 libelle=f"Règlement {libelle_compte} — {libelle}"),
-            dict(ordre=4, no_compte='411',           debit=0,       credit=montant,
-                 libelle=f"Règlement {libelle_compte} — {libelle}"),
+            *tresor,
+            dict(ordre=3 + len(tresor), no_compte='411', debit=0, credit=montant,
+                 libelle=f"Règlement — {libelle}"),
         ]
 
         for e in ecritures:
@@ -279,6 +288,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
             # Paiement
             'mode_paiement':     p.mode_paiement,
             'mode_label':        MODE_LABELS.get(p.mode_paiement, p.mode_paiement),
+            # Ventilation multi-mode pour le détail du reçu (vide si règlement simple).
+            'modes_reglement':   [
+                {'mode': m.get('mode'),
+                 'mode_label': MODE_LABELS.get(m.get('mode'), m.get('mode')),
+                 'montant': round(float(m.get('montant', 0)), 2)}
+                for m in (p.modes_reglement or [])
+            ] if len(p.modes_reglement or []) > 1 else [],
             'observations':      p.observations or '',
             'saisi_par':         p.saisi_par.nom if p.saisi_par else '—',
             # Établissement
@@ -384,6 +400,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         montant_cantine     = float(data.get('montant_cantine',     paiement.montant_cantine))
         montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
         mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
+        modes_reglement_in  = data.get('modes_reglement', paiement.modes_reglement or [])
         observations        = data.get('observations',  paiement.observations or '')
         mois_regles         = data.get('mois_regles',   paiement.mois_regles or [])
 
@@ -391,6 +408,17 @@ class PaiementViewSet(viewsets.ModelViewSet):
                          montant_fournitures + montant_cantine + montant_divers)
         if nouveau_total <= 0:
             return Response({'error': 'Le total du paiement modifié doit être > 0.'}, status=400)
+
+        # Valider la ventilation multi-mode avant toute écriture.
+        from apps.comptabilite.tresorerie import normaliser_ventilation, lignes_tresorerie
+        try:
+            ventilation = normaliser_ventilation(modes_reglement_in, nouveau_total, mode_paiement)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        modes_reglement_norm = [
+            {'mode': v['mode'], 'montant': float(v['montant'])} for v in ventilation]
+        if len(ventilation) > 1:
+            mode_paiement = 'MIXTE'
 
         # 1 — Annuler l'original (contre-écritures)
         ecritures_orig = JournalEntry.objects.filter(
@@ -442,31 +470,23 @@ class PaiementViewSet(viewsets.ModelViewSet):
             montant_divers=montant_divers,
             mois_regles=mois_regles,
             mode_paiement=mode_paiement,
+            modes_reglement=modes_reglement_norm,
             observations=observations,
             statut='ACTIF',
             saisi_par=request.user,
         )
 
-        # 3 — Nouvelles écritures SYSCOHADA pour le nouveau paiement
-        compte_reglement, libelle_compte = {
-            'ESPECE':       ('571',  'Caisse'),
-            'WAVE':         ('5521', 'WAVE'),
-            'ORANGE_MONEY': ('5522', 'Orange Money'),
-            'FREE_MONEY':   ('5523', 'Free Money'),
-            'VIREMENT':     ('521',  'Banque'),
-            'CHEQUE':       ('521',  'Banque'),
-        }.get(mode_paiement, ('571', 'Caisse'))
-
+        # 3 — Nouvelles écritures SYSCOHADA (règlement ventilé par mode)
         libelle_new = f"{paiement.eleve.nom_complet} - {no_piece_new}"
+        tresor_new = lignes_tresorerie(ventilation, 'debit', libelle_new, ordre_debut=3)
         ecritures_new = [
-            dict(ordre=1, no_compte='411',            debit=nouveau_total, credit=0,
+            dict(ordre=1, no_compte='411', debit=nouveau_total, credit=0,
                  libelle=f"Créance scolarité — {libelle_new}"),
-            dict(ordre=2, no_compte='706',            debit=0, credit=nouveau_total,
+            dict(ordre=2, no_compte='706', debit=0, credit=nouveau_total,
                  libelle=f"Créance scolarité — {libelle_new}"),
-            dict(ordre=3, no_compte=compte_reglement, debit=nouveau_total, credit=0,
-                 libelle=f"Règlement {libelle_compte} — {libelle_new}"),
-            dict(ordre=4, no_compte='411',            debit=0, credit=nouveau_total,
-                 libelle=f"Règlement {libelle_compte} — {libelle_new}"),
+            *tresor_new,
+            dict(ordre=3 + len(tresor_new), no_compte='411', debit=0, credit=nouveau_total,
+                 libelle=f"Règlement — {libelle_new}"),
         ]
         for e in ecritures_new:
             JournalEntry.objects.create(

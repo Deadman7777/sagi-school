@@ -17,6 +17,8 @@ export interface Paiement {
   mois_regles?:        number[];
   services_regles?:    { nom: string; montant: number }[];
   mode_paiement: string;
+  // Ventilation multi-mode : un même règlement réparti sur plusieurs moyens.
+  modes_reglement?: { mode: string; montant: number }[];
   observations?: string;
   total?: number;
   statut?: 'ACTIF' | 'ANNULE';

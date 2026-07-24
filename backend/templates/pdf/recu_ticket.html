@@ -60,6 +60,7 @@
 
   <table class="row" style="margin-top:4px">
     <tr><td class="lbl">Mode</td><td class="r">{{ mode_label }}</td></tr>
+    {% for mr in modes_reglement %}<tr><td class="lbl" style="padding-left:8px">↳ {{ mr.mode_label }}</td><td class="r">{{ mr.montant|floatformat:0 }}</td></tr>{% endfor %}
     <tr><td class="lbl">Caissier</td><td class="r">{{ saisi_par }}</td></tr>
   </table>
 
