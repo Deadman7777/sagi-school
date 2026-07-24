@@ -198,3 +198,40 @@ class GedBudgetTest(_BaseAPITest):
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(len(r2.data), 1)
         self.assertEqual(r2.data[0]['nom'], 'devis.pdf')
+
+
+class BudgetProjetTest(_BaseAPITest):
+    """Lot B — budget analytique par projet."""
+
+    def _projet(self, libelle):
+        r = self.client.post('/api/gouvernance/projets/', {'libelle': libelle}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        return r.data['id']
+
+    def test_meme_compte_ventilable_par_projet(self):
+        pa, pb = self._projet('Projet A'), self._projet('Projet B')
+        from apps.comptabilite.models import BudgetLigne
+        for pid in (pa, pb, None):
+            payload = {'no_compte': '6011', 'libelle': 'Fournitures', 'm01': 100000}
+            if pid:
+                payload['projet_id'] = pid
+            r = self.client.post('/api/comptabilite/budget/', payload, format='json')
+            self.assertIn(r.status_code, (200, 201), r.content)
+        # 3 lignes : projet A, projet B, générale (projet vide).
+        self.assertEqual(
+            BudgetLigne.objects.filter(tenant=self.tenant, no_compte='6011').count(), 3)
+
+    def test_realise_filtre_par_projet(self):
+        pa = self._projet('Projet A')
+        self.client.post('/api/comptabilite/budget/',
+                         {'no_compte': '6011', 'm01': 100000, 'projet_id': pa}, format='json')
+        # Une charge taggée projet A + une charge non taggée, même compte.
+        self.client.post('/api/comptabilite/charges/',
+                         {'no_compte': '6011', 'montant': 40000, 'libelle': 'F', 'projet_id': pa}, format='json')
+        self.client.post('/api/comptabilite/charges/',
+                         {'no_compte': '6011', 'montant': 10000, 'libelle': 'G'}, format='json')
+
+        r = self.client.get('/api/comptabilite/budget/')
+        ligne_pa = next(l for l in r.data['lignes'] if l['projet'] == pa)
+        # Le réalisé de la ligne projet A ne compte QUE la charge taggée A.
+        self.assertEqual(ligne_pa['total_realise'], 40000)

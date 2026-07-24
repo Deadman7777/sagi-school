@@ -1538,16 +1538,22 @@ MOIS_NOMS   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','No
 class BudgetView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def _realise_par_mois(self, tenant, exercice, no_compte):
+    def _realise_par_mois(self, tenant, exercice, no_compte, projet=None):
         """Réalisé NET par mois pour un compte (et ses sous-comptes) :
         débits − crédits, pour que les annulations/modifications par
-        contre-écriture (crédit sur le 6xx) soient bien déduites."""
+        contre-écriture (crédit sur le 6xx) soient bien déduites.
+
+        Si `projet` est fourni (ligne de budget analytique), le réalisé est
+        filtré sur ce projet — sinon on agrège tout le compte (budget général)."""
         qs = JournalEntry.objects.filter(
             tenant=tenant, exercice=exercice,
             source__in=('CHARGE', 'PAIE', 'BUDGET'),
         ).filter(
             Q(no_compte=no_compte) | Q(no_compte__startswith=no_compte)
-        ).annotate(
+        )
+        if projet is not None:
+            qs = qs.filter(projet=projet)
+        qs = qs.annotate(
             mois=ExtractMonth('date_ecriture')
         ).values('mois').annotate(d=Sum('debit'), c=Sum('credit'))
         return {r['mois']: float(r['d'] or 0) - float(r['c'] or 0) for r in qs}
@@ -1559,7 +1565,8 @@ class BudgetView(APIView):
             return Response({'lignes': [], 'totaux': {}, 'exercice': None})
 
         plan    = get_plan_dict(tenant)
-        lignes  = BudgetLigne.objects.filter(tenant=tenant, exercice=exercice)
+        lignes  = BudgetLigne.objects.filter(
+            tenant=tenant, exercice=exercice).select_related('projet', 'ressource')
 
         result = []
         total_prevu = total_realise = 0.0
@@ -1570,7 +1577,7 @@ class BudgetView(APIView):
         mois_realise = [0.0] * 12
 
         for l in lignes:
-            realise_mois = self._realise_par_mois(tenant, exercice, l.no_compte)
+            realise_mois = self._realise_par_mois(tenant, exercice, l.no_compte, l.projet)
             mois_data = []
             t_prevu = t_realise = 0.0
 
@@ -1603,6 +1610,10 @@ class BudgetView(APIView):
                 'total_prevu': round(t_prevu, 2),
                 'total_realise': round(t_realise, 2),
                 'taux_realisation': pct,
+                'projet':          str(l.projet_id) if l.projet_id else None,
+                'projet_libelle':  l.projet.libelle if l.projet else '',
+                'ressource':       str(l.ressource_id) if l.ressource_id else None,
+                'ressource_libelle': l.ressource.libelle if l.ressource else '',
             })
 
         return Response({
@@ -1636,9 +1647,20 @@ class BudgetView(APIView):
         plan    = get_plan_dict(tenant)
         libelle = request.data.get('libelle') or plan.get(no_compte, no_compte)
 
+        # Dimensions analytiques (gouvernance) : projet (clé) + ressource.
+        from apps.gouvernance.models import Projet, Ressource
+        projet = ressource = None
+        pid = request.data.get('projet_id')
+        rid = request.data.get('ressource_id')
+        if pid:
+            projet = Projet.objects.filter(tenant=tenant, id=pid).first()
+        if rid:
+            ressource = Ressource.objects.filter(tenant=tenant, id=rid).first()
+
         defaults = {
             'libelle':     libelle,
             'type_charge': request.data.get('type_charge', 'FIXE'),
+            'ressource':   ressource,
         }
         # Montants mensuels
         for champ in MOIS_CHAMPS:
@@ -1646,7 +1668,7 @@ class BudgetView(APIView):
             defaults[champ] = float(val) if val else 0
 
         obj, created = BudgetLigne.objects.update_or_create(
-            tenant=tenant, exercice=exercice, no_compte=no_compte,
+            tenant=tenant, exercice=exercice, no_compte=no_compte, projet=projet,
             defaults=defaults,
         )
         return Response({'id': str(obj.id), 'no_compte': obj.no_compte}, status=201 if created else 200)

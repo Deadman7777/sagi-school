@@ -981,7 +981,9 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <tbody>
           <tr *ngFor="let l of budget()!.lignes" [class.ligne-depasse]="l.total_realise > l.total_prevu">
             <td class="mono bold">{{ l.no_compte }}</td>
-            <td>{{ l.libelle }}</td>
+            <td>{{ l.libelle }}
+              <span *ngIf="l.projet_libelle" style="font-size:10px;color:#4fc3f7"> · 🎯 {{ l.projet_libelle }}</span>
+            </td>
             <td>
               <p-tag [value]="l.type_charge === 'FIXE' ? 'Fixe' : 'Variable'"
                      [severity]="l.type_charge === 'FIXE' ? 'info' : 'warn'" />
@@ -1475,6 +1477,19 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
         <label>Libellé</label>
         <input pInputText [(ngModel)]="formBudget.libelle" class="w-full" />
       </div>
+      <div class="form-group" *ngIf="projetsGouv().length">
+        <label>Projet (budget analytique)</label>
+        <p-select appendTo="body" [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
+                  [(ngModel)]="formBudget.projet_id" styleClass="w-full" [showClear]="true"
+                  placeholder="— Budget général —" [filter]="true" />
+        <small style="color:#64748b;font-size:10px">Un même compte peut être budgété par projet ; le réalisé se compare par projet.</small>
+      </div>
+      <div class="form-group" *ngIf="ressourcesGouv().length">
+        <label>Ressource de financement</label>
+        <p-select appendTo="body" [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
+                  [(ngModel)]="formBudget.ressource_id" styleClass="w-full" [showClear]="true"
+                  placeholder="— Aucune —" [filter]="true" />
+      </div>
     </div>
     <!-- Répartition mensuelle -->
     <div style="margin-top:14px">
@@ -1942,18 +1957,32 @@ comptesCredit = [
     });
   }
 
+  /** Recharge les listes projets/ressources (dimensions analytiques gouvernance). */
+  private chargerDimensionsGouv() {
+    this.gouv.getRessources().subscribe({
+      next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),
+      error: () => this.ressourcesGouv.set([]),
+    });
+    this.gouv.getProjets(true).subscribe({
+      next: d => this.projetsGouv.set(d || []),
+      error: () => this.projetsGouv.set([]),
+    });
+  }
+
   ouvrirDialogBudget() {
     this.editBudgetMode = false;
-    const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE' };
+    const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE', projet_id: null, ressource_id: null };
     for (let i = 1; i <= 12; i++) base[`m${String(i).padStart(2,'0')}`] = 0;
     this.formBudget = base;
     this.dialogBudgetVisible = true;
     if (!this.planComptable().length) this.chargerPlan();
+    this.chargerDimensionsGouv();
   }
 
   ouvrirModifierBudget(l: any) {
     this.editBudgetMode = true;
-    this.formBudget = { ...l };
+    this.formBudget = { ...l, projet_id: l.projet || null, ressource_id: l.ressource || null };
+    this.chargerDimensionsGouv();
     for (let i = 1; i <= 12; i++) {
       const k = `m${String(i).padStart(2,'0')}`;
       if (this.formBudget[k] === undefined) this.formBudget[k] = 0;
