@@ -235,3 +235,38 @@ class BudgetProjetTest(_BaseAPITest):
         ligne_pa = next(l for l in r.data['lignes'] if l['projet'] == pa)
         # Le réalisé de la ligne projet A ne compte QUE la charge taggée A.
         self.assertEqual(ligne_pa['total_realise'], 40000)
+
+
+class RhMultiModeTest(_BaseAPITest):
+    """Lot C — RH : avance multi-mode ventilée + rattachée à une ressource."""
+
+    def _employe(self):
+        from apps.rh.models import Employe
+        return Employe.objects.create(
+            tenant=self.tenant, nom_complet='Awa Sow', type_employe='ENSEIGNANT',
+            poste='Professeure', date_embauche=datetime.date(2024, 1, 1),
+            salaire_base=200000)
+
+    def test_avance_multimode_ventilee_et_taggee(self):
+        from apps.gouvernance.models import Ressource
+        res = Ressource.objects.create(
+            tenant=self.tenant, reference='R1', libelle='Don', montant=1000000)
+        emp = self._employe()
+
+        r = self.client.post(f'/api/rh/employes/{emp.id}/avance/', {
+            'montant': 60000, 'mode_paiement': 'CAISSE',
+            'ressource_id': str(res.id),
+            'modes_reglement': [
+                {'mode': 'CAISSE', 'montant': 40000},
+                {'mode': 'WAVE', 'montant': 20000},
+            ],
+        }, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+
+        av = JournalEntry.objects.filter(tenant=self.tenant, source='AVANCE')
+        self.assertEqual(av.filter(no_compte='421').aggregate(s=Sum('debit'))['s'], 60000)
+        self.assertEqual(av.filter(no_compte='571').aggregate(s=Sum('credit'))['s'], 40000)
+        self.assertEqual(av.filter(no_compte='5521').aggregate(s=Sum('credit'))['s'], 20000)
+        self.assertTrue(av.filter(no_compte='421', ressource=res).exists())
+        agg = av.aggregate(d=Sum('debit'), c=Sum('credit'))
+        self.assertEqual(agg['d'], agg['c'])
