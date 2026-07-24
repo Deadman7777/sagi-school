@@ -2143,3 +2143,83 @@ class ReglerImmobilisationView(APIView):
                   f"Règlement {immo.libelle} ({montant:,.0f} FCFA) par {mode_reglement} — pièce {no_piece}")
 
         return Response(_immo_to_dict(immo))
+
+
+class ImportChargesView(APIView):
+    """Import Excel des charges — modèle, aperçu et création en masse.
+
+    GET  ?template=1        → télécharge le modèle .xlsx
+    POST fichier            → aperçu (analyse ligne par ligne)
+    POST fichier confirmer=1 → crée les écritures des lignes OK (6xx D / trésorerie C)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.http import HttpResponse
+        from .import_charges import generer_template
+        tenant = get_tenant(request)
+        try:
+            buf = generer_template(tenant)
+        except ImportError as e:
+            return Response({'error': str(e)}, status=400)
+        resp = HttpResponse(
+            buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = 'attachment; filename="import_charges_sagi.xlsx"'
+        return resp
+
+    def post(self, request):
+        from django.db import transaction
+        from django.db.models import Max
+        import re as _re
+        from core.models import log_audit
+        from .import_charges import analyser
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+
+        fichier = request.FILES.get('fichier')
+        if not fichier:
+            return Response({'error': 'Aucun fichier reçu.'}, status=400)
+        try:
+            rapport = analyser(fichier, tenant, exercice)
+        except (ImportError, ValueError) as e:
+            return Response({'error': str(e)}, status=400)
+
+        if request.data.get('confirmer') != '1':
+            return Response(rapport)
+
+        a_creer = [l for l in rapport['lignes'] if l['statut'] == 'OK']
+        last = JournalEntry.objects.filter(
+            tenant=tenant, source='CHARGE', no_piece__startswith='CHG-'
+        ).aggregate(m=Max('no_piece'))['m']
+        nums = _re.findall(r'\d+', last or 'CHG-0000')
+        seq = int(nums[-1]) if nums else 0
+
+        cree = 0
+        with transaction.atomic():
+            for l in a_creer:
+                seq += 1
+                no_piece = f"CHG-{seq:04d}"
+                montant = float(l['montant'])
+                lib = l['libelle']
+                date = l['date'] or str(exercice.date_debut)
+                JournalEntry.objects.create(
+                    tenant=tenant, exercice=exercice, no_piece=no_piece,
+                    date_ecriture=date, source='CHARGE', source_id=None, ordre=1,
+                    no_compte=l['no_compte'], debit=montant, credit=0,
+                    libelle=f"{lib}")
+                JournalEntry.objects.create(
+                    tenant=tenant, exercice=exercice, no_piece=no_piece,
+                    date_ecriture=date, source='CHARGE', source_id=None, ordre=2,
+                    no_compte=l['compte_tresorerie'], debit=0, credit=montant,
+                    libelle=f"Règlement — {lib}")
+                cree += 1
+
+        log_audit(request, 'IMPORT', 'Charge',
+                  description=f"Import Excel : {cree} charges créées "
+                              f"({rapport['resume']['montant_total']:,.0f} FCFA)")
+        return Response({'success': True, 'crees': cree,
+                         'montant_total': rapport['resume']['montant_total']})

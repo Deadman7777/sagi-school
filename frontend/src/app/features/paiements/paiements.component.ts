@@ -19,13 +19,15 @@ import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
+import { ImportChargesDialogComponent } from './import-charges-dialog.component';
 
 @Component({
   selector: 'app-paiements',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, CheckboxModule, TooltipModule, PiecesJustificativesComponent],
+            InputNumberModule, CheckboxModule, TooltipModule, PiecesJustificativesComponent,
+            ImportChargesDialogComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -580,8 +582,15 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               Total : {{ totalCharges() | number:'1.0-0' }} FCFA
             </span>
           </div>
-          <p-button label="+ Nouvelle charge" severity="danger" (onClick)="ouvrirDialogCharge()" />
+          <div style="display:flex;gap:8px">
+            <p-button label="📥 Importer Excel" severity="secondary" [outlined]="true"
+                      (onClick)="importChargesVisible.set(true)" />
+            <p-button label="+ Nouvelle charge" severity="danger" (onClick)="ouvrirDialogCharge()" />
+          </div>
         </div>
+
+        <app-import-charges-dialog [(visible)]="importChargesVisible"
+                                   (importe)="chargerCharges()" />
 
         <p-table [value]="charges()" [loading]="loadingCharges()"
                 [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
@@ -1382,6 +1391,9 @@ export class PaiementsComponent implements OnInit {
       .reduce((s: number, m: any) => s + (Number(m.montant) || 0), 0);
     return Math.round(((Number(this.nouvelleCharge.montant) || 0) - somme) * 100) / 100;
   }
+
+  // Import Excel des charges
+  importChargesVisible = signal(false);
 
   // ── GED — pièces justificatives (charges) ───────────────────────────────
   dialogPiecesVisible = false;

@@ -25,6 +25,15 @@ export class ComptabiliteService {
   getNotesAnnexes(exercice?: string)   { return this.api.get<any>('/comptabilite/notes-annexes/', this.exParams(exercice)); }
   getCharges()        { return this.api.get<any[]>('/comptabilite/charges/'); }
   creerCharge(data: any)      { return this.api.post<any>('/comptabilite/charges/', data); }
+
+  // Import Excel des charges
+  telechargerTemplateCharges() { return this.api.getBlob('/comptabilite/import-charges/'); }
+  importerChargesExcel(fichier: File, confirmer: boolean) {
+    const form = new FormData();
+    form.append('fichier', fichier);
+    if (confirmer) form.append('confirmer', '1');
+    return this.api.post<any>('/comptabilite/import-charges/', form);
+  }
   supprimerCharge(id: string) { return this.api.delete(`/comptabilite/charges/${id}/`); }
   modifierCharge(id: string, data: any) { return this.api.put<any>(`/comptabilite/charges/${id}/`, data); }
   exportPDF(type: string, exercice?: string) { return this.api.getBlob(`/comptabilite/export-pdf/${type}/`, this.exParams(exercice)); }
