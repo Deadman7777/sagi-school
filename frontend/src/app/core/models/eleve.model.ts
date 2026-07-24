@@ -52,11 +52,13 @@ export interface Eleve {
   // Prise en charge — motif
   prise_en_charge: string | null;
   obs_prise_en_charge: string;
-  // Prise en charge — type et taux détaillés
+  // Prise en charge — MONTANTS directs (priment sur les taux)
+  pec_inscription: number;
+  pec_mensualite: number;
+  // Anciens taux (compat)
   type_pec: TypePEC | null;
   taux_pec_inscription: number;
   taux_pec_mensualite: number;
-  // Legacy
   taux_prise_en_charge: number;
   // Services optionnels (IDs de services auxquels l'élève est abonné)
   abonnements: string[];

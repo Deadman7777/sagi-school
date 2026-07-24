@@ -88,6 +88,14 @@ export class ElevesService {
     return this.api.getBlob(`/eleves/${eleveId}/situation-pdf/`);
   }
 
+  // Correction du « déjà payé » de reprise (données migrées)
+  getReprise(eleveId: string) {
+    return this.api.get<any>(`/eleves/${eleveId}/corriger-reprise/`);
+  }
+  corrigerReprise(eleveId: string, data: any) {
+    return this.api.post<any>(`/eleves/${eleveId}/corriger-reprise/`, data);
+  }
+
   fichePDF(eleveId: string) {
     return this.api.getBlob(`/eleves/${eleveId}/fiche-pdf/`);
   }
