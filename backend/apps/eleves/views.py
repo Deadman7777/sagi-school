@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Value, DecimalField
+from django.db.models import Sum, Count, Value, DecimalField, F, Q
 from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
@@ -50,7 +50,7 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Eleve.objects.none()
 
         qs = Eleve.objects.filter(tenant=tenant).select_related(
-            'section', 'exercice'
+            'section', 'exercice', 'reliquat_exercice_origine'
         ).prefetch_related('paiements', 'abonnements__service').annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
@@ -60,7 +60,14 @@ class EleveViewSet(viewsets.ModelViewSet):
                 Sum('paiements__montant_cantine')     +
                 Sum('paiements__montant_divers'),
                 Value(0), output_field=DecimalField()
-            )
+            ),
+            # Reliquat déjà encaissé — annoté pour que le reliquat restant de
+            # chaque élève se lise sans une requête par ligne (cf. reliquat_paye).
+            reliquat_paye_sql=Coalesce(
+                Sum('paiements__montant_reliquat',
+                    filter=Q(paiements__statut='ACTIF')),
+                Value(0), output_field=DecimalField()
+            ),
         )
 
         if section := self.request.query_params.get('section'):
@@ -71,6 +78,11 @@ class EleveViewSet(viewsets.ModelViewSet):
             qs = qs.filter(statut=statut)
         if pec := self.request.query_params.get('prise_en_charge'):
             qs = qs.filter(prise_en_charge=pec)
+        # Suivi des dettes antérieures : ne garder que les élèves qui traînent
+        # un reliquat encore ouvert (reporté > déjà réglé).
+        if self.request.query_params.get('avec_reliquat') in ('1', 'true', 'True'):
+            qs = qs.filter(reliquat_anterieur__gt=0).filter(
+                reliquat_anterieur__gt=F('reliquat_paye_sql'))
 
         return qs.order_by('numero')
 
@@ -186,6 +198,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         from django.db import transaction
         from apps.paiements.models import Paiement
         from apps.paiements.reprise import creer_paiement_reprise
+        from apps.comptabilite.neutralisation import neutraliser_reprises
 
         tenant   = get_tenant(request)
         eleve    = self.get_object()
@@ -216,27 +229,14 @@ class EleveViewSet(viewsets.ModelViewSet):
                 JournalEntry.objects.filter(tenant=tenant, exercice=exercice,
                                             source='PAIEMENT', source_id=reprise.id).delete()
                 reprise.delete()
-            a_migration = JournalEntry.objects.filter(
-                tenant=tenant, exercice=exercice, source='MIGRATION',
-                no_compte__startswith='70', credit__gt=0).exists()
-            p = None
             if sum(montants.values()) > 0:
-                p = creer_paiement_reprise(tenant, exercice, eleve, user=request.user, montants=montants)
-            if a_migration and p:
-                r706 = float(JournalEntry.objects.filter(
-                    tenant=tenant, exercice=exercice, source='PAIEMENT', source_id=p.id,
-                    no_compte='706', credit__gt=0).aggregate(c=Sum('credit'))['c'] or 0)
-                if r706 > 0:
-                    JournalEntry.objects.bulk_create([
-                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
-                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
-                                     no_compte='706', debit=r706, credit=0, ordre=1,
-                                     libelle=f"Neutralisation reprise corrigée — {eleve.nom_complet}"),
-                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
-                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
-                                     no_compte='890', debit=0, credit=r706, ordre=2,
-                                     libelle=f"Contrepartie reprise corrigée — {eleve.nom_complet}"),
-                    ])
+                creer_paiement_reprise(tenant, exercice, eleve, user=request.user,
+                                       montants=montants)
+            # Neutralisation recalculée sur TOUTES les reprises en vigueur —
+            # jamais empilée sur l'existante. Sans cela, chaque correction
+            # laissait un débit 706 orphelin qui rongeait les produits migrés
+            # jusqu'à mettre le total des recettes à 0.
+            neutraliser_reprises(tenant, exercice)
         eleve.refresh_from_db()
         from core.models import log_audit
         log_audit(request, 'UPDATE', 'Eleve', str(eleve.id),
@@ -421,6 +421,17 @@ class EleveViewSet(viewsets.ModelViewSet):
             'total_annuel_net':  total_annuel,
             'total_paye':        total_paye,
             'total_restant':     round(max(total_annuel - total_paye, 0), 2),
+            # Dette d'un exercice antérieur, encaissable sur ce même règlement.
+            # Elle vit à part du dû de l'année : elle ne constate aucun produit
+            # (voir apps.paiements.ecritures.lignes_paiement).
+            'reliquat': {
+                'annee':   eleve.reliquat_origine_libelle,
+                'du':      round(float(eleve.reliquat_anterieur or 0), 2),
+                'paye':    eleve.reliquat_paye,
+                'restant': eleve.reliquat_restant,
+            },
+            'total_restant_global': round(max(total_annuel - total_paye, 0)
+                                          + eleve.reliquat_restant, 2),
             'nb_paiements':      nb_paiements,
             'nb_mensualites_dues': nb_dus,
             'mois_ecole':        mois_ecole,
@@ -1000,9 +1011,12 @@ class SituationElevePDFView(APIView):
                 'observations':  p.observations or '',
             })
 
+        # total_p ne somme que les 6 catégories : le suivi ci-dessous porte
+        # sur l'année en cours. La dette antérieure est présentée à part.
         total_paye   = sum(p['total'] for p in paiements_list)
         total_attendu = float(eleve.total_attendu)
         reste        = round(max(0.0, total_attendu - total_paye), 0)
+        reliquat     = eleve.reliquat_restant
 
         context = {
             'tenant':         tenant,
@@ -1014,6 +1028,12 @@ class SituationElevePDFView(APIView):
             'total_paye':     round(total_paye, 0),
             'total_attendu':  round(total_attendu, 0),
             'reste':          reste,
+            # Reliquat d'un exercice antérieur — ce que la famille doit encore
+            # au titre des années passées, en plus du reste de l'année.
+            'reliquat_du':      round(float(eleve.reliquat_anterieur or 0), 0),
+            'reliquat_restant': round(reliquat, 0),
+            'reliquat_annee':   eleve.reliquat_origine_libelle,
+            'reste_global':     round(reste + reliquat, 0),
             'nb_paiements':   len(paiements_list),
         }
 

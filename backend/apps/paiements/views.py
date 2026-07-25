@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count
 from apps.eleves.models import Eleve
-from core.permissions import IsTenantMember
+from core.permissions import IsTenantMember, IsAdminEcole
 from core.tenant import get_tenant
 from .models import Paiement, Exercice
 from .serializers import PaiementSerializer, ExerciceSerializer
@@ -71,6 +71,14 @@ class PaiementViewSet(viewsets.ModelViewSet):
             next_num = 1
         no_piece = f"REC-{next_num:04d}"
 
+        # Un reliquat ne peut être encaissé que s'il a été reporté, et jamais
+        # au-delà de ce qui reste ouvert — contrôlé avant toute écriture.
+        from apps.paiements.ecritures import lignes_paiement, verifier_reliquat
+        from rest_framework.exceptions import ValidationError
+        if err := verifier_reliquat(serializer.validated_data['eleve'],
+                                    serializer.validated_data.get('montant_reliquat')):
+            raise ValidationError(err)
+
         paiement = serializer.save(
             tenant=tenant,
             exercice=exercice,
@@ -84,8 +92,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         eleve_nom = paiement.eleve.nom_complet
 
         # Ventilation multi-mode du règlement (encaissement → débit trésorerie).
-        from apps.comptabilite.tresorerie import normaliser_ventilation, lignes_tresorerie
-        from rest_framework.exceptions import ValidationError
+        from apps.comptabilite.tresorerie import normaliser_ventilation
         try:
             ventilation = normaliser_ventilation(
                 paiement.modes_reglement, montant, paiement.mode_paiement)
@@ -103,19 +110,11 @@ class PaiementViewSet(viewsets.ModelViewSet):
         libelle = f"{eleve_nom} - {no_piece}"
         date = paiement.date_paiement
 
-        # Écriture 1-2 — Constatation créance : D 411 / C 706
-        # Écriture 3…  — Règlement : une ligne de débit trésorerie par mode
-        # Écriture finale — Solde de la créance : C 411
-        tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=3)
-        ecritures = [
-            dict(ordre=1, no_compte='411', debit=montant, credit=0,
-                 libelle=f"Créance scolarité — {libelle}"),
-            dict(ordre=2, no_compte='706', debit=0, credit=montant,
-                 libelle=f"Créance scolarité — {libelle}"),
-            *tresor,
-            dict(ordre=3 + len(tresor), no_compte='411', debit=0, credit=montant,
-                 libelle=f"Règlement — {libelle}"),
-        ]
+        # Constatation créance + produit sur la part « année en cours »,
+        # règlement ventilé par mode, puis solde du 411. La part reliquat,
+        # elle, ne constate aucun produit (déjà comptabilisé l'année d'origine).
+        ecritures = lignes_paiement(
+            montant, float(paiement.total_exercice), ventilation, libelle)
 
         for e in ecritures:
             JournalEntry.objects.create(
@@ -193,10 +192,24 @@ class PaiementViewSet(viewsets.ModelViewSet):
             )
             return float(a['t'] or 0)
 
+        def _sum_reliquat(qs):
+            return float(qs.aggregate(t=_Sum('montant_reliquat'))['t'] or 0)
+
+        # Le suivi « attendu / versé / reste » porte sur l'ANNÉE EN COURS :
+        # on n'y mêle donc que la part exercice du règlement. Le reliquat d'une
+        # année antérieure est suivi à part, sur sa propre ligne.
         deja_paye_avant = _sum_qs(paiements_avant) + _sum_qs(meme_jour)
         total_attendu   = float(p.eleve.total_attendu)
         total_paiement  = float(p.total)
-        reste_apres     = max(total_attendu - deja_paye_avant - total_paiement, 0)
+        part_exercice   = float(p.total_exercice)
+        reste_apres     = max(total_attendu - deja_paye_avant - part_exercice, 0)
+
+        # Reliquat antérieur : dû reporté, déjà réglé avant ce reçu, restant après.
+        reliquat_du     = float(p.eleve.reliquat_anterieur or 0)
+        reliquat_paye_p = float(p.montant_reliquat or 0)
+        reliquat_avant  = (_sum_reliquat(paiements_avant) + _sum_reliquat(meme_jour))
+        reliquat_apres  = max(reliquat_du - reliquat_avant - reliquat_paye_p, 0)
+        annee_reliquat  = p.eleve.reliquat_origine_libelle
 
         # Libellé des mois concernés par la mensualité (traçabilité)
         _MOIS = {1:'Janvier',2:'Février',3:'Mars',4:'Avril',5:'Mai',6:'Juin',
@@ -241,6 +254,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
         divers_residuel = float(p.montant_divers) - total_services
         if divers_residuel > 0.009:
             lignes.append(('Frais divers', round(divers_residuel, 2)))
+        # Reliquat d'une année antérieure — libellé explicite sur le reçu pour
+        # que la famille voie ce qu'elle solde.
+        if reliquat_paye_p:
+            label_rel = 'Reliquat année antérieure'
+            if annee_reliquat:
+                label_rel = f'Reliquat {annee_reliquat}'
+            lignes.append((label_rel, reliquat_paye_p))
 
         # Numéro séquentiel du reçu pour cet élève
         nb_recu_eleve = Paiement.objects.filter(
@@ -275,6 +295,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'fournitures':       float(p.montant_fournitures),
             'cantine':           float(p.montant_cantine),
             'divers':            float(p.montant_divers),
+            'reliquat':          reliquat_paye_p,
             'mois_concernes':    mois_concernes,
             'mois_regles':       mois_regles,
             'services_regles':   services_regles,
@@ -282,8 +303,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
             # Suivi financier
             'total_attendu':     round(total_attendu, 2),
             'deja_paye_avant':   round(deja_paye_avant, 2),
-            'total_paye_apres':  round(deja_paye_avant + total_paiement, 2),
+            'total_paye_apres':  round(deja_paye_avant + part_exercice, 2),
             'reste_apres':       round(reste_apres, 2),
+            # Reliquat antérieur (0 partout si l'élève n'en a pas)
+            'reliquat_annee':        annee_reliquat,
+            'reliquat_du':           round(reliquat_du, 2),
+            'reliquat_restant_apres': round(reliquat_apres, 2),
+            'reste_global_apres':    round(reste_apres + reliquat_apres, 2),
             'nb_recu_eleve':     nb_recu_eleve,
             # Paiement
             'mode_paiement':     p.mode_paiement,
@@ -399,18 +425,27 @@ class PaiementViewSet(viewsets.ModelViewSet):
         montant_fournitures = float(data.get('montant_fournitures', paiement.montant_fournitures))
         montant_cantine     = float(data.get('montant_cantine',     paiement.montant_cantine))
         montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
+        montant_reliquat    = float(data.get('montant_reliquat',    paiement.montant_reliquat))
         mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
         modes_reglement_in  = data.get('modes_reglement', paiement.modes_reglement or [])
         observations        = data.get('observations',  paiement.observations or '')
         mois_regles         = data.get('mois_regles',   paiement.mois_regles or [])
 
-        nouveau_total = (montant_inscription + montant_mensualite + montant_uniforme +
+        part_exercice = (montant_inscription + montant_mensualite + montant_uniforme +
                          montant_fournitures + montant_cantine + montant_divers)
+        nouveau_total = part_exercice + montant_reliquat
         if nouveau_total <= 0:
             return Response({'error': 'Le total du paiement modifié doit être > 0.'}, status=400)
 
+        # Le paiement réécrit ne doit pas se compter lui-même dans le
+        # déjà-réglé, sinon toute modification à la hausse serait refusée.
+        from apps.paiements.ecritures import lignes_paiement, verifier_reliquat
+        if err := verifier_reliquat(paiement.eleve, montant_reliquat,
+                                    paiement_exclu=paiement):
+            return Response({'error': err}, status=400)
+
         # Valider la ventilation multi-mode avant toute écriture.
-        from apps.comptabilite.tresorerie import normaliser_ventilation, lignes_tresorerie
+        from apps.comptabilite.tresorerie import normaliser_ventilation
         try:
             ventilation = normaliser_ventilation(modes_reglement_in, nouveau_total, mode_paiement)
         except ValueError as exc:
@@ -468,6 +503,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             montant_fournitures=montant_fournitures,
             montant_cantine=montant_cantine,
             montant_divers=montant_divers,
+            montant_reliquat=montant_reliquat,
             mois_regles=mois_regles,
             mode_paiement=mode_paiement,
             modes_reglement=modes_reglement_norm,
@@ -478,16 +514,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         # 3 — Nouvelles écritures SYSCOHADA (règlement ventilé par mode)
         libelle_new = f"{paiement.eleve.nom_complet} - {no_piece_new}"
-        tresor_new = lignes_tresorerie(ventilation, 'debit', libelle_new, ordre_debut=3)
-        ecritures_new = [
-            dict(ordre=1, no_compte='411', debit=nouveau_total, credit=0,
-                 libelle=f"Créance scolarité — {libelle_new}"),
-            dict(ordre=2, no_compte='706', debit=0, credit=nouveau_total,
-                 libelle=f"Créance scolarité — {libelle_new}"),
-            *tresor_new,
-            dict(ordre=3 + len(tresor_new), no_compte='411', debit=0, credit=nouveau_total,
-                 libelle=f"Règlement — {libelle_new}"),
-        ]
+        ecritures_new = lignes_paiement(nouveau_total, part_exercice,
+                                        ventilation, libelle_new)
         for e in ecritures_new:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
@@ -604,10 +632,96 @@ class CloturerExerciceView(APIView):
             }, status=400)
 
         creer_suivant = request.data.get('creer_suivant', True)
-        result        = cloturer_exercice(exercice, creer_suivant)
+        reporter      = request.data.get('reporter_impayes', True)
+        result        = cloturer_exercice(exercice, creer_suivant, reporter)
 
         return Response({
             'success': True,
             'message': f"Exercice {result['exercice_cloture']} clôturé ✅",
             **result
+        })
+
+
+class ReporterReliquatsView(APIView):
+    """Reconduction des impayés d'un exercice sur le suivant.
+
+    GET  — prévisualisation : qui doit quoi, ce qui sera créé, ce qui sera
+           ignoré. N'écrit rien.
+    POST — exécution (confirme=true). Idempotent : rejouable en rattrapage
+           sur un exercice déjà clôturé, sans jamais le modifier.
+
+    Paramètres communs : `source` / `cible` (ids d'exercice). Par défaut,
+    cible = exercice actif et source = l'exercice qui le précède.
+    """
+    permission_classes = [IsAdminEcole]
+
+    def _exercices(self, request):
+        """Résout (source, cible, erreur)."""
+        from .report_reliquats import exercice_source_par_defaut
+        tenant = get_tenant(request)
+        params = request.query_params if request.method == 'GET' else request.data
+
+        cible_id = params.get('cible')
+        if cible_id:
+            cible = Exercice.objects.filter(tenant=tenant, id=cible_id).first()
+        else:
+            cible = Exercice.objects.filter(
+                tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not cible:
+            return None, None, Response(
+                {'error': "Aucun exercice actif pour recevoir les reliquats."}, status=404)
+
+        source_id = params.get('source')
+        if source_id:
+            source = Exercice.objects.filter(tenant=tenant, id=source_id).first()
+        else:
+            source = exercice_source_par_defaut(tenant, cible)
+        if not source:
+            return None, None, Response(
+                {'error': f"Aucun exercice antérieur à {cible.annee_scolaire}."}, status=404)
+
+        return source, cible, None
+
+    def get(self, request):
+        from .report_reliquats import reporter_reliquats
+        source, cible, err = self._exercices(request)
+        if err:
+            return err
+        try:
+            rapport = reporter_reliquats(source, cible, dry_run=True)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response(rapport)
+
+    def post(self, request):
+        from .report_reliquats import reporter_reliquats
+        from core.models import log_audit
+
+        source, cible, err = self._exercices(request)
+        if err:
+            return err
+        if not request.data.get('confirme'):
+            return Response({
+                'error':   'Confirmation requise',
+                'message': 'Envoyez {"confirme": true} pour lancer le report',
+            }, status=400)
+
+        try:
+            rapport = reporter_reliquats(
+                source, cible,
+                creer_fiches=request.data.get('creer_fiches', True))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+
+        log_audit(request, 'CREATE', 'ReportReliquats', str(cible.id),
+                  f"{source.annee_scolaire} → {cible.annee_scolaire} : "
+                  f"{rapport['nb_reportes']} élève(s), "
+                  f"{rapport['montant_total']:,.0f} FCFA")
+
+        return Response({
+            'success': True,
+            'message': (f"{rapport['nb_reportes']} reliquat(s) reporté(s) sur "
+                        f"{cible.annee_scolaire} — "
+                        f"{rapport['montant_total']:,.0f} FCFA"),
+            **rapport,
         })

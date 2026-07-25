@@ -238,7 +238,9 @@
     "import_fait": "{{n}} students imported successfully!",
     "import_deja_paye": "Already paid",
     "import_reprises_info": "{{n}} student(s) with opening balances: {{montant}} FCFA already paid before migration will be recorded (account 890, cash untouched).",
-    "import_fait_reprises": "{{n}} opening balance(s) recorded for {{montant}} FCFA."
+    "import_fait_reprises": "{{n}} opening balance(s) recorded for {{montant}} FCFA.",
+    "reliquat": "Prior balance",
+    "reliquat_de": "Balance from"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -423,7 +425,9 @@
     "total_eleves": "Total Students",
     "total_recettes": "Total Revenue",
     "total_charges": "Total Expenses",
-    "resultat_net": "Net Result"
+    "resultat_net": "Net Result",
+    "reporter_impayes": "Carry unpaid balances over to the new year",
+    "reporter_impayes_aide": "Students still in debt are re-enrolled with their balance (opening entries 411/890). The closed year is left untouched."
   },
   "common": {
     "fcfa": "FCFA",
@@ -941,5 +945,19 @@
     "maintenant": "Back up now",
     "ok_toast": "Backup completed",
     "erreur_toast": "Backup failed"
+  },
+  "reliquats": {
+    "title": "Carry over unpaid balances",
+    "aide": "Carries the previous year’s unpaid balances over to the active year, even if it is already closed. The closed year is never modified. Safe to re-run: students already processed are skipped.",
+    "previsualiser": "Preview",
+    "appliquer": "Apply",
+    "eleves_concernes": "student(s) concerned",
+    "montant": "Balance",
+    "fiche": "Record",
+    "fiche_creee": "Re-enrolled",
+    "fiche_existante": "Existing record",
+    "aucun": "No unpaid balance to carry over.",
+    "passager": "short-stay ndongo — re-enrol manually (remaining months), then run again",
+    "deja_traites": "student(s) already processed, skipped."
   }
 }

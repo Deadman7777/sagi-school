@@ -238,7 +238,9 @@
     "import_fait": "{{n}} élèves importés avec succès !",
     "import_deja_paye": "Déjà payé",
     "import_reprises_info": "{{n}} élève(s) avec reprise de soldes : {{montant}} FCFA déjà réglés avant la migration seront enregistrés (compte 890, sans toucher à la caisse).",
-    "import_fait_reprises": "{{n}} reprise(s) de soldes enregistrée(s) pour {{montant}} FCFA."
+    "import_fait_reprises": "{{n}} reprise(s) de soldes enregistrée(s) pour {{montant}} FCFA.",
+    "reliquat": "Reliquat N-1",
+    "reliquat_de": "Reliquat de"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -423,7 +425,9 @@
     "total_eleves": "Total Élèves",
     "total_recettes": "Total Recettes",
     "total_charges": "Total Charges",
-    "resultat_net": "Résultat Net"
+    "resultat_net": "Résultat Net",
+    "reporter_impayes": "Reporter les impayés sur le nouvel exercice",
+    "reporter_impayes_aide": "Les élèves encore débiteurs sont réinscrits avec leur dette (à-nouveaux 411/890). L'exercice clôturé n'est pas modifié."
   },
   "common": {
     "fcfa": "FCFA",
@@ -941,5 +945,19 @@
     "maintenant": "Sauvegarder maintenant",
     "ok_toast": "Sauvegarde effectuée",
     "erreur_toast": "Échec de la sauvegarde"
+  },
+  "reliquats": {
+    "title": "Report des reliquats",
+    "aide": "Reconduit les impayés de l'exercice précédent sur l'exercice actif, même s'il est déjà clôturé. L'année clôturée n'est jamais modifiée. Opération rejouable : les élèves déjà traités sont ignorés.",
+    "previsualiser": "Prévisualiser",
+    "appliquer": "Appliquer le report",
+    "eleves_concernes": "élève(s) concerné(s)",
+    "montant": "Reliquat",
+    "fiche": "Fiche",
+    "fiche_creee": "Réinscrit",
+    "fiche_existante": "Fiche existante",
+    "aucun": "Aucun impayé à reporter.",
+    "passager": "ndongo passager — à réinscrire à la main (mois restants), puis relancer le report",
+    "deja_traites": "élève(s) déjà traité(s), ignoré(s)."
   }
 }

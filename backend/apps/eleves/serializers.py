@@ -37,6 +37,12 @@ class EleveSerializer(serializers.ModelSerializer):
     total_paye                   = serializers.SerializerMethodField()
     reste_a_payer                = serializers.SerializerMethodField()
     niveau_alerte                = serializers.SerializerMethodField()
+    # Dette de l'exercice précédent — suivie en parallèle du dû de l'année,
+    # jamais fondue dedans (le niveau d'alerte reste celui de l'année en cours).
+    reliquat_paye                = serializers.ReadOnlyField()
+    reliquat_restant             = serializers.ReadOnlyField()
+    reliquat_origine_libelle     = serializers.ReadOnlyField()
+    reste_a_payer_global         = serializers.SerializerMethodField()
 
     class Meta:
         model  = Eleve
@@ -100,6 +106,10 @@ class EleveSerializer(serializers.ModelSerializer):
 
     def get_reste_a_payer(self, obj):
         return round(float(obj.total_attendu) - self.get_total_paye(obj), 2)
+
+    def get_reste_a_payer_global(self, obj):
+        """Dû réel de la famille : reste de l'année + reliquat encore ouvert."""
+        return round(self.get_reste_a_payer(obj) + obj.reliquat_restant, 2)
 
     def get_niveau_alerte(self, obj):
         # Délègue au modèle pour cohérence avec le dashboard

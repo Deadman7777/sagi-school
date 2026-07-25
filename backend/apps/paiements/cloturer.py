@@ -79,9 +79,14 @@ def verifier_avant_cloture(exercice):
     }
 
 
-def cloturer_exercice(exercice, creer_suivant=True):
+def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
     """
     Clôture l'exercice et optionnellement crée le suivant.
+
+    `reporter_impayes` reconduit les restes dus sur le nouvel exercice
+    (réinscription des élèves concernés + à-nouveaux 411/890). Sans effet si
+    le nouvel exercice n'est pas créé — le report reste alors jouable après
+    coup, l'exercice clôturé n'étant jamais modifié (voir report_reliquats).
     """
     from dateutil.relativedelta import relativedelta
     import datetime
@@ -128,8 +133,14 @@ def cloturer_exercice(exercice, creer_suivant=True):
             cloture            = False,
         )
 
+    report = None
+    if nouvel_exercice and reporter_impayes:
+        from .report_reliquats import reporter_reliquats
+        report = reporter_reliquats(exercice, nouvel_exercice)
+
     return {
         'exercice_cloture': exercice.annee_scolaire,
         'nouvel_exercice':  nouvel_exercice.annee_scolaire if nouvel_exercice else None,
         'date_cloture':     str(exercice.date_cloture),
+        'report_reliquats': report,
     }

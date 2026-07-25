@@ -72,6 +72,13 @@ export interface Eleve {
   total_paye: number;
   reste_a_payer: number;
   niveau_alerte: NiveauAlerte;
+  // Dette reportée de l'exercice précédent. Suivie à part du dû de l'année :
+  // le niveau d'alerte ne juge que l'année en cours.
+  reliquat_anterieur: number;
+  reliquat_paye: number;
+  reliquat_restant: number;
+  reliquat_origine_libelle: string;
+  reste_a_payer_global: number;
 }
 
 export interface PriseEnChargeStats {

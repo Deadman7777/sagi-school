@@ -101,4 +101,28 @@
 <p style="padding:20px; text-align:center; color:#6b7280;">Aucun paiement enregistré pour cet exercice.</p>
 {% endif %}
 
+{% if reliquat_du %}
+<!-- Dette d'un exercice antérieur — hors du bloc ci-dessus (qui ne couvre que
+     l'année en cours) et affichée même sans aucun paiement cette année. -->
+<div class="section-title" style="margin-top:14px">Reliquat des années antérieures</div>
+<table class="resultat-table resultat-def">
+  <tr>
+    <td class="rb-label">Reliquat {{ reliquat_annee }} — reporté</td>
+    <td class="rb-val">{{ reliquat_du|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+<table class="resultat-table {% if reliquat_restant == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+  <tr>
+    <td class="rb-label">{% if reliquat_restant == 0 %}Reliquat soldé ✓{% else %}Reliquat restant dû{% endif %}</td>
+    <td class="rb-val {% if reliquat_restant == 0 %}green{% else %}red{% endif %}">{{ reliquat_restant|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+<table class="resultat-table {% if reste_global == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+  <tr>
+    <td class="rb-label">{% if reste_global == 0 %}Tout est soldé ✓{% else %}Dû total (toutes années){% endif %}</td>
+    <td class="rb-val {% if reste_global == 0 %}green{% else %}red{% endif %}">{{ reste_global|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+{% endif %}
+
 {% endblock %}
