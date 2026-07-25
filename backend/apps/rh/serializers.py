@@ -46,13 +46,17 @@ class ParametresFiscauxSerializer(serializers.ModelSerializer):
 
 class AvanceSalaireSerializer(serializers.ModelSerializer):
     employe_nom = serializers.CharField(source='employe.nom_complet', read_only=True)
+    # Solde encore à retenir : une avance trop lourde pour un seul salaire est
+    # retenue sur plusieurs bulletins.
+    montant_restant = serializers.ReadOnlyField()
 
     class Meta:
         model  = AvanceSalaire
         fields = '__all__'
         extra_kwargs = {
-            'tenant':   {'required': False, 'read_only': True},
-            'no_piece': {'required': False},
+            'tenant':         {'required': False, 'read_only': True},
+            'no_piece':       {'required': False},
+            'montant_impute': {'read_only': True},
         }
 
 

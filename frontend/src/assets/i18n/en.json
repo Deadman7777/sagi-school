@@ -884,11 +884,12 @@
     "autorisation_autorite": "Issuing authority",
     "autorisation_obs": "Notes",
     "transport_label": "Transport allowance (optional)",
-    "avances_auto_info": "Pending advances up to month end are deducted automatically.",
+    "avances_auto_info": "All pending advances are deducted automatically, whatever their date. An advance larger than the net pay is withheld up to the available amount, the balance carrying over to the next payslip.",
     "regime_titre": "Payroll regime",
     "regime_label": "Establishment regime",
     "regime_aide_simplifie": "Simplified: payslips without social contributions (non-affiliated).",
-    "regime_aide_complet": "Full: IPRES, CSS, IR and employer charges (affiliated)."
+    "regime_aide_complet": "Full: IPRES, CSS, IR and employer charges (affiliated).",
+    "avance_restant": "Outstanding"
   },
   "suivi": {
     "title": "Monthly Tracking",
