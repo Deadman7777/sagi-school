@@ -59,6 +59,65 @@ class CorrigerRepriseTest(APITestCase):
         agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(d=Sum('debit'), c=Sum('credit'))
         self.assertEqual(agg['d'], agg['c'])
 
+    def test_corrections_successives_ne_detruisent_pas_les_produits(self):
+        """Corriger deux fois de suite ne doit pas empiler les neutralisations.
+
+        Chaque correction supprime la reprise et son 706 crédit, puis en
+        recrée un neutralisé par un 706 débit. Si l'ancienne neutralisation
+        survit, son débit devient orphelin et ronge le produit migré à chaque
+        passage — jusqu'à faire tomber le total des recettes à 0."""
+        JournalEntry.objects.create(tenant=self.tenant, exercice=self.ex, no_piece='M',
+                                    date_ecriture=self.ex.date_debut, no_compte='571',
+                                    debit=13337500, credit=0, source='MIGRATION', ordre=1)
+        JournalEntry.objects.create(tenant=self.tenant, exercice=self.ex, no_piece='M',
+                                    date_ecriture=self.ex.date_debut, no_compte='706',
+                                    debit=0, credit=13337500, source='MIGRATION', ordre=2)
+
+        def net_706():
+            agg = JournalEntry.objects.filter(
+                tenant=self.tenant, exercice=self.ex, no_compte__startswith='70'
+            ).aggregate(c=Sum('credit'), d=Sum('debit'))
+            return float(agg['c'] or 0) - float(agg['d'] or 0)
+
+        for montant in (420000, 300000, 250000):
+            r = self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
+                                 {'montant_mensualite': montant}, format='json')
+            self.assertEqual(r.status_code, 200, r.content)
+            # Le produit migré reste la seule recette : les reprises se
+            # neutralisent exactement, quel que soit le nombre de corrections.
+            self.assertEqual(net_706(), 13337500,
+                             f"produits faussés après correction à {montant}")
+
+        # Une seule paire de neutralisation subsiste (pas d'accumulation)
+        self.assertEqual(JournalEntry.objects.filter(
+            tenant=self.tenant, source='RECAL_MIGRATION').count(), 2)
+        # …et le journal reste équilibré
+        agg = JournalEntry.objects.filter(tenant=self.tenant).aggregate(
+            d=Sum('debit'), c=Sum('credit'))
+        self.assertEqual(agg['d'], agg['c'])
+
+    def test_remise_a_zero_supprime_la_neutralisation(self):
+        """Ramener la reprise à 0 doit retirer aussi sa neutralisation,
+        sinon il reste un débit 706 sans crédit en face."""
+        JournalEntry.objects.create(tenant=self.tenant, exercice=self.ex, no_piece='M',
+                                    date_ecriture=self.ex.date_debut, no_compte='571',
+                                    debit=13337500, credit=0, source='MIGRATION', ordre=1)
+        JournalEntry.objects.create(tenant=self.tenant, exercice=self.ex, no_piece='M',
+                                    date_ecriture=self.ex.date_debut, no_compte='706',
+                                    debit=0, credit=13337500, source='MIGRATION', ordre=2)
+
+        self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
+                         {'montant_mensualite': 420000}, format='json')
+        self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
+                         {'montant_mensualite': 0}, format='json')
+
+        agg = JournalEntry.objects.filter(
+            tenant=self.tenant, exercice=self.ex, no_compte__startswith='70'
+        ).aggregate(c=Sum('credit'), d=Sum('debit'))
+        self.assertEqual(float(agg['c'] or 0) - float(agg['d'] or 0), 13337500)
+        self.assertFalse(JournalEntry.objects.filter(
+            tenant=self.tenant, source='RECAL_MIGRATION').exists())
+
     def test_get_lit_la_reprise(self):
         self.client.post(f'/api/eleves/{self.eleve.id}/corriger-reprise/',
                          {'montant_mensualite': 120000}, format='json')

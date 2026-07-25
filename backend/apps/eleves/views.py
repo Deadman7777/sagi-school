@@ -198,6 +198,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         from django.db import transaction
         from apps.paiements.models import Paiement
         from apps.paiements.reprise import creer_paiement_reprise
+        from apps.comptabilite.neutralisation import neutraliser_reprises
 
         tenant   = get_tenant(request)
         eleve    = self.get_object()
@@ -228,27 +229,14 @@ class EleveViewSet(viewsets.ModelViewSet):
                 JournalEntry.objects.filter(tenant=tenant, exercice=exercice,
                                             source='PAIEMENT', source_id=reprise.id).delete()
                 reprise.delete()
-            a_migration = JournalEntry.objects.filter(
-                tenant=tenant, exercice=exercice, source='MIGRATION',
-                no_compte__startswith='70', credit__gt=0).exists()
-            p = None
             if sum(montants.values()) > 0:
-                p = creer_paiement_reprise(tenant, exercice, eleve, user=request.user, montants=montants)
-            if a_migration and p:
-                r706 = float(JournalEntry.objects.filter(
-                    tenant=tenant, exercice=exercice, source='PAIEMENT', source_id=p.id,
-                    no_compte='706', credit__gt=0).aggregate(c=Sum('credit'))['c'] or 0)
-                if r706 > 0:
-                    JournalEntry.objects.bulk_create([
-                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
-                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
-                                     no_compte='706', debit=r706, credit=0, ordre=1,
-                                     libelle=f"Neutralisation reprise corrigée — {eleve.nom_complet}"),
-                        JournalEntry(tenant=tenant, exercice=exercice, no_piece='RECAL-REP',
-                                     date_ecriture=exercice.date_debut, source='RECAL_MIGRATION',
-                                     no_compte='890', debit=0, credit=r706, ordre=2,
-                                     libelle=f"Contrepartie reprise corrigée — {eleve.nom_complet}"),
-                    ])
+                creer_paiement_reprise(tenant, exercice, eleve, user=request.user,
+                                       montants=montants)
+            # Neutralisation recalculée sur TOUTES les reprises en vigueur —
+            # jamais empilée sur l'existante. Sans cela, chaque correction
+            # laissait un débit 706 orphelin qui rongeait les produits migrés
+            # jusqu'à mettre le total des recettes à 0.
+            neutraliser_reprises(tenant, exercice)
         eleve.refresh_from_db()
         from core.models import log_audit
         log_audit(request, 'UPDATE', 'Eleve', str(eleve.id),
