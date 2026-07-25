@@ -20,10 +20,11 @@ class Employe(TenantModel):
         ('APPUI',         "Personnel d'appui"),
     ]
     CONTRAT_CHOICES = [
-        ('CDI',       'CDI'),
-        ('CDD',       'CDD'),
-        ('VACATAIRE', 'Vacataire'),
-        ('STAGIAIRE', 'Stagiaire'),
+        ('CDI',         'CDI'),
+        ('CDD',         'CDD'),
+        ('VACATAIRE',   'Vacataire'),
+        ('STAGIAIRE',   'Stagiaire'),
+        ('PRESTATAIRE', 'Prestataire'),
     ]
     STATUT_CHOICES = [
         ('ACTIF',    'Actif'),
@@ -168,6 +169,10 @@ class AvanceSalaire(TenantModel):
 
     employe       = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name='avances')
     montant       = models.DecimalField(max_digits=12, decimal_places=2)
+    # Part déjà retenue sur des bulletins. Une avance trop lourde pour un seul
+    # salaire est retenue à concurrence du net disponible, le solde restant dû
+    # sur les bulletins suivants — d'où une imputation possiblement partielle.
+    montant_impute = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     date_avance   = models.DateField()
     mode_paiement = models.CharField(max_length=15, choices=MODE_CHOICES, default='CAISSE')
     no_piece      = models.CharField(max_length=30, blank=True)
@@ -183,6 +188,11 @@ class AvanceSalaire(TenantModel):
     class Meta:
         db_table = 'avances_salaire'
         ordering = ['-date_avance']
+
+    @property
+    def montant_restant(self):
+        """Part de l'avance encore à retenir sur les prochains bulletins."""
+        return max(self.montant - (self.montant_impute or 0), 0)
 
     def __str__(self):
         return f"Avance {self.employe.nom_complet} — {self.montant} FCFA ({self.date_avance})"
@@ -256,6 +266,10 @@ class BulletinPaie(TenantModel):
     modes_reglement = models.JSONField(default=list, blank=True)
 
     avances = models.ManyToManyField(AvanceSalaire, blank=True, related_name='bulletins')
+    # Ventilation de `avance_sur_salaire` avance par avance — nécessaire parce
+    # qu'une avance peut n'être retenue que pour partie sur ce bulletin.
+    # Ex. [{"avance_id": "…", "montant": 180000.0}].
+    avances_imputees = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'bulletins_paie'

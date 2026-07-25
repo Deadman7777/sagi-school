@@ -267,7 +267,7 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f"Erreur calcul : {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        data.pop('_avances_qs', None)
+        data.pop('_avances_plan', None)
         params = data.pop('parametres_fiscaux', None)
 
         result = {k: str(v) for k, v in data.items() if not k.startswith('_')}

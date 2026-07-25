@@ -279,6 +279,7 @@ const MOIS_OPTIONS = [
         <tr>
           <th>{{ 'rh.employe_col' | translate }}</th>
           <th>{{ 'rh.montant_avance' | translate }}</th>
+          <th>{{ 'rh.avance_restant' | translate }}</th>
           <th>{{ 'rh.date_avance'   | translate }}</th>
           <th>{{ 'rh.avance_mode'   | translate }}</th>
           <th>N° Pièce</th>
@@ -290,6 +291,18 @@ const MOIS_OPTIONS = [
         <tr>
           <td class="bold">{{ a.employe_nom }}</td>
           <td class="mono warn bold">{{ a.montant | number:'1.0-0' }} FCFA</td>
+          <!-- Une avance trop lourde pour un seul salaire est retenue sur
+               plusieurs bulletins : elle reste « en attente » tant qu'il y a
+               un solde, d'où cette colonne qui explique le statut. -->
+          <td class="mono">
+            @if (a.montant_restant > 0 && a.montant_restant < a.montant) {
+              <strong class="warn">{{ a.montant_restant | number:'1.0-0' }} FCFA</strong>
+            } @else if (a.montant_restant <= 0) {
+              <span class="success">✓</span>
+            } @else {
+              <span class="small-txt">—</span>
+            }
+          </td>
           <td class="mono">{{ a.date_avance }}</td>
           <td>{{ a.mode_paiement }}</td>
           <td class="mono small-txt">{{ a.no_piece }}</td>
@@ -1137,10 +1150,11 @@ export class RhComponent implements OnInit {
       { label: this.t('rh.appui'),       value: 'APPUI'          },
     ];
     this.typesContrat = [
-      { label: 'CDI',       value: 'CDI'       },
-      { label: 'CDD',       value: 'CDD'       },
-      { label: 'Vacataire', value: 'VACATAIRE' },
-      { label: 'Stagiaire', value: 'STAGIAIRE' },
+      { label: 'CDI',         value: 'CDI'         },
+      { label: 'CDD',         value: 'CDD'         },
+      { label: 'Vacataire',   value: 'VACATAIRE'   },
+      { label: 'Stagiaire',   value: 'STAGIAIRE'   },
+      { label: 'Prestataire', value: 'PRESTATAIRE' },
     ];
     this.niveauxEnseignement = [
       { label: 'Préscolaire', value: 'PRESCOLAIRE' },

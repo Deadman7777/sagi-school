@@ -81,6 +81,11 @@ export interface AvanceSalaire {
   employe: string;
   employe_nom: string;
   montant: number;
+  // Part déjà retenue sur des bulletins, et solde encore à retenir : une
+  // avance trop lourde pour un seul salaire s'étale sur plusieurs bulletins
+  // et reste EN_ATTENTE tant qu'elle n'est pas soldée.
+  montant_impute: number;
+  montant_restant: number;
   date_avance: string;
   mode_paiement: string;
   no_piece: string;

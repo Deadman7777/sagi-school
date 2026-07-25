@@ -884,11 +884,12 @@
     "autorisation_autorite": "Autorité émettrice",
     "autorisation_obs": "Observations",
     "transport_label": "Indemnité de transport (optionnelle)",
-    "avances_auto_info": "Les avances en attente jusqu'à la fin du mois seront déduites automatiquement.",
+    "avances_auto_info": "Toutes les avances en attente sont déduites automatiquement, quelle que soit leur date. Une avance supérieure au net à payer est retenue à concurrence du disponible, le solde passant sur le bulletin suivant.",
     "regime_titre": "Régime de paie",
     "regime_label": "Régime de l'établissement",
     "regime_aide_simplifie": "Simplifié : bulletins sans cotisations sociales (établissement non affilié).",
-    "regime_aide_complet": "Complet : IPRES, CSS, IR et charges patronales (établissement affilié)."
+    "regime_aide_complet": "Complet : IPRES, CSS, IR et charges patronales (établissement affilié).",
+    "avance_restant": "Restant dû"
   },
   "suivi": {
     "title": "Suivi Mensuel",

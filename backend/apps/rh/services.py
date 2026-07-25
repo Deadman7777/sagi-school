@@ -216,19 +216,38 @@ class PaieCalculateur:
             atmp = _arrondi(base_css * params.taux_atmp / 100)
             cfce = _arrondi(salaire_brut * params.taux_cfce / 100)
 
-        # Avances à imputer : par défaut toutes les avances EN_ATTENTE jusqu'à fin du mois
-        import calendar as _cal, datetime as _dt
+        # Avances à imputer : par défaut TOUTES les avances encore en attente,
+        # quelle que soit leur date. Une avance accordée est une somme déjà
+        # sortie de la caisse (D 421) : elle doit être retranchée dès le
+        # prochain bulletin établi, sans attendre que le mois de paie
+        # « rattrape » sa date. Une sélection explicite (avance_ids) prime.
         avance_ids = kwargs.get('avance_ids', None)
         avances_qs = AvanceSalaire.objects.filter(
             tenant=employe.tenant, employe=employe, statut='EN_ATTENTE'
-        )
+        ).order_by('date_avance')          # les plus anciennes se soldent d'abord
         if avance_ids is not None:
             avances_qs = avances_qs.filter(id__in=avance_ids)   # sélection explicite (peut être vide)
-        else:
-            fin_mois = _dt.date(annee, mois, _cal.monthrange(annee, mois)[1])
-            avances_qs = avances_qs.filter(date_avance__lte=fin_mois)
 
-        avance_montant = sum((_d(a.montant) for a in avances_qs), Decimal('0'))
+        # Le salaire ne peut pas absorber plus que ce qu'il reste après les
+        # retenues obligatoires : on retient à concurrence de ce disponible et
+        # le solde de l'avance reste dû sur les bulletins suivants. Sans ce
+        # plafond, un net négatif produirait des écritures à montants négatifs.
+        disponible = (salaire_brut - ipres_g_sal - ipres_c_sal - ir
+                      - opposition_saisie - autres_retenues_ext)
+        disponible = max(disponible, Decimal('0'))
+
+        avances_plan = []
+        avance_montant = Decimal('0')
+        for avance in avances_qs:
+            if disponible <= 0:
+                break
+            restant = _d(avance.montant) - _d(avance.montant_impute)
+            retenu = min(restant, disponible)
+            if retenu <= 0:
+                continue
+            avances_plan.append((avance, retenu))
+            avance_montant += retenu
+            disponible -= retenu
 
         total_retenues = (
             ipres_g_sal + ipres_c_sal + ir
@@ -273,22 +292,26 @@ class PaieCalculateur:
             'net_a_payer':                 net_a_payer,
             'cout_total_employeur':        cout_total,
             'mode_paiement_effectif':      mode_pmt,
-            # interne
-            '_avances_qs':                 avances_qs,
+            # interne — [(AvanceSalaire, montant retenu sur CE bulletin)]
+            '_avances_plan':               avances_plan,
         }
 
     @classmethod
     def creer_bulletin(cls, employe, mois, annee, nb_heures_effectuees=0, **kwargs):
         from .models import BulletinPaie
         data = cls.calculer_bulletin(employe, mois, annee, nb_heures_effectuees, **kwargs)
-        avances_qs = data.pop('_avances_qs')
+        avances_plan = data.pop('_avances_plan')
         bulletin = BulletinPaie.objects.create(
             tenant=employe.tenant,
             employe=employe,
+            # Ventilation figée au moment du calcul : c'est elle qui sera
+            # appliquée aux avances à la validation du bulletin.
+            avances_imputees=[{'avance_id': str(a.id), 'montant': float(m)}
+                              for a, m in avances_plan],
             **data,
         )
-        if avances_qs.exists():
-            bulletin.avances.set(avances_qs)
+        if avances_plan:
+            bulletin.avances.set([a for a, _ in avances_plan])
         return bulletin
 
 
@@ -461,8 +484,43 @@ def generer_ecritures_paie(bulletin, tenant):
 
     JournalEntry.objects.bulk_create(rows)
 
-    # Marquer les avances comme imputées
-    bulletin.avances.filter(statut='EN_ATTENTE').update(statut='IMPUTE')
+    _appliquer_imputation_avances(bulletin)
+
+
+def _plan_avances(bulletin):
+    """Rend [(avance, montant retenu)] pour ce bulletin.
+
+    Lit la ventilation figée au calcul. Les bulletins créés avant l'imputation
+    partielle n'en ont pas : on retombe alors sur l'ancienne règle — l'avance
+    entière était retenue."""
+    from .models import AvanceSalaire
+    detail = bulletin.avances_imputees or []
+    if detail:
+        par_id = {str(a.id): a for a in bulletin.avances.all()}
+        return [(par_id[l['avance_id']], _d(l['montant']))
+                for l in detail if l.get('avance_id') in par_id]
+    return [(a, _d(a.montant)) for a in bulletin.avances.all()]
+
+
+def _appliquer_imputation_avances(bulletin):
+    """Retient sur chaque avance la part portée par ce bulletin.
+
+    Une avance ne passe IMPUTE que lorsqu'elle est soldée : tant qu'il reste
+    un solde, elle demeure EN_ATTENTE et sera reprise sur le bulletin suivant."""
+    for avance, montant in _plan_avances(bulletin):
+        avance.montant_impute = _d(avance.montant_impute) + montant
+        avance.statut = ('IMPUTE' if avance.montant_impute >= _d(avance.montant)
+                         else 'EN_ATTENTE')
+        avance.save(update_fields=['montant_impute', 'statut'])
+
+
+def _annuler_imputation_avances(bulletin):
+    """Rend à chaque avance la part qui avait été retenue par ce bulletin."""
+    for avance, montant in _plan_avances(bulletin):
+        avance.montant_impute = max(_d(avance.montant_impute) - montant, Decimal('0'))
+        avance.statut = ('IMPUTE' if avance.montant_impute >= _d(avance.montant)
+                         else 'EN_ATTENTE')
+        avance.save(update_fields=['montant_impute', 'statut'])
 
 
 def annuler_ecritures_paie(bulletin, tenant):
@@ -513,5 +571,5 @@ def annuler_ecritures_paie(bulletin, tenant):
         ))
     JournalEntry.objects.bulk_create(contre_ecritures)
 
-    # Ré-ouvrir les avances imputées dans ce bulletin
-    bulletin.avances.filter(statut='IMPUTE').update(statut='EN_ATTENTE')
+    # Rendre aux avances la part retenue par ce bulletin (partielle ou totale)
+    _annuler_imputation_avances(bulletin)
