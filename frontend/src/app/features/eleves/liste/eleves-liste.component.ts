@@ -91,6 +91,17 @@ interface PecForm {
           <span class="km-val" style="color:#ec4899">{{ countGenre('F') }}</span>
           <span class="km-label">Filles</span>
         </div>
+        <!-- Dettes des années antérieures : compteur cliquable pour isoler
+             les élèves à relancer. -->
+        @if (nbAvecReliquat() > 0) {
+          <div class="kpi-mini" style="border-color:#f97316;cursor:pointer"
+               (click)="filtreReliquat = !filtreReliquat; filtrer()"
+               [style.background]="filtreReliquat ? 'rgba(249,115,22,0.12)' : ''">
+            <span class="km-val" style="color:#f97316">{{ nbAvecReliquat() }}</span>
+            <span class="km-label">{{ 'eleves.reliquat' | translate }}
+              ({{ totalReliquat() | number:'1.0-0' }})</span>
+          </div>
+        }
       </div>
 
       <div class="filters-bar">
@@ -147,6 +158,7 @@ interface PecForm {
               <th>{{ 'eleves.total_attendu' | translate }}</th>
               <th>{{ 'eleves.paye'          | translate }}</th>
               <th>{{ 'eleves.reste'         | translate }}</th>
+              <th>{{ 'eleves.reliquat'      | translate }}</th>
               <th>{{ 'eleves.alerte'        | translate }}</th>
               <th>{{ 'eleves.actions'       | translate }}</th>
             </tr>
@@ -167,6 +179,18 @@ interface PecForm {
               <td class="mono">{{ eleve.total_attendu | number }} FCFA</td>
               <td class="mono success">{{ eleve.total_paye | number }} FCFA</td>
               <td class="mono" [class.danger]="eleve.reste_a_payer > 0">{{ eleve.reste_a_payer | number }} FCFA</td>
+              <!-- Dette d'une année antérieure : canal de suivi distinct de
+                   l'alerte, qui ne juge que l'année en cours. -->
+              <td>
+                @if (eleve.reliquat_restant > 0) {
+                  <span class="reliquat-badge"
+                        [pTooltip]="('eleves.reliquat_de' | translate) + ' ' + eleve.reliquat_origine_libelle">
+                    {{ eleve.reliquat_restant | number }} FCFA
+                  </span>
+                } @else {
+                  <span class="mono" style="color:var(--text-3)">—</span>
+                }
+              </td>
               <td>
                 <p-tag [value]="alerteLabel(eleve.niveau_alerte)"
                        [severity]="alerteSeverity(eleve.niveau_alerte)" />
@@ -784,6 +808,11 @@ interface PecForm {
 
     .mono    { font-family:monospace; font-size:12px; }
     .bold    { font-weight:600; color:var(--text); }
+    /* Dette d'une année antérieure — orange, distinct du rouge « en retard
+       cette année » pour qu'on lise d'où vient l'impayé. */
+    .reliquat-badge { display:inline-block; font-family:monospace; font-size:11px; font-weight:600;
+                      color:#f97316; background:rgba(249,115,22,0.12);
+                      border:1px solid rgba(249,115,22,0.35); border-radius:6px; padding:2px 7px; }
     .success { color:#10b981; }
     .danger  { color:#ef4444; }
     .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
@@ -862,6 +891,7 @@ export class ElevesListeComponent implements OnInit {
   recherche    = '';
   filtreAlerte = '';
   filtreStatut = '';
+  filtreReliquat = false;
   tri          = 'numero';
   // Date d'entrée : jour inconnu → on ne saisit que le mois (input type=month,
   // valeur AAAA-MM), stocké au 1er du mois avec le drapeau jour_estime.
@@ -1060,6 +1090,7 @@ export class ElevesListeComponent implements OnInit {
     if (this.recherche)    data = data.filter(e => e.nom_complet.toLowerCase().includes(this.recherche.toLowerCase()));
     if (this.filtreAlerte) data = data.filter(e => e.niveau_alerte === this.filtreAlerte as NiveauAlerte);
     if (this.filtreStatut) data = data.filter(e => e.statut === this.filtreStatut);
+    if (this.filtreReliquat) data = data.filter(e => (e.reliquat_restant || 0) > 0);
     this.elevesFiltres.set(this.trier(data));
   }
 
@@ -1084,6 +1115,11 @@ export class ElevesListeComponent implements OnInit {
 
   countStatut(s: string)      { return this.eleves().filter(e => e.statut === s).length; }
   countGenre(g: string)       { return this.eleves().filter(e => e.genre === g).length; }
+
+  // Dettes antérieures encore ouvertes — recalculées à chaque chargement.
+  nbAvecReliquat = computed(() => this.eleves().filter(e => (e.reliquat_restant || 0) > 0).length);
+  totalReliquat  = computed(() =>
+    this.eleves().reduce((s, e) => s + (e.reliquat_restant || 0), 0));
   countTypePEC(t: TypePEC)    { return this.elevesPEC().filter(e => e.type_pec === t).length; }
 
   alerteLabel(a: NiveauAlerte | string): string {

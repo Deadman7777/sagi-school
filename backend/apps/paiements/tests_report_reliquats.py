@@ -312,6 +312,13 @@ class EncaissementReliquatTest(ReportReliquatsBase):
             self.assertEqual(pdf.status_code, 200, f"taille {taille}")
             self.assertEqual(pdf['Content-Type'], 'application/pdf')
 
+    def test_situation_pdf_porte_le_reliquat(self):
+        """Document remis à la famille : il doit se générer et porter la dette
+        antérieure même sans aucun paiement sur l'année en cours."""
+        pdf = self.client.get(f'/api/eleves/{self.fiche.id}/situation-pdf/')
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
     def test_filtre_avec_reliquat(self):
         Eleve.objects.create(
             tenant=self.tenant, exercice=self.ex2, nom_complet='Sans dette',

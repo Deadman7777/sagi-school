@@ -14,6 +14,9 @@ export interface Paiement {
   montant_fournitures: number;
   montant_cantine:     number;
   montant_divers:      number;
+  // Part réglée sur le reliquat d'un exercice antérieur : encaissée, mais
+  // hors produits de l'année (elle solde une créance reportée).
+  montant_reliquat?:   number;
   mois_regles?:        number[];
   services_regles?:    { nom: string; montant: number }[];
   mode_paiement: string;

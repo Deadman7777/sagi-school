@@ -1023,9 +1023,12 @@ class SituationElevePDFView(APIView):
                 'observations':  p.observations or '',
             })
 
+        # total_p ne somme que les 6 catégories : le suivi ci-dessous porte
+        # sur l'année en cours. La dette antérieure est présentée à part.
         total_paye   = sum(p['total'] for p in paiements_list)
         total_attendu = float(eleve.total_attendu)
         reste        = round(max(0.0, total_attendu - total_paye), 0)
+        reliquat     = eleve.reliquat_restant
 
         context = {
             'tenant':         tenant,
@@ -1037,6 +1040,12 @@ class SituationElevePDFView(APIView):
             'total_paye':     round(total_paye, 0),
             'total_attendu':  round(total_attendu, 0),
             'reste':          reste,
+            # Reliquat d'un exercice antérieur — ce que la famille doit encore
+            # au titre des années passées, en plus du reste de l'année.
+            'reliquat_du':      round(float(eleve.reliquat_anterieur or 0), 0),
+            'reliquat_restant': round(reliquat, 0),
+            'reliquat_annee':   eleve.reliquat_origine_libelle,
+            'reste_global':     round(reste + reliquat, 0),
             'nb_paiements':   len(paiements_list),
         }
 

@@ -485,6 +485,18 @@ import { MessageService } from 'primeng/api';
       </label>
     </div>
 
+    <!-- Report des impayés : les élèves qui restent débiteurs sont réinscrits
+         sur le nouvel exercice avec leur dette (à-nouveaux 411/890). -->
+    <div class="option-row" *ngIf="verification()!.peut_cloturer && creerSuivant">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-2)">
+        <input type="checkbox" [(ngModel)]="reporterImpayes" style="width:16px;height:16px">
+        {{ 'cloture.reporter_impayes' | translate }}
+      </label>
+      <div style="font-size:11px;color:var(--text-3);margin-left:26px;margin-top:4px">
+        {{ 'cloture.reporter_impayes_aide' | translate }}
+      </div>
+    </div>
+
     <!-- Bouton clôture -->
     <div class="form-actions" style="gap:12px" *ngIf="verification()!.peut_cloturer">
       <div style="font-size:12px;color:#ef4444;align-self:center">
@@ -497,6 +509,82 @@ import { MessageService } from 'primeng/api';
         (onClick)="confirmerCloture()" />
     </div>
 
+  </div>
+
+  <!-- ── Report des reliquats (rattrapage) ──────────────────────────────
+       Sert quand l'exercice précédent est DÉJÀ clôturé : on reconduit ses
+       impayés sans jamais y toucher (les à-nouveaux vont dans l'exercice
+       actif). Rejouable — les élèves déjà traités sont ignorés. -->
+  <div class="form-card">
+    <div class="fc-title">🔁 {{ 'reliquats.title' | translate }}</div>
+    <p style="font-size:12px;color:var(--text-3);margin:0 0 14px">
+      {{ 'reliquats.aide' | translate }}
+    </p>
+
+    <div class="form-actions" style="justify-content:flex-start;gap:12px">
+      <p-button [label]="'🔍 ' + ('reliquats.previsualiser' | translate)"
+                severity="secondary" [loading]="reliquatsLoading()"
+                (onClick)="previsualiserReliquats()" />
+      @if (apercuReliquats(); as ap) {
+        @if (ap.nb_reportes > 0) {
+          <p-button [label]="'✅ ' + ('reliquats.appliquer' | translate)"
+                    [loading]="reliquatsLoading()"
+                    (onClick)="appliquerReliquats()" />
+        }
+      }
+    </div>
+
+    @if (apercuReliquats(); as ap) {
+      <div style="margin-top:16px">
+        <div class="statut-cloture" [class.ok]="ap.nb_reportes > 0">
+          {{ ap.exercice_source }} → {{ ap.exercice_cible }} :
+          <strong>{{ ap.nb_reportes }}</strong> {{ 'reliquats.eleves_concernes' | translate }}
+          — <strong>{{ ap.montant_total | number:'1.0-0' }} FCFA</strong>
+        </div>
+
+        @if (ap.nb_reportes === 0 && ap.nb_ignores === 0 && ap.nb_a_verifier === 0) {
+          <div class="empty-msg">{{ 'reliquats.aucun' | translate }}</div>
+        }
+
+        @if (ap.reportes.length) {
+          <table class="mini-table">
+            <thead>
+              <tr>
+                <th>{{ 'eleves.nom_complet' | translate }}</th>
+                <th>{{ 'eleves.section' | translate }}</th>
+                <th style="text-align:right">{{ 'reliquats.montant' | translate }}</th>
+                <th>{{ 'reliquats.fiche' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (l of ap.reportes; track l.eleve_id) {
+                <tr>
+                  <td>{{ l.nom_complet }}</td>
+                  <td>{{ l.section }}</td>
+                  <td style="text-align:right;font-family:monospace">{{ l.montant | number:'1.0-0' }}</td>
+                  <td>{{ (l.fiche === 'creee' ? 'reliquats.fiche_creee' : 'reliquats.fiche_existante') | translate }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        <!-- Ndongo passagers : durée de séjour non déductible, à réinscrire
+             à la main puis relancer le report. -->
+        @for (l of ap.a_verifier; track l.eleve_id) {
+          <div class="alerte-orange">
+            ⚠️ {{ l.nom_complet }} — {{ l.montant | number:'1.0-0' }} FCFA :
+            {{ 'reliquats.passager' | translate }}
+          </div>
+        }
+
+        @if (ap.nb_ignores > 0) {
+          <div style="font-size:12px;color:var(--text-3);margin-top:8px">
+            {{ ap.nb_ignores }} {{ 'reliquats.deja_traites' | translate }}
+          </div>
+        }
+      </div>
+    }
   </div>
 
   <!-- Loading -->
@@ -693,6 +781,13 @@ import { MessageService } from 'primeng/api';
     .statut-cloture { border-radius:8px; padding:12px 16px; font-size:13px; font-weight:600; margin-bottom:16px; }
     .statut-cloture.ok     { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; }
     .statut-cloture.bloque { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444; }
+    .statut-cloture:not(.ok):not(.bloque) { background:var(--bg); border:1px solid var(--border); color:var(--text-2); }
+
+    .mini-table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:12px; }
+    .mini-table th { text-align:left; font-size:10px; text-transform:uppercase; color:var(--text-3);
+                     padding:8px 10px; border-bottom:1px solid var(--border); }
+    .mini-table td { padding:7px 10px; color:var(--text-2); border-bottom:1px solid rgba(42,63,95,0.4); }
+    .mini-table tbody tr:hover td { background:var(--surface-hover); }
     .option-row { padding:12px 0; border-top:1px solid var(--border); margin-bottom:12px; }
     .kpi-mini { border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
     .km-label { font-size:10px; color:var(--text-3); text-transform:uppercase; margin-bottom:4px; }
@@ -829,6 +924,47 @@ export class ParametresComponent implements OnInit {
 
   verification  = signal<any>(null);
 creerSuivant  = true;
+reporterImpayes = true;
+
+// ── Report des reliquats (rattrapage d'un exercice déjà clôturé) ──────
+apercuReliquats  = signal<any>(null);
+reliquatsLoading = signal(false);
+
+previsualiserReliquats() {
+  this.reliquatsLoading.set(true);
+  this.api.get<any>('/paiements/reporter-reliquats/').subscribe({
+    next: res => { this.apercuReliquats.set(res); this.reliquatsLoading.set(false); },
+    error: err => {
+      this.msg.add({ severity:'error', summary:'Erreur',
+                     detail: err.error?.error || 'Prévisualisation impossible' });
+      this.reliquatsLoading.set(false);
+    }
+  });
+}
+
+appliquerReliquats() {
+  const ap = this.apercuReliquats();
+  if (!ap) return;
+  if (!confirm(
+    `Reporter ${ap.nb_reportes} reliquat(s) de ${ap.exercice_source} sur ${ap.exercice_cible} ?\n\n` +
+    `Montant total : ${ap.montant_total.toLocaleString('fr-FR')} FCFA.\n` +
+    `Les élèves concernés seront réinscrits avec leur dette.`
+  )) return;
+
+  this.reliquatsLoading.set(true);
+  this.api.post<any>('/paiements/reporter-reliquats/', { confirme: true }).subscribe({
+    next: res => {
+      this.msg.add({ severity:'success', summary:'Reliquats reportés ✅', detail: res.message });
+      this.apercuReliquats.set(res);
+      this.reliquatsLoading.set(false);
+    },
+    error: err => {
+      this.msg.add({ severity:'error', summary:'Erreur',
+                     detail: err.error?.error || 'Report impossible' });
+      this.reliquatsLoading.set(false);
+    }
+  });
+}
 
 chargerVerification() {
   this.api.get<any>('/paiements/cloturer-exercice/').subscribe({
@@ -844,14 +980,18 @@ confirmerCloture() {
 
   this.saving.set(true);
   this.api.post('/paiements/cloturer-exercice/', {
-    confirme:      true,
-    creer_suivant: this.creerSuivant
+    confirme:         true,
+    creer_suivant:    this.creerSuivant,
+    reporter_impayes: this.reporterImpayes
   }).subscribe({
     next: (res: any) => {
+      const rep = res.report_reliquats;
       this.msg.add({
         severity: 'success',
         summary:  'Exercice clôturé ✅',
-        detail:   res.message
+        detail:   res.message + (rep?.nb_reportes
+          ? ` — ${rep.nb_reportes} reliquat(s) reporté(s) (${rep.montant_total.toLocaleString('fr-FR')} FCFA)`
+          : '')
       });
       this.saving.set(false);
       this.verification.set(null);

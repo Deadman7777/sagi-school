@@ -195,6 +195,14 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
             <label>Divers</label>
             <p-inputNumber [(ngModel)]="modifForm.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
           </div>
+          <!-- Part reliquat du reçu d'origine : modifiable, plafonnée au
+               reliquat encore dû (le backend refuse tout dépassement). -->
+          @if (modifForm.montant_reliquat > 0) {
+            <div class="form-group">
+              <label>🔁 Reliquat antérieur</label>
+              <p-inputNumber [(ngModel)]="modifForm.montant_reliquat" [min]="0" mode="decimal" styleClass="w-full" />
+            </div>
+          }
         </div>
 
         <div class="total-bar" style="margin-bottom:12px">
@@ -334,6 +342,20 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
               {{ saisieDonnees()!.total_restant === 0 ? '✅ Soldé' : (saisieDonnees()!.total_restant | number:'1.0-0') + ' FCFA' }}
             </strong>
           </div>
+          @if (saisieDonnees()!.reliquat.restant > 0) {
+            <div class="ei-row">
+              <span>Reliquat {{ saisieDonnees()!.reliquat.annee }}</span>
+              <strong class="mono" style="color:#f97316">
+                {{ saisieDonnees()!.reliquat.restant | number:'1.0-0' }} FCFA
+              </strong>
+            </div>
+            <div class="ei-row">
+              <span>Dû total (toutes années)</span>
+              <strong class="mono danger">
+                {{ saisieDonnees()!.total_restant_global | number:'1.0-0' }} FCFA
+              </strong>
+            </div>
+          }
         </div>
       }
 
@@ -445,6 +467,24 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
                                  [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
                 </div>
               }
+            </div>
+          </div>
+        }
+
+        <!-- Reliquat d'une année antérieure — encaissable sur le même reçu,
+             quel que soit le type de paiement. Il solde une créance reportée :
+             il ne constate aucun produit de l'année en cours. -->
+        @if (saisieDonnees()!.reliquat.restant > 0) {
+          <div class="form-group full reliquat-box">
+            <label>
+              🔁 Reliquat {{ saisieDonnees()!.reliquat.annee }}
+              <span class="fee-hint">Restant dû : {{ saisieDonnees()!.reliquat.restant | number:'1.0-0' }}</span>
+            </label>
+            <p-inputNumber [(ngModel)]="form.montant_reliquat" [min]="0"
+                           [max]="saisieDonnees()!.reliquat.restant"
+                           mode="decimal" styleClass="w-full" />
+            <div class="reliquat-aide">
+              Dette de l'année précédente reportée à l'ouverture de l'exercice.
             </div>
           </div>
         }
@@ -827,6 +867,12 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
     .recu-total   { display:flex; justify-content:space-between; font-size:14px; font-weight:700; padding:6px 0; color:#00d4aa; border-top:1px solid var(--border); margin-top:4px; }
     .recu-section { font-size:10px; font-weight:700; color:#00d4aa; text-transform:uppercase; letter-spacing:.5px; padding:6px 0 2px; border-bottom:1px solid var(--border); }
     .fee-hint { font-size:10px; color:#00d4aa; margin-left:6px; font-weight:400; font-style:italic; }
+    /* Encart reliquat — orange, pour ne pas le confondre avec les frais de
+       l'année en cours (turquoise). */
+    .reliquat-box { border:1px solid rgba(249,115,22,0.35); background:rgba(249,115,22,0.07);
+                    border-radius:8px; padding:10px 12px; margin-top:10px; }
+    .reliquat-box .fee-hint { color:#f97316; }
+    .reliquat-aide { font-size:11px; color:var(--text-3); margin-top:5px; }
     /* Recherche élève */
     .search-eleve-wrap { margin-bottom:14px; }
     .search-label      { display:block; font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
@@ -925,6 +971,7 @@ export class PaiementsComponent implements OnInit {
   modifForm = {
     montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
     montant_fournitures: 0, montant_cantine: 0,    montant_divers: 0,
+    montant_reliquat: 0,
     mode_paiement: '', observations: '',
   };
   dialogVisible     = false;
@@ -950,6 +997,10 @@ export class PaiementsComponent implements OnInit {
     montant_fournitures: 0,
     montant_cantine:     0,
     montant_divers:      0,
+    // Part affectée au reliquat d'un exercice antérieur. Comptée dans
+    // totalForm() (qui somme tous les champs montant_*) et donc dans la
+    // ventilation multi-mode, puisqu'elle est bien encaissée.
+    montant_reliquat:    0,
     mois_regles:         [] as number[],
     services:            [] as { id: string; nom: string; tarif: number; montant: number; inclus: boolean }[],
     mode_paiement:       '',
@@ -1145,6 +1196,7 @@ export class PaiementsComponent implements OnInit {
     this.form = {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
+      montant_reliquat: 0,
       mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '',
       multi_mode: false, modes_reglement: [], observations: '',
     };
@@ -1231,6 +1283,7 @@ export class PaiementsComponent implements OnInit {
       montant_fournitures: this.form.montant_fournitures,
       montant_cantine:     this.form.montant_cantine,
       montant_divers:      Number(this.form.montant_divers || 0) + servicesTotal,
+      montant_reliquat:    Number(this.form.montant_reliquat || 0),
       mois_regles:         this.form.mois_regles,
       services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant) })),
       mode_paiement:       this.form.multi_mode ? 'MIXTE' : this.form.mode_paiement,
@@ -1271,6 +1324,7 @@ export class PaiementsComponent implements OnInit {
       montant_fournitures: p.montant_fournitures || 0,
       montant_cantine:     p.montant_cantine     || 0,
       montant_divers:      p.montant_divers      || 0,
+      montant_reliquat:    p.montant_reliquat    || 0,
       mode_paiement:       p.mode_paiement       || '',
       observations:        p.observations        || '',
     };
