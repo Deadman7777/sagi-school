@@ -889,7 +889,8 @@
     "regime_label": "نظام المؤسسة",
     "regime_aide_simplifie": "مبسّط: قسائم دون اشتراكات اجتماعية (غير منتسبة).",
     "regime_aide_complet": "كامل: IPRES وCSS وIR وأعباء صاحب العمل (منتسبة).",
-    "avance_restant": "المتبقي"
+    "avance_restant": "المتبقي",
+    "champs_requis_employe": "الاسم والوظيفة وتاريخ التوظيف حقول إلزامية."
   },
   "suivi": {
     "title": "المتابعة الشهرية",

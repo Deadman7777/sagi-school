@@ -889,7 +889,8 @@
     "regime_label": "Establishment regime",
     "regime_aide_simplifie": "Simplified: payslips without social contributions (non-affiliated).",
     "regime_aide_complet": "Full: IPRES, CSS, IR and employer charges (affiliated).",
-    "avance_restant": "Outstanding"
+    "avance_restant": "Outstanding",
+    "champs_requis_employe": "Full name, position and hire date are required."
   },
   "suivi": {
     "title": "Monthly Tracking",

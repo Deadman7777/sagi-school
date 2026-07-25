@@ -1245,8 +1245,12 @@ export class RhComponent implements OnInit {
   }
 
   sauvegarderEmploye() {
-    if (!this.formEmploye.nom_complet?.trim() || !this.formEmploye.poste?.trim()) {
-      this.msg.add({ severity: 'warn', summary: this.t('common.requis'), detail: this.t('rh.champs_requis') });
+    // La date d'embauche est obligatoire côté modèle : la contrôler ici évite
+    // un aller-retour serveur pour un champ que le formulaire laisse vide.
+    if (!this.formEmploye.nom_complet?.trim() || !this.formEmploye.poste?.trim()
+        || !this.formEmploye.date_embauche) {
+      this.msg.add({ severity: 'warn', summary: this.t('common.requis'),
+                     detail: this.t('rh.champs_requis_employe') });
       return;
     }
     this.saving.set(true);
@@ -1260,7 +1264,7 @@ export class RhComponent implements OnInit {
         this.saving.set(false);
         this.chargerDonnees();
       },
-      error: () => this.saving.set(false),
+      error: (err) => this.erreurToast(err),
     });
   }
 
@@ -1389,7 +1393,7 @@ export class RhComponent implements OnInit {
         this.saving.set(false);
         this.chargerBulletins();
       },
-      error: () => this.saving.set(false),
+      error: (err) => this.erreurToast(err),
     });
   }
 
@@ -1533,11 +1537,50 @@ export class RhComponent implements OnInit {
         this.saving.set(false);
         this.msg.add({ severity: 'success', summary: this.t('common.succes'), detail: this.t('rh.params_sauvegardes') });
       },
-      error: () => this.saving.set(false),
+      error: (err) => this.erreurToast(err),
     });
   }
 
   // ── Helpers ─────────────────────────────────────────────────
+  /** Message lisible à partir d'une réponse d'erreur DRF.
+   *
+   * Sans cela, un refus de validation (400 : champ manquant, format de date…)
+   * ne laissait aucune trace à l'écran : la fenêtre restait ouverte, rien ne
+   * se passait, et l'utilisateur ne pouvait pas savoir quoi corriger. */
+  private messageErreur(err: unknown): string {
+    const corps = (err as { error?: unknown })?.error;
+    if (typeof corps === 'string') return corps;
+    if (corps && typeof corps === 'object') {
+      const o = corps as Record<string, unknown>;
+      if (typeof o['error']  === 'string') return o['error'] as string;
+      if (typeof o['detail'] === 'string') return o['detail'] as string;
+      // Erreurs par champ : { date_embauche: ["Ce champ est obligatoire."] }
+      const lignes = Object.entries(o).map(([champ, msg]) => {
+        const texte = Array.isArray(msg) ? msg.join(' ') : String(msg);
+        return `${this.libelleChamp(champ)} : ${texte}`;
+      });
+      if (lignes.length) return lignes.join('\n');
+    }
+    return this.t('common.erreur');
+  }
+
+  private libelleChamp(champ: string): string {
+    const map: Record<string, string> = {
+      nom_complet: 'Nom complet', poste: 'Poste', date_embauche: "Date d'embauche",
+      salaire_base: 'Salaire de base', type_employe: "Type d'employé",
+      type_contrat: 'Type de contrat', email: 'E-mail', telephone: 'Téléphone',
+      date_fin_contrat: 'Fin de contrat', nb_enfants: "Nombre d'enfants",
+      montant: 'Montant', date_avance: "Date de l'avance",
+    };
+    return map[champ] ?? champ;
+  }
+
+  private erreurToast(err: unknown) {
+    this.msg.add({ severity: 'error', summary: this.t('common.erreur'),
+                   detail: this.messageErreur(err), life: 8000 });
+    this.saving.set(false);
+  }
+
   statutLabel(s: string) {
     const map: Record<string, string> = {
       BROUILLON: 'Brouillon', VALIDE: 'Validé', PAYE: 'Payé', ANNULE: 'Annulé',
