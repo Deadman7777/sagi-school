@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Value, DecimalField
+from django.db.models import Sum, Count, Value, DecimalField, F, Q
 from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
@@ -50,7 +50,7 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Eleve.objects.none()
 
         qs = Eleve.objects.filter(tenant=tenant).select_related(
-            'section', 'exercice'
+            'section', 'exercice', 'reliquat_exercice_origine'
         ).prefetch_related('paiements', 'abonnements__service').annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
@@ -60,7 +60,14 @@ class EleveViewSet(viewsets.ModelViewSet):
                 Sum('paiements__montant_cantine')     +
                 Sum('paiements__montant_divers'),
                 Value(0), output_field=DecimalField()
-            )
+            ),
+            # Reliquat déjà encaissé — annoté pour que le reliquat restant de
+            # chaque élève se lise sans une requête par ligne (cf. reliquat_paye).
+            reliquat_paye_sql=Coalesce(
+                Sum('paiements__montant_reliquat',
+                    filter=Q(paiements__statut='ACTIF')),
+                Value(0), output_field=DecimalField()
+            ),
         )
 
         if section := self.request.query_params.get('section'):
@@ -71,6 +78,11 @@ class EleveViewSet(viewsets.ModelViewSet):
             qs = qs.filter(statut=statut)
         if pec := self.request.query_params.get('prise_en_charge'):
             qs = qs.filter(prise_en_charge=pec)
+        # Suivi des dettes antérieures : ne garder que les élèves qui traînent
+        # un reliquat encore ouvert (reporté > déjà réglé).
+        if self.request.query_params.get('avec_reliquat') in ('1', 'true', 'True'):
+            qs = qs.filter(reliquat_anterieur__gt=0).filter(
+                reliquat_anterieur__gt=F('reliquat_paye_sql'))
 
         return qs.order_by('numero')
 
@@ -421,6 +433,17 @@ class EleveViewSet(viewsets.ModelViewSet):
             'total_annuel_net':  total_annuel,
             'total_paye':        total_paye,
             'total_restant':     round(max(total_annuel - total_paye, 0), 2),
+            # Dette d'un exercice antérieur, encaissable sur ce même règlement.
+            # Elle vit à part du dû de l'année : elle ne constate aucun produit
+            # (voir apps.paiements.ecritures.lignes_paiement).
+            'reliquat': {
+                'annee':   eleve.reliquat_origine_libelle,
+                'du':      round(float(eleve.reliquat_anterieur or 0), 2),
+                'paye':    eleve.reliquat_paye,
+                'restant': eleve.reliquat_restant,
+            },
+            'total_restant_global': round(max(total_annuel - total_paye, 0)
+                                          + eleve.reliquat_restant, 2),
             'nb_paiements':      nb_paiements,
             'nb_mensualites_dues': nb_dus,
             'mois_ecole':        mois_ecole,

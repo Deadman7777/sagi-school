@@ -53,6 +53,13 @@ class Paiement(TenantModel):
     montant_fournitures = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_cantine     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_divers      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Part du règlement affectée au reliquat de l'exercice précédent. Elle est
+    # encaissée (trésorerie) mais ne constate AUCUN produit 706 : le produit a
+    # déjà été comptabilisé l'année d'origine, seule la créance 411 reportée
+    # en à-nouveaux se solde. C'est pourquoi elle est volontairement absente de
+    # toutes les sommes « recettes de l'exercice » (les 6 catégories ci-dessus)
+    # et n'apparaît que dans Paiement.total, le montant réellement encaissé.
+    montant_reliquat    = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     # Mois scolaires couverts par la mensualité (numéros 1-12), pour le suivi mensuel
     # et la gestion des paiements anticipés. Ex. [10, 11, 12].
     mois_regles         = models.JSONField(default=list, blank=True)
@@ -80,10 +87,18 @@ class Paiement(TenantModel):
         ]
 
     @property
-    def total(self):
+    def total_exercice(self):
+        """Part du règlement qui porte sur les frais de l'année en cours
+        (= produits 706 de l'exercice). Exclut le reliquat reporté."""
         return (self.montant_inscription + self.montant_mensualite +
                 self.montant_uniforme    + self.montant_fournitures +
                 self.montant_cantine     + self.montant_divers)
+
+    @property
+    def total(self):
+        """Montant réellement encaissé (ce qui figure sur le reçu et se
+        ventile en trésorerie) : frais de l'année + reliquat antérieur."""
+        return self.total_exercice + self.montant_reliquat
 
     def save(self, *args, **kwargs):
         if not self.no_piece:

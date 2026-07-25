@@ -72,6 +72,12 @@
     <tr><td class="lbl">Versé après</td><td class="r b">{{ total_paye_apres|floatformat:0 }}</td></tr>
     <tr><td class="lbl b">Reste à payer</td>
         <td class="r b">{% if reste_apres == 0 %}SOLDÉ{% else %}{{ reste_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+    {% if reliquat_du %}
+    <tr><td class="lbl">Reliquat {{ reliquat_annee }}</td>
+        <td class="r">{% if reliquat_restant_apres == 0 %}SOLDÉ{% else %}{{ reliquat_restant_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+    <tr><td class="lbl b">Dû total</td>
+        <td class="r b">{% if reste_global_apres == 0 %}SOLDÉ{% else %}{{ reste_global_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+    {% endif %}
   </table>
 
   <div class="sep"></div>

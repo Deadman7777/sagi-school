@@ -212,6 +212,35 @@
   </tr>
 </table>
 
+{% if reliquat_du %}
+<!-- Dette d'une année antérieure : suivie hors du bloc « exercice en cours »,
+     qui ne porte que sur les frais de l'année. -->
+<table class="suivi-table">
+  <tr>
+    <td>
+      <div class="suivi-lbl">Reliquat {{ reliquat_annee }} — reporté</div>
+      <div class="suivi-val s-blue">{{ reliquat_du|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Réglé sur ce reçu</div>
+      <div class="suivi-val s-green">{% if reliquat %}+ {{ reliquat|floatformat:0 }}{% else %}—{% endif %}</div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Reliquat restant</div>
+      <div class="suivi-val {% if reliquat_restant_apres == 0 %}s-green{% else %}s-red{% endif %}">
+        {% if reliquat_restant_apres == 0 %}✓ SOLDÉ{% else %}{{ reliquat_restant_apres|floatformat:0 }}{% endif %}
+      </div>
+    </td>
+    <td>
+      <div class="suivi-lbl">Dû total (toutes années)</div>
+      <div class="suivi-val {% if reste_global_apres == 0 %}s-green{% else %}s-red{% endif %}">
+        {% if reste_global_apres == 0 %}✓ SOLDÉ{% else %}{{ reste_global_apres|floatformat:0 }}{% endif %}
+      </div>
+    </td>
+  </tr>
+</table>
+{% endif %}
+
 <!-- MODE DE PAIEMENT -->
 <table class="mode-table">
   <tr>

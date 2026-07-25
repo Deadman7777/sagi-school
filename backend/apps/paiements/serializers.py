@@ -17,6 +17,9 @@ class ExerciceSerializer(serializers.ModelSerializer):
 
 class PaiementSerializer(serializers.ModelSerializer):
     total     = serializers.ReadOnlyField()
+    # Part « frais de l'année » : total − reliquat antérieur. C'est elle qui
+    # constate un produit 706 (voir apps.paiements.ecritures).
+    total_exercice = serializers.ReadOnlyField()
     eleve_nom = serializers.CharField(source='eleve.nom_complet', read_only=True)
 
     class Meta:
