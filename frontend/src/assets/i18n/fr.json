@@ -889,7 +889,8 @@
     "regime_label": "Régime de l'établissement",
     "regime_aide_simplifie": "Simplifié : bulletins sans cotisations sociales (établissement non affilié).",
     "regime_aide_complet": "Complet : IPRES, CSS, IR et charges patronales (établissement affilié).",
-    "avance_restant": "Restant dû"
+    "avance_restant": "Restant dû",
+    "champs_requis_employe": "Nom, poste et date d'embauche sont obligatoires."
   },
   "suivi": {
     "title": "Suivi Mensuel",

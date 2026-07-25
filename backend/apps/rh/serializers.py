@@ -14,15 +14,22 @@ class EmployeSerializer(serializers.ModelSerializer):
         }
 
     def to_internal_value(self, data):
-        # Les champs date nullable arrivent souvent en chaîne vide depuis le formulaire
-        # → convertir '' en None (DRF DateField refuse la chaîne vide).
+        # Le formulaire envoie des chaînes vides pour tout champ non renseigné.
         if hasattr(data, 'dict'):
             data = data.dict()
         else:
             data = dict(data)
+        # Dates facultatives : '' → None (DRF DateField refuse la chaîne vide).
+        # date_embauche n'est PAS de la partie : elle est obligatoire, et la
+        # laisser passer en None donnerait un employé sans ancienneté.
         for f in ('autorisation_date', 'date_fin_contrat'):
             if data.get(f) == '':
                 data[f] = None
+        # Numériques à valeur par défaut : un champ vidé à l'écran ne doit pas
+        # faire échouer l'enregistrement, il vaut 0.
+        for f in ('salaire_base', 'nb_enfants'):
+            if data.get(f) in ('', None):
+                data[f] = 0
         return super().to_internal_value(data)
 
 
