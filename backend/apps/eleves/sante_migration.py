@@ -105,6 +105,19 @@ def diagnostiquer(tenant, exercice):
         'journal_equilibre', 'attention' if abs(ecart) > 1 else 'ok',
         0, montant=abs(ecart)))
 
+    # 7. Net des produits (classe 70) négatif — impossible comptablement, et
+    #    parfaitement silencieux : le tableau de bord borne le total à 0 et
+    #    affiche « Total Recettes : 0 » sans rien signaler. C'est resté invisible
+    #    des mois chez Shoumoul, où des neutralisations de migration empilées
+    #    débitaient 46 M contre 30 M de crédits.
+    agg70 = JournalEntry.objects.filter(
+        tenant=tenant, exercice=exercice, no_compte__startswith='70'
+    ).aggregate(d=Sum('debit'), c=Sum('credit'))
+    net70 = round(float(agg70['c'] or 0) - float(agg70['d'] or 0), 2)
+    controles.append(_controle(
+        'produits_negatifs', 'attention' if net70 < 0 else 'ok',
+        0, montant=abs(net70) if net70 < 0 else 0))
+
     # Créances totales à recouvrer, fiches de créance des sortis comprises :
     # c'est l'argent réellement dû à l'école, tous élèves confondus.
     creances = 0.0

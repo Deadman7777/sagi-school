@@ -155,3 +155,51 @@ class ReparationCommandeTest(NeutralisationBase):
         sortie = self._appeler()
         self.assertIn('déjà cohérente', sortie)
         self.assertEqual(self._net_70(), AGREGAT)
+
+
+class ReprisesAnnuleesTest(NeutralisationBase):
+    def _reprise(self, nom, montant):
+        return creer_paiement_reprise(
+            self.tenant, self.ex, self._eleve(nom),
+            montants={'montant_inscription': 0, 'montant_mensualite': montant,
+                      'montant_uniforme': 0, 'montant_fournitures': 0})
+
+    """Une reprise ANNULÉE ne doit plus être neutralisée.
+
+    Son extourne a déjà contre-passé le 706 ; la neutraliser en plus
+    retirerait le même produit une seconde fois.
+    """
+
+    def test_une_reprise_annulee_sort_du_calcul(self):
+        from apps.comptabilite.neutralisation import total_produits_reprises
+
+        p1 = self._reprise('Awa', 100000)
+        p2 = self._reprise('Bina', 60000)
+        p2.statut = 'ANNULE'
+        p2.save()
+
+        total = total_produits_reprises(self.tenant, self.ex)
+
+        self.assertEqual(total, float(p1.total))
+
+    def test_le_net_produits_reste_juste_apres_annulation(self):
+        p = self._reprise('Awa', 100000)
+        neutraliser_reprises(self.tenant, self.ex)
+        self.assertEqual(self._net_70(), AGREGAT)
+
+        # L'école annule la reprise : son 706 est contre-passé…
+        JournalEntry.objects.create(
+            tenant=self.tenant, exercice=self.ex, no_piece='ANN-REC-0001',
+            date_ecriture=self.ex.date_debut, source='ANNUL_PAIEMENT',
+            source_id=p.id, no_compte='706', debit=p.total, credit=0, ordre=1)
+        p.statut = 'ANNULE'
+        p.save()
+
+        # …et la neutralisation recalculée ne doit plus la compter.
+        neutraliser_reprises(self.tenant, self.ex)
+
+        # Le net revient exactement à l'agrégat migré : l'extourne a retiré le
+        # produit de la reprise, la neutralisation s'est supprimée d'elle-même.
+        # SANS le filtre statut='ACTIF', la neutralisation serait recréée et
+        # retirerait le même produit une 2e fois -> AGREGAT - 100 000.
+        self.assertEqual(self._net_70(), AGREGAT)

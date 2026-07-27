@@ -158,3 +158,39 @@ class ApiTest(SanteMigrationBase):
                              date_inscription=ex.date_debut)
         self._eleve('Fatou MBAYE')
         self.assertEqual(diagnostiquer(self.tenant, self.ex)['nb_eleves'], 1)
+
+
+class ProduitsNegatifsTest(SanteMigrationBase):
+    """7e contrôle : un net de classe 70 négatif est comptablement impossible.
+
+    Le tableau de bord borne le total à 0 et affiche « Total Recettes : 0 »
+    sans rien signaler — c'est resté invisible des mois chez Shoumoul.
+    """
+
+    def _je(self, compte, debit, credit, source='MIGRATION'):
+        JournalEntry.objects.create(
+            tenant=self.tenant, exercice=self.ex, no_piece='X',
+            date_ecriture=self.ex.date_debut, no_compte=compte,
+            debit=debit, credit=credit, source=source, ordre=1)
+
+    def test_produits_positifs_rien_a_signaler(self):
+        self._je('571', 1000000, 0)
+        self._je('706', 0, 1000000)
+        c = self._controle(diagnostiquer(self.tenant, self.ex), 'produits_negatifs')
+        self.assertEqual(c['niveau'], 'ok')
+
+    def test_net_negatif_signale_avec_son_montant(self):
+        self._je('706', 0, 1000000)
+        self._je('706', 1600000, 0, 'RECAL_MIGRATION')   # neutralisations empilées
+
+        c = self._controle(diagnostiquer(self.tenant, self.ex), 'produits_negatifs')
+
+        self.assertEqual(c['niveau'], 'attention')
+        self.assertEqual(c['montant'], 600000)
+
+    def test_le_controle_reste_non_bloquant(self):
+        self._je('706', 0, 1000000)
+        self._je('706', 1600000, 0, 'RECAL_MIGRATION')
+        rapport = diagnostiquer(self.tenant, self.ex)
+        self.assertTrue(all(c['niveau'] in ('ok', 'info', 'attention')
+                            for c in rapport['controles']))

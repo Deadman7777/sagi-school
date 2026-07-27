@@ -121,9 +121,13 @@ def generer_ecriture_regularisation(ligne, compte_contrepartie, tenant, libelle_
     compte_banque = rap.compte_bancaire.no_compte_comptable
     # N° de pièce séquentiel dans le rapprochement (RAP-<ref>-Rn) — évite toute
     # collision entre régularisations d'un même rapprochement.
+    # .order_by() VIDE avant .distinct() : JournalEntry.Meta déclare un ordering,
+    # et Django ajoute les colonnes de tri au SELECT d'un DISTINCT. Sans ce reset,
+    # une régularisation multi-lignes est comptée autant de fois qu'elle a de
+    # lignes et la séquence saute (R1, R3, R5…).
     n = JournalEntry.objects.filter(
         tenant=tenant, source='RAPPRO_REG', no_piece__startswith=f"RAP-{rap.reference}-R"
-    ).values('no_piece').distinct().count() + 1
+    ).order_by().values('no_piece').distinct().count() + 1
     ref = f"RAP-{rap.reference}-R{n}"
     label = f"Régularisation rapprochement — {ligne.libelle}" + (f" {libelle_extra}" if libelle_extra else '')
     m = _d(ligne.montant)
