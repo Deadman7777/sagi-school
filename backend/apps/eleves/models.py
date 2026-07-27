@@ -79,6 +79,20 @@ class Eleve(TenantModel):
                                               on_delete=models.SET_NULL, related_name='eleves_classe')
     numero                = models.IntegerField(null=True, blank=True)
     matricule             = models.CharField(max_length=20, blank=True, null=True)
+    # Matricule porté avant le passage au format promo (AAAA-CODE-NNNN).
+    # Conservé pour que les carnets papier et les anciens reçus de l'école
+    # restent exploitables : on retrouve l'élève par son ancien numéro.
+    matricule_ancien      = models.CharField(max_length=20, blank=True,
+                                             help_text="Matricule d'avant le rebasage")
+    # ── Entrée dans l'établissement — figée à vie ─────────────────────────
+    # date_inscription est repositionnée au début de chaque exercice pour le
+    # prorata des mensualités : elle ne peut donc PAS servir de référence
+    # historique. Ces deux champs, eux, ne bougent jamais et sont recopiés à
+    # chaque réinscription — c'est le socle de la base « année après année ».
+    annee_entree          = models.CharField(max_length=20, blank=True,
+                                             help_text="Année scolaire d'entrée (promo), ex. 2025-2026")
+    date_entree           = models.DateField(null=True, blank=True,
+                                             help_text="Date de première entrée dans l'établissement")
     nom_complet           = models.CharField(max_length=200)
     genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance        = models.DateField(null=True, blank=True)
@@ -131,16 +145,34 @@ class Eleve(TenantModel):
     eleve_precedent    = models.ForeignKey('self', null=True, blank=True,
                                            on_delete=models.SET_NULL, related_name='reinscriptions',
                                            help_text="Fiche du même élève sur l'exercice précédent")
-    # Reste dû reporté depuis l'exercice précédent, figé au moment du report.
+    # Reste dû antérieur à l'exercice en cours, figé. Deux origines :
+    #   - le report automatique d'un exercice à l'autre (reliquat_exercice_origine) ;
+    #   - une SAISIE de migration, quand l'année d'avant n'existe pas dans le
+    #     système — l'école arrive avec une ardoise et aucun détail exploitable
+    #     (reliquat_note). Voir apps.paiements.reliquat_migration.
     # Ce n'est PAS un produit de l'exercice en cours (le 706 a été constaté
     # l'année où les frais sont nés) : il n'entre donc jamais dans
     # total_attendu, seulement dans le dû global — voir reste_a_payer_global.
     reliquat_anterieur = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                             help_text="Reste dû reporté de l'exercice précédent (FCFA)")
+                                             help_text="Reste dû des années antérieures (FCFA)")
     reliquat_exercice_origine = models.ForeignKey('paiements.Exercice', null=True, blank=True,
                                                   on_delete=models.SET_NULL,
                                                   related_name='reliquats_reportes',
                                                   help_text="Exercice d'où provient le reliquat")
+    # Origine libre, quand elle ne correspond à aucun exercice du système :
+    # « 2024-2025 », « ardoise cahier », « ancien logiciel »… Volontairement un
+    # texte et non une liste : sur le terrain, la provenance exacte de la dette
+    # est rarement reconstituable, l'important est que l'école puisse l'assumer.
+    reliquat_note = models.CharField(max_length=120, blank=True,
+                                     help_text="Origine de l'impayé antérieur saisi à la migration")
+    # Fiche ouverte UNIQUEMENT pour porter la créance d'un élève qui a quitté
+    # l'établissement (diplômé, transféré, abandon) en laissant une ardoise.
+    # Elle existe parce que l'à-nouveaux 411/890 doit être passé dans le
+    # nouvel exercice — sans elle, la créance disparaîtrait du bilan. Mais
+    # l'enfant n'est plus élève : elle est tenue hors de la liste et des
+    # effectifs, et se consulte depuis « Anciens élèves ».
+    fiche_creance = models.BooleanField(default=False,
+                                        help_text="Fiche de suivi de créance — l'élève a quitté l'établissement")
 
     class Meta:
         db_table = 'eleves'
@@ -254,7 +286,14 @@ class Eleve(TenantModel):
     # ── Montants attendus / payés ─────────────────────────────────────────
     @property
     def total_attendu(self):
-        """Total annuel réel attendu : frais section − prise en charge + services optionnels."""
+        """Total annuel réel attendu : frais section − prise en charge + services optionnels.
+
+        Une fiche de créance ne doit RIEN au titre de l'année : l'enfant a
+        quitté l'établissement, la fiche n'existe que pour porter son ardoise
+        (qui, elle, est dans reliquat_anterieur). Lui compter la scolarité
+        reviendrait à facturer une année qu'il ne fera pas."""
+        if self.fiche_creance:
+            return 0.0
         base = max(self.total_theorique - self.montant_pec_annuel, 0.0)
         return round(base + self.montant_services_annuel, 2)
 
@@ -303,10 +342,11 @@ class Eleve(TenantModel):
 
     @property
     def reliquat_origine_libelle(self):
-        """Année d'où vient le reliquat, pour les libellés (« Reliquat 2024-2025 »)."""
+        """Origine du reliquat, pour les libellés (« Reliquat 2024-2025 »).
+        L'exercice d'origine prime ; à défaut la note saisie à la migration."""
         if self.reliquat_exercice_origine_id and self.reliquat_exercice_origine:
             return self.reliquat_exercice_origine.annee_scolaire
-        return ''
+        return self.reliquat_note or ''
 
     def mois_echus(self, today=None):
         """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée

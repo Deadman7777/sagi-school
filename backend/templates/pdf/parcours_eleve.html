@@ -1,0 +1,134 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Parcours scolaire{% endblock %}
+{% block content %}
+
+<!-- Identité -->
+<div class="section-title">Élève</div>
+<table class="school-band" style="margin-bottom:14px">
+  <tr>
+    <td>
+      <div class="sb-label">Nom complet</div>
+      <div class="sb-value">{{ p.nom_complet }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Matricule</div>
+      <div class="sb-value">{{ p.matricule|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Promotion</div>
+      <div class="sb-value">{{ p.annee_entree|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Statut</div>
+      <div class="sb-value">{{ p.statut_libelle }}</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="sb-label">Date de naissance</div>
+      <div class="sb-value">{{ p.date_naissance|date:"d/m/Y"|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Entré(e) le</div>
+      <div class="sb-value">{{ p.date_entree|date:"d/m/Y"|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Années passées</div>
+      <div class="sb-value">{{ p.nb_annees }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Dernière année</div>
+      <div class="sb-value">{{ p.annee_sortie }}</div>
+    </td>
+  </tr>
+  {% if p.matricule_ancien %}
+  <tr>
+    <td colspan="4">
+      <div class="sb-label">Ancien matricule</div>
+      <div class="sb-value">{{ p.matricule_ancien }}</div>
+    </td>
+  </tr>
+  {% endif %}
+</table>
+
+<!-- Parents -->
+<div class="section-title">Parents / Tuteur</div>
+<table class="school-band" style="margin-bottom:14px">
+  <tr>
+    <td>
+      <div class="sb-label">Père</div>
+      <div class="sb-value">{{ p.nom_pere|default:"—" }}{% if p.telephone_pere %} — {{ p.telephone_pere }}{% endif %}</div>
+    </td>
+    <td>
+      <div class="sb-label">Mère</div>
+      <div class="sb-value">{{ p.nom_mere|default:"—" }}{% if p.telephone_mere %} — {{ p.telephone_mere }}{% endif %}</div>
+    </td>
+    <td>
+      <div class="sb-label">Tuteur</div>
+      <div class="sb-value">{{ p.nom_tuteur|default:"—" }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- Année par année -->
+<div class="section-title">Scolarité année par année</div>
+<table>
+  <thead>
+    <tr>
+      <th>Année</th>
+      <th>Classe / Section</th>
+      <th>Statut</th>
+      <th class="text-right">Dû de l'année</th>
+      <th class="text-right">Payé</th>
+      <th class="text-right">Reste</th>
+      <th class="text-right">Reliquat repris</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in p.annees %}
+    <tr>
+      <td class="bold">{{ a.annee }}</td>
+      <td>{{ a.classe|default:a.section|default:"—" }}</td>
+      <td>{% if a.fiche_creance %}Créance (sorti){% else %}{{ a.statut_libelle }}{% endif %}</td>
+      <td class="text-right">{{ a.total_attendu|floatformat:0 }}</td>
+      <td class="text-right green">{{ a.total_paye|floatformat:0 }}</td>
+      <td class="text-right {% if a.reste > 0 %}red{% endif %}">{{ a.reste|floatformat:0 }}</td>
+      <td class="text-right">{% if a.reliquat %}{{ a.reliquat|floatformat:0 }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Synthèse. Le dû n'est PAS la somme des restes annuels : un impayé est
+     reconduit en reliquat, le sommer compterait la même ardoise plusieurs
+     fois. C'est la dette de la dernière année qui fait foi. -->
+<div class="section-title">Synthèse depuis l'entrée</div>
+<table class="kpi-table">
+  <tr>
+    <td>
+      <div class="kb-label">Années passées</div>
+      <div class="kb-val kb-teal">{{ p.nb_annees }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total facturé</div>
+      <div class="kb-val kb-blue">{{ p.total_attendu|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total réglé</div>
+      <div class="kb-val kb-green">{{ p.total_paye|floatformat:0 }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Reste dû à ce jour</div>
+      <div class="kb-val {% if p.du_actuel > 0 %}red{% else %}kb-green{% endif %}">{{ p.du_actuel|floatformat:0 }}</div>
+    </td>
+  </tr>
+</table>
+
+<table class="resultat-table {% if p.du_actuel == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+  <tr>
+    <td class="rb-label">{% if p.du_actuel == 0 %}Scolarité entièrement réglée ✓{% else %}Reste dû, toutes années confondues{% endif %}</td>
+    <td class="rb-val {% if p.du_actuel == 0 %}green{% else %}red{% endif %}">{{ p.du_actuel|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+
+{% endblock %}

@@ -1,0 +1,728 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{longtable}
+\usepackage{needspace}
+\usepackage[hidelinks]{hyperref}
+
+% ---- Couleurs de marque ----
+\definecolor{sagiteal}{HTML}{00745A}
+\definecolor{sagidark}{HTML}{1A1A2E}
+\definecolor{sagigray}{HTML}{6B7280}
+\definecolor{sagibg}{HTML}{F4F6F8}
+\definecolor{sagired}{HTML}{B91C1C}
+\definecolor{sagiamber}{HTML}{B45309}
+
+\hypersetup{
+  pdftitle={SAGI SCHOOL -- Reprise des donnees a la migration},
+  pdfauthor={HADY GESMAN},
+  colorlinks=false,
+}
+
+% ---- Titres ----
+\titleformat{\chapter}[hang]
+  {\bfseries\Large\color{sagiteal}}{\thechapter.}{0.6em}{}
+\titlespacing{\chapter}{0pt}{0pt}{12pt}
+\titleformat{\section}
+  {\bfseries\large\color{sagidark}}{\thesection}{0.6em}{}
+\titleformat{\subsection}
+  {\bfseries\normalsize\color{sagidark}}{\thesubsection}{0.6em}{}
+
+% ---- En-tête / pied ----
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyhead[L]{\small\color{sagiteal}\textbf{SAGI SCHOOL}}
+\fancyhead[R]{\small\color{sagigray}Reprise des données à la migration}
+\fancyfoot[L]{\small\color{sagigray}by HADY GESMAN}
+\fancyfoot[C]{\small\color{sagigray}Conforme SYSCOHADA Révisé}
+\fancyfoot[R]{\small\thepage}
+
+\setlist[itemize]{leftmargin=1.3em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=3pt,topsep=3pt}
+\renewcommand{\tabularxcolumn}[1]{>{\small}m{#1}}
+
+% ---- Encadrés ----
+\newcommand{\encadre}[2]{%
+  \begingroup
+  \setlength{\fboxsep}{9pt}%
+  \noindent\colorbox{sagibg}{%
+    \begin{minipage}{\dimexpr\linewidth-2\fboxsep\relax}
+    \textbf{\color{#1}#2}
+    \end{minipage}}%
+  \par\vspace{8pt}
+  \endgroup}
+
+\newcommand{\pointcle}[1]{\encadre{sagiteal}{#1}}
+\newcommand{\alerte}[1]{\encadre{sagired}{#1}}
+
+\begin{document}
+
+% =========================== PAGE DE TITRE ===========================
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\Huge\bfseries\color{sagiteal} SAGI SCHOOL\par}
+\vspace{0.4cm}
+{\Large\color{sagidark} Système de Gestion Scolaire\par}
+\vspace{0.2cm}
+{\large\color{sagigray} \textit{by HADY GESMAN}\par}
+\vspace{2.2cm}
+{\LARGE\bfseries\color{sagidark} Reprise des données à la migration\par}
+\vspace{0.5cm}
+{\large\color{sagigray} Rapport de développement --- 4 lots livrés\par}
+\vspace{0.3cm}
+{\normalsize\color{sagigray} Cas de référence : Complexe Shoumoul Excellence\par}
+\vspace{2.6cm}
+
+\begin{tabular}{rl}
+\textbf{Date} & 27 juillet 2026\\[4pt]
+\textbf{Branche} & \texttt{feat/impaye-anterieur-migration}\\[4pt]
+\textbf{Commits} & 4\\[4pt]
+\textbf{Portée} & 31 fichiers, +3 276 / --57 lignes\\[4pt]
+\textbf{Tests} & 123 verts (82 nouveaux)\\[4pt]
+\textbf{Statut} & \textbf{\color{sagiamber}En attente de validation}\\[4pt]
+\end{tabular}
+
+\vfill
+{\small\color{sagigray} Document interne --- pour décision de mise en production\par}
+\end{titlepage}
+
+% Sommaire tenu sur une page : chapitres et sections seulement, corps réduit.
+{\small
+\setcounter{tocdepth}{1}
+\tableofcontents
+}
+\newpage
+
+% =========================== RÉSUMÉ EXÉCUTIF ===========================
+\chapter*{Résumé exécutif}
+\addcontentsline{toc}{chapter}{Résumé exécutif}
+
+\section*{Le problème}
+
+L'installation de SAGI SCHOOL au \textbf{Complexe Shoumoul Excellence} était
+bloquée. Le logiciel savait calculer ce que chaque élève doit pour l'année en
+cours, à partir des tarifs paramétrés par niveau. Il ne savait pas enregistrer
+ce que les familles devaient \emph{déjà} en arrivant.
+
+Or c'est la situation normale sur le terrain : une école qui bascule sur un
+logiciel traîne des années d'ardoises, connues de manière approximative, sans
+détail exploitable poste par poste. Le directeur sait dire « cette famille doit
+45 000 francs », rarement « dont 12 000 d'inscription 2023 et 33 000 de
+mensualités ». Exiger le détail, c'est bloquer la migration.
+
+Deux besoins connexes sont apparus au même moment : constituer une base
+d'élèves fiable année après année, et retrouver le dossier complet d'un ancien
+élève longtemps après son départ.
+
+\section*{Ce qui a été livré}
+
+Quatre lots, développés et testés :
+
+\begin{enumerate}
+\item \textbf{Impayé antérieur saisissable} --- un montant global par élève
+      suffit, saisissable de trois façons, avec l'écriture comptable
+      correspondante. \emph{Lot qui débloque Shoumoul.}
+\item \textbf{Matricule de promotion} --- le matricule dit désormais l'année
+      et le rang d'entrée de l'élève, et ne change plus jamais.
+\item \textbf{Parcours scolaire et anciens élèves} --- l'histoire complète d'un
+      enfant, de son entrée à sa sortie, et une base historique des diplômés.
+\item \textbf{Santé de la migration} --- un tableau de bord de ce qui reste à
+      compléter dans les données reprises.
+\end{enumerate}
+
+\section*{Principe directeur}
+
+\pointcle{La migration n'est jamais bloquante. Une école peut installer le
+logiciel sans aucune donnée financière, travailler dès le premier jour, et
+compléter progressivement --- élève par élève, sans jamais refaire l'import.}
+
+\section*{Décision demandée}
+
+Autorisation de pousser les 4 commits, d'ouvrir la demande de fusion, de
+publier une version et de déployer. Le plan de mise en production détaillé
+figure au chapitre~\ref{chap:deploiement}.
+
+\newpage
+
+% =========================== CHAPITRE 1 ===========================
+\chapter{Le contexte : pourquoi la migration bloquait}
+
+\section{Ce que le logiciel savait déjà faire}
+
+Avant ces travaux, SAGI SCHOOL gérait correctement le cycle normal d'une
+école :
+
+\begin{itemize}
+\item tarifs paramétrés par niveau (inscription, mensualité, uniforme,
+      fournitures, services optionnels) ;
+\item calcul automatique du total dû par élève, au prorata de sa date
+      d'entrée et de sa prise en charge sociale éventuelle ;
+\item suivi des paiements, alertes de retard, reçus, comptabilité SYSCOHADA ;
+\item report automatique des impayés d'un exercice sur le suivant, lors de la
+      clôture.
+\end{itemize}
+
+Ce dernier point mérite attention : le mécanisme de report existait, avec toute
+sa mécanique comptable. Mais il supposait que \textbf{l'année précédente existe
+dans le logiciel}. Pour une école qui migre, c'est précisément ce qui manque.
+
+\section{Le blocage constaté chez Shoumoul}
+
+Les élèves du Complexe Shoumoul Excellence arrivaient avec des impayés nés
+avant l'installation. Le logiciel n'avait aucun endroit où les enregistrer :
+
+\begin{itemize}
+\item le total dû affiché était \emph{faux}, car amputé de la dette ancienne ;
+\item l'école ne pouvait pas relancer les familles sur le bon montant ;
+\item la comptabilité ne portait pas ces créances au bilan.
+\end{itemize}
+
+\section{La difficulté de fond}
+
+\alerte{Les données financières fiables sont rares sur le terrain. Un système
+qui exige le détail poste par poste d'une dette de trois ans ne sera jamais
+rempli --- l'école abandonnera, ou saisira n'importe quoi.}
+
+C'est cette contrainte qui a dicté la conception : accepter le niveau de
+précision que l'école peut réellement fournir, et permettre d'affiner ensuite.
+
+\section{Les quatre niveaux de précision acceptés}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{0.5cm}p{4.2cm}X@{}}
+\toprule
+\textbf{N\textsuperscript{o}} & \textbf{Niveau} & \textbf{Ce que l'école doit savoir dire} \\
+\midrule
+1 & Rien & Aucune donnée financière. L'élève démarre à zéro payé. \\
+2 & Dette actuelle & « Cette famille doit 30 000 francs à ce jour. » \\
+3 & Détail par poste & Inscription réglée, 3 mensualités payées, etc. \\
+4 & + Impayé antérieur & « Et elle devait déjà 45 000 avant. » \emph{(nouveau)} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Les trois premiers niveaux existaient. Le quatrième est ajouté, et il est
+\textbf{indépendant} : il se cumule avec n'importe lequel des autres, ou se
+remplit seul.
+
+% =========================== CHAPITRE 2 ===========================
+\chapter{Lot 1 --- Impayé antérieur saisissable}
+
+\section{Le principe retenu}
+
+Un seul montant global par élève, plus une note libre sur son origine
+(« 2024--2025 », « ardoise cahier », « ancien logiciel »). Aucune ventilation
+par poste n'est demandée --- c'est précisément ce que les écoles ne peuvent
+pas fournir.
+
+\section{Trois points d'entrée}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{4.2cm}X@{}}
+\toprule
+\textbf{Point d'entrée} & \textbf{Usage} \\
+\midrule
+Fiche élève & Cas par cas, à tout moment de l'année. \\
+Import Excel & Colonnes « Impayé antérieur » et « Origine », avec
+  tolérance sur les intitulés (\textit{ardoise}, \textit{arriérés},
+  \textit{dette antérieure}, \textit{reliquat}\ldots). \\
+Saisie en lot & Une grille avec recherche et total en direct, pour traiter
+  plusieurs centaines d'élèves en une passe. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Traitement comptable}
+
+L'impayé antérieur est une créance née \emph{avant} l'exercice en cours. Le
+produit correspondant a été constaté à l'époque, dans l'ancien système ou sur
+les cahiers de l'école.
+
+\pointcle{Écriture passée : 411 Débit / 890 Crédit, à la date d'ouverture de
+l'exercice. Aucun compte de produit (706), aucun mouvement de trésorerie.}
+
+Cette règle est essentielle : rejouer le produit gonflerait le résultat de
+l'année en cours avec des frais qui ne lui appartiennent pas, et fausserait le
+compte de résultat comme le bilan.
+
+\section{Deux choix de conception qui comptent}
+
+\subsection{Une écriture auto-réparatrice}
+
+Une migration se nettoie progressivement : un montant sera corrigé plusieurs
+fois. Plutôt que d'empiler des écritures d'ajustement, le système
+\textbf{recalcule l'écriture en entier} à chaque modification.
+
+Conséquences concrètes :
+
+\begin{itemize}
+\item trois corrections successives ne laissent \textbf{qu'une seule pièce} au
+      journal, celle du dernier montant ;
+\item le numéro de pièce reste stable d'une correction à l'autre ;
+\item remettre le montant à zéro fait disparaître l'écriture, sans trace
+      parasite.
+\end{itemize}
+
+Cette approche découle directement d'un incident antérieur : un mécanisme
+d'ajustement empilé avait fini par ronger les produits d'une école migrée
+jusqu'à afficher zéro recette, sans qu'aucun contrôle ne le signale.
+
+\subsection{Un refus ligne par ligne, jamais en bloc}
+
+La saisie en lot applique ce qu'elle peut et rejette le reste avec le motif
+exact. Sur trois cents élèves saisis à la main, tout annuler pour une faute de
+frappe serait le meilleur moyen de décourager l'école.
+
+\section{Garde-fous}
+
+\begin{itemize}
+\item montant négatif refusé ;
+\item exercice clôturé : modification refusée (une année fermée reste en
+      lecture seule) ;
+\item montant inférieur à ce qui a déjà été encaissé sur cette dette : refusé,
+      avec le montant déjà réglé dans le message.
+\end{itemize}
+
+\section{Affichage}
+
+La colonne principale de la liste des élèves affiche désormais le \textbf{dû
+global} --- année en cours plus ardoise ancienne --- avec la décomposition au
+survol et une colonne « dont antérieur » à côté.
+
+Le niveau d'alerte (Attention / Urgent / Critique), lui, continue de ne juger
+que l'année en cours. Sans cette précaution, toute l'école basculerait en
+« Critique » le jour de la migration, rendant l'indicateur inutilisable.
+
+% =========================== CHAPITRE 3 ===========================
+\chapter{Lot 2 --- Matricule de promotion}
+
+\section{Le défaut de l'ancien format}
+
+L'ancien matricule avait la forme \texttt{AAAA-CODE-NNNNNN}, où :
+
+\begin{itemize}
+\item \texttt{AAAA} était l'\textbf{année civile du jour de la saisie} ;
+\item \texttt{NNNNNN} un compteur global à l'école.
+\end{itemize}
+
+Deux élèves d'une même promotion, l'un inscrit en septembre et l'autre en
+janvier, portaient donc deux années différentes. Et le numéro ne disait rien de
+la cohorte. Impossible d'en tirer une base ordonnée des premiers aux derniers
+inscrits.
+
+\section{Le nouveau format}
+
+\pointcle{\texttt{2025-SHE-0042} se lit : quarante-deuxième élève entré en
+2025--2026 au Complexe Shoumoul Excellence.}
+
+\begin{itemize}
+\item \texttt{2025} : année de début de l'exercice d'entrée --- la promotion ;
+\item \texttt{SHE} : code de l'établissement ;
+\item \texttt{0042} : rang dans la promotion, par ordre d'entrée.
+\end{itemize}
+
+Un élève inscrit en janvier reste de la promotion de son exercice. Le matricule
+est attribué une fois et suit l'enfant jusqu'à sa sortie : réinscription,
+clôture d'exercice, changement de niveau ne le modifient jamais.
+
+\section{Deux dates, deux usages}
+
+Un point technique aux conséquences réelles a été découvert en explorant ce
+lot.
+
+\alerte{La date d'entrée réelle des élèves était déjà perdue. Le mécanisme de
+réinscription repositionne chaque année la date d'inscription au début du
+nouvel exercice, pour le calcul du prorata des mensualités. Dès la deuxième
+année, plus aucune trace de la date d'arrivée effective.}
+
+Deux champs figés à vie ont donc été ajoutés, recopiés à chaque
+réinscription :
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{4.5cm}X@{}}
+\toprule
+\textbf{Champ} & \textbf{Rôle} \\
+\midrule
+Date d'inscription & Repositionnée chaque année. Sert au prorata des
+  mensualités dues. \\
+Date d'entrée \emph{(nouveau)} & Ne bouge jamais. Première arrivée dans
+  l'établissement. \\
+Année d'entrée \emph{(nouveau)} & La promotion. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Reprise de l'existant}
+
+Une commande de renumérotation traite les bases déjà installées. Elle
+fonctionne en \textbf{diagnostic par défaut} : elle affiche la correspondance
+ancien~$\rightarrow$~nouveau sans rien écrire. L'écriture demande une option
+explicite.
+
+Trois précautions ont été nécessaires :
+
+\begin{enumerate}
+\item \textbf{Regrouper les fiches par enfant réel.} Un même enfant possède une
+      fiche par année. Toutes doivent recevoir le même matricule, sinon on
+      casse justement le suivi qu'on cherche à établir. Le regroupement combine
+      le lien de réinscription \emph{et} l'égalité de matricule --- une fiche
+      importée avant le report n'est pas liée, et une base ancienne peut
+      manquer de matricule.
+\item \textbf{Écrire en deux passes.} Quand deux élèves échangent leurs rangs,
+      écrire directement violerait la contrainte d'unicité en cours de route.
+      Les matricules sont donc d'abord parqués sur une valeur temporaire.
+\item \textbf{Conserver l'ancien matricule.} Il est stocké à part, et la
+      recherche accepte les deux numéros --- les carnets papier et les anciens
+      reçus de l'école restent exploitables.
+\end{enumerate}
+
+La commande est rejouable : un second passage recalcule les mêmes matricules et
+ne touche plus rien.
+
+\alerte{Point d'attention pour le déploiement : tant que cette commande n'a pas
+été lancée, l'année et la date d'entrée restent vides sur les fiches
+existantes. C'est un choix assumé --- un remplissage automatique prendrait la
+promotion de la fiche courante au lieu de celle d'entrée pour les élèves
+réinscrits, donnant une valeur \emph{fausse} plutôt qu'une valeur vide sur une
+base censée devenir la référence historique.}
+
+% =========================== CHAPITRE 4 ===========================
+\chapter{Lot 3 --- Parcours scolaire et anciens élèves}
+
+\section{Le constat}
+
+Un enfant possède une fiche par exercice. Son histoire était donc éparpillée
+sur autant de lignes qu'il avait passé d'années dans l'établissement, sans
+aucun écran ni aucune interface pour la rassembler.
+
+\section{Le parcours}
+
+Un onglet « Parcours scolaire », ouvrable depuis la fiche élève ou depuis la
+base des anciens, présente la scolarité complète année par année : classe,
+statut, dû, payé, reste, reliquat repris. Il est complété par une synthèse
+depuis l'entrée et par un \textbf{dossier de scolarité en PDF}, à remettre à
+une famille qui part ou à ressortir des archives.
+
+\subsection{Un piège de calcul évité}
+
+\alerte{La dette totale d'un parcours n'est pas la somme des restes annuels.}
+
+Un impayé est reconduit en reliquat chaque année. L'additionner sur toutes les
+lignes reviendrait à compter la même ardoise autant de fois qu'elle a traversé
+d'exercices : sur trois ans, 50 000 francs deviendraient 150 000. C'est le dû
+de la dernière année qui fait foi, car il porte déjà tout l'historique. Un test
+automatisé verrouille ce comportement.
+
+\section{La base des anciens élèves}
+
+Un écran dédié, \textbf{indépendant de l'exercice affiché} : on doit y
+retrouver un diplômé de 2019 comme un transféré de l'an dernier.
+
+\begin{itemize}
+\item une ligne par enfant, pas par fiche ;
+\item diplômés, transférés et abandons, filtrables ;
+\item recherche par nom, matricule ou ancien matricule ;
+\item pour chacun : promotion, date d'entrée, dernière année, nombre d'années,
+      total réglé sur toute la scolarité, et solde éventuellement encore dû ;
+\item total des créances des anciens en indicateur.
+\end{itemize}
+
+Le statut retenu est celui de la dernière fiche. Un enfant réinscrit après un
+abandon n'est donc plus un ancien --- il est redevenu élève.
+
+\section{Le sort des sortants endettés}
+
+Un diplômé qui part en devant de l'argent posait un dilemme.
+
+\begin{itemize}
+\item \textbf{Le réinscrire} comme élève de l'année suivante, comme le faisait
+      le système : il pollue la liste et les listes d'appel.
+\item \textbf{Ne rien créer du tout} : sa créance disparaît du bilan du nouvel
+      exercice --- inacceptable comptablement.
+\end{itemize}
+
+La solution retenue crée une \textbf{fiche de créance} : elle porte l'écriture
+de report 411/890, donc la créance reste au bilan, mais elle est tenue hors de
+la liste des élèves et hors des effectifs. Elle se consulte depuis la base des
+anciens élèves.
+
+% =========================== CHAPITRE 5 ===========================
+\chapter{Lot 4 --- Santé de la migration}
+
+\section{Pourquoi ce tableau}
+
+Une migration ne se termine pas le jour de l'installation. L'école complète
+ensuite --- encore faut-il qu'elle sache ce qui reste à compléter. Sans ce
+tableau, les trous se découvrent six mois plus tard, au moment d'éditer un
+bilan.
+
+\section{Les six contrôles}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{4.6cm}X@{}}
+\toprule
+\textbf{Contrôle} & \textbf{Ce qu'il détecte} \\
+\midrule
+Situation financière & Élèves sans aucun paiement ni impayé antérieur
+  enregistré : ceux dont on ne sait rien. \\
+Impayés antérieurs & Nombre d'ardoises saisies et montant total. \\
+Identité d'entrée & Matricule, année ou date d'entrée manquants : la commande
+  de renumérotation n'a pas été lancée. \\
+Sections sans tarif & Une section sans frais renseignés : tous ses élèves
+  doivent zéro franc, et rien ne le signale. \\
+Élèves sans section & Leur dû ne peut pas être calculé du tout. \\
+Équilibre du journal & Écart entre débits et crédits : une reprise ou un
+  recalage a mal tourné. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Quatre de ces six contrôles visent des anomalies \textbf{parfaitement
+silencieuses} : rien, dans l'usage quotidien, ne les révèle.
+
+\section{Deux partis pris}
+
+\begin{itemize}
+\item \textbf{Aucun contrôle n'est bloquant.} Trois niveaux seulement : correct,
+      information, à traiter. C'est une liste de courses, pas un barrage.
+\item \textbf{Le tableau ne corrige rien.} Il compte, et dit où aller.
+\end{itemize}
+
+% =========================== CHAPITRE 6 ===========================
+\chapter{Anomalies corrigées en chemin}
+
+Trois défauts ont été trouvés pendant les travaux. Aucun n'était visible dans
+l'usage courant.
+
+\section{Messages d'erreur avalés à l'enregistrement d'une fiche}
+
+L'enregistrement d'un élève affichait « impossible d'ajouter » quelle que soit
+la cause réelle du refus. Les nouveaux garde-fous auraient donc laissé l'école
+corriger à l'aveugle. Le motif exact du serveur est désormais remonté à
+l'utilisateur.
+
+\section{Date d'entrée perdue dès la deuxième année}
+
+Détaillé au chapitre~3 : la réinscription écrasait chaque année la date
+d'arrivée réelle. Le défaut existait depuis la mise en place du report des
+reliquats. Il est corrigé par le champ figé de date d'entrée.
+
+\section{Scolarité facturée à un enfant déjà parti}
+
+Découvert en écrivant les tests du lot 3. Une fiche de créance --- ouverte pour
+suivre l'ardoise d'un élève sorti --- réclamait \emph{aussi} la scolarité
+complète de l'année, soit 300 000 francs facturés à un enfant qui ne remettra
+pas les pieds dans l'établissement. Le total attendu de ces fiches est
+désormais nul.
+
+% =========================== CHAPITRE 7 ===========================
+\chapter{Qualité et couverture de tests}
+
+\section{Chiffres}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}Xr@{}}
+\toprule
+\textbf{Indicateur} & \textbf{Valeur} \\
+\midrule
+Commits & 4 \\
+Fichiers touchés & 31 (16 créés, 15 modifiés) \\
+Lignes & +3 276 / --57 \\
+Tests automatisés sur le périmètre & 123, tous verts \\
+\quad dont nouveaux & 82 \\
+Migrations de base de données & 3 \\
+Nouveaux points d'API & 5 \\
+Compilation de l'interface & sans erreur \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Répartition des nouveaux tests}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}Xr@{}}
+\toprule
+\textbf{Module} & \textbf{Tests} \\
+\midrule
+Impayé antérieur (écritures, auto-réparation, garde-fous, API) & 22 \\
+Matricule de promotion et renumérotation & 21 \\
+Parcours, anciens élèves, sortants endettés, PDF & 20 \\
+Santé de la migration & 15 \\
+Import Excel --- colonne impayé antérieur & 4 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Ce que les tests protègent en priorité}
+
+\begin{itemize}
+\item l'absence de produit (706) sur les reprises de dette --- sans quoi le
+      résultat de l'exercice serait gonflé ;
+\item l'équilibre du journal après chaque opération ;
+\item le caractère auto-réparateur des écritures, y compris après plusieurs
+      corrections successives et une remise à zéro ;
+\item la non-sommation des restes annuels dans un parcours ;
+\item l'isolation entre écoles : aucune opération ne doit franchir la frontière
+      d'un établissement ;
+\item la survie de l'identité d'entrée à la réinscription.
+\end{itemize}
+
+% =========================== CHAPITRE 8 ===========================
+\chapter{Plan de mise en production}
+\label{chap:deploiement}
+
+\section{État actuel}
+
+Les 4 commits sont sur une branche locale. \textbf{Rien n'a été poussé}, aucune
+demande de fusion n'est ouverte, aucune version n'est publiée.
+
+\section{Séquence proposée après validation}
+
+\begin{enumerate}
+\item \textbf{Pousser} la branche et ouvrir la demande de fusion vers la
+      branche principale.
+\item \textbf{Fusionner} après relecture.
+\item \textbf{Publier une version} par étiquette Git, ce qui déclenche la
+      chaîne d'intégration continue et la production de l'installeur Windows.
+\item \textbf{Déployer le cloud} : construction de l'interface en local, envoi
+      vers le serveur, purge du cache du réseau de diffusion.
+\item \textbf{Déployer chez Shoumoul} (installation locale Windows) selon la
+      procédure ci-dessous.
+\end{enumerate}
+
+\section{Procédure sur l'installation Shoumoul}
+
+\begin{enumerate}
+\item \textbf{Sauvegarde de la base} avant toute opération.
+\item \textbf{Appliquer les 3 migrations} de base de données.
+\item \textbf{Lancer la renumérotation des matricules en mode diagnostic} et
+      \emph{examiner la sortie} : la correspondance ancien~$\rightarrow$~nouveau
+      doit être cohérente, notamment pour les élèves présents depuis plusieurs
+      années.
+\item \textbf{Valider avec l'école}, puis relancer la commande avec l'option
+      d'écriture.
+\item \textbf{Ouvrir l'onglet « Santé de la migration »} : les contrôles
+      « identité d'entrée » et « équilibre du journal » doivent être au vert.
+\item \textbf{Saisir les impayés antérieurs} avec la direction de l'école, via
+      la grille de saisie en lot. Les montants doivent être validés par
+      l'établissement avant enregistrement.
+\end{enumerate}
+
+\alerte{Aucune de ces opérations ne modifie un exercice clôturé. Les écritures
+de reprise sont passées exclusivement dans l'exercice actif, conformément à la
+règle appliquée depuis la mise en place du report des reliquats.}
+
+\section{Retour arrière}
+
+Les trois migrations sont additives : elles ajoutent des colonnes sans en
+supprimer ni en transformer. Un retour à la version précédente du logiciel
+laisse les données intactes.
+
+La renumérotation des matricules, elle, écrit dans la base --- d'où la
+sauvegarde préalable et l'obligation de passer par le diagnostic. L'ancien
+matricule reste conservé dans tous les cas.
+
+% Garde la section entière sur une même page : sans cela la dernière puce
+% se retrouve seule sur une page blanche.
+\Needspace*{8\baselineskip}
+\section{Points à surveiller après déploiement}
+
+\begin{itemize}
+\item la lecture du dû global par l'école : la colonne principale a changé de
+      signification, elle inclut désormais l'ardoise ancienne ;
+\item les fiches de créance des élèves sortis, qui n'apparaissent plus dans la
+      liste des élèves --- comportement voulu, à expliquer à la direction ;
+\item le total des créances anciennes, nouvel indicateur de la base des
+      anciens élèves.
+\end{itemize}
+
+% =========================== ANNEXE ===========================
+\appendix
+\chapter{Inventaire technique}
+
+\section{Modules créés}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}>{\small\ttfamily}p{6.2cm}X@{}}
+\toprule
+\textbf{Fichier} & \textbf{Rôle} \\
+\midrule
+paiements/reliquat\_migration.py & Saisie et écriture de l'impayé
+  antérieur, synchronisation auto-réparatrice. \\
+eleves/matricules.py & Attribution du matricule de promotion. \\
+eleves/rebasage.py & Renumérotation de l'existant. \\
+eleves/parcours.py & Parcours d'un élève, base des anciens,
+  regroupement des fiches par enfant. \\
+eleves/sante\_migration.py & Diagnostic de complétude. \\
+commands/rebaser\_matricules.py & Commande d'administration. \\
+templates/pdf/parcours\_eleve.html & Dossier de scolarité PDF. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Nouveaux points d'API}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}>{\small\ttfamily}p{6.8cm}X@{}}
+\toprule
+\textbf{Route} & \textbf{Usage} \\
+\midrule
+GET/POST /eleves/impayes-anterieurs/ & Grille de saisie en lot. \\
+\texttt{GET /eleves/\{id\}/parcours/} & Scolarité complète. \\
+\texttt{GET /eleves/\{id\}/parcours-pdf/} & Dossier de scolarité. \\
+GET /eleves/anciens/ & Base historique des sortis. \\
+GET /eleves/sante-migration/ & Diagnostic de migration. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Migrations de base de données}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{2.2cm}X@{}}
+\toprule
+\textbf{Numéro} & \textbf{Contenu} \\
+\midrule
+\texttt{0021} & Note d'origine de l'impayé antérieur. \\
+\texttt{0022} & Année d'entrée, date d'entrée, ancien matricule. \\
+\texttt{0023} & Indicateur de fiche de créance. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Historique des commits}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}p{2.2cm}X@{}}
+\toprule
+\textbf{Référence} & \textbf{Objet} \\
+\midrule
+\texttt{6b740dd} & Impayé antérieur saisissable à la migration. \\
+\texttt{e1b2bd2} & Matricule de promotion ancré sur l'année et la date
+  d'entrée. \\
+\texttt{bd60d26} & Parcours scolaire, base des anciens élèves, sort des
+  sortants. \\
+\texttt{ec2c6a5} & Carte « Santé de la migration ». \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\vfill
+\noindent{\small\color{sagigray}Document généré le 27 juillet 2026 ---
+SAGI SCHOOL by HADY GESMAN}
+
+\end{document}

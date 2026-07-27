@@ -70,6 +70,12 @@ class EleveViewSet(viewsets.ModelViewSet):
             ),
         )
 
+        # Les fiches de créance ne sont pas des élèves : elles n'existent que
+        # pour porter au bilan l'ardoise d'un enfant déjà parti. Elles se
+        # consultent depuis « Anciens élèves » (?creances=1 pour les voir ici).
+        if self.request.query_params.get('creances') not in ('1', 'true', 'True'):
+            qs = qs.filter(fiche_creance=False)
+
         if section := self.request.query_params.get('section'):
             qs = qs.filter(section__nom=section)
         if exercice := self.request.query_params.get('exercice'):
@@ -97,18 +103,31 @@ class EleveViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Aucun exercice actif trouvé.")
 
-        # ID interne séquentiel
-        max_num = Eleve.objects.filter(tenant=tenant).aggregate(
-            m=Max('numero')
-        )['m'] or 0
-        numero = max_num + 1
+        # Numéro interne + matricule de promo (AAAA-CODE-NNNN) + entrée figée.
+        # La date d'entrée est celle saisie sur la fiche : un élève inscrit en
+        # cours d'année appartient bien à la promo de l'exercice, mais garde
+        # sa vraie date d'arrivée.
+        from .matricules import identite_nouvel_eleve
+        identite = identite_nouvel_eleve(
+            tenant, exercice,
+            date_entree=serializer.validated_data.get('date_inscription'))
 
-        # Matricule visible : AAAA-ETB-NNNNNN
-        annee    = str(timezone.now().year)
-        code_etb = (tenant.code_etablissement or 'ETB').upper()
-        matricule = f"{annee}-{code_etb}-{str(numero).zfill(6)}"
+        eleve = serializer.save(tenant=tenant, exercice=exercice, **identite)
+        self._sync_reliquat(serializer, eleve)
 
-        serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
+    def perform_update(self, serializer):
+        self._sync_reliquat(serializer, serializer.save())
+
+    @staticmethod
+    def _sync_reliquat(serializer, eleve):
+        """Recale l'à-nouveaux 411/890 quand l'impayé antérieur a été touché.
+
+        L'écriture est recalculée en entier par le service — corriger le montant
+        d'une fiche trois fois ne laisse qu'une seule pièce au journal."""
+        from apps.paiements.reliquat_migration import synchroniser_ecritures
+        touche = {'reliquat_anterieur', 'reliquat_note'} & set(serializer.initial_data or {})
+        if touche and eleve.exercice_id and not eleve.exercice.cloture:
+            synchroniser_ecritures(eleve)
 
     @action(detail=False, methods=['get'], url_path='import-template')
     def import_template(self, request):
@@ -159,19 +178,20 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Response(rapport)
 
         from apps.paiements.reprise import creer_paiement_reprise
+        from apps.paiements.reliquat_migration import definir_impaye_anterieur
+        from .matricules import Attributeur
         a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
-        annee    = str(timezone.now().year)
-        code_etb = (tenant.code_etablissement or 'ETB').upper()
         reprises, montant_reprise = 0, 0.0
+        impayes, montant_impaye = 0, 0.0
         with transaction.atomic():
-            numero = Eleve.objects.filter(tenant=tenant).aggregate(m=Max('numero'))['m'] or 0
+            attributeur = Attributeur(tenant, exercice)
             for ligne in a_creer:
                 data = ligne['data']
-                numero += 1
+                identite = attributeur.suivant(
+                    matricule=data.pop('matricule'),
+                    date_entree=data.get('date_inscription'))
                 eleve = Eleve.objects.create(
-                    tenant=tenant, exercice=exercice, numero=numero,
-                    matricule=data.pop('matricule') or f"{annee}-{code_etb}-{str(numero).zfill(6)}",
-                    **data,
+                    tenant=tenant, exercice=exercice, **identite, **data,
                 )
                 if ligne['montant_reprise'] > 0:
                     paiement = creer_paiement_reprise(
@@ -180,13 +200,23 @@ class EleveViewSet(viewsets.ModelViewSet):
                     if paiement:
                         reprises += 1
                         montant_reprise += float(paiement.total)
+                # Ardoise des années d'avant : à-nouveaux 411/890, sans 706 ni
+                # trésorerie — indépendante de la reprise ci-dessus.
+                if ligne.get('impaye_anterieur', 0) > 0:
+                    definir_impaye_anterieur(eleve, ligne['impaye_anterieur'],
+                                             note=ligne.get('origine_impaye') or '')
+                    impayes += 1
+                    montant_impaye += ligne['impaye_anterieur']
         log_audit(request, 'IMPORT', 'Eleve',
                   description=f"Import Excel : {len(a_creer)} élèves créés, "
                               f"{reprises} reprises de soldes ({montant_reprise:,.0f} FCFA), "
+                              f"{impayes} impayés antérieurs ({montant_impaye:,.0f} FCFA), "
                               f"{rapport['resume']['doublons']} doublons ignorés, "
                               f"{rapport['resume']['erreurs']} lignes en erreur")
         return Response({'resume': rapport['resume'], 'crees': len(a_creer),
-                         'reprises': reprises, 'montant_reprise': montant_reprise})
+                         'reprises': reprises, 'montant_reprise': montant_reprise,
+                         'impayes_anterieurs': impayes,
+                         'montant_impaye_anterieur': round(montant_impaye, 2)})
 
     @action(detail=True, methods=['get', 'post'], url_path='corriger-reprise')
     def corriger_reprise(self, request, pk=None):
@@ -243,6 +273,132 @@ class EleveViewSet(viewsets.ModelViewSet):
                   f"Correction du déjà payé (reprise) — {eleve.nom_complet}")
         return Response({'success': True, 'reste_a_payer': float(eleve.reste_a_payer)})
 
+    @action(detail=False, methods=['get', 'post'], url_path='impayes-anterieurs')
+    def impayes_anterieurs(self, request):
+        """Saisie en lot des impayés antérieurs — écran de migration.
+
+        GET  : la liste des élèves de l'exercice actif avec leur impayé
+               antérieur actuel, allégée (pas d'annotation de paiements).
+        POST : {"lignes": [{"eleve_id": ..., "montant": ..., "note": "..."}]}
+               Applique ligne par ligne et rend le détail des refus. Une ligne
+               en erreur n'empêche pas les autres de passer : sur 300 élèves
+               saisis à la main, tout annuler pour une faute de frappe serait
+               le meilleur moyen de décourager l'école.
+        """
+        from django.db.models import Sum as _Sum
+        from apps.paiements.reliquat_migration import (definir_impaye_anterieur,
+                                                       resume_impayes_anterieurs)
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
+
+        if request.method == 'GET':
+            qs = Eleve.objects.filter(
+                tenant=tenant, exercice=exercice
+            ).select_related('section').annotate(
+                reliquat_paye_sql=Coalesce(
+                    _Sum('paiements__montant_reliquat',
+                         filter=Q(paiements__statut='ACTIF')),
+                    Value(0), output_field=DecimalField()),
+            ).order_by('section__ordre', 'nom_complet')
+            return Response({
+                'exercice': exercice.annee_scolaire,
+                'resume':   resume_impayes_anterieurs(tenant, exercice),
+                'lignes': [{
+                    'eleve_id':    str(e.id),
+                    'matricule':   e.matricule or '',
+                    'nom_complet': e.nom_complet,
+                    'section':     e.section.nom if e.section else '',
+                    'montant':     round(float(e.reliquat_anterieur or 0), 2),
+                    'deja_paye':   e.reliquat_paye,
+                    'restant':     e.reliquat_restant,
+                    'note':        e.reliquat_note,
+                } for e in qs],
+            })
+
+        lignes = request.data.get('lignes') or []
+        if not isinstance(lignes, list):
+            return Response({'error': "« lignes » doit être une liste."}, status=400)
+
+        eleves = {str(e.id): e for e in Eleve.objects.filter(
+            tenant=tenant, exercice=exercice,
+            id__in=[l.get('eleve_id') for l in lignes if l.get('eleve_id')])}
+
+        appliques, refuses, total = [], [], 0.0
+        for ligne in lignes:
+            eleve = eleves.get(str(ligne.get('eleve_id')))
+            if not eleve:
+                refuses.append({'eleve_id': ligne.get('eleve_id'),
+                                'motif': 'Élève introuvable sur cet exercice'})
+                continue
+            try:
+                res = definir_impaye_anterieur(eleve, ligne.get('montant'),
+                                               note=ligne.get('note'))
+            except (ValueError, TypeError) as e:
+                refuses.append({'eleve_id': str(eleve.id),
+                                'nom_complet': eleve.nom_complet, 'motif': str(e)})
+                continue
+            total += res['montant']
+            appliques.append({'eleve_id': str(eleve.id),
+                              'nom_complet': eleve.nom_complet, **res})
+
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Eleve',
+                  description=f"Impayés antérieurs : {len(appliques)} élève(s) "
+                              f"mis à jour ({total:,.0f} FCFA), {len(refuses)} refusé(s)")
+        return Response({'appliques': appliques, 'refuses': refuses,
+                         'nb_appliques': len(appliques), 'nb_refuses': len(refuses),
+                         'resume': resume_impayes_anterieurs(tenant, exercice)})
+
+    @action(detail=True, methods=['get'], url_path='parcours')
+    def parcours(self, request, pk=None):
+        """Scolarité complète de l'enfant, année par année, depuis son entrée.
+
+        Rassemble les fiches éparpillées sur les exercices — c'est la lecture
+        continue qui manquait pour suivre un élève qui reste plusieurs années
+        et pour rouvrir le dossier d'un diplômé longtemps après son départ.
+        """
+        from .parcours import construire_parcours
+        # Lecture directe et non self.get_object() : le queryset de la liste
+        # écarte les fiches de créance, or c'est justement depuis « Anciens
+        # élèves » qu'on ouvre le parcours d'un enfant parti en devant.
+        eleve = Eleve.objects.filter(tenant=get_tenant(request), pk=pk).first()
+        if not eleve:
+            return Response({'error': 'Élève introuvable.'}, status=404)
+        return Response(construire_parcours(eleve))
+
+    @action(detail=False, methods=['get'], url_path='sante-migration')
+    def sante_migration(self, request):
+        """État de complétude des données reprises — ce qui reste à compléter.
+
+        Une migration se termine progressivement : sans ce tableau, les trous
+        se découvrent au moment d'éditer un bilan, six mois plus tard."""
+        from .sante_migration import diagnostiquer
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
+        return Response(diagnostiquer(tenant, exercice))
+
+    @action(detail=False, methods=['get'], url_path='anciens')
+    def anciens(self, request):
+        """Base historique des élèves sortis (diplômés, transférés, abandons).
+
+        Indépendante de l'exercice actif : un diplômé de 2019 s'y retrouve
+        comme un transféré de l'an dernier. Le statut retenu est celui de la
+        dernière fiche — un enfant réinscrit après un abandon n'y est plus.
+        """
+        from .parcours import anciens_eleves
+        return Response(anciens_eleves(
+            get_tenant(request),
+            recherche=request.query_params.get('q', ''),
+            statut=request.query_params.get('statut', '')))
+
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):
         """Recherche ultra-légère pour l'autocomplétion — pas d'annotation paiements.
@@ -264,6 +420,9 @@ class EleveViewSet(viewsets.ModelViewSet):
         qs = qs.filter(
             _Q(nom_complet__icontains=q) |
             _Q(matricule__icontains=q)   |
+            # Après un rebasage, l'école cherche encore par l'ancien numéro
+            # (carnets papier, anciens reçus).
+            _Q(matricule_ancien__icontains=q) |
             _Q(nom_pere__icontains=q)    |
             _Q(telephone_pere__icontains=q)
         )[:15]
@@ -1169,4 +1328,45 @@ class FicheElevePDFView(APIView):
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="fiche_{safe_name}.pdf"'
+        return response
+
+
+class ParcoursElevePDFView(APIView):
+    """Dossier de scolarité : toutes les années de l'enfant sur une page.
+
+    C'est le document qu'on remet à une famille qui part, ou qu'on ressort
+    des archives pour un ancien élève — d'où la lecture continue plutôt
+    qu'une photo de l'année en cours."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, eleve_id):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        from .parcours import construire_parcours
+
+        tenant = get_tenant(request)
+        eleve = Eleve.objects.filter(tenant=tenant, id=eleve_id).first()
+        if not eleve:
+            return HttpResponse('Élève introuvable', status=404)
+
+        html_str = render_to_string('pdf/parcours_eleve.html', {
+            'tenant':       tenant,
+            'p':            construire_parcours(eleve),
+            'date_edition': timezone.now(),
+        })
+        buf    = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération du parcours PDF.', status=500)
+
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="parcours_{safe_name}.pdf"'
         return response

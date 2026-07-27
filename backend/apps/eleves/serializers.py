@@ -54,6 +54,12 @@ class EleveSerializer(serializers.ModelSerializer):
             # (uniq_matricule_par_tenant) ; or le matricule est généré par
             # perform_create — sans ceci, toute création d'élève renvoie 400.
             'matricule': {'required': False, 'allow_null': True, 'allow_blank': True},
+            # Identité d'entrée : attribuée par le système (voir matricules.py)
+            # et recopiée à chaque réinscription. Seule la date reste corrigeable
+            # — une école qui migre découvre parfois la vraie date d'arrivée
+            # après coup ; la promo, elle, découle de l'exercice d'entrée.
+            'annee_entree':     {'read_only': True},
+            'matricule_ancien': {'read_only': True},
         }
 
     def validate(self, attrs):
@@ -66,7 +72,34 @@ class EleveSerializer(serializers.ModelSerializer):
                 {'nb_mois_passager': 'Nombre de mois requis pour un ndongo passager.'})
         if regime == 'EXERCICE':
             attrs['nb_mois_passager'] = None
+        self._valider_reliquat(attrs)
         return attrs
+
+    def _valider_reliquat(self, attrs):
+        """L'impayé antérieur porte une écriture de bilan (411/890) : on refuse
+        ici ce que la comptabilité ne saurait pas représenter proprement."""
+        if 'reliquat_anterieur' not in attrs:
+            return
+        montant = float(attrs['reliquat_anterieur'] or 0)
+        if montant < 0:
+            raise serializers.ValidationError(
+                {'reliquat_anterieur': "L'impayé antérieur ne peut pas être négatif."})
+        if not self.instance:
+            return
+        exercice = self.instance.exercice
+        if exercice and exercice.cloture:
+            raise serializers.ValidationError(
+                {'reliquat_anterieur':
+                 f"L'exercice {exercice.annee_scolaire} est clôturé : "
+                 "l'impayé antérieur ne peut plus y être modifié."})
+        # Descendre sous ce qui a déjà été encaissé afficherait un trop-perçu
+        # fantôme sur la fiche — on annule d'abord les encaissements.
+        deja = self.instance.reliquat_paye
+        if montant and montant < deja:
+            raise serializers.ValidationError(
+                {'reliquat_anterieur':
+                 f"Montant inférieur aux {deja:,.0f} FCFA déjà encaissés sur cet "
+                 "impayé antérieur. Annulez d'abord les encaissements concernés."})
 
     def get_classe_nom(self, obj):
         return obj.classe.nom if obj.classe_id else ''

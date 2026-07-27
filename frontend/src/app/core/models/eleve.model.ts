@@ -25,6 +25,13 @@ export interface Eleve {
   id: string;
   numero: number;
   matricule: string;
+  // Matricule d'avant le rebasage au format promo — les carnets papier de
+  // l'école restent exploitables.
+  matricule_ancien: string;
+  // Entrée dans l'établissement, figée à vie et recopiée à chaque
+  // réinscription (date_inscription, elle, est repositionnée chaque année).
+  annee_entree: string;
+  date_entree: string | null;
   nom_complet: string;
   genre: 'G' | 'F';
   section: string;
@@ -72,13 +79,88 @@ export interface Eleve {
   total_paye: number;
   reste_a_payer: number;
   niveau_alerte: NiveauAlerte;
-  // Dette reportée de l'exercice précédent. Suivie à part du dû de l'année :
-  // le niveau d'alerte ne juge que l'année en cours.
+  // Dette des années antérieures — reportée automatiquement d'un exercice à
+  // l'autre, ou saisie à la migration. Suivie à part du dû de l'année : le
+  // niveau d'alerte ne juge que l'année en cours.
   reliquat_anterieur: number;
+  reliquat_note: string;
   reliquat_paye: number;
   reliquat_restant: number;
   reliquat_origine_libelle: string;
   reste_a_payer_global: number;
+}
+
+/** Une ligne de la grille de saisie des impayés antérieurs (migration). */
+export interface LigneImpayeAnterieur {
+  eleve_id: string;
+  matricule: string;
+  nom_complet: string;
+  section: string;
+  montant: number;
+  deja_paye: number;
+  restant: number;
+  note: string;
+}
+
+/** Une année de scolarité dans le parcours d'un élève. */
+export interface AnneeParcours {
+  eleve_id: string;
+  annee: string;
+  section: string;
+  classe: string;
+  statut: string;
+  statut_libelle: string;
+  fiche_creance: boolean;
+  total_attendu: number;
+  total_paye: number;
+  reste: number;
+  reliquat: number;
+  reliquat_restant: number;
+  du_global: number;
+}
+
+export interface ParcoursEleve {
+  eleve_id: string;
+  nom_complet: string;
+  matricule: string;
+  matricule_ancien: string;
+  annee_entree: string;
+  date_entree: string | null;
+  annee_sortie: string;
+  statut: string;
+  statut_libelle: string;
+  est_sorti: boolean;
+  section: string;
+  classe: string;
+  nb_annees: number;
+  annees: AnneeParcours[];
+  total_attendu: number;
+  total_paye: number;
+  /** Dette d'aujourd'hui — surtout pas la somme des restes annuels. */
+  du_actuel: number;
+}
+
+export interface AncienEleve {
+  eleve_id: string;
+  matricule: string;
+  matricule_ancien: string;
+  nom_complet: string;
+  genre: string;
+  annee_entree: string;
+  date_entree: string | null;
+  annee_sortie: string;
+  statut: string;
+  statut_libelle: string;
+  derniere_classe: string;
+  nb_annees: number;
+  total_paye: number;
+  solde_du: number;
+}
+
+export interface ResumeImpayesAnterieurs {
+  exercice: string;
+  nb_eleves: number;
+  montant_total: number;
 }
 
 export interface PriseEnChargeStats {

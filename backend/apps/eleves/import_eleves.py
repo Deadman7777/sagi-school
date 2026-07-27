@@ -41,6 +41,10 @@ COLONNES = {
     # + le prorata + le mois en cours) — prioritaire sur les colonnes détaillées
     'a_jour':           'À jour ce mois (O/N)',
     'dette_actuelle':   'Dette actuelle (montant)',
+    # Ardoise des années d'AVANT (indépendante de l'année en cours, cumulable
+    # avec n'importe laquelle des colonnes ci-dessus) — reliquat_migration
+    'impaye_anterieur': 'Impayé antérieur (montant)',
+    'origine_impaye':   'Origine impayé antérieur',
     # Reprise de soldes détaillée (migration) — voir apps.paiements.reprise
     'rep_inscription':  'Inscription déjà payée (O/N)',
     'rep_mensualites':  'Mensualités déjà payées (nombre)',
@@ -92,6 +96,18 @@ _SYNONYMES = {
     'dette actuelle':            'dette_actuelle',
     'dette':                     'dette_actuelle',
     'dette en cours':            'dette_actuelle',
+    'impaye anterieur':          'impaye_anterieur',
+    'impayes anterieurs':        'impaye_anterieur',
+    'dette anterieure':          'impaye_anterieur',
+    'ancienne dette':            'impaye_anterieur',
+    'reliquat':                  'impaye_anterieur',
+    'reliquat anterieur':        'impaye_anterieur',
+    'arriere':                   'impaye_anterieur',
+    'arrieres':                  'impaye_anterieur',
+    'ardoise':                   'impaye_anterieur',
+    'origine impaye anterieur':  'origine_impaye',
+    'origine impaye':            'origine_impaye',
+    'annee impaye':              'origine_impaye',
     'inscription deja payee':    'rep_inscription',
     'inscription payee':         'rep_inscription',
     'mensualites deja payees':   'rep_mensualites',
@@ -331,6 +347,16 @@ def generer_template(tenant):
         ('Dette actuelle (montant)', "Montant exactement dû à ce jour, ex. 30000. Le payé est "
          "reconstitué automatiquement. Prioritaire sur les colonnes détaillées ci-dessous."),
         ('', ''),
+        ("Impayé des années d'AVANT (optionnel)", "Ce que la famille devait déjà en arrivant "
+         "dans SAGI SCHOOL, toutes années confondues."),
+        ('Impayé antérieur (montant)', "Montant global, ex. 45000. Aucun détail à fournir : "
+         "un seul chiffre suffit. Il s'ajoute au dû de l'année en cours et se règle à part."),
+        ('Origine impayé antérieur', "Optionnel. Texte libre : « 2024-2025 », « ardoise cahier », "
+         "« ancien logiciel »… Sert seulement à vous souvenir d'où vient la dette."),
+        ('', "Cette colonne est INDÉPENDANTE des précédentes : vous pouvez la remplir seule, "
+         "ou en plus de « À jour » / « Dette actuelle ». Et vous pouvez la laisser vide "
+         "aujourd'hui et la saisir plus tard, élève par élève, sans refaire l'import."),
+        ('', ''),
         ('Reprise détaillée (optionnelle)', 'À la place, si vous préférez détailler ce qui a déjà'
          ' été encaissé AVANT SAGI SCHOOL. Ignorée si « À jour » / « Dette actuelle » est renseigné.'),
         ('Inscription / Uniforme / Fournitures déjà payés', 'O si déjà réglé, N ou vide sinon.'),
@@ -543,6 +569,18 @@ def analyser(fichier, tenant, exercice):
                 + (section.frais_fournitures if rep_fournitures else 0)
             )
 
+        # ── Ardoise des années d'avant ───────────────────────────────────
+        # Totalement indépendante de la situation de l'année en cours : une
+        # école peut ne remplir QUE cette colonne, ou la cumuler avec « Dette
+        # actuelle ». Le montant n'a pas à être justifié poste par poste —
+        # c'est précisément ce qu'on n'obtient pas sur le terrain.
+        # _montant ramène un négatif à 0 avec un avertissement : une faute de
+        # frappe n'a pas à faire échouer la ligne entière (l'élève, lui, est bon).
+        impaye_ant, wa = _montant(brut.get('impaye_anterieur'))
+        if wa:
+            avert.append(f'Impayé antérieur : {wa}')
+        origine_impaye = _texte(brut.get('origine_impaye'))[:120]
+
         statut = 'ERREUR' if erreurs else 'OK'
         cle_doublon = (_norm(nom), date_naiss)
         if statut == 'OK':
@@ -601,15 +639,20 @@ def analyser(fichier, tenant, exercice):
             'avertissements': avert,
             'montant_reprise': montant_reprise,
             'reprise': reprise_payload,
+            'impaye_anterieur': round(impaye_ant, 2),
+            'origine_impaye':   origine_impaye,
             'data': data,
         })
 
+    ok = [l for l in lignes if l['statut'] == 'OK']
     resume = {
         'total':    len(lignes),
-        'ok':       sum(1 for l in lignes if l['statut'] == 'OK'),
+        'ok':       len(ok),
         'doublons': sum(1 for l in lignes if l['statut'] == 'DOUBLON'),
         'erreurs':  sum(1 for l in lignes if l['statut'] == 'ERREUR'),
-        'reprises': sum(1 for l in lignes if l['statut'] == 'OK' and l['montant_reprise'] > 0),
-        'montant_reprise': sum(l['montant_reprise'] for l in lignes if l['statut'] == 'OK'),
+        'reprises': sum(1 for l in ok if l['montant_reprise'] > 0),
+        'montant_reprise': sum(l['montant_reprise'] for l in ok),
+        'impayes_anterieurs':        sum(1 for l in ok if l['impaye_anterieur'] > 0),
+        'montant_impaye_anterieur':  round(sum(l['impaye_anterieur'] for l in ok), 2),
     }
     return {'resume': resume, 'lignes': lignes}
