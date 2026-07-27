@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
-import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats } from '../models/eleve.model';
+import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
+         LigneImpayeAnterieur, ResumeImpayesAnterieurs } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -10,17 +11,22 @@ export interface LigneImport {
   erreurs: string[];
   avertissements: string[];
   montant_reprise: number;
+  impaye_anterieur: number;
 }
 
 export interface RapportImport {
   resume: {
     total: number; ok: number; doublons: number; erreurs: number;
     reprises: number; montant_reprise: number;
+    impayes_anterieurs: number; montant_impaye_anterieur: number;
   };
   lignes: LigneImport[];
+  // Renvoyés uniquement par l'import confirmé (confirmer=1), pas par l'analyse.
   crees?: number;
   reprises?: number;
   montant_reprise?: number;
+  impayes_anterieurs?: number;
+  montant_impaye_anterieur?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -98,6 +104,19 @@ export class ElevesService {
 
   fichePDF(eleveId: string) {
     return this.api.getBlob(`/eleves/${eleveId}/fiche-pdf/`);
+  }
+
+  // Impayés antérieurs (migration) — saisie en lot d'un montant par élève.
+  // Le backend passe l'à-nouveaux 411/890 et refuse ligne par ligne.
+  getImpayesAnterieurs() {
+    return this.api.get<{ exercice: string; resume: ResumeImpayesAnterieurs;
+                          lignes: LigneImpayeAnterieur[] }>('/eleves/impayes-anterieurs/');
+  }
+  enregistrerImpayesAnterieurs(lignes: { eleve_id: string; montant: number; note?: string }[]) {
+    return this.api.post<{ nb_appliques: number; nb_refuses: number;
+                           refuses: { nom_complet?: string; motif: string }[];
+                           resume: ResumeImpayesAnterieurs }>(
+      '/eleves/impayes-anterieurs/', { lignes });
   }
 
   getSections() {

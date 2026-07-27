@@ -108,7 +108,23 @@ class EleveViewSet(viewsets.ModelViewSet):
         code_etb = (tenant.code_etablissement or 'ETB').upper()
         matricule = f"{annee}-{code_etb}-{str(numero).zfill(6)}"
 
-        serializer.save(tenant=tenant, exercice=exercice, numero=numero, matricule=matricule)
+        eleve = serializer.save(tenant=tenant, exercice=exercice, numero=numero,
+                                matricule=matricule)
+        self._sync_reliquat(serializer, eleve)
+
+    def perform_update(self, serializer):
+        self._sync_reliquat(serializer, serializer.save())
+
+    @staticmethod
+    def _sync_reliquat(serializer, eleve):
+        """Recale l'à-nouveaux 411/890 quand l'impayé antérieur a été touché.
+
+        L'écriture est recalculée en entier par le service — corriger le montant
+        d'une fiche trois fois ne laisse qu'une seule pièce au journal."""
+        from apps.paiements.reliquat_migration import synchroniser_ecritures
+        touche = {'reliquat_anterieur', 'reliquat_note'} & set(serializer.initial_data or {})
+        if touche and eleve.exercice_id and not eleve.exercice.cloture:
+            synchroniser_ecritures(eleve)
 
     @action(detail=False, methods=['get'], url_path='import-template')
     def import_template(self, request):
@@ -159,10 +175,12 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Response(rapport)
 
         from apps.paiements.reprise import creer_paiement_reprise
+        from apps.paiements.reliquat_migration import definir_impaye_anterieur
         a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
         annee    = str(timezone.now().year)
         code_etb = (tenant.code_etablissement or 'ETB').upper()
         reprises, montant_reprise = 0, 0.0
+        impayes, montant_impaye = 0, 0.0
         with transaction.atomic():
             numero = Eleve.objects.filter(tenant=tenant).aggregate(m=Max('numero'))['m'] or 0
             for ligne in a_creer:
@@ -180,13 +198,23 @@ class EleveViewSet(viewsets.ModelViewSet):
                     if paiement:
                         reprises += 1
                         montant_reprise += float(paiement.total)
+                # Ardoise des années d'avant : à-nouveaux 411/890, sans 706 ni
+                # trésorerie — indépendante de la reprise ci-dessus.
+                if ligne.get('impaye_anterieur', 0) > 0:
+                    definir_impaye_anterieur(eleve, ligne['impaye_anterieur'],
+                                             note=ligne.get('origine_impaye') or '')
+                    impayes += 1
+                    montant_impaye += ligne['impaye_anterieur']
         log_audit(request, 'IMPORT', 'Eleve',
                   description=f"Import Excel : {len(a_creer)} élèves créés, "
                               f"{reprises} reprises de soldes ({montant_reprise:,.0f} FCFA), "
+                              f"{impayes} impayés antérieurs ({montant_impaye:,.0f} FCFA), "
                               f"{rapport['resume']['doublons']} doublons ignorés, "
                               f"{rapport['resume']['erreurs']} lignes en erreur")
         return Response({'resume': rapport['resume'], 'crees': len(a_creer),
-                         'reprises': reprises, 'montant_reprise': montant_reprise})
+                         'reprises': reprises, 'montant_reprise': montant_reprise,
+                         'impayes_anterieurs': impayes,
+                         'montant_impaye_anterieur': round(montant_impaye, 2)})
 
     @action(detail=True, methods=['get', 'post'], url_path='corriger-reprise')
     def corriger_reprise(self, request, pk=None):
@@ -242,6 +270,86 @@ class EleveViewSet(viewsets.ModelViewSet):
         log_audit(request, 'UPDATE', 'Eleve', str(eleve.id),
                   f"Correction du déjà payé (reprise) — {eleve.nom_complet}")
         return Response({'success': True, 'reste_a_payer': float(eleve.reste_a_payer)})
+
+    @action(detail=False, methods=['get', 'post'], url_path='impayes-anterieurs')
+    def impayes_anterieurs(self, request):
+        """Saisie en lot des impayés antérieurs — écran de migration.
+
+        GET  : la liste des élèves de l'exercice actif avec leur impayé
+               antérieur actuel, allégée (pas d'annotation de paiements).
+        POST : {"lignes": [{"eleve_id": ..., "montant": ..., "note": "..."}]}
+               Applique ligne par ligne et rend le détail des refus. Une ligne
+               en erreur n'empêche pas les autres de passer : sur 300 élèves
+               saisis à la main, tout annuler pour une faute de frappe serait
+               le meilleur moyen de décourager l'école.
+        """
+        from django.db.models import Sum as _Sum
+        from apps.paiements.reliquat_migration import (definir_impaye_anterieur,
+                                                       resume_impayes_anterieurs)
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
+
+        if request.method == 'GET':
+            qs = Eleve.objects.filter(
+                tenant=tenant, exercice=exercice
+            ).select_related('section').annotate(
+                reliquat_paye_sql=Coalesce(
+                    _Sum('paiements__montant_reliquat',
+                         filter=Q(paiements__statut='ACTIF')),
+                    Value(0), output_field=DecimalField()),
+            ).order_by('section__ordre', 'nom_complet')
+            return Response({
+                'exercice': exercice.annee_scolaire,
+                'resume':   resume_impayes_anterieurs(tenant, exercice),
+                'lignes': [{
+                    'eleve_id':    str(e.id),
+                    'matricule':   e.matricule or '',
+                    'nom_complet': e.nom_complet,
+                    'section':     e.section.nom if e.section else '',
+                    'montant':     round(float(e.reliquat_anterieur or 0), 2),
+                    'deja_paye':   e.reliquat_paye,
+                    'restant':     e.reliquat_restant,
+                    'note':        e.reliquat_note,
+                } for e in qs],
+            })
+
+        lignes = request.data.get('lignes') or []
+        if not isinstance(lignes, list):
+            return Response({'error': "« lignes » doit être une liste."}, status=400)
+
+        eleves = {str(e.id): e for e in Eleve.objects.filter(
+            tenant=tenant, exercice=exercice,
+            id__in=[l.get('eleve_id') for l in lignes if l.get('eleve_id')])}
+
+        appliques, refuses, total = [], [], 0.0
+        for ligne in lignes:
+            eleve = eleves.get(str(ligne.get('eleve_id')))
+            if not eleve:
+                refuses.append({'eleve_id': ligne.get('eleve_id'),
+                                'motif': 'Élève introuvable sur cet exercice'})
+                continue
+            try:
+                res = definir_impaye_anterieur(eleve, ligne.get('montant'),
+                                               note=ligne.get('note'))
+            except (ValueError, TypeError) as e:
+                refuses.append({'eleve_id': str(eleve.id),
+                                'nom_complet': eleve.nom_complet, 'motif': str(e)})
+                continue
+            total += res['montant']
+            appliques.append({'eleve_id': str(eleve.id),
+                              'nom_complet': eleve.nom_complet, **res})
+
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Eleve',
+                  description=f"Impayés antérieurs : {len(appliques)} élève(s) "
+                              f"mis à jour ({total:,.0f} FCFA), {len(refuses)} refusé(s)")
+        return Response({'appliques': appliques, 'refuses': refuses,
+                         'nb_appliques': len(appliques), 'nb_refuses': len(refuses),
+                         'resume': resume_impayes_anterieurs(tenant, exercice)})
 
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):

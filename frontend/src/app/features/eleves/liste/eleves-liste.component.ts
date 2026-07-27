@@ -4,7 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service } from '../../../core/models/eleve.model';
+import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service,
+         LigneImpayeAnterieur } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -18,6 +19,9 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { TooltipModule } from 'primeng/tooltip';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
+
+/** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
+type LigneImpayeEditable = LigneImpayeAnterieur & { montant0: number; note0: string };
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -54,6 +58,10 @@ interface PecForm {
                   severity="info" size="small"
                   [pTooltip]="'eleves.import_titre' | translate" [disabled]="estAnneeCloturee()"
                   (onClick)="dialogImportVisible = true" />
+        <p-button icon="pi pi-history" [label]="'eleves.saisie_impayes' | translate"
+                  severity="warn" size="small"
+                  [pTooltip]="'eleves.saisie_impayes_aide' | translate" [disabled]="estAnneeCloturee()"
+                  (onClick)="ouvrirSaisieImpayes()" />
         <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success"
                   pTooltip="Inscrire un nouvel élève" [disabled]="estAnneeCloturee()"
                   (onClick)="ouvrirDialog()" />
@@ -157,7 +165,7 @@ interface PecForm {
               <th>Statut</th>
               <th>{{ 'eleves.total_attendu' | translate }}</th>
               <th>{{ 'eleves.paye'          | translate }}</th>
-              <th>{{ 'eleves.reste'         | translate }}</th>
+              <th>{{ 'eleves.du_global'     | translate }}</th>
               <th>{{ 'eleves.reliquat'      | translate }}</th>
               <th>{{ 'eleves.alerte'        | translate }}</th>
               <th>{{ 'eleves.actions'       | translate }}</th>
@@ -178,7 +186,12 @@ interface PecForm {
               </td>
               <td class="mono">{{ eleve.total_attendu | number }} FCFA</td>
               <td class="mono success">{{ eleve.total_paye | number }} FCFA</td>
-              <td class="mono" [class.danger]="eleve.reste_a_payer > 0">{{ eleve.reste_a_payer | number }} FCFA</td>
+              <!-- Ce que la famille doit RÉELLEMENT : année en cours + ardoise
+                   des années d'avant. La décomposition est au survol. -->
+              <td class="mono" [class.danger]="eleve.reste_a_payer_global > 0"
+                  [pTooltip]="detailDu(eleve)">
+                {{ eleve.reste_a_payer_global | number }} FCFA
+              </td>
               <!-- Dette d'une année antérieure : canal de suivi distinct de
                    l'alerte, qui ne juge que l'année en cours. -->
               <td>
@@ -432,11 +445,25 @@ interface PecForm {
             }
             <div class="fiche-row"><span>Total attendu</span><strong class="mono">{{ e.total_attendu | number }} FCFA</strong></div>
             <div class="fiche-row"><span>Total payé</span><strong class="mono success">{{ e.total_paye | number }} FCFA</strong></div>
-            <div class="fiche-row"><span>Reste à payer</span>
+            <div class="fiche-row"><span>Reste à payer (année en cours)</span>
               <strong class="mono" [class.danger]="e.reste_a_payer > 0" [class.success]="e.reste_a_payer <= 0">
                 {{ e.reste_a_payer | number }} FCFA
               </strong>
             </div>
+            @if (e.reliquat_anterieur > 0) {
+              <div class="fiche-row">
+                <span>{{ 'eleves.impaye_anterieur' | translate }}{{ e.reliquat_origine_libelle ? ' (' + e.reliquat_origine_libelle + ')' : '' }}</span>
+                <strong class="mono">{{ e.reliquat_anterieur | number }} FCFA</strong></div>
+              @if (e.reliquat_paye > 0) {
+                <div class="fiche-row"><span>Dont déjà réglé</span>
+                  <strong class="mono success">- {{ e.reliquat_paye | number }} FCFA</strong></div>
+              }
+              <div class="fiche-row"><span>{{ 'eleves.du_global' | translate }}</span>
+                <strong class="mono" [class.danger]="e.reste_a_payer_global > 0"
+                        [class.success]="e.reste_a_payer_global <= 0">
+                  {{ e.reste_a_payer_global | number }} FCFA
+                </strong></div>
+            }
             <div class="fiche-row"><span>Alerte</span>
               <p-tag [value]="alerteLabel(e.niveau_alerte)" [severity]="alerteSeverity(e.niveau_alerte)" /></div>
           </div>
@@ -708,10 +735,74 @@ interface PecForm {
                          optionLabel="nom" optionValue="id" display="chip"
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
         </div>
+        <!-- Ardoise des années d'avant : montant global, sans justification par
+             poste — c'est ce que les écoles savent donner à la migration. -->
+        <div class="form-group">
+          <label>{{ 'eleves.impaye_anterieur' | translate }}</label>
+          <p-inputNumber [(ngModel)]="nouvelEleve.reliquat_anterieur" [min]="0" [step]="1000"
+                         suffix=" FCFA" styleClass="w-full" inputStyleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.impaye_origine' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.reliquat_note" class="w-full" maxlength="120"
+                 [placeholder]="'eleves.impaye_origine_ph' | translate" />
+        </div>
+        <div class="form-group full" style="margin-top:-4px">
+          <small style="color:var(--text-3);font-size:11px">{{ 'eleves.impaye_anterieur_aide' | translate }}</small>
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
         <p-button [label]="'common.enregistrer'| translate" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- ═══════════ SAISIE EN LOT DES IMPAYÉS ANTÉRIEURS (migration) ═══════════ -->
+    <p-dialog [header]="'eleves.saisie_impayes_titre' | translate" [(visible)]="dialogImpayesVisible"
+              [modal]="true" [style]="{width:'900px'}" [draggable]="false">
+      <p style="font-size:12px;color:var(--text-2);margin:0 0 12px">
+        {{ 'eleves.saisie_impayes_aide' | translate }}
+      </p>
+      <div class="filters-bar" style="margin-bottom:10px">
+        <input pInputText [(ngModel)]="rechercheImpaye" class="search-input"
+               [placeholder]="'eleves.rechercher' | translate" />
+        <span class="impayes-total">
+          {{ 'eleves.saisie_impayes_total' | translate:{
+               n: lignesImpayesSaisies(), montant: (totalImpayesSaisi() | number:'1.0-0') } }}
+        </span>
+      </div>
+      <p-table [value]="lignesImpayesFiltrees()" [loading]="chargementImpayes()"
+               styleClass="p-datatable-sm" [scrollable]="true" scrollHeight="46vh">
+        <ng-template pTemplate="header">
+          <tr>
+            <th style="width:130px">{{ 'eleves.matricule' | translate }}</th>
+            <th>{{ 'eleves.nom_complet' | translate }}</th>
+            <th style="width:120px">{{ 'eleves.section' | translate }}</th>
+            <th style="width:150px">{{ 'eleves.impaye_anterieur' | translate }}</th>
+            <th style="width:200px">{{ 'eleves.impaye_origine' | translate }}</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-l>
+          <tr>
+            <td class="mono" style="font-size:11px;color:#00d4aa">{{ l.matricule || '—' }}</td>
+            <td class="bold">{{ l.nom_complet }}</td>
+            <td>{{ l.section }}</td>
+            <td>
+              <p-inputNumber [(ngModel)]="l.montant" [min]="0" [step]="1000"
+                             styleClass="w-full" inputStyleClass="w-full" />
+            </td>
+            <td>
+              <input pInputText [(ngModel)]="l.note" class="w-full" maxlength="120"
+                     [placeholder]="'eleves.impaye_origine_ph' | translate" />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="dialogImpayesVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="sauvegardeImpayes()" (onClick)="enregistrerImpayes()" />
       </ng-template>
     </p-dialog>
 
@@ -836,6 +927,10 @@ interface PecForm {
     .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .w-full { width:100%; }
 
+    /* Saisie en lot des impayés antérieurs */
+    .impayes-total { margin-left:auto; font-size:12px; font-weight:600; color:#f97316;
+                     white-space:nowrap; }
+
     /* Dialog PEC */
     .pec-eleve-header { display:flex; align-items:center; gap:10px; margin-bottom:16px;
                         padding:10px 14px; background:var(--surface-2); border-radius:8px; }
@@ -883,6 +978,15 @@ export class ElevesListeComponent implements OnInit {
   dialogPECVisible     = false;
   dialogServicesVisible = false;
   eleveSelectionne    = signal<Eleve | null>(null);
+
+  // Saisie en lot des impayés antérieurs (migration). Les lignes sont un
+  // tableau simple : ngModel écrit directement dedans, et la CD par défaut
+  // suffit à rafraîchir les totaux.
+  dialogImpayesVisible = false;
+  chargementImpayes    = signal(false);
+  sauvegardeImpayes    = signal(false);
+  lignesImpayes: LigneImpayeEditable[] = [];
+  rechercheImpaye      = '';
 
   services       = signal<Service[]>([]);
   servicesActifs = computed(() => this.services().filter(s => s.actif));
@@ -1122,6 +1226,83 @@ export class ElevesListeComponent implements OnInit {
     this.eleves().reduce((s, e) => s + (e.reliquat_restant || 0), 0));
   countTypePEC(t: TypePEC)    { return this.elevesPEC().filter(e => e.type_pec === t).length; }
 
+  /** Décomposition du dû global, affichée au survol de la colonne. */
+  detailDu(e: Eleve): string {
+    return this.translate.instant('eleves.du_detail', {
+      annee:     (e.reste_a_payer || 0).toLocaleString('fr-FR'),
+      anterieur: (e.reliquat_restant || 0).toLocaleString('fr-FR'),
+    });
+  }
+
+  // ── Saisie en lot des impayés antérieurs ────────────────────────────────
+  ouvrirSaisieImpayes() {
+    this.dialogImpayesVisible = true;
+    this.rechercheImpaye = '';
+    this.chargementImpayes.set(true);
+    this.elevesService.getImpayesAnterieurs().subscribe({
+      next: r => {
+        // montant0/note0 = valeur d'origine, pour ne renvoyer que ce qui bouge.
+        this.lignesImpayes = r.lignes.map(l => ({
+          ...l, montant0: l.montant || 0, note0: l.note || '' }));
+        this.chargementImpayes.set(false);
+      },
+      error: () => {
+        this.chargementImpayes.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: this.translate.instant('eleves.saisie_impayes_titre') });
+      },
+    });
+  }
+
+  lignesImpayesFiltrees(): LigneImpayeEditable[] {
+    const q = this.rechercheImpaye.trim().toLowerCase();
+    if (!q) return this.lignesImpayes;
+    return this.lignesImpayes.filter(l =>
+      l.nom_complet.toLowerCase().includes(q) || (l.matricule || '').toLowerCase().includes(q));
+  }
+  lignesImpayesSaisies(): number {
+    return this.lignesImpayes.filter(l => (l.montant || 0) > 0).length;
+  }
+  totalImpayesSaisi(): number {
+    return this.lignesImpayes.reduce((s, l) => s + (l.montant || 0), 0);
+  }
+
+  enregistrerImpayes() {
+    // N'envoyer que ce qui a changé : sur 300 élèves, rejouer les lignes
+    // intactes réécrirait autant d'écritures pour rien.
+    const lignes = this.lignesImpayes
+      .filter(l => (l.montant || 0) !== l.montant0 || (l.note || '') !== l.note0)
+      .map(l => ({ eleve_id: l.eleve_id, montant: l.montant || 0, note: l.note || '' }));
+    if (!lignes.length) { this.dialogImpayesVisible = false; return; }
+
+    this.sauvegardeImpayes.set(true);
+    this.elevesService.enregistrerImpayesAnterieurs(lignes).subscribe({
+      next: r => {
+        this.sauvegardeImpayes.set(false);
+        this.dialogImpayesVisible = false;
+        this.msg.add({ severity: r.nb_refuses ? 'warn' : 'success',
+                       summary: this.translate.instant('common.succes'),
+                       detail: this.translate.instant('eleves.saisie_impayes_ok', { n: r.nb_appliques })
+                             + (r.nb_refuses
+                                ? ' ' + this.translate.instant('eleves.saisie_impayes_refus', { n: r.nb_refuses })
+                                : ''),
+                       life: r.nb_refuses ? 8000 : 4000 });
+        // Les refus sont détaillés : ils portent le motif exact (montant sous le
+        // déjà encaissé, exercice clôturé…), sans quoi l'école corrige à l'aveugle.
+        for (const refus of (r.refuses || []).slice(0, 5)) {
+          this.msg.add({ severity: 'error', summary: refus.nom_complet || '—',
+                         detail: refus.motif, life: 8000 });
+        }
+        this.chargerEleves();
+      },
+      error: (err) => {
+        this.sauvegardeImpayes.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: err?.error?.error || 'Enregistrement impossible' });
+      },
+    });
+  }
+
   alerteLabel(a: NiveauAlerte | string): string {
     return { CRITIQUE: 'CRITIQUE', URGENT: 'URGENT', ATTENTION: 'ATTENTION', OK: 'OK', A_JOUR: 'A JOUR' }[a] || a;
   }
@@ -1355,7 +1536,8 @@ export class ElevesListeComponent implements OnInit {
     this.jourInconnu = false;
     this.moisInscription = '';
     this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE',
-                         etat_sante: 'SAIN', date_inscription_jour_estime: false };
+                         etat_sante: 'SAIN', date_inscription_jour_estime: false,
+                         reliquat_anterieur: 0, reliquat_note: '' };
     this.dialogVisible = true;
   }
 
@@ -1383,6 +1565,8 @@ export class ElevesListeComponent implements OnInit {
       etat_sante:       eleve.etat_sante || 'SAIN',
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
+      reliquat_anterieur: Number(eleve.reliquat_anterieur || 0),
+      reliquat_note:      eleve.reliquat_note || '',
     };
     this.jourInconnu = !!eleve.date_inscription_jour_estime;
     this.moisInscription = this.jourInconnu ? (eleve.date_inscription || '').slice(0, 7) : '';
@@ -1442,9 +1626,15 @@ export class ElevesListeComponent implements OnInit {
         this.statsPEC.set(null);  // les montants peuvent changer (section, PEC…)
         this.chargerEleves();
       },
-      error: () => {
+      error: (err) => {
+        // Remonter le motif du backend quand il y en a un : « montant inférieur
+        // au déjà encaissé », « exercice clôturé »… un message générique
+        // laisserait l'école corriger à l'aveugle.
+        const champ = err?.error && Object.values(err.error)[0];
+        const detail = Array.isArray(champ) ? champ[0] : (typeof champ === 'string' ? champ : null);
         this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
-                       detail: this.translate.instant('eleves.impossible_ajouter') });
+                       detail: detail || this.translate.instant('eleves.impossible_ajouter'),
+                       life: detail ? 8000 : 4000 });
         this.saving.set(false);
       }
     });

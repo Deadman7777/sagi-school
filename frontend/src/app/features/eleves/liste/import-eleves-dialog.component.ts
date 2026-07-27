@@ -64,6 +64,13 @@ import { ElevesService, RapportImport } from '../../../core/services/eleves.serv
                   { n: r.resume.reprises, montant: (r.resume.montant_reprise | number:'1.0-0') } }}
           </div>
         }
+        @if (r.resume.impayes_anterieurs > 0) {
+          <div class="reprise-info impaye">
+            🕓 {{ 'eleves.import_impayes_info' | translate:
+                  { n: r.resume.impayes_anterieurs,
+                    montant: (r.resume.montant_impaye_anterieur | number:'1.0-0') } }}
+          </div>
+        }
         <p-table [value]="r.lignes" [scrollable]="true" scrollHeight="320px" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr>
@@ -72,6 +79,7 @@ import { ElevesService, RapportImport } from '../../../core/services/eleves.serv
               <th>{{ 'eleves.section' | translate }}</th>
               <th style="width:110px">{{ 'eleves.import_statut' | translate }}</th>
               <th style="width:120px">{{ 'eleves.import_deja_paye' | translate }}</th>
+              <th style="width:120px">{{ 'eleves.impaye_anterieur' | translate }}</th>
               <th>{{ 'eleves.import_details' | translate }}</th>
             </tr>
           </ng-template>
@@ -82,6 +90,7 @@ import { ElevesService, RapportImport } from '../../../core/services/eleves.serv
               <td>{{ l.section || '—' }}</td>
               <td><p-tag [value]="l.statut" [severity]="severite(l.statut)" /></td>
               <td>{{ l.montant_reprise ? (l.montant_reprise | number:'1.0-0') + ' F' : '—' }}</td>
+              <td>{{ l.impaye_anterieur ? (l.impaye_anterieur | number:'1.0-0') + ' F' : '—' }}</td>
               <td class="details">
                 @for (e of l.erreurs; track e) { <div class="err-txt">{{ e }}</div> }
                 @for (a of l.avertissements; track a) { <div class="warn-txt">{{ a }}</div> }
@@ -99,6 +108,10 @@ import { ElevesService, RapportImport } from '../../../core/services/eleves.serv
           @if (reprisesFaites() > 0) {
             <p class="fini-reprise">{{ 'eleves.import_fait_reprises' | translate:
                 { n: reprisesFaites(), montant: (montantReprises() | number:'1.0-0') } }}</p>
+          }
+          @if (impayesFaits() > 0) {
+            <p class="fini-reprise">{{ 'eleves.import_fait_impayes' | translate:
+                { n: impayesFaits(), montant: (montantImpayes() | number:'1.0-0') } }}</p>
           }
         </div>
       }
@@ -150,6 +163,7 @@ import { ElevesService, RapportImport } from '../../../core/services/eleves.serv
     .fini-reprise { margin-top: 8px; color: var(--text-color-secondary); font-size: .92rem; }
     .reprise-info { margin: 0 0 14px; padding: 9px 14px; border-radius: 8px; font-size: .9rem;
                     background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3); }
+    .reprise-info.impaye { background: rgba(249,115,22,.1); border-color: rgba(249,115,22,.3); }
   `],
 })
 export class ImportElevesDialogComponent {
@@ -164,6 +178,8 @@ export class ImportElevesDialogComponent {
   crees          = signal(0);
   reprisesFaites = signal(0);
   montantReprises = signal(0);
+  impayesFaits   = signal(0);
+  montantImpayes = signal(0);
   occupe         = signal(false);
   chargeTemplate = signal(false);
   erreur         = signal<string | null>(null);
@@ -227,6 +243,8 @@ export class ImportElevesDialogComponent {
         this.crees.set(res.crees || 0);
         this.reprisesFaites.set(res.reprises || 0);
         this.montantReprises.set(res.montant_reprise || 0);
+        this.impayesFaits.set(res.impayes_anterieurs || 0);
+        this.montantImpayes.set(res.montant_impaye_anterieur || 0);
         this.etape.set('fait');
         this.importe.emit(res.crees || 0);
       },

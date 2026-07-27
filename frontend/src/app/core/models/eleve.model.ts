@@ -72,13 +72,33 @@ export interface Eleve {
   total_paye: number;
   reste_a_payer: number;
   niveau_alerte: NiveauAlerte;
-  // Dette reportée de l'exercice précédent. Suivie à part du dû de l'année :
-  // le niveau d'alerte ne juge que l'année en cours.
+  // Dette des années antérieures — reportée automatiquement d'un exercice à
+  // l'autre, ou saisie à la migration. Suivie à part du dû de l'année : le
+  // niveau d'alerte ne juge que l'année en cours.
   reliquat_anterieur: number;
+  reliquat_note: string;
   reliquat_paye: number;
   reliquat_restant: number;
   reliquat_origine_libelle: string;
   reste_a_payer_global: number;
+}
+
+/** Une ligne de la grille de saisie des impayés antérieurs (migration). */
+export interface LigneImpayeAnterieur {
+  eleve_id: string;
+  matricule: string;
+  nom_complet: string;
+  section: string;
+  montant: number;
+  deja_paye: number;
+  restant: number;
+  note: string;
+}
+
+export interface ResumeImpayesAnterieurs {
+  exercice: string;
+  nb_eleves: number;
+  montant_total: number;
 }
 
 export interface PriseEnChargeStats {

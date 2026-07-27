@@ -93,6 +93,38 @@ class MigrationSituationTests(TestCase):
         self.assertEqual(float(eleve.total_paye), 0)           # rien payé
         self.assertEqual(float(eleve.reste_a_payer), 55000)
 
+    def test_impaye_anterieur_seul(self):
+        """La colonne se remplit seule : une école qui ne sait rien dire de
+        l'année en cours peut quand même déclarer l'ardoise."""
+        ligne = self._analyser_une_ligne(impaye_anterieur='45000',
+                                         origine_impaye='2023-2024')
+        self.assertEqual(ligne['statut'], 'OK')
+        self.assertEqual(ligne['impaye_anterieur'], 45000)
+        self.assertEqual(ligne['origine_impaye'], '2023-2024')
+        self.assertEqual(ligne['montant_reprise'], 0)      # rien à voir avec l'année
+
+    def test_impaye_anterieur_cumulable_avec_dette_actuelle(self):
+        ligne = self._analyser_une_ligne(dette_actuelle='15000',
+                                         impaye_anterieur='45000')
+        self.assertEqual(ligne['montant_reprise'], 40000)  # année en cours, inchangé
+        self.assertEqual(ligne['impaye_anterieur'], 45000)
+
+    def test_impaye_anterieur_synonyme_ardoise(self):
+        from .import_eleves import COLONNES
+        entetes = ['Nom complet', 'Section', 'Ardoise']
+        rapport = analyser(_xlsx(entetes, ['Aliou Ba', 'CI', 30000]),
+                           self.tenant, self.exercice)
+        self.assertEqual(rapport['lignes'][0]['impaye_anterieur'], 30000)
+        self.assertEqual(rapport['resume']['montant_impaye_anterieur'], 30000)
+        self.assertEqual(rapport['resume']['impayes_anterieurs'], 1)
+        self.assertIn('Impayé antérieur (montant)', COLONNES.values())
+
+    def test_impaye_anterieur_negatif_ramene_a_zero_sans_bloquer(self):
+        ligne = self._analyser_une_ligne(impaye_anterieur='-5000')
+        self.assertEqual(ligne['statut'], 'OK')      # l'élève reste importable
+        self.assertEqual(ligne['impaye_anterieur'], 0)
+        self.assertTrue(any('négatif' in a for a in ligne['avertissements']))
+
     def test_telephone_multiple_ne_plante_pas(self):
         # Deux numéros séparés par « / » (27 car. > champ 20) : garder le 1er,
         # ne jamais dépasser la taille du champ (sinon 500 « value too long »).

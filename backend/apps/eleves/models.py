@@ -131,16 +131,26 @@ class Eleve(TenantModel):
     eleve_precedent    = models.ForeignKey('self', null=True, blank=True,
                                            on_delete=models.SET_NULL, related_name='reinscriptions',
                                            help_text="Fiche du même élève sur l'exercice précédent")
-    # Reste dû reporté depuis l'exercice précédent, figé au moment du report.
+    # Reste dû antérieur à l'exercice en cours, figé. Deux origines :
+    #   - le report automatique d'un exercice à l'autre (reliquat_exercice_origine) ;
+    #   - une SAISIE de migration, quand l'année d'avant n'existe pas dans le
+    #     système — l'école arrive avec une ardoise et aucun détail exploitable
+    #     (reliquat_note). Voir apps.paiements.reliquat_migration.
     # Ce n'est PAS un produit de l'exercice en cours (le 706 a été constaté
     # l'année où les frais sont nés) : il n'entre donc jamais dans
     # total_attendu, seulement dans le dû global — voir reste_a_payer_global.
     reliquat_anterieur = models.DecimalField(max_digits=12, decimal_places=2, default=0,
-                                             help_text="Reste dû reporté de l'exercice précédent (FCFA)")
+                                             help_text="Reste dû des années antérieures (FCFA)")
     reliquat_exercice_origine = models.ForeignKey('paiements.Exercice', null=True, blank=True,
                                                   on_delete=models.SET_NULL,
                                                   related_name='reliquats_reportes',
                                                   help_text="Exercice d'où provient le reliquat")
+    # Origine libre, quand elle ne correspond à aucun exercice du système :
+    # « 2024-2025 », « ardoise cahier », « ancien logiciel »… Volontairement un
+    # texte et non une liste : sur le terrain, la provenance exacte de la dette
+    # est rarement reconstituable, l'important est que l'école puisse l'assumer.
+    reliquat_note = models.CharField(max_length=120, blank=True,
+                                     help_text="Origine de l'impayé antérieur saisi à la migration")
 
     class Meta:
         db_table = 'eleves'
@@ -303,10 +313,11 @@ class Eleve(TenantModel):
 
     @property
     def reliquat_origine_libelle(self):
-        """Année d'où vient le reliquat, pour les libellés (« Reliquat 2024-2025 »)."""
+        """Origine du reliquat, pour les libellés (« Reliquat 2024-2025 »).
+        L'exercice d'origine prime ; à défaut la note saisie à la migration."""
         if self.reliquat_exercice_origine_id and self.reliquat_exercice_origine:
             return self.reliquat_exercice_origine.annee_scolaire
-        return ''
+        return self.reliquat_note or ''
 
     def mois_echus(self, today=None):
         """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée
