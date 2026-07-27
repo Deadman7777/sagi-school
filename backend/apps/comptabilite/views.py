@@ -173,6 +173,7 @@ PLAN_COMPTABLE = {
     '65':    'Autres charges',
     '651':   'Pertes sur créances irrecouvrables',
     '658':   'Charges diverses',
+    '6588':  'Charges reprises à la migration (détail non communiqué)',
     '66':    'Charges de personnel',
     '661':   'Appointements et salaires',
     '662':   'Charges sociales salariales (IPRES)',
@@ -1108,6 +1109,7 @@ class ChargeView(APIView):
         # Autres charges
         '651': 'Pertes sur créances irrecouvrables',
         '658': 'Charges diverses',
+        '6588': 'Charges reprises à la migration (détail non communiqué)',
         # Charges de personnel
         '661': 'Appointements et salaires',
         '662': 'Charges sociales salariales (IPRES)',
