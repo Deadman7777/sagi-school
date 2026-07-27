@@ -129,6 +129,12 @@ class Eleve(TenantModel):
     mois_dus              = models.JSONField(default=list, blank=True,
                                              help_text='Mois facturés (1-12) — vide = prorata automatique')
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
+    # Date de départ de l'établissement (diplôme, transfert, abandon). Arrête
+    # l'horloge des arriérés : sans elle, un abandon de mars continue
+    # d'accumuler des mois de retard jusqu'en décembre et la fiche annonce
+    # CRITIQUE pour une scolarité que l'enfant n'a jamais suivie.
+    date_sortie           = models.DateField(null=True, blank=True,
+                                             help_text="Date de sortie de l'établissement")
     # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
     obs_prise_en_charge   = models.TextField(blank=True)
@@ -366,11 +372,19 @@ class Eleve(TenantModel):
         """Nombre de mensualités échues à ce jour : mois commencés depuis l'entrée
         de l'élève (mois courant inclus), plafonné au nombre de mensualités dues.
         Le plafond nb_mensualites_dues couvre les deux régimes : fin d'exercice
-        pour EXERCICE, durée convenue pour PASSAGER (qui peut dépasser l'exercice)."""
+        pour EXERCICE, durée convenue pour PASSAGER (qui peut dépasser l'exercice).
+
+        L'horloge S'ARRÊTE à la date de sortie : un élève parti en mars ne doit
+        pas voir ses arriérés grossir jusqu'en décembre. Sans ce plafond, une
+        fiche d'abandon finit toujours en CRITIQUE, pour une scolarité que
+        l'enfant n'a pas suivie — et l'alerte cesse alors de vouloir dire
+        quoi que ce soit."""
         from django.utils import timezone
         if not self.exercice_id:
             return 0
         today = today or timezone.now().date()
+        if self.date_sortie and self.date_sortie < today:
+            today = self.date_sortie
         debut = self.exercice.date_debut
         insc  = self.date_inscription or debut
         mois_avant = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0

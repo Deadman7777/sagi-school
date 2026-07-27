@@ -150,7 +150,7 @@ const MOIS_ANNEE = [
                   (onChange)="filtrer()" [placeholder]="'eleves.toutes_alertes' | translate"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
         <p-select appendTo="body" [options]="tris" [(ngModel)]="tri"
-                  (onChange)="filtrer()" placeholder="Trier par…"
+                  (onChange)="onTriChange()" placeholder="Trier par…"
                   optionLabel="label" optionValue="value" styleClass="filter-drop" />
         <select class="ex-select" [(ngModel)]="exerciceSel" (ngModelChange)="changerExercice()">
           <option value="">{{ 'comptabilite.annee_active' | translate }}</option>
@@ -178,6 +178,29 @@ const MOIS_ANNEE = [
           </div>
         }
       </div>
+
+      <!-- Effectifs par classe : visible quand on trie par classe, c'est là que
+           la question « combien dans chaque classe ? » se pose. -->
+      @if (tri === 'classe' && effectifs(); as eff) {
+        <div class="classes-bar">
+          @for (c of eff.classes; track c.classe_id) {
+            <div class="classe-chip">
+              <span class="cc-nom">{{ c.classe }}</span>
+              <span class="cc-nb">{{ c.nb }}</span>
+              <button type="button" class="cc-pdf"
+                      [attr.aria-label]="('eleves.liste_classe_export' | translate) + ' ' + c.classe"
+                      [disabled]="exportClasse() === c.classe_id"
+                      (click)="exporterListeClasse(c.classe_id, c.classe)">
+                <i class="pi pi-file-pdf"></i>
+              </button>
+            </div>
+          }
+          <div class="classe-chip total">
+            <span class="cc-nom">{{ 'eleves.effectif_total' | translate }}</span>
+            <span class="cc-nb">{{ eff.total }}</span>
+          </div>
+        </div>
+      }
 
       <div class="table-card">
         <p-table [value]="elevesFiltres()" [loading]="loading()"
@@ -291,6 +314,8 @@ const MOIS_ANNEE = [
         <p-select appendTo="body" [options]="filtresStatutAncien" [(ngModel)]="filtreStatutAncien"
                   (onChange)="chargerAnciens()" optionLabel="label" optionValue="value"
                   styleClass="filter-drop" />
+        <p-button [label]="'eleves.ancien_ajouter' | translate" icon="pi pi-user-plus"
+                  severity="success" (onClick)="ouvrirAncien()" />
       </div>
 
       <div class="table-card">
@@ -559,17 +584,18 @@ const MOIS_ANNEE = [
           </div>
           <div class="fiche-section">
             <div class="fiche-title">
-              Situation financière
+              {{ 'eleves.situation_titre' | translate }}
               <button type="button" class="fiche-edit" (click)="ouvrirPriseEnCharge(e)">
-                <i class="pi pi-pencil"></i> Modifier
+                <i class="pi pi-pencil"></i> {{ 'eleves.situation_modifier' | translate }}
               </button>
             </div>
             <div class="fiche-row">
-              <span>Mois facturés</span>
+              <span>{{ 'eleves.mois_factures' | translate }}</span>
               <strong class="mono">
-                {{ e.nb_mensualites_dues }} mois
+                {{ e.nb_mensualites_dues }} {{ 'eleves.mois_unite' | translate }}
                 <span class="mois-origine" [class.saisi]="e.mois_dus_origine === 'SAISI'">
-                  {{ e.mois_dus_origine === 'SAISI' ? 'saisis' : 'calculés' }}
+                  {{ (e.mois_dus_origine === 'SAISI' ? 'eleves.mois_origine_saisi'
+                                                     : 'eleves.mois_origine_calcule') | translate }}
                 </span>
               </strong>
             </div>
@@ -590,17 +616,17 @@ const MOIS_ANNEE = [
                  règle au mois. Chargé à l'ouverture de la fiche. -->
             @if (echeancier(); as ech) {
               @if (ech.lignes.length) {
-                <div class="ech-titre">Détail par mois</div>
+                <div class="ech-titre">{{ 'eleves.ech_titre' | translate }}</div>
                 <table class="ech-table">
                   <caption class="sr-only">
-                    Montant dû, payé et restant pour chaque mois facturé
+                    {{ 'eleves.ech_caption' | translate }}
                   </caption>
                   <thead>
                     <tr>
-                      <th scope="col">Mois</th>
-                      <th scope="col" class="num">Dû</th>
-                      <th scope="col" class="num">Payé</th>
-                      <th scope="col" class="num">Reste</th>
+                      <th scope="col">{{ 'eleves.ech_mois' | translate }}</th>
+                      <th scope="col" class="num">{{ 'eleves.ech_du' | translate }}</th>
+                      <th scope="col" class="num">{{ 'eleves.ech_paye' | translate }}</th>
+                      <th scope="col" class="num">{{ 'eleves.ech_reste' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -609,7 +635,7 @@ const MOIS_ANNEE = [
                         <td>
                           {{ l.nom }} {{ l.annee }}
                           @if (l.reste > 0 && l.echu) {
-                            <span class="ech-badge">en retard</span>
+                            <span class="ech-badge">{{ 'eleves.ech_retard' | translate }}</span>
                           }
                         </td>
                         <td class="mono num">{{ l.du | number:'1.0-0' }}</td>
@@ -620,7 +646,7 @@ const MOIS_ANNEE = [
                     }
                     @if (ech.hors_mensualite; as h) {
                       <tr>
-                        <td>{{ h.libelle }}</td>
+                        <td>{{ 'eleves.ech_hors_mensualite' | translate }}</td>
                         <td class="mono num">{{ h.du | number:'1.0-0' }}</td>
                         <td class="mono num success">{{ h.paye | number:'1.0-0' }}</td>
                         <td class="mono num" [class.danger]="h.reste > 0">
@@ -630,7 +656,7 @@ const MOIS_ANNEE = [
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td>Total</td>
+                      <td>{{ 'eleves.ech_total' | translate }}</td>
                       <td class="mono num">{{ ech.totaux.du | number:'1.0-0' }}</td>
                       <td class="mono num success">{{ ech.totaux.paye | number:'1.0-0' }}</td>
                       <td class="mono num" [class.danger]="ech.totaux.reste > 0">
@@ -699,7 +725,7 @@ const MOIS_ANNEE = [
     </p-dialog>
 
     <!-- ══════════════════════ DIALOG PRISE EN CHARGE ══════════════════════ -->
-    <p-dialog header="Prise en charge" [(visible)]="dialogPECVisible"
+    <p-dialog [header]="'eleves.situation_titre' | translate" [(visible)]="dialogPECVisible"
               [modal]="true" [style]="{width:'520px'}" [draggable]="false">
       @if (eleveSelectionne()) {
         @let e = eleveSelectionne()!;
@@ -711,42 +737,42 @@ const MOIS_ANNEE = [
         <div class="form-grid">
           <!-- Motif -->
           <div class="form-group full">
-            <label>Motif / Catégorie</label>
+            <label>{{ 'eleves.pec_motif' | translate }}</label>
             <p-select appendTo="body" [options]="categoriesPEC" [(ngModel)]="formPEC.prise_en_charge"
                       optionLabel="label" optionValue="value" styleClass="w-full"
-                      placeholder="Aucune prise en charge" [showClear]="true" />
+                      [placeholder]="'eleves.pec_aucune' | translate" [showClear]="true" />
           </div>
 
           <!-- Montant PEC inscription -->
           <div class="form-group">
-            <label>Montant PEC inscription (FCFA)</label>
+            <label>{{ 'eleves.pec_inscription_label' | translate }}</label>
             <p-inputNumber [(ngModel)]="formPEC.pec_inscription" [min]="0" mode="decimal"
                            styleClass="w-full" placeholder="0" />
           </div>
 
           <!-- Montant PEC mensualité (par mois) -->
           <div class="form-group">
-            <label>Montant PEC mensualité (FCFA / mois)</label>
+            <label>{{ 'eleves.pec_mensualite_label' | translate }}</label>
             <p-inputNumber [(ngModel)]="formPEC.pec_mensualite" [min]="0" mode="decimal"
                            styleClass="w-full" placeholder="0" />
           </div>
 
           <!-- Observations -->
           <div class="form-group full">
-            <label>Observations</label>
+            <label>{{ 'eleves.pec_observations' | translate }}</label>
             <input pInputText [(ngModel)]="formPEC.obs_prise_en_charge" class="w-full"
-                   placeholder="Ex : Orphelin de père, suivi par la commune…" />
+                   [placeholder]="'eleves.pec_observations_ph' | translate" />
           </div>
 
           <!-- Mois facturés -->
           <div class="form-group full">
-            <label>Mois facturés</label>
+            <label>{{ 'eleves.mois_factures' | translate }}</label>
             <div class="mois-mode">
               <p-checkbox [(ngModel)]="formPEC.moisAuto" [binary]="true"
                           inputId="moisAuto" (onChange)="onMoisAutoChange()" />
               <label for="moisAuto" class="mois-mode-label">
-                Calculer automatiquement depuis la date d'entrée
-                <span class="mois-mode-hint">({{ e.nb_mensualites_dues }} mois aujourd'hui)</span>
+                {{ 'eleves.mois_auto' | translate }}
+                <span class="mois-mode-hint">{{ 'eleves.mois_auto_hint' | translate:{ n: e.nb_mensualites_dues } }}</span>
               </label>
             </div>
 
@@ -762,9 +788,9 @@ const MOIS_ANNEE = [
                 }
               </div>
               <div class="mois-resume">
-                {{ formPEC.mois_dus.length }} mois facturé(s)
+                {{ 'eleves.mois_resume' | translate:{ n: formPEC.mois_dus.length } }}
                 @if (formPEC.mois_dus.length === 0) {
-                  <span class="mois-alerte">— aucune mensualité ne sera due</span>
+                  <span class="mois-alerte">{{ 'eleves.mois_aucun' | translate }}</span>
                 }
               </div>
             }
@@ -775,26 +801,26 @@ const MOIS_ANNEE = [
         @if (previewPEC()) {
           @let pv = previewPEC()!;
           <div class="pec-preview">
-            <div class="pec-preview-title">Simulation impact financier</div>
+            <div class="pec-preview-title">{{ 'eleves.pec_simulation' | translate }}</div>
             <div class="pec-preview-grid">
               @if (pv.inscr > 0) {
                 <div class="pv-row">
-                  <span>Réduction inscription</span>
+                  <span>{{ 'eleves.pec_reduction_inscription' | translate }}</span>
                   <strong style="color:#3b82f6">{{ pv.inscr | number:'1.0-0' }} FCFA</strong>
                 </div>
               }
               @if (pv.mens > 0) {
                 <div class="pv-row">
-                  <span>Réduction mensualité</span>
+                  <span>{{ 'eleves.pec_reduction_mensualite' | translate }}</span>
                   <strong style="color:#3b82f6">{{ pv.mens | number:'1.0-0' }} FCFA / mois</strong>
                 </div>
               }
               <div class="pv-row highlight">
-                <span>Prise en charge annuelle totale</span>
+                <span>{{ 'eleves.pec_annuelle_totale' | translate }}</span>
                 <strong style="color:#f59e0b">{{ pv.annuel | number:'1.0-0' }} FCFA</strong>
               </div>
               <div class="pv-row">
-                <span>Reste à payer par l'élève</span>
+                <span>{{ 'eleves.pec_reste_eleve' | translate }}</span>
                 <strong style="color:#10b981">{{ pv.restant | number:'1.0-0' }} FCFA</strong>
               </div>
             </div>
@@ -804,6 +830,60 @@ const MOIS_ANNEE = [
       <ng-template pTemplate="footer">
         <p-button label="Annuler" severity="secondary" (onClick)="dialogPECVisible=false" />
         <p-button label="Enregistrer" severity="success" [loading]="saving()" (onClick)="sauvegarderPEC()" />
+      </ng-template>
+    </p-dialog>
+
+
+    <!-- Dialog : enregistrer un ancien élève inconnu du système -->
+    <p-dialog [header]="'eleves.ancien_ajouter' | translate" [(visible)]="dialogAncienVisible"
+              [modal]="true" [style]="{width:'560px'}" [draggable]="false">
+      <p class="dialog-aide">{{ 'eleves.ancien_aide' | translate }}</p>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="anc-nom">{{ 'eleves.nom_complet' | translate }} *</label>
+          <input pInputText id="anc-nom" [(ngModel)]="formAncien.nom_complet" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="anc-genre">{{ 'eleves.genre' | translate }}</label>
+          <p-select appendTo="body" inputId="anc-genre" [options]="genreOptions"
+                    [(ngModel)]="formAncien.genre" optionLabel="label" optionValue="value"
+                    styleClass="w-full" [showClear]="true" />
+        </div>
+        <div class="form-group">
+          <label for="anc-naissance">{{ 'eleves.date_naissance' | translate }}</label>
+          <input pInputText id="anc-naissance" type="date"
+                 [(ngModel)]="formAncien.date_naissance" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="anc-entree">{{ 'eleves.ancien_date_entree' | translate }} *</label>
+          <input pInputText id="anc-entree" type="date"
+                 [(ngModel)]="formAncien.date_entree" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="anc-sortie">{{ 'eleves.ancien_date_sortie' | translate }}</label>
+          <input pInputText id="anc-sortie" type="date"
+                 [(ngModel)]="formAncien.date_sortie" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="anc-statut">{{ 'eleves.statut' | translate }}</label>
+          <p-select appendTo="body" inputId="anc-statut" [options]="statutsSortie"
+                    [(ngModel)]="formAncien.statut" optionLabel="label" optionValue="value"
+                    styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="anc-tuteur">{{ 'eleves.nom_tuteur' | translate }}</label>
+          <input pInputText id="anc-tuteur" [(ngModel)]="formAncien.nom_tuteur" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label for="anc-tel">{{ 'eleves.telephone_tuteur' | translate }}</label>
+          <input pInputText id="anc-tel" [(ngModel)]="formAncien.telephone_tuteur" class="w-full" />
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="dialogAncienVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="enregistrerAncien()" />
       </ng-template>
     </p-dialog>
 
@@ -1223,6 +1303,21 @@ const MOIS_ANNEE = [
     .fiche-row span { color:var(--text-3); }
     .fiche-row strong { color:var(--text); }
     .fiche-row strong.muted { color:var(--text-3); font-weight:500; }
+
+    /* Effectifs par classe */
+    .classes-bar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+    .classe-chip { display:flex; align-items:center; gap:8px; padding:6px 10px;
+                   background:var(--surface-2); border:1px solid var(--border);
+                   border-radius:8px; font-size:12px; }
+    .classe-chip.total { border-color:#00d4aa; }
+    .cc-nom { color:var(--text-2); }
+    .cc-nb  { font-weight:700; color:var(--text); }
+    .cc-pdf { background:none; border:none; cursor:pointer; color:var(--text-3);
+              padding:2px 4px; font-size:12px; }
+    .cc-pdf:hover:not(:disabled) { color:#ef4444; }
+    .cc-pdf:disabled { opacity:.4; cursor:default; }
+    .cc-pdf:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; border-radius:4px; }
+    .dialog-aide { font-size:11px; color:var(--text-3); margin:0 0 12px; }
 
     /* Échéancier mensuel */
     .ech-titre { font-size:10px; font-weight:700; color:var(--text-3);
@@ -1784,6 +1879,101 @@ export class ElevesListeComponent implements OnInit {
 
   echeancier = signal<Echeancier | null>(null);
 
+  // ── Enregistrement d'un ancien élève inconnu du système ────────────────
+  dialogAncienVisible = false;
+  statutsSortie = [
+    { label: 'Diplômé',   value: 'DIPLOME' },
+    { label: 'Transféré', value: 'TRANSFERE' },
+    { label: 'Abandon',   value: 'ABANDONNE' },
+  ];
+  formAncien = this.ancienFormVide();
+
+  private ancienFormVide() {
+    return {
+      nom_complet: '', genre: null as string | null, date_naissance: '',
+      date_entree: '', date_sortie: '', statut: 'DIPLOME',
+      nom_tuteur: '', telephone_tuteur: '',
+    };
+  }
+
+  // ── Effectifs par classe ───────────────────────────────────────────────
+  effectifs = signal<{ exercice: string; total: number;
+                       classes: { classe_id: string | null; classe: string;
+                                  section: string; nb: number }[] } | null>(null);
+  exportClasse = signal<string | null>(null);
+
+  onTriChange() {
+    this.filtrer();
+    // Chargé à la demande : l'effectif par classe n'intéresse que le tri par
+    // classe, inutile d'une requête de plus à chaque ouverture de l'écran.
+    if (this.tri === 'classe' && !this.effectifs()) this.chargerEffectifs();
+  }
+
+  private chargerEffectifs() {
+    this.elevesService.getEffectifsClasses().subscribe({
+      next: (e) => this.effectifs.set(e),
+      error: () => this.effectifs.set(null),
+    });
+  }
+
+  exporterListeClasse(classeId: string | null, nom: string) {
+    this.exportClasse.set(classeId);
+    this.elevesService.listeClassePDF(classeId ?? 'sans').subscribe({
+      next: (blob) => {
+        this.exportClasse.set(null);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `liste_${nom}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.exportClasse.set(null);
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('eleves.liste_classe_erreur'),
+                       detail: nom });
+      },
+    });
+  }
+
+  ouvrirAncien() {
+    this.formAncien = this.ancienFormVide();
+    this.dialogAncienVisible = true;
+  }
+
+  enregistrerAncien() {
+    const f = this.formAncien;
+    if (!f.nom_complet.trim() || !f.date_entree) {
+      this.msg.add({ severity: 'warn',
+                     summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.ancien_champs') });
+      return;
+    }
+    this.saving.set(true);
+    this.elevesService.creerAncien(f).subscribe({
+      next: (e) => {
+        this.saving.set(false);
+        this.dialogAncienVisible = false;
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('eleves.ancien_enregistre'),
+                       detail: `${e.nom_complet} — ${e.matricule}` });
+        this.chargerAnciens();
+      },
+      // Le backend refuse une sortie antérieure à l'entrée, un statut non
+      // sortant, un nom vide : on remonte son motif plutôt qu'un échec muet.
+      error: (err) => {
+        this.saving.set(false);
+        const d = err?.error || {};
+        const motif = d.date_entree || d.date_sortie || d.statut
+                      || d.nom_complet || d.error || 'Enregistrement impossible.';
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('eleves.ancien_refuse'),
+                       detail: String(motif), life: 8000 });
+      },
+    });
+  }
+
   voirFiche(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.dialogFicheVisible = true;
@@ -1995,7 +2185,7 @@ export class ElevesListeComponent implements OnInit {
     } as Partial<Eleve>;
     this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Situation enregistrée',
+        this.msg.add({ severity: 'success', summary: this.translate.instant('eleves.situation_enregistree'),
                        detail: e.nom_complet });
         this.dialogPECVisible = false;
         this.saving.set(false);
@@ -2009,7 +2199,7 @@ export class ElevesListeComponent implements OnInit {
         const d = err?.error;
         const motif = d?.mois_dus?.[0] || d?.detail || d?.error
                       || 'Enregistrement impossible.';
-        this.msg.add({ severity: 'error', summary: 'Situation non enregistrée',
+        this.msg.add({ severity: 'error', summary: this.translate.instant('eleves.situation_erreur'),
                        detail: String(motif), life: 8000 });
       },
     });

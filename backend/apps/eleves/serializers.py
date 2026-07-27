@@ -99,9 +99,32 @@ class EleveSerializer(serializers.ModelSerializer):
                 {'nb_mois_passager': 'Nombre de mois requis pour un ndongo passager.'})
         if regime == 'EXERCICE':
             attrs['nb_mois_passager'] = None
+        self._dater_la_sortie(attrs)
         self._valider_mois_dus(attrs)
         self._valider_reliquat(attrs)
         return attrs
+
+    def _dater_la_sortie(self, attrs):
+        """Pose (ou retire) la date de sortie quand le statut bascule.
+
+        Sans date, l'horloge des arriérés continue de tourner après le départ
+        et la fiche finit en CRITIQUE pour une scolarité non suivie. On la met
+        donc au jour du changement si l'école ne l'a pas précisée — elle reste
+        corrigeable ensuite.
+
+        Réinscrire un ancien sortant efface la date : la fiche redevient celle
+        d'un élève présent, elle ne peut pas garder une sortie.
+        """
+        from .parcours import STATUTS_SORTIE
+
+        if 'statut' not in attrs:
+            return
+        sort = attrs['statut'] in STATUTS_SORTIE
+        deja = attrs.get('date_sortie') or getattr(self.instance, 'date_sortie', None)
+        if sort:
+            attrs['date_sortie'] = attrs.get('date_sortie') or deja or timezone.now().date()
+        else:
+            attrs['date_sortie'] = None
 
     def _valider_mois_dus(self, attrs):
         """Mois facturés : numéros valides, et jamais retirer un mois déjà réglé.
