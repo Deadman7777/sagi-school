@@ -120,6 +120,14 @@ class Eleve(TenantModel):
     regime                = models.CharField(max_length=10, choices=REGIME_CHOICES, default='EXERCICE')
     nb_mois_passager      = models.PositiveIntegerField(null=True, blank=True,
                                               help_text='Mensualités dues depuis la date d\'entrée (régime passager)')
+    # Mois réellement dus, saisis par l'école — mêmes numéros que
+    # Paiement.mois_regles (1=janvier … 12=décembre).
+    # VIDE = le prorata automatique sur la date d'entrée fait foi : une école
+    # qui ne touche à rien garde exactement le comportement d'avant. Renseigné,
+    # il PRIME — l'école sait mieux que le calendrier quels mois elle facture
+    # (entrée en fin de mois, vacances, arrangement particulier).
+    mois_dus              = models.JSONField(default=list, blank=True,
+                                             help_text='Mois facturés (1-12) — vide = prorata automatique')
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
     # Prise en charge sociale — motif
     prise_en_charge       = models.CharField(max_length=20, choices=PRISE_EN_CHARGE_CHOICES, blank=True, null=True)
@@ -210,25 +218,25 @@ class Eleve(TenantModel):
     # ── Prise en charge ──────────────────────────────────────────────────
     @property
     def montant_pec_inscription(self):
+        """Montant pris en charge sur l'inscription — le champ fait foi.
+
+        Plus de repli sur l'ancien taux : il rendait 0 INSAISISSABLE. Une école
+        qui retirait une prise en charge en remettant le montant à zéro voyait
+        le taux reprendre la main et la réduction revenir intacte. Les taux ont
+        été matérialisés en montants par la migration 0024, ils ne servent plus
+        qu'à l'historique."""
         if not self.section:
             return 0.0
-        # Montant direct prioritaire (plafonné aux frais), sinon ancien taux.
-        if self.pec_inscription:
-            return round(min(float(self.pec_inscription), float(self.section.frais_inscription)), 2)
-        if self.type_pec in ('INSCRIPTION', 'TOTALE'):
-            return round(float(self.section.frais_inscription) * float(self.taux_pec_inscription) / 100, 2)
-        return 0.0
+        return round(min(float(self.pec_inscription or 0),
+                         float(self.section.frais_inscription)), 2)
 
     @property
     def montant_pec_mensualite_mensuel(self):
-        """Réduction sur une mensualité (montant mensuel)."""
+        """Réduction sur une mensualité (montant mensuel) — voir ci-dessus."""
         if not self.section:
             return 0.0
-        if self.pec_mensualite:
-            return round(min(float(self.pec_mensualite), float(self.section.frais_mensualite)), 2)
-        if self.type_pec in ('MENSUALITES', 'TOTALE'):
-            return round(float(self.section.frais_mensualite) * float(self.taux_pec_mensualite) / 100, 2)
-        return 0.0
+        return round(min(float(self.pec_mensualite or 0),
+                         float(self.section.frais_mensualite)), 2)
 
     @property
     def nb_mensualites_dues(self):
@@ -237,7 +245,13 @@ class Eleve(TenantModel):
         pas oct/nov/déc. Plafonné à nb_mensualites de l'exercice.
         Régime PASSAGER (daara) : la durée convenue prime — le ndongo doit
         nb_mois_passager mensualités depuis son entrée, sans plafond de fin
-        d'exercice (séjour à cheval → réinscrire avec les mois restants)."""
+        d'exercice (séjour à cheval → réinscrire avec les mois restants).
+
+        Mois saisis par l'école (`mois_dus`) : ils priment sur tout le reste —
+        c'est une décision explicite, elle ne se fait pas corriger par un
+        calendrier."""
+        if self.mois_dus:
+            return len(self.mois_dus)
         if self.regime == 'PASSAGER' and self.nb_mois_passager:
             return self.nb_mois_passager
         if not self.exercice_id:

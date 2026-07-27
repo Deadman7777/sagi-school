@@ -32,7 +32,22 @@ class PecMontantTest(TestCase):
         self.assertEqual(e.montant_pec_mensualite_mensuel, 60000)  # plafonné
         self.assertEqual(e.frais_mensualite_effectif, 0)
 
-    def test_retro_compat_taux_si_pas_de_montant(self):
+    def test_le_montant_est_la_seule_source_le_taux_ne_reprend_pas_la_main(self):
+        """Le repli sur le taux a été retiré (migration 0024).
+
+        Il rendait 0 insaisissable : une école qui retirait une prise en charge
+        en remettant le montant à zéro la voyait revenir par le taux, et la
+        correction était impossible depuis l'application. Les taux existants
+        ont été matérialisés en montants une fois pour toutes ; ils ne pilotent
+        plus le calcul et ne restent que pour l'historique.
+        """
         e = self._e(type_pec='MENSUALITES', taux_pec_mensualite=50)
-        self.assertEqual(e.montant_pec_mensualite_mensuel, 30000)  # 60000 × 50%
+        self.assertEqual(e.montant_pec_mensualite_mensuel, 0)
+        self.assertEqual(e.frais_mensualite_effectif, 60000)
+
+    def test_le_montant_materialise_par_la_migration_pilote_le_calcul(self):
+        """Après 0024, une fiche historiquement à 50 % porte le montant."""
+        e = self._e(pec_mensualite=30000, type_pec='MENSUALITES',
+                    taux_pec_mensualite=0)
+        self.assertEqual(e.montant_pec_mensualite_mensuel, 30000)
         self.assertEqual(e.frais_mensualite_effectif, 30000)
