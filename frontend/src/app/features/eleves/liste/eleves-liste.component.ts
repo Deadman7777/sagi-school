@@ -394,6 +394,14 @@ interface PecForm {
             <div class="fiche-row"><span>Section</span><strong>{{ e.section_nom }}</strong></div>
             <div class="fiche-row"><span>Statut</span>
               <p-tag [value]="statutLabel(e.statut)" [severity]="statutSeverity(e.statut)" /></div>
+            <div class="fiche-row"><span>{{ 'eleves.promotion' | translate }}</span>
+              <strong>{{ e.annee_entree || '—' }}</strong></div>
+            <div class="fiche-row"><span>{{ 'eleves.date_entree' | translate }}</span>
+              <strong>{{ (e.date_entree | date:'dd/MM/yyyy') || '—' }}</strong></div>
+            @if (e.matricule_ancien) {
+              <div class="fiche-row"><span>{{ 'eleves.matricule_ancien' | translate }}</span>
+                <strong class="mono" style="color:var(--text-3);font-size:11px">{{ e.matricule_ancien }}</strong></div>
+            }
             <div class="fiche-row"><span>Date inscription</span><strong>{{ e.date_inscription_libelle || '—' }}</strong></div>
             @if (e.regime === 'PASSAGER') {
               <div class="fiche-row"><span>{{ 'eleves.regime' | translate }}</span>
@@ -1035,7 +1043,8 @@ export class ElevesListeComponent implements OnInit {
   legendeVisible = false;
 
   tris = [
-    { label: 'Tri : Matricule',        value: 'numero' },
+    { label: "Tri : Ordre d'entrée",   value: 'matricule' },
+    { label: 'Tri : Numéro interne',   value: 'numero' },
     { label: 'Tri : Nom (A → Z)',      value: 'nom' },
     { label: 'Tri : Nom (Z → A)',      value: 'nom_desc' },
     { label: 'Tri : Arrivée (récent)', value: 'arrivee_recent' },
@@ -1191,7 +1200,15 @@ export class ElevesListeComponent implements OnInit {
 
   filtrer() {
     let data = this.eleves();
-    if (this.recherche)    data = data.filter(e => e.nom_complet.toLowerCase().includes(this.recherche.toLowerCase()));
+    // Le matricule (nouveau ET ancien) est cherchable : après un rebasage,
+    // l'école continue de retrouver un élève par le numéro de ses carnets.
+    if (this.recherche) {
+      const q = this.recherche.toLowerCase();
+      data = data.filter(e =>
+        e.nom_complet.toLowerCase().includes(q) ||
+        (e.matricule || '').toLowerCase().includes(q) ||
+        (e.matricule_ancien || '').toLowerCase().includes(q));
+    }
     if (this.filtreAlerte) data = data.filter(e => e.niveau_alerte === this.filtreAlerte as NiveauAlerte);
     if (this.filtreStatut) data = data.filter(e => e.statut === this.filtreStatut);
     if (this.filtreReliquat) data = data.filter(e => (e.reliquat_restant || 0) > 0);
@@ -1213,6 +1230,10 @@ export class ElevesListeComponent implements OnInit {
       case 'arrivee_recent': return copie.sort((a, b) => parDate(b, a));
       case 'classe':         return copie.sort((a, b) =>
         (a.classe_nom || '').localeCompare(b.classe_nom || '', 'fr', { sensitivity: 'base' }) || parNom(a, b));
+      // Le matricule promo (AAAA-CODE-NNNN) se trie tout seul en ordre
+      // chronologique : promo croissante, puis rang d'entrée dans la promo.
+      case 'matricule':      return copie.sort((a, b) =>
+        (a.matricule || '').localeCompare(b.matricule || ''));
       default:               return copie.sort((a, b) => a.numero - b.numero);
     }
   }

@@ -36,6 +36,10 @@ SOURCE_REPORT = 'REPORT_RELIQUAT'
 #   - date_inscription : repositionnée au début du nouvel exercice.
 CHAMPS_IDENTITE = (
     'section', 'numero', 'matricule', 'nom_complet', 'genre',
+    # Entrée dans l'établissement : figée à vie, sinon la promo et la date
+    # d'arrivée se perdent dès la 2e année (date_inscription, elle, est
+    # repositionnée plus bas au début du nouvel exercice pour le prorata).
+    'matricule_ancien', 'annee_entree', 'date_entree',
     'date_naissance', 'lieu_naissance',
     'nom_pere', 'telephone_pere', 'nom_mere', 'telephone_mere',
     'nom_tuteur', 'telephone_tuteur', 'lien_tuteur',

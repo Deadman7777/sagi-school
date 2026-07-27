@@ -97,19 +97,16 @@ class EleveViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Aucun exercice actif trouvé.")
 
-        # ID interne séquentiel
-        max_num = Eleve.objects.filter(tenant=tenant).aggregate(
-            m=Max('numero')
-        )['m'] or 0
-        numero = max_num + 1
+        # Numéro interne + matricule de promo (AAAA-CODE-NNNN) + entrée figée.
+        # La date d'entrée est celle saisie sur la fiche : un élève inscrit en
+        # cours d'année appartient bien à la promo de l'exercice, mais garde
+        # sa vraie date d'arrivée.
+        from .matricules import identite_nouvel_eleve
+        identite = identite_nouvel_eleve(
+            tenant, exercice,
+            date_entree=serializer.validated_data.get('date_inscription'))
 
-        # Matricule visible : AAAA-ETB-NNNNNN
-        annee    = str(timezone.now().year)
-        code_etb = (tenant.code_etablissement or 'ETB').upper()
-        matricule = f"{annee}-{code_etb}-{str(numero).zfill(6)}"
-
-        eleve = serializer.save(tenant=tenant, exercice=exercice, numero=numero,
-                                matricule=matricule)
+        eleve = serializer.save(tenant=tenant, exercice=exercice, **identite)
         self._sync_reliquat(serializer, eleve)
 
     def perform_update(self, serializer):
@@ -176,20 +173,19 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         from apps.paiements.reprise import creer_paiement_reprise
         from apps.paiements.reliquat_migration import definir_impaye_anterieur
+        from .matricules import Attributeur
         a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
-        annee    = str(timezone.now().year)
-        code_etb = (tenant.code_etablissement or 'ETB').upper()
         reprises, montant_reprise = 0, 0.0
         impayes, montant_impaye = 0, 0.0
         with transaction.atomic():
-            numero = Eleve.objects.filter(tenant=tenant).aggregate(m=Max('numero'))['m'] or 0
+            attributeur = Attributeur(tenant, exercice)
             for ligne in a_creer:
                 data = ligne['data']
-                numero += 1
+                identite = attributeur.suivant(
+                    matricule=data.pop('matricule'),
+                    date_entree=data.get('date_inscription'))
                 eleve = Eleve.objects.create(
-                    tenant=tenant, exercice=exercice, numero=numero,
-                    matricule=data.pop('matricule') or f"{annee}-{code_etb}-{str(numero).zfill(6)}",
-                    **data,
+                    tenant=tenant, exercice=exercice, **identite, **data,
                 )
                 if ligne['montant_reprise'] > 0:
                     paiement = creer_paiement_reprise(
@@ -372,6 +368,9 @@ class EleveViewSet(viewsets.ModelViewSet):
         qs = qs.filter(
             _Q(nom_complet__icontains=q) |
             _Q(matricule__icontains=q)   |
+            # Après un rebasage, l'école cherche encore par l'ancien numéro
+            # (carnets papier, anciens reçus).
+            _Q(matricule_ancien__icontains=q) |
             _Q(nom_pere__icontains=q)    |
             _Q(telephone_pere__icontains=q)
         )[:15]

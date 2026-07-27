@@ -25,6 +25,13 @@ export interface Eleve {
   id: string;
   numero: number;
   matricule: string;
+  // Matricule d'avant le rebasage au format promo — les carnets papier de
+  // l'école restent exploitables.
+  matricule_ancien: string;
+  // Entrée dans l'établissement, figée à vie et recopiée à chaque
+  // réinscription (date_inscription, elle, est repositionnée chaque année).
+  annee_entree: string;
+  date_entree: string | null;
   nom_complet: string;
   genre: 'G' | 'F';
   section: string;

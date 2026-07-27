@@ -54,6 +54,12 @@ class EleveSerializer(serializers.ModelSerializer):
             # (uniq_matricule_par_tenant) ; or le matricule est généré par
             # perform_create — sans ceci, toute création d'élève renvoie 400.
             'matricule': {'required': False, 'allow_null': True, 'allow_blank': True},
+            # Identité d'entrée : attribuée par le système (voir matricules.py)
+            # et recopiée à chaque réinscription. Seule la date reste corrigeable
+            # — une école qui migre découvre parfois la vraie date d'arrivée
+            # après coup ; la promo, elle, découle de l'exercice d'entrée.
+            'annee_entree':     {'read_only': True},
+            'matricule_ancien': {'read_only': True},
         }
 
     def validate(self, attrs):

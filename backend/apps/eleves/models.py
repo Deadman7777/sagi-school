@@ -79,6 +79,20 @@ class Eleve(TenantModel):
                                               on_delete=models.SET_NULL, related_name='eleves_classe')
     numero                = models.IntegerField(null=True, blank=True)
     matricule             = models.CharField(max_length=20, blank=True, null=True)
+    # Matricule porté avant le passage au format promo (AAAA-CODE-NNNN).
+    # Conservé pour que les carnets papier et les anciens reçus de l'école
+    # restent exploitables : on retrouve l'élève par son ancien numéro.
+    matricule_ancien      = models.CharField(max_length=20, blank=True,
+                                             help_text="Matricule d'avant le rebasage")
+    # ── Entrée dans l'établissement — figée à vie ─────────────────────────
+    # date_inscription est repositionnée au début de chaque exercice pour le
+    # prorata des mensualités : elle ne peut donc PAS servir de référence
+    # historique. Ces deux champs, eux, ne bougent jamais et sont recopiés à
+    # chaque réinscription — c'est le socle de la base « année après année ».
+    annee_entree          = models.CharField(max_length=20, blank=True,
+                                             help_text="Année scolaire d'entrée (promo), ex. 2025-2026")
+    date_entree           = models.DateField(null=True, blank=True,
+                                             help_text="Date de première entrée dans l'établissement")
     nom_complet           = models.CharField(max_length=200)
     genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance        = models.DateField(null=True, blank=True)
