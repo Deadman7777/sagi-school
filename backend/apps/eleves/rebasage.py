@@ -68,19 +68,23 @@ def calculer_rebasage(tenant):
 
     # Ordre chronologique réel : promo, puis date d'entrée, puis ordre de
     # création (départage stable des élèves entrés le même jour).
-    enfants.sort(key=lambda e: (annee_promo(e['exercice']), e['date_entree'],
+    # La promo se lit sur la DATE D'ENTRÉE réelle, pas sur l'exercice de la
+    # fiche : une migration verse tous les élèves dans l'exercice courant, et
+    # sans ça un enfant entré en 2021 serait rebasé en promo 2026.
+    enfants.sort(key=lambda e: (annee_promo(e['exercice'], e['date_entree']),
+                                e['date_entree'],
                                 min(f.created_at for f in e['groupe'])))
 
     rangs = {}
     lignes = []
     for enfant in enfants:
-        annee = annee_promo(enfant['exercice'])
+        annee = annee_promo(enfant['exercice'], enfant['date_entree'])
         rangs[annee] = rangs.get(annee, 0) + 1
         nouveau = f"{annee}-{code}-{rangs[annee]:04d}"
         ancien = next((f.matricule for f in enfant['groupe'] if f.matricule), '')
         lignes.append({
             **enfant,
-            'promo':     libelle_promo(enfant['exercice']),
+            'promo':     libelle_promo(enfant['exercice'], enfant['date_entree']),
             'ancien':    ancien or '',
             'nouveau':   nouveau,
             'nb_fiches': len(enfant['groupe']),
