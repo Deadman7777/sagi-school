@@ -97,6 +97,26 @@ export interface Eleve {
   nb_mensualites_dues: number;
 }
 
+/** Une échéance mensuelle : ce qui est dû ce mois-là, et ce qui reste. */
+export interface LigneEcheance {
+  mois: number;
+  nom: string;
+  annee: number;
+  du: number;
+  paye: number;
+  reste: number;
+  echu: boolean;
+  statut: 'SOLDE' | 'PARTIEL' | 'IMPAYE';
+}
+
+/** Dû mois par mois d'un élève. `hors_mensualite` porte l'inscription et les
+ *  frais uniques, qui ne se rattachent à aucun mois. */
+export interface Echeancier {
+  lignes: LigneEcheance[];
+  hors_mensualite: { libelle: string; du: number; paye: number; reste: number } | null;
+  totaux: { du: number; paye: number; reste: number };
+}
+
 /** Une ligne de la grille de saisie des impayés antérieurs (migration). */
 export interface LigneImpayeAnterieur {
   eleve_id: string;

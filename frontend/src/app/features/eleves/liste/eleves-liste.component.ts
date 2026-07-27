@@ -5,7 +5,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service,
-         LigneImpayeAnterieur, AncienEleve, ParcoursEleve } from '../../../core/models/eleve.model';
+         LigneImpayeAnterieur, AncienEleve, ParcoursEleve, Echeancier } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -586,6 +586,61 @@ const MOIS_ANNEE = [
                 {{ e.reste_a_payer | number }} FCFA
               </strong>
             </div>
+            <!-- Détail mois par mois : un total ne dit rien à une famille qui
+                 règle au mois. Chargé à l'ouverture de la fiche. -->
+            @if (echeancier(); as ech) {
+              @if (ech.lignes.length) {
+                <div class="ech-titre">Détail par mois</div>
+                <table class="ech-table">
+                  <caption class="sr-only">
+                    Montant dû, payé et restant pour chaque mois facturé
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Mois</th>
+                      <th scope="col" class="num">Dû</th>
+                      <th scope="col" class="num">Payé</th>
+                      <th scope="col" class="num">Reste</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (l of ech.lignes; track l.mois) {
+                      <tr [class.ech-retard]="l.reste > 0 && l.echu">
+                        <td>
+                          {{ l.nom }} {{ l.annee }}
+                          @if (l.reste > 0 && l.echu) {
+                            <span class="ech-badge">en retard</span>
+                          }
+                        </td>
+                        <td class="mono num">{{ l.du | number:'1.0-0' }}</td>
+                        <td class="mono num success">{{ l.paye | number:'1.0-0' }}</td>
+                        <td class="mono num" [class.danger]="l.reste > 0">
+                          {{ l.reste | number:'1.0-0' }}</td>
+                      </tr>
+                    }
+                    @if (ech.hors_mensualite; as h) {
+                      <tr>
+                        <td>{{ h.libelle }}</td>
+                        <td class="mono num">{{ h.du | number:'1.0-0' }}</td>
+                        <td class="mono num success">{{ h.paye | number:'1.0-0' }}</td>
+                        <td class="mono num" [class.danger]="h.reste > 0">
+                          {{ h.reste | number:'1.0-0' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Total</td>
+                      <td class="mono num">{{ ech.totaux.du | number:'1.0-0' }}</td>
+                      <td class="mono num success">{{ ech.totaux.paye | number:'1.0-0' }}</td>
+                      <td class="mono num" [class.danger]="ech.totaux.reste > 0">
+                        {{ ech.totaux.reste | number:'1.0-0' }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              }
+            }
+
             <!-- L'ardoise des années antérieures est TOUJOURS affichée, même à
                  zéro : c'est la seule façon de voir d'un coup d'œil que le
                  reste à payer de l'année est bien tout ce que l'élève doit. -->
@@ -1168,6 +1223,25 @@ const MOIS_ANNEE = [
     .fiche-row span { color:var(--text-3); }
     .fiche-row strong { color:var(--text); }
     .fiche-row strong.muted { color:var(--text-3); font-weight:500; }
+
+    /* Échéancier mensuel */
+    .ech-titre { font-size:10px; font-weight:700; color:var(--text-3);
+                 text-transform:uppercase; letter-spacing:.5px; margin:10px 0 5px; }
+    .ech-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .ech-table th { text-align:left; color:var(--text-3); font-weight:600;
+                    padding:3px 4px; border-bottom:1px solid var(--border); }
+    .ech-table td { padding:3px 4px; border-bottom:1px solid rgba(42,63,95,0.3);
+                    color:var(--text-2); }
+    .ech-table .num { text-align:right; }
+    .ech-table tfoot td { border-top:1px solid var(--border); border-bottom:none;
+                          font-weight:700; color:var(--text); padding-top:5px; }
+    .ech-retard td { background:rgba(239,68,68,0.07); }
+    .ech-badge { display:inline-block; margin-left:6px; padding:0 5px;
+                 border-radius:8px; background:rgba(239,68,68,0.15);
+                 color:#ef4444; font-size:9px; font-weight:700;
+                 text-transform:uppercase; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+               overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .fiche-title { display:flex; justify-content:space-between; align-items:center; }
     .fiche-edit { background:none; border:none; cursor:pointer; padding:2px 4px;
                   color:var(--text-3); font-size:10px; font-weight:600;
@@ -1708,9 +1782,24 @@ export class ElevesListeComponent implements OnInit {
     return ({ INSCRIPTION:'info', MENSUALITES:'success', TOTALE:'warn' } as any)[t || ''] || 'secondary';
   }
 
+  echeancier = signal<Echeancier | null>(null);
+
   voirFiche(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.dialogFicheVisible = true;
+    this.chargerEcheancier(eleve.id);
+  }
+
+  /** Le détail mensuel est une requête à part : inutile de l'alourdir sur la
+   *  liste, il n'a de sens qu'une fiche ouverte. */
+  private chargerEcheancier(eleveId: string) {
+    this.echeancier.set(null);
+    this.elevesService.getEcheancier(eleveId).subscribe({
+      next: (e) => this.echeancier.set(e),
+      // Silencieux : le reste de la fiche est lisible sans l'échéancier, un
+      // toast d'erreur ici masquerait l'information utile.
+      error: () => this.echeancier.set(null),
+    });
   }
 
   genererCertificat(eleve: Eleve | null) {

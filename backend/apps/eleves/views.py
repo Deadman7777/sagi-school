@@ -353,6 +353,23 @@ class EleveViewSet(viewsets.ModelViewSet):
                          'nb_appliques': len(appliques), 'nb_refuses': len(refuses),
                          'resume': resume_impayes_anterieurs(tenant, exercice)})
 
+    @action(detail=True, methods=['get'], url_path='echeancier')
+    def echeancier(self, request, pk=None):
+        """Ce que l'élève doit mois par mois, et ce qui reste sur chacun.
+
+        Un total (« reste à payer 91 000 ») ne dit rien à une famille qui règle
+        au mois : elle ne sait ni quels mois sont soldés, ni combien il manque
+        sur celui en cours. Lecture directe comme pour le parcours — une fiche
+        de créance doit rester consultable.
+        """
+        from .echeancier import construire_echeancier
+        eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
+                 .select_related('section', 'exercice')
+                 .prefetch_related('abonnements__service').first())
+        if not eleve:
+            return Response({'error': 'Élève introuvable.'}, status=404)
+        return Response(construire_echeancier(eleve))
+
     @action(detail=True, methods=['get'], url_path='parcours')
     def parcours(self, request, pk=None):
         """Scolarité complète de l'enfant, année par année, depuis son entrée.
