@@ -165,6 +165,14 @@ class Eleve(TenantModel):
     # est rarement reconstituable, l'important est que l'école puisse l'assumer.
     reliquat_note = models.CharField(max_length=120, blank=True,
                                      help_text="Origine de l'impayé antérieur saisi à la migration")
+    # Fiche ouverte UNIQUEMENT pour porter la créance d'un élève qui a quitté
+    # l'établissement (diplômé, transféré, abandon) en laissant une ardoise.
+    # Elle existe parce que l'à-nouveaux 411/890 doit être passé dans le
+    # nouvel exercice — sans elle, la créance disparaîtrait du bilan. Mais
+    # l'enfant n'est plus élève : elle est tenue hors de la liste et des
+    # effectifs, et se consulte depuis « Anciens élèves ».
+    fiche_creance = models.BooleanField(default=False,
+                                        help_text="Fiche de suivi de créance — l'élève a quitté l'établissement")
 
     class Meta:
         db_table = 'eleves'
@@ -278,7 +286,14 @@ class Eleve(TenantModel):
     # ── Montants attendus / payés ─────────────────────────────────────────
     @property
     def total_attendu(self):
-        """Total annuel réel attendu : frais section − prise en charge + services optionnels."""
+        """Total annuel réel attendu : frais section − prise en charge + services optionnels.
+
+        Une fiche de créance ne doit RIEN au titre de l'année : l'enfant a
+        quitté l'établissement, la fiche n'existe que pour porter son ardoise
+        (qui, elle, est dans reliquat_anterieur). Lui compter la scolarité
+        reviendrait à facturer une année qu'il ne fera pas."""
+        if self.fiche_creance:
+            return 0.0
         base = max(self.total_theorique - self.montant_pec_annuel, 0.0)
         return round(base + self.montant_services_annuel, 2)
 

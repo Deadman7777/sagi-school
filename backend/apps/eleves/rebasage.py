@@ -30,45 +30,9 @@ from django.db import transaction
 
 from .matricules import annee_promo, code_etablissement, libelle_promo
 from .models import Eleve
-
-
-def _racine(parents, x):
-    while parents[x] != x:
-        parents[x] = parents[parents[x]]
-        x = parents[x]
-    return x
-
-
-def _unir(parents, a, b):
-    ra, rb = _racine(parents, a), _racine(parents, b)
-    if ra != rb:
-        parents[rb] = ra
-
-
-def grouper_par_eleve(fiches):
-    """Regroupe les fiches par enfant réel. Rend [[fiche, ...], ...].
-
-    Deux fiches appartiennent au même enfant si elles sont chaînées par
-    `eleve_precedent`, ou si elles portent le même matricule non vide.
-    """
-    parents = {f.id: f.id for f in fiches}
-    presentes = set(parents)
-    par_matricule = {}
-
-    for f in fiches:
-        if f.eleve_precedent_id in presentes:
-            _unir(parents, f.eleve_precedent_id, f.id)
-        if f.matricule:
-            cle = f.matricule.strip().upper()
-            if cle in par_matricule:
-                _unir(parents, par_matricule[cle], f.id)
-            else:
-                par_matricule[cle] = f.id
-
-    groupes = {}
-    for f in fiches:
-        groupes.setdefault(_racine(parents, f.id), []).append(f)
-    return list(groupes.values())
+# Le regroupement des fiches par enfant réel est partagé avec le parcours :
+# une seule définition de « c'est le même enfant » dans toute l'application.
+from .parcours import grouper_par_eleve
 
 
 def _entree(groupe):

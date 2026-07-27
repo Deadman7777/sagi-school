@@ -102,6 +102,61 @@ export interface LigneImpayeAnterieur {
   note: string;
 }
 
+/** Une année de scolarité dans le parcours d'un élève. */
+export interface AnneeParcours {
+  eleve_id: string;
+  annee: string;
+  section: string;
+  classe: string;
+  statut: string;
+  statut_libelle: string;
+  fiche_creance: boolean;
+  total_attendu: number;
+  total_paye: number;
+  reste: number;
+  reliquat: number;
+  reliquat_restant: number;
+  du_global: number;
+}
+
+export interface ParcoursEleve {
+  eleve_id: string;
+  nom_complet: string;
+  matricule: string;
+  matricule_ancien: string;
+  annee_entree: string;
+  date_entree: string | null;
+  annee_sortie: string;
+  statut: string;
+  statut_libelle: string;
+  est_sorti: boolean;
+  section: string;
+  classe: string;
+  nb_annees: number;
+  annees: AnneeParcours[];
+  total_attendu: number;
+  total_paye: number;
+  /** Dette d'aujourd'hui — surtout pas la somme des restes annuels. */
+  du_actuel: number;
+}
+
+export interface AncienEleve {
+  eleve_id: string;
+  matricule: string;
+  matricule_ancien: string;
+  nom_complet: string;
+  genre: string;
+  annee_entree: string;
+  date_entree: string | null;
+  annee_sortie: string;
+  statut: string;
+  statut_libelle: string;
+  derniere_classe: string;
+  nb_annees: number;
+  total_paye: number;
+  solde_du: number;
+}
+
 export interface ResumeImpayesAnterieurs {
   exercice: string;
   nb_eleves: number;

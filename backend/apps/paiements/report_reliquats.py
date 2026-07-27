@@ -24,6 +24,7 @@ from django.db.models import DecimalField, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.eleves.models import Eleve
+from apps.eleves.parcours import STATUTS_SORTIE
 from .models import Exercice
 
 SOURCE_REPORT = 'REPORT_RELIQUAT'
@@ -143,8 +144,15 @@ def _ecrire_a_nouveaux(fiche, montant, exercice_cible, exercice_source):
 
 
 def _creer_fiche(eleve, exercice_cible):
-    """Réinscrit l'élève sur l'exercice cible : nouvelle fiche, même identité
-    (matricule et numéro conservés — c'est le même enfant)."""
+    """Ouvre la fiche de l'élève sur l'exercice cible : même identité
+    (matricule, numéro et entrée conservés — c'est le même enfant).
+
+    Pour un élève SORTI (diplômé, transféré, abandon), ce n'est pas une
+    réinscription : il ne revient pas, mais sa dette le suit. La fiche est
+    alors marquée `fiche_creance` — elle porte l'à-nouveaux 411/890, sans
+    quoi la créance disparaîtrait du bilan du nouvel exercice, tout en
+    restant hors de la liste des élèves et des effectifs.
+    """
     valeurs = {champ: getattr(eleve, champ) for champ in CHAMPS_IDENTITE}
     return Eleve.objects.create(
         tenant=eleve.tenant,
@@ -154,6 +162,7 @@ def _creer_fiche(eleve, exercice_cible):
         date_inscription_jour_estime=False,
         regime='EXERCICE',
         nb_mois_passager=None,
+        fiche_creance=eleve.statut in STATUTS_SORTIE,
         **valeurs,
     )
 

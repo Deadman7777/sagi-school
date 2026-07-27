@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
-         LigneImpayeAnterieur, ResumeImpayesAnterieurs } from '../models/eleve.model';
+         LigneImpayeAnterieur, ResumeImpayesAnterieurs,
+         ParcoursEleve, AncienEleve } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -104,6 +105,20 @@ export class ElevesService {
 
   fichePDF(eleveId: string) {
     return this.api.getBlob(`/eleves/${eleveId}/fiche-pdf/`);
+  }
+
+  // Scolarité complète d'un enfant, toutes années confondues.
+  getParcours(eleveId: string) {
+    return this.api.get<ParcoursEleve>(`/eleves/${eleveId}/parcours/`);
+  }
+  parcoursPDF(eleveId: string) {
+    return this.api.getBlob(`/eleves/${eleveId}/parcours-pdf/`);
+  }
+
+  // Base historique des sortis — indépendante de l'exercice actif.
+  getAnciens(params?: { q?: string; statut?: string }) {
+    return this.api.get<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;
+                          total_du: number }>('/eleves/anciens/', params as any);
   }
 
   // Impayés antérieurs (migration) — saisie en lot d'un montant par élève.

@@ -70,6 +70,12 @@ class EleveViewSet(viewsets.ModelViewSet):
             ),
         )
 
+        # Les fiches de créance ne sont pas des élèves : elles n'existent que
+        # pour porter au bilan l'ardoise d'un enfant déjà parti. Elles se
+        # consultent depuis « Anciens élèves » (?creances=1 pour les voir ici).
+        if self.request.query_params.get('creances') not in ('1', 'true', 'True'):
+            qs = qs.filter(fiche_creance=False)
+
         if section := self.request.query_params.get('section'):
             qs = qs.filter(section__nom=section)
         if exercice := self.request.query_params.get('exercice'):
@@ -346,6 +352,37 @@ class EleveViewSet(viewsets.ModelViewSet):
         return Response({'appliques': appliques, 'refuses': refuses,
                          'nb_appliques': len(appliques), 'nb_refuses': len(refuses),
                          'resume': resume_impayes_anterieurs(tenant, exercice)})
+
+    @action(detail=True, methods=['get'], url_path='parcours')
+    def parcours(self, request, pk=None):
+        """Scolarité complète de l'enfant, année par année, depuis son entrée.
+
+        Rassemble les fiches éparpillées sur les exercices — c'est la lecture
+        continue qui manquait pour suivre un élève qui reste plusieurs années
+        et pour rouvrir le dossier d'un diplômé longtemps après son départ.
+        """
+        from .parcours import construire_parcours
+        # Lecture directe et non self.get_object() : le queryset de la liste
+        # écarte les fiches de créance, or c'est justement depuis « Anciens
+        # élèves » qu'on ouvre le parcours d'un enfant parti en devant.
+        eleve = Eleve.objects.filter(tenant=get_tenant(request), pk=pk).first()
+        if not eleve:
+            return Response({'error': 'Élève introuvable.'}, status=404)
+        return Response(construire_parcours(eleve))
+
+    @action(detail=False, methods=['get'], url_path='anciens')
+    def anciens(self, request):
+        """Base historique des élèves sortis (diplômés, transférés, abandons).
+
+        Indépendante de l'exercice actif : un diplômé de 2019 s'y retrouve
+        comme un transféré de l'an dernier. Le statut retenu est celui de la
+        dernière fiche — un enfant réinscrit après un abandon n'y est plus.
+        """
+        from .parcours import anciens_eleves
+        return Response(anciens_eleves(
+            get_tenant(request),
+            recherche=request.query_params.get('q', ''),
+            statut=request.query_params.get('statut', '')))
 
     @action(detail=False, methods=['get'], url_path='search')
     def search(self, request):
@@ -1276,4 +1313,45 @@ class FicheElevePDFView(APIView):
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="fiche_{safe_name}.pdf"'
+        return response
+
+
+class ParcoursElevePDFView(APIView):
+    """Dossier de scolarité : toutes les années de l'enfant sur une page.
+
+    C'est le document qu'on remet à une famille qui part, ou qu'on ressort
+    des archives pour un ancien élève — d'où la lecture continue plutôt
+    qu'une photo de l'année en cours."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, eleve_id):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        from .parcours import construire_parcours
+
+        tenant = get_tenant(request)
+        eleve = Eleve.objects.filter(tenant=tenant, id=eleve_id).first()
+        if not eleve:
+            return HttpResponse('Élève introuvable', status=404)
+
+        html_str = render_to_string('pdf/parcours_eleve.html', {
+            'tenant':       tenant,
+            'p':            construire_parcours(eleve),
+            'date_edition': timezone.now(),
+        })
+        buf    = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
+        if result.err:
+            return HttpResponse('Erreur génération du parcours PDF.', status=500)
+
+        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="parcours_{safe_name}.pdf"'
         return response

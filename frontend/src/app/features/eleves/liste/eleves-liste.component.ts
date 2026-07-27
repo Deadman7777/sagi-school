@@ -5,7 +5,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service,
-         LigneImpayeAnterieur } from '../../../core/models/eleve.model';
+         LigneImpayeAnterieur, AncienEleve, ParcoursEleve } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -22,6 +22,8 @@ import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 
 /** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
 type LigneImpayeEditable = LigneImpayeAnterieur & { montant0: number; note0: string };
+
+type OngletEleves = 'liste' | 'prise_en_charge' | 'anciens';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -47,10 +49,20 @@ interface PecForm {
         <span class="page-sub">{{ eleves().length }} élèves</span>
       </div>
       <div style="display:flex;gap:8px">
-        <p-button [label]="onglet() === 'liste' ? 'Prise en charge' : 'Liste élèves'"
-                  severity="secondary" size="small"
-                  [pTooltip]="onglet() === 'liste' ? 'Voir les prises en charge sociales' : 'Revenir à la liste des élèves'"
-                  (onClick)="basculerOnglet()" />
+        <p-button label="Liste élèves" size="small"
+                  [severity]="onglet() === 'liste' ? 'primary' : 'secondary'"
+                  [outlined]="onglet() !== 'liste'"
+                  (onClick)="allerOnglet('liste')" />
+        <p-button label="Prise en charge" size="small"
+                  [severity]="onglet() === 'prise_en_charge' ? 'primary' : 'secondary'"
+                  [outlined]="onglet() !== 'prise_en_charge'"
+                  pTooltip="Voir les prises en charge sociales"
+                  (onClick)="allerOnglet('prise_en_charge')" />
+        <p-button [label]="'eleves.anciens' | translate" size="small"
+                  [severity]="onglet() === 'anciens' ? 'primary' : 'secondary'"
+                  [outlined]="onglet() !== 'anciens'"
+                  [pTooltip]="'eleves.anciens_aide' | translate"
+                  (onClick)="allerOnglet('anciens')" />
         <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
                   pTooltip="Exporter la liste en PDF"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
@@ -231,6 +243,92 @@ interface PecForm {
           </ng-template>
           <ng-template pTemplate="emptymessage">
             <tr><td colspan="11" class="empty-msg">{{ 'eleves.aucun' | translate }}</td></tr>
+          </ng-template>
+        </p-table>
+      </div>
+    }
+
+    <!-- ══════════════════════ ONGLET ANCIENS ÉLÈVES ══════════════════════ -->
+    <!-- Base historique : indépendante de l'exercice affiché, on doit y
+         retrouver un diplômé de 2019 comme un transféré de l'an dernier. -->
+    @if (onglet() === 'anciens') {
+      <div class="kpi-row" style="margin-bottom:14px">
+        <div class="kpi-mini">
+          <span class="km-val">{{ resumeAnciens()?.nb || 0 }}</span>
+          <span class="km-label">{{ 'eleves.anciens' | translate }}</span>
+        </div>
+        <div class="kpi-mini info">
+          <span class="km-val">{{ resumeAnciens()?.nb_diplomes || 0 }}</span>
+          <span class="km-label">Diplômés</span>
+        </div>
+        @if ((resumeAnciens()?.total_du || 0) > 0) {
+          <div class="kpi-mini" style="border-color:#f97316">
+            <span class="km-val" style="color:#f97316">{{ resumeAnciens()!.total_du | number:'1.0-0' }}</span>
+            <span class="km-label">{{ 'eleves.anciens_creances' | translate }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="filters-bar">
+        <input pInputText [(ngModel)]="rechercheAncien" (input)="chargerAnciens()"
+               [placeholder]="'eleves.anciens_recherche' | translate" class="search-input" />
+        <p-select appendTo="body" [options]="filtresStatutAncien" [(ngModel)]="filtreStatutAncien"
+                  (onChange)="chargerAnciens()" optionLabel="label" optionValue="value"
+                  styleClass="filter-drop" />
+      </div>
+
+      <div class="table-card">
+        <p-table [value]="anciens()" [loading]="chargementAnciens()" [rowHover]="true"
+                 styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>{{ 'eleves.matricule' | translate }}</th>
+              <th>{{ 'eleves.nom_complet' | translate }}</th>
+              <th>{{ 'eleves.promotion' | translate }}</th>
+              <th>{{ 'eleves.annee_sortie' | translate }}</th>
+              <th>{{ 'eleves.derniere_classe' | translate }}</th>
+              <th class="text-right">{{ 'eleves.nb_annees' | translate }}</th>
+              <th>Statut</th>
+              <th class="text-right">{{ 'eleves.paye' | translate }}</th>
+              <th class="text-right">{{ 'eleves.solde_du' | translate }}</th>
+              <th>{{ 'eleves.actions' | translate }}</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-a>
+            <tr>
+              <td class="mono" style="color:#00d4aa;font-size:11px">
+                {{ a.matricule || '—' }}
+                @if (a.matricule_ancien) {
+                  <div style="color:var(--text-3);font-size:10px">{{ a.matricule_ancien }}</div>
+                }
+              </td>
+              <td class="bold">{{ a.nom_complet }}</td>
+              <td>{{ a.annee_entree || '—' }}</td>
+              <td>{{ a.annee_sortie }}</td>
+              <td>{{ a.derniere_classe || '—' }}</td>
+              <td class="mono text-right">{{ a.nb_annees }}</td>
+              <td><p-tag [value]="a.statut_libelle" [severity]="statutSeverity(a.statut)" /></td>
+              <td class="mono text-right success">{{ a.total_paye | number:'1.0-0' }}</td>
+              <td class="mono text-right" [class.danger]="a.solde_du > 0">
+                {{ a.solde_du | number:'1.0-0' }}
+              </td>
+              <td>
+                <div class="btn-row">
+                  <p-button icon="pi pi-history" [rounded]="true" [text]="true" severity="info"
+                            [pTooltip]="'eleves.parcours' | translate"
+                            (onClick)="ouvrirParcours(a.eleve_id)" />
+                  <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="danger"
+                            [pTooltip]="'eleves.parcours_pdf' | translate"
+                            [loading]="exportantParcours()"
+                            (onClick)="telechargerParcoursPDF(a.eleve_id)" />
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="10" style="text-align:center;padding:26px;color:var(--text-3)">
+              {{ 'eleves.anciens_vide' | translate }}
+            </td></tr>
           </ng-template>
         </p-table>
       </div>
@@ -480,6 +578,8 @@ interface PecForm {
       <ng-template pTemplate="footer">
         <p-button label="Modifier" severity="warn" icon="pi pi-pencil"
                   (onClick)="ouvrirModifier(eleveSelectionne())" />
+        <p-button [label]="'eleves.parcours' | translate" severity="help" icon="pi pi-history"
+                  (onClick)="ouvrirParcours(eleveSelectionne()!.id)" />
         <p-button label="Exporter la fiche" severity="info" icon="pi pi-file-pdf"
                   [loading]="exportantFiche()" (onClick)="telechargerFichePDF(eleveSelectionne()!)" />
         <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
@@ -765,6 +865,80 @@ interface PecForm {
       </ng-template>
     </p-dialog>
 
+    <!-- ═══════════════════ PARCOURS SCOLAIRE D'UN ÉLÈVE ═══════════════════ -->
+    <p-dialog [header]="'eleves.parcours' | translate" [(visible)]="dialogParcoursVisible"
+              [modal]="true" [style]="{width:'860px'}" [draggable]="false">
+      @if (chargementParcours()) {
+        <p style="color:var(--text-3)">…</p>
+      }
+      @if (parcours(); as p) {
+        <div class="parcours-tete">
+          <div>
+            <strong>{{ p.nom_complet }}</strong>
+            <span class="mono" style="color:#00d4aa;font-size:11px;margin-left:8px">{{ p.matricule }}</span>
+          </div>
+          <p-tag [value]="p.statut_libelle" [severity]="statutSeverity(p.statut)" />
+        </div>
+        <div class="parcours-meta">
+          {{ 'eleves.promotion' | translate }} <strong>{{ p.annee_entree || '—' }}</strong> ·
+          {{ 'eleves.date_entree' | translate }} <strong>{{ (p.date_entree | date:'dd/MM/yyyy') || '—' }}</strong> ·
+          <strong>{{ p.nb_annees }}</strong> {{ 'eleves.nb_annees' | translate }}
+        </div>
+
+        <p-table [value]="p.annees" styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th>{{ 'eleves.annee' | translate }}</th>
+              <th>{{ 'eleves.classe' | translate }}</th>
+              <th>Statut</th>
+              <th class="text-right">{{ 'eleves.total_attendu' | translate }}</th>
+              <th class="text-right">{{ 'eleves.paye' | translate }}</th>
+              <th class="text-right">{{ 'eleves.reste' | translate }}</th>
+              <th class="text-right">{{ 'eleves.reliquat' | translate }}</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-a>
+            <tr>
+              <td class="bold">{{ a.annee }}</td>
+              <td>{{ a.classe || a.section || '—' }}</td>
+              <td>
+                @if (a.fiche_creance) {
+                  <p-tag [value]="'eleves.fiche_creance' | translate" severity="warn" />
+                } @else {
+                  {{ a.statut_libelle }}
+                }
+              </td>
+              <td class="mono text-right">{{ a.total_attendu | number:'1.0-0' }}</td>
+              <td class="mono text-right success">{{ a.total_paye | number:'1.0-0' }}</td>
+              <td class="mono text-right" [class.danger]="a.reste > 0">{{ a.reste | number:'1.0-0' }}</td>
+              <td class="mono text-right">{{ a.reliquat ? (a.reliquat | number:'1.0-0') : '—' }}</td>
+            </tr>
+          </ng-template>
+        </p-table>
+
+        <!-- Le dû affiché est celui de la dernière année, jamais la somme des
+             restes : un impayé reconduit serait compté à chaque exercice. -->
+        <div class="parcours-synthese">
+          <div><span>{{ 'eleves.total_facture' | translate }}</span>
+            <strong class="mono">{{ p.total_attendu | number:'1.0-0' }} FCFA</strong></div>
+          <div><span>{{ 'eleves.total_regle' | translate }}</span>
+            <strong class="mono success">{{ p.total_paye | number:'1.0-0' }} FCFA</strong></div>
+          <div><span>{{ 'eleves.du_actuel' | translate }}</span>
+            <strong class="mono" [class.danger]="p.du_actuel > 0" [class.success]="p.du_actuel <= 0">
+              {{ p.du_actuel | number:'1.0-0' }} FCFA</strong></div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        @if (parcours(); as p) {
+          <p-button [label]="'eleves.parcours_pdf' | translate" icon="pi pi-file-pdf"
+                    severity="danger" [loading]="exportantParcours()"
+                    (onClick)="telechargerParcoursPDF(p.eleve_id)" />
+        }
+        <p-button [label]="'common.fermer' | translate" severity="secondary"
+                  (onClick)="dialogParcoursVisible=false" />
+      </ng-template>
+    </p-dialog>
+
     <!-- ═══════════ SAISIE EN LOT DES IMPAYÉS ANTÉRIEURS (migration) ═══════════ -->
     <p-dialog [header]="'eleves.saisie_impayes_titre' | translate" [(visible)]="dialogImpayesVisible"
               [modal]="true" [style]="{width:'900px'}" [draggable]="false">
@@ -935,6 +1109,20 @@ interface PecForm {
     .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .w-full { width:100%; }
 
+    /* Parcours scolaire */
+    .parcours-tete { display:flex; justify-content:space-between; align-items:center;
+                     margin-bottom:6px; }
+    .parcours-tete strong { font-size:14px; color:var(--text); }
+    .parcours-meta { font-size:12px; color:var(--text-2); margin-bottom:14px; }
+    .parcours-meta strong { color:var(--text); }
+    .parcours-synthese { display:flex; gap:10px; margin-top:14px; }
+    .parcours-synthese > div { flex:1; text-align:center; padding:10px;
+                               background:var(--surface-2); border:1px solid var(--border);
+                               border-radius:8px; }
+    .parcours-synthese span { display:block; font-size:10px; color:var(--text-3);
+                              text-transform:uppercase; letter-spacing:.4px; }
+    .parcours-synthese strong { display:block; font-size:15px; margin-top:4px; }
+
     /* Saisie en lot des impayés antérieurs */
     .impayes-total { margin-left:auto; font-size:12px; font-weight:600; color:#f97316;
                      white-space:nowrap; }
@@ -977,7 +1165,20 @@ export class ElevesListeComponent implements OnInit {
   saving        = signal(false);
   exportant     = signal(false);
   exportantFiche = signal(false);
-  onglet        = signal<'liste' | 'prise_en_charge'>('liste');
+  onglet        = signal<OngletEleves>('liste');
+
+  // Base historique des sortis — indépendante de l'exercice affiché.
+  anciens             = signal<AncienEleve[]>([]);
+  resumeAnciens       = signal<{ nb: number; nb_diplomes: number; total_du: number } | null>(null);
+  chargementAnciens   = signal(false);
+  rechercheAncien     = '';
+  filtreStatutAncien  = '';
+
+  // Parcours d'un élève, toutes années confondues.
+  dialogParcoursVisible = false;
+  parcours              = signal<ParcoursEleve | null>(null);
+  chargementParcours    = signal(false);
+  exportantParcours     = signal(false);
 
   dialogVisible        = false;
   dialogImportVisible  = false;
@@ -1050,6 +1251,12 @@ export class ElevesListeComponent implements OnInit {
     { label: 'Tri : Arrivée (récent)', value: 'arrivee_recent' },
     { label: 'Tri : Arrivée (ancien)', value: 'arrivee_ancien' },
     { label: 'Tri : Classe',           value: 'classe' },
+  ];
+  filtresStatutAncien = [
+    { label: 'Tous les sortis', value: '' },
+    { label: 'Diplômés',        value: 'DIPLOME' },
+    { label: 'Transférés',      value: 'TRANSFERE' },
+    { label: 'Abandons',        value: 'ABANDONNE' },
   ];
   filtresAlerte = [
     { label: 'Toutes alertes', value: '' },
@@ -1159,12 +1366,60 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
-  basculerOnglet() {
-    const next = this.onglet() === 'liste' ? 'prise_en_charge' : 'liste';
+  allerOnglet(next: OngletEleves) {
     this.onglet.set(next);
-    if (next === 'prise_en_charge' && !this.statsPEC()) {
-      this.chargerStatsPEC();
-    }
+    if (next === 'prise_en_charge' && !this.statsPEC()) this.chargerStatsPEC();
+    if (next === 'anciens') this.chargerAnciens();
+  }
+
+  // ── Base historique des anciens élèves ──────────────────────────────────
+  chargerAnciens() {
+    this.chargementAnciens.set(true);
+    this.elevesService.getAnciens({
+      q: this.rechercheAncien || undefined,
+      statut: this.filtreStatutAncien || undefined,
+    }).subscribe({
+      next: r => { this.anciens.set(r.lignes); this.resumeAnciens.set(r);
+                   this.chargementAnciens.set(false); },
+      error: () => {
+        this.chargementAnciens.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: this.translate.instant('eleves.anciens_titre') });
+      },
+    });
+  }
+
+  // ── Parcours d'un élève ─────────────────────────────────────────────────
+  ouvrirParcours(eleveId: string) {
+    this.dialogParcoursVisible = true;
+    this.parcours.set(null);
+    this.chargementParcours.set(true);
+    this.elevesService.getParcours(eleveId).subscribe({
+      next: p => { this.parcours.set(p); this.chargementParcours.set(false); },
+      error: () => {
+        this.chargementParcours.set(false);
+        this.dialogParcoursVisible = false;
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: this.translate.instant('eleves.parcours') });
+      },
+    });
+  }
+
+  telechargerParcoursPDF(eleveId: string) {
+    this.exportantParcours.set(true);
+    this.elevesService.parcoursPDF(eleveId).subscribe({
+      next: blob => {
+        this.exportantParcours.set(false);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      },
+      error: () => {
+        this.exportantParcours.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: this.translate.instant('eleves.parcours_pdf') });
+      },
+    });
   }
 
   changerExercice() {
