@@ -88,6 +88,13 @@ export interface Eleve {
   reliquat_restant: number;
   reliquat_origine_libelle: string;
   reste_a_payer_global: number;
+  // Mois réellement facturés (1-12). VIDE = le prorata sur la date d'entrée
+  // fait foi ; renseigné, il prime. `mois_dus_origine` dit lequel des deux
+  // s'applique — sans quoi l'école ne sait pas si le chiffre est le sien.
+  mois_dus: number[];
+  mois_dus_effectifs: number[];
+  mois_dus_origine: 'SAISI' | 'PRORATA';
+  nb_mensualites_dues: number;
 }
 
 /** Une ligne de la grille de saisie des impayés antérieurs (migration). */

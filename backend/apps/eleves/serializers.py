@@ -2,6 +2,12 @@ from rest_framework import serializers
 from django.utils import timezone
 from .models import Eleve, Section, Service, EleveService
 
+# Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
+# dans l'autre sens (nom → numéro) : deux tables homonymes seraient un piège.
+_NOMS_MOIS = {1: 'janvier', 2: 'février', 3: 'mars', 4: 'avril',
+              5: 'mai', 6: 'juin', 7: 'juillet', 8: 'août',
+              9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'décembre'}
+
 
 class ServiceSerializer(serializers.ModelSerializer):
     montant = serializers.FloatField(required=False, default=0)
@@ -43,6 +49,27 @@ class EleveSerializer(serializers.ModelSerializer):
     reliquat_restant             = serializers.ReadOnlyField()
     reliquat_origine_libelle     = serializers.ReadOnlyField()
     reste_a_payer_global         = serializers.SerializerMethodField()
+    # Mois réellement dus + d'où ils viennent : l'école doit voir si le chiffre
+    # est le sien ou celui du prorata, sinon elle ne sait pas quoi corriger.
+    nb_mensualites_dues          = serializers.ReadOnlyField()
+    mois_dus_effectifs           = serializers.SerializerMethodField()
+    mois_dus_origine             = serializers.SerializerMethodField()
+
+    def get_mois_dus_effectifs(self, obj):
+        """Les mois facturés, saisis ou déduits du prorata."""
+        if obj.mois_dus:
+            return sorted(int(m) for m in obj.mois_dus)
+        if not obj.exercice_id:
+            return []
+        debut = obj.exercice.date_debut
+        nb    = obj.nb_mensualites_dues
+        # Les mois dus courent depuis le premier mois facturé jusqu'au bout du
+        # compte : le prorata ne dit qu'un NOMBRE, on le déroule en calendrier.
+        premier = obj.exercice.nb_mensualites - nb
+        return [((debut.month - 1 + premier + i) % 12) + 1 for i in range(nb)]
+
+    def get_mois_dus_origine(self, obj):
+        return 'SAISI' if obj.mois_dus else 'PRORATA'
 
     class Meta:
         model  = Eleve
@@ -72,8 +99,44 @@ class EleveSerializer(serializers.ModelSerializer):
                 {'nb_mois_passager': 'Nombre de mois requis pour un ndongo passager.'})
         if regime == 'EXERCICE':
             attrs['nb_mois_passager'] = None
+        self._valider_mois_dus(attrs)
         self._valider_reliquat(attrs)
         return attrs
+
+    def _valider_mois_dus(self, attrs):
+        """Mois facturés : numéros valides, et jamais retirer un mois déjà réglé.
+
+        Décocher un mois qu'un paiement a déjà soldé creuserait un trop-perçu
+        fantôme sur la fiche — l'élève aurait payé un mois qu'il ne doit pas.
+        On refuse avec le nom du mois plutôt que de laisser corriger à l'aveugle.
+        """
+        if 'mois_dus' not in attrs:
+            return
+        brut = attrs['mois_dus'] or []
+        if not isinstance(brut, list):
+            raise serializers.ValidationError(
+                {'mois_dus': 'Format attendu : une liste de numéros de mois.'})
+        try:
+            mois = sorted({int(m) for m in brut})
+        except (TypeError, ValueError):
+            raise serializers.ValidationError(
+                {'mois_dus': 'Les mois doivent être des nombres de 1 à 12.'})
+        if any(m < 1 or m > 12 for m in mois):
+            raise serializers.ValidationError(
+                {'mois_dus': 'Les mois doivent être compris entre 1 et 12.'})
+        attrs['mois_dus'] = mois
+
+        if not self.instance or not mois:
+            return
+        regles = set()
+        for p in self.instance.paiements.filter(statut='ACTIF'):
+            regles.update(int(m) for m in (p.mois_regles or []))
+        retires = sorted(regles - set(mois))
+        if retires:
+            noms = ', '.join(_NOMS_MOIS.get(m, str(m)) for m in retires)
+            raise serializers.ValidationError(
+                {'mois_dus': f"Déjà réglé pour : {noms}. Annulez d'abord "
+                             "les paiements concernés."})
 
     def _valider_reliquat(self, attrs):
         """L'impayé antérieur porte une écriture de bilan (411/890) : on refuse

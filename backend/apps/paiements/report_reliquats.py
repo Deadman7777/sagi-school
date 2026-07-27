@@ -50,6 +50,11 @@ CHAMPS_IDENTITE = (
     'pec_inscription', 'pec_mensualite',
     'type_pec', 'taux_pec_inscription', 'taux_pec_mensualite',
     'taux_prise_en_charge',
+    # PAS de `mois_dus` ici, et c'est délibéré : les mois facturés valent pour
+    # UNE année. Les recopier ferait entrer l'élève dans le nouvel exercice avec
+    # le calendrier de l'ancien — la même erreur que date_inscription, qu'on a
+    # dû neutraliser par date_entree. La fiche repart sur le prorata, l'école
+    # ajuste si besoin.
 )
 
 

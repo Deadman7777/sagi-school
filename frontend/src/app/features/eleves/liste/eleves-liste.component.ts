@@ -18,6 +18,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TooltipModule } from 'primeng/tooltip';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { CheckboxModule } from 'primeng/checkbox';
 import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 
 /** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
@@ -30,14 +31,29 @@ interface PecForm {
   pec_inscription: number;
   pec_mensualite: number;
   obs_prise_en_charge: string;
+  // Mois facturés. `moisAuto` à vrai = on laisse le prorata sur la date
+  // d'entrée décider, et on n'envoie PAS mois_dus : éditer la prise en charge
+  // d'un élève ne doit pas figer son calendrier au passage.
+  moisAuto: boolean;
+  mois_dus: number[];
 }
+
+/** Mois de l'année, pour les cases à cocher des mois facturés. */
+const MOIS_ANNEE = [
+  { num: 1,  nom: 'Janvier' },   { num: 2,  nom: 'Février' },
+  { num: 3,  nom: 'Mars' },      { num: 4,  nom: 'Avril' },
+  { num: 5,  nom: 'Mai' },       { num: 6,  nom: 'Juin' },
+  { num: 7,  nom: 'Juillet' },   { num: 8,  nom: 'Août' },
+  { num: 9,  nom: 'Septembre' }, { num: 10, nom: 'Octobre' },
+  { num: 11, nom: 'Novembre' },  { num: 12, nom: 'Décembre' },
+];
 
 @Component({
   selector: 'app-eleves-liste',
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
-            TooltipModule, MultiSelectModule, ImportElevesDialogComponent],
+            TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -542,7 +558,21 @@ interface PecForm {
             }
           </div>
           <div class="fiche-section">
-            <div class="fiche-title">Situation financière</div>
+            <div class="fiche-title">
+              Situation financière
+              <button type="button" class="fiche-edit" (click)="ouvrirPriseEnCharge(e)">
+                <i class="pi pi-pencil"></i> Modifier
+              </button>
+            </div>
+            <div class="fiche-row">
+              <span>Mois facturés</span>
+              <strong class="mono">
+                {{ e.nb_mensualites_dues }} mois
+                <span class="mois-origine" [class.saisi]="e.mois_dus_origine === 'SAISI'">
+                  {{ e.mois_dus_origine === 'SAISI' ? 'saisis' : 'calculés' }}
+                </span>
+              </strong>
+            </div>
             @if (e.montant_pec_annuel > 0) {
               <div class="fiche-row"><span>Total théorique</span>
                 <strong class="mono" style="color:var(--text-3)">{{ e.total_theorique | number:'1.0-0' }} FCFA</strong></div>
@@ -556,14 +586,18 @@ interface PecForm {
                 {{ e.reste_a_payer | number }} FCFA
               </strong>
             </div>
+            <!-- L'ardoise des années antérieures est TOUJOURS affichée, même à
+                 zéro : c'est la seule façon de voir d'un coup d'œil que le
+                 reste à payer de l'année est bien tout ce que l'élève doit. -->
+            <div class="fiche-row">
+              <span>{{ 'eleves.impaye_anterieur' | translate }}{{ e.reliquat_origine_libelle ? ' (' + e.reliquat_origine_libelle + ')' : '' }}</span>
+              <strong class="mono" [class.muted]="e.reliquat_anterieur <= 0">
+                {{ e.reliquat_anterieur | number }} FCFA</strong></div>
+            @if (e.reliquat_paye > 0) {
+              <div class="fiche-row"><span>Dont déjà réglé</span>
+                <strong class="mono success">- {{ e.reliquat_paye | number }} FCFA</strong></div>
+            }
             @if (e.reliquat_anterieur > 0) {
-              <div class="fiche-row">
-                <span>{{ 'eleves.impaye_anterieur' | translate }}{{ e.reliquat_origine_libelle ? ' (' + e.reliquat_origine_libelle + ')' : '' }}</span>
-                <strong class="mono">{{ e.reliquat_anterieur | number }} FCFA</strong></div>
-              @if (e.reliquat_paye > 0) {
-                <div class="fiche-row"><span>Dont déjà réglé</span>
-                  <strong class="mono success">- {{ e.reliquat_paye | number }} FCFA</strong></div>
-              }
               <div class="fiche-row"><span>{{ 'eleves.du_global' | translate }}</span>
                 <strong class="mono" [class.danger]="e.reste_a_payer_global > 0"
                         [class.success]="e.reste_a_payer_global <= 0">
@@ -647,6 +681,38 @@ interface PecForm {
             <label>Observations</label>
             <input pInputText [(ngModel)]="formPEC.obs_prise_en_charge" class="w-full"
                    placeholder="Ex : Orphelin de père, suivi par la commune…" />
+          </div>
+
+          <!-- Mois facturés -->
+          <div class="form-group full">
+            <label>Mois facturés</label>
+            <div class="mois-mode">
+              <p-checkbox [(ngModel)]="formPEC.moisAuto" [binary]="true"
+                          inputId="moisAuto" (onChange)="onMoisAutoChange()" />
+              <label for="moisAuto" class="mois-mode-label">
+                Calculer automatiquement depuis la date d'entrée
+                <span class="mois-mode-hint">({{ e.nb_mensualites_dues }} mois aujourd'hui)</span>
+              </label>
+            </div>
+
+            @if (!formPEC.moisAuto) {
+              <div class="mois-grille">
+                @for (m of moisAnnee; track m.num) {
+                  <label class="mois-case" [class.actif]="formPEC.mois_dus.includes(m.num)">
+                    <p-checkbox [ngModel]="formPEC.mois_dus.includes(m.num)"
+                                [binary]="true" [ngModelOptions]="{standalone:true}"
+                                (onChange)="basculerMois(m.num)" />
+                    <span>{{ m.nom }}</span>
+                  </label>
+                }
+              </div>
+              <div class="mois-resume">
+                {{ formPEC.mois_dus.length }} mois facturé(s)
+                @if (formPEC.mois_dus.length === 0) {
+                  <span class="mois-alerte">— aucune mensualité ne sera due</span>
+                }
+              </div>
+            }
           </div>
         </div>
 
@@ -1101,6 +1167,33 @@ interface PecForm {
                  border-bottom:1px solid rgba(42,63,95,0.3); font-size:11px; }
     .fiche-row span { color:var(--text-3); }
     .fiche-row strong { color:var(--text); }
+    .fiche-row strong.muted { color:var(--text-3); font-weight:500; }
+    .fiche-title { display:flex; justify-content:space-between; align-items:center; }
+    .fiche-edit { background:none; border:none; cursor:pointer; padding:2px 4px;
+                  color:var(--text-3); font-size:10px; font-weight:600;
+                  text-transform:none; letter-spacing:0; }
+    .fiche-edit:hover { color:#00d4aa; }
+    .fiche-edit:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; border-radius:4px; }
+    /* Origine des mois : « calculés » discret, « saisis » mis en avant — c'est
+       la décision de l'école, elle doit se distinguer du calcul par défaut. */
+    .mois-origine { font-size:10px; font-weight:600; color:var(--text-3);
+                    text-transform:uppercase; margin-left:6px; }
+    .mois-origine.saisi { color:#f59e0b; }
+
+    /* Mois facturés */
+    .mois-mode { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .mois-mode-label { font-size:11px; color:var(--text-2); text-transform:none;
+                       letter-spacing:0; cursor:pointer; }
+    .mois-mode-hint { color:var(--text-3); }
+    .mois-grille { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+    .mois-case { display:flex; align-items:center; gap:6px; padding:5px 7px;
+                 border:1px solid var(--border); border-radius:6px; cursor:pointer;
+                 font-size:11px; color:var(--text-2); text-transform:none;
+                 letter-spacing:0; }
+    .mois-case.actif { border-color:#00d4aa; color:var(--text); }
+    .mois-resume { margin-top:8px; font-size:11px; color:var(--text-3); }
+    .mois-alerte { color:#f59e0b; font-weight:600; }
+    @media (max-width: 640px) { .mois-grille { grid-template-columns:repeat(2, 1fr); } }
 
     /* Formulaires */
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -1233,10 +1326,17 @@ export class ElevesListeComponent implements OnInit {
     // Montants directs, plafonnés aux frais.
     const inscr = Math.min(form.pec_inscription || 0, section.frais_inscription);
     const mens  = Math.min(form.pec_mensualite  || 0, section.frais_mensualite);
+    // Nombre de mois réellement facturés : les mois cochés s'ils le sont,
+    // sinon le prorata que le backend a déjà calculé pour cette fiche.
+    // (Auparavant : `mens * 10` en dur — faux dès qu'un exercice compte
+    // 12 mensualités, ce qui est le cas de Shoumoul.)
+    const nbMois = form.moisAuto ? eleve.nb_mensualites_dues : form.mois_dus.length;
     if (!inscr && !mens) return null;
-    const annuel  = inscr + mens * 10;
-    const restant = Math.max((section.total_annuel || 0) - annuel, 0);
-    return { inscr, mens, annuel, restant };
+    const annuel  = inscr + mens * nbMois;
+    const brut    = section.frais_inscription + section.frais_uniforme +
+                    section.frais_fournitures + section.frais_mensualite * nbMois;
+    const restant = Math.max(brut - annuel, 0);
+    return { inscr, mens, annuel, restant, nbMois };
   });
 
   nouvelEleve: Partial<Eleve> = {};
@@ -1761,13 +1861,33 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  moisAnnee = MOIS_ANNEE;
+
+  onMoisAutoChange() {
+    // En passant en manuel, on part des mois réellement facturés aujourd'hui :
+    // l'école corrige une liste, elle ne la reconstruit pas de zéro.
+    if (!this.formPEC.moisAuto && this.formPEC.mois_dus.length === 0) {
+      this.formPEC.mois_dus = [...(this.eleveSelectionne()?.mois_dus_effectifs || [])];
+    }
+  }
+
+  basculerMois(num: number) {
+    const mois = this.formPEC.mois_dus;
+    this.formPEC.mois_dus = mois.includes(num)
+      ? mois.filter(m => m !== num)
+      : [...mois, num].sort((a, b) => a - b);
+  }
+
   ouvrirPriseEnCharge(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
+    const saisis = eleve.mois_dus || [];
     this.formPEC = {
       prise_en_charge:      eleve.prise_en_charge || null,
       pec_inscription:      eleve.pec_inscription || 0,
       pec_mensualite:       eleve.pec_mensualite  || 0,
       obs_prise_en_charge:  eleve.obs_prise_en_charge  || '',
+      moisAuto:             saisis.length === 0,
+      mois_dus:             [...(saisis.length ? saisis : eleve.mois_dus_effectifs || [])],
     };
     this.dialogPECVisible = true;
   }
@@ -1781,17 +1901,28 @@ export class ElevesListeComponent implements OnInit {
       pec_inscription:      this.formPEC.pec_inscription || 0,
       pec_mensualite:       this.formPEC.pec_mensualite  || 0,
       obs_prise_en_charge:  this.formPEC.obs_prise_en_charge,
+      // Liste vide = retour au prorata automatique côté backend.
+      mois_dus:             this.formPEC.moisAuto ? [] : this.formPEC.mois_dus,
     } as Partial<Eleve>;
     this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
-        this.msg.add({ severity: 'success', summary: 'Prise en charge enregistrée',
+        this.msg.add({ severity: 'success', summary: 'Situation enregistrée',
                        detail: e.nom_complet });
         this.dialogPECVisible = false;
         this.saving.set(false);
         this.statsPEC.set(null);  // invalider le cache stats
         this.chargerEleves();
       },
-      error: () => this.saving.set(false),
+      // Le backend refuse de retirer un mois déjà réglé, en nommant le mois :
+      // l'avaler laisserait l'école corriger à l'aveugle.
+      error: (err) => {
+        this.saving.set(false);
+        const d = err?.error;
+        const motif = d?.mois_dus?.[0] || d?.detail || d?.error
+                      || 'Enregistrement impossible.';
+        this.msg.add({ severity: 'error', summary: 'Situation non enregistrée',
+                       detail: String(motif), life: 8000 });
+      },
     });
   }
 
@@ -1918,6 +2049,6 @@ export class ElevesListeComponent implements OnInit {
 
   private pecFormVide(): PecForm {
     return { prise_en_charge: null, pec_inscription: 0, pec_mensualite: 0,
-             obs_prise_en_charge: '' };
+             obs_prise_en_charge: '', moisAuto: true, mois_dus: [] };
   }
 }
