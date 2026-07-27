@@ -223,18 +223,29 @@ class ExportPDFView(APIView):
             systeme = _detecter_systeme(caht)
 
             def _sum(prefixes, field='debit'):
+                # Contribution NETTE (voir CompteResultatView._sum) : le PDF doit
+                # dire la même chose que l'écran, sinon deux vérités officielles.
                 q = Q()
                 for p in prefixes: q |= Q(no_compte__startswith=p)
-                return float(entries.filter(q).aggregate(t=Sum(field))['t'] or 0)
+                agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
+                debit, credit = float(agg['d'] or 0), float(agg['c'] or 0)
+                return credit - debit if field == 'credit' else debit - credit
 
             def _detail(prefixes, field='debit'):
+                # Montant NET, comme l'écran (voir CompteResultatView._detail).
                 q = Q()
                 for p in prefixes: q |= Q(no_compte__startswith=p)
-                rows = entries.filter(q).values('no_compte').annotate(t=Sum(field)).order_by('no_compte')
-                return [{'compte': r['no_compte'],
-                         'libelle': plan.get(r['no_compte'], r['no_compte']),
-                         'montant': round(float(r['t'] or 0), 2)}
-                        for r in rows if float(r['t'] or 0) > 0]
+                rows = (entries.filter(q).values('no_compte')
+                        .annotate(d=Sum('debit'), c=Sum('credit')).order_by('no_compte'))
+                out = []
+                for r in rows:
+                    debit, credit = float(r['d'] or 0), float(r['c'] or 0)
+                    montant = credit - debit if field == 'credit' else debit - credit
+                    if montant > 0:
+                        out.append({'compte': r['no_compte'],
+                                    'libelle': plan.get(r['no_compte'], r['no_compte']),
+                                    'montant': round(montant, 2)})
+                return out
 
             ventes_marchandises      = _sum(['701'], 'credit')
             prestations_services     = _sum(['706', '707', '708'], 'credit')
