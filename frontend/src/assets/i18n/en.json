@@ -982,6 +982,26 @@
     "ok_toast": "Backup completed",
     "erreur_toast": "Backup failed"
   },
+  "sante": {
+    "title": "Migration health",
+    "aide": "What is still missing in the migrated data. Nothing here blocks you: you can work and fill the gaps as you go.",
+    "nb_eleves": "Students tracked",
+    "creances": "Receivables",
+    "a_traiter": "Items to address",
+    "pied": "This table is recomputed each time you open it. It changes nothing.",
+    "situation_financiere": "Students with no financial situation",
+    "situation_financiere_detail": "{{n}} of {{total}} students have neither a payment nor a prior unpaid balance on record. Normal early in the year; worth completing if the school migrated mid-year.",
+    "impayes_anterieurs": "Prior unpaid balances recorded",
+    "impayes_anterieurs_detail": "{{n}} student(s) carry a debt from previous years, {{montant}} FCFA in total.",
+    "identite_entree": "Incomplete entry identity",
+    "identite_entree_detail": "{{n}} of {{total}} students have no intake ID, entry year or entry date. Run the student ID rebasing command.",
+    "sections_sans_tarif": "Sections with no fees",
+    "sections_sans_tarif_detail": "{{n}} of {{total}} sections have no fees set: their students owe nothing. Fix this in the Sections tab.",
+    "sans_section": "Students with no section",
+    "sans_section_detail": "{{n}} of {{total}} students belong to no section: their dues cannot be computed.",
+    "journal_equilibre": "Ledger balance",
+    "journal_equilibre_detail": "{{montant}} FCFA gap between debits and credits for the year. Above 1 FCFA, an opening balance or a re-alignment went wrong."
+  },
   "reliquats": {
     "title": "Carry over unpaid balances",
     "aide": "Carries the previous year’s unpaid balances over to the active year, even if it is already closed. The closed year is never modified. Safe to re-run: students already processed are skipped.",

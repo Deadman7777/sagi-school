@@ -982,6 +982,26 @@
     "ok_toast": "Sauvegarde effectuée",
     "erreur_toast": "Échec de la sauvegarde"
   },
+  "sante": {
+    "title": "Santé de la migration",
+    "aide": "Ce qui reste à compléter dans les données reprises. Rien ici n'est bloquant : vous pouvez travailler et compléter au fil de l'eau.",
+    "nb_eleves": "Élèves suivis",
+    "creances": "Créances à recouvrer",
+    "a_traiter": "Points à traiter",
+    "pied": "Ce tableau se recalcule à chaque ouverture. Il ne modifie rien.",
+    "situation_financiere": "Élèves sans situation financière",
+    "situation_financiere_detail": "{{n}} élève(s) sur {{total}} n'ont ni paiement, ni impayé antérieur enregistré. Normal en début d'année ; à compléter si l'école a migré en cours d'année.",
+    "impayes_anterieurs": "Impayés antérieurs saisis",
+    "impayes_anterieurs_detail": "{{n}} élève(s) portent une ardoise des années précédentes, pour {{montant}} FCFA au total.",
+    "identite_entree": "Identité d'entrée incomplète",
+    "identite_entree_detail": "{{n}} élève(s) sur {{total}} n'ont pas de matricule de promotion, d'année ou de date d'entrée. Lancez la commande de rebasage des matricules.",
+    "sections_sans_tarif": "Sections sans tarif",
+    "sections_sans_tarif_detail": "{{n}} section(s) sur {{total}} n'ont aucun frais renseigné : leurs élèves ne doivent rien. À corriger dans l'onglet Sections.",
+    "sans_section": "Élèves sans section",
+    "sans_section_detail": "{{n}} élève(s) sur {{total}} ne sont rattachés à aucune section : leur dû ne peut pas être calculé.",
+    "journal_equilibre": "Équilibre du journal",
+    "journal_equilibre_detail": "Écart de {{montant}} FCFA entre les débits et les crédits de l'exercice. Au-delà de 1 FCFA, une reprise ou un recalage a mal tourné."
+  },
   "reliquats": {
     "title": "Report des reliquats",
     "aide": "Reconduit les impayés de l'exercice précédent sur l'exercice actif, même s'il est déjà clôturé. L'année clôturée n'est jamais modifiée. Opération rejouable : les élèves déjà traités sont ignorés.",

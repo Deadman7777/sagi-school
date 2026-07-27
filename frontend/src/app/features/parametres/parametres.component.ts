@@ -57,10 +57,74 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
       <button class="tab-btn" *ngIf="estLocal" [class.active]="onglet() === 'sauvegarde'"
               (click)="onglet.set('sauvegarde'); chargerSauvegarde()">☁️ {{ 'parametres.sauvegarde' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'migration'"
+        (click)="onglet.set('migration'); chargerSanteMigration()">
+        🩺 {{ 'sante.title' | translate }}
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'cloture'"
         (click)="onglet.set('cloture'); chargerVerification()">
         🔒 {{ 'cloture.title' | translate }}
       </button>
+    </div>
+
+    <!-- ══ ONGLET SANTÉ DE LA MIGRATION ══
+         Une migration se termine progressivement : sans ce tableau, les
+         trous se découvrent six mois plus tard, en éditant un bilan. -->
+    <div *ngIf="onglet() === 'migration'">
+      <div class="form-card">
+        <div class="fc-title">🩺 {{ 'sante.title' | translate }}
+          <span *ngIf="sante()" style="font-weight:400;color:var(--text-3)">
+            — {{ sante()!.exercice }}</span>
+        </div>
+        <p style="font-size:12px;color:var(--text-3);margin:0 0 16px">
+          {{ 'sante.aide' | translate }}
+        </p>
+
+        <div *ngIf="santeLoading()" class="empty-msg">…</div>
+
+        <ng-container *ngIf="sante() as s">
+          <div class="kpi-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+            <div class="kpi-mini teal">
+              <div class="km-label">{{ 'sante.nb_eleves' | translate }}</div>
+              <div class="km-val" style="font-size:16px;color:#00d4aa">{{ s.nb_eleves }}</div>
+            </div>
+            <div class="kpi-mini" [style.border-color]="s.total_creances > 0 ? '#f97316' : '#10b981'">
+              <div class="km-label">{{ 'sante.creances' | translate }}</div>
+              <div class="km-val" style="font-size:16px"
+                   [style.color]="s.total_creances > 0 ? '#f97316' : '#10b981'">
+                {{ s.total_creances | number:'1.0-0' }} FCFA
+              </div>
+            </div>
+            <div class="kpi-mini" [style.border-color]="s.nb_a_traiter ? '#ef4444' : '#10b981'">
+              <div class="km-label">{{ 'sante.a_traiter' | translate }}</div>
+              <div class="km-val" style="font-size:16px"
+                   [style.color]="s.nb_a_traiter ? '#ef4444' : '#10b981'">{{ s.nb_a_traiter }}</div>
+            </div>
+          </div>
+
+          <div class="sante-liste">
+            <div class="sante-ligne" *ngFor="let c of s.controles" [class]="'niv-' + c.niveau">
+              <span class="sante-pastille"></span>
+              <div class="sante-txt">
+                <div class="sante-libelle">{{ 'sante.' + c.cle | translate }}</div>
+                <div class="sante-detail">{{ detailControle(c) }}</div>
+              </div>
+              <div class="sante-chiffre">
+                <ng-container *ngIf="c.cle !== 'journal_equilibre'">
+                  {{ c.nb }}<span *ngIf="c.total !== null" class="sur">/{{ c.total }}</span>
+                </ng-container>
+                <ng-container *ngIf="c.cle === 'journal_equilibre'">
+                  {{ c.montant | number:'1.0-0' }}
+                </ng-container>
+              </div>
+            </div>
+          </div>
+
+          <p style="font-size:11px;color:var(--text-3);margin:16px 0 0">
+            {{ 'sante.pied' | translate }}
+          </p>
+        </ng-container>
+      </div>
     </div>
 
     <!-- ══ ONGLET INFOS ÉCOLE ══ -->
@@ -792,6 +856,21 @@ import { MessageService } from 'primeng/api';
     .kpi-mini { border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
     .km-label { font-size:10px; color:var(--text-3); text-transform:uppercase; margin-bottom:4px; }
     .km-val   { font-weight:700; font-family:monospace; }
+
+    /* Santé de la migration */
+    .sante-liste { display:flex; flex-direction:column; gap:8px; }
+    .sante-ligne { display:flex; align-items:center; gap:12px; padding:11px 14px;
+                   background:var(--bg); border:1px solid var(--border);
+                   border-radius:8px; }
+    .sante-pastille { flex:none; width:9px; height:9px; border-radius:50%; background:#10b981; }
+    .sante-ligne.niv-info      .sante-pastille { background:#0099ff; }
+    .sante-ligne.niv-attention .sante-pastille { background:#ef4444; }
+    .sante-ligne.niv-attention { border-color:rgba(239,68,68,.4); }
+    .sante-txt { flex:1; min-width:0; }
+    .sante-libelle { font-size:13px; color:var(--text); font-weight:600; }
+    .sante-detail  { font-size:11px; color:var(--text-3); margin-top:2px; }
+    .sante-chiffre { font-family:monospace; font-weight:700; font-size:15px; color:var(--text); }
+    .sante-chiffre .sur { font-size:11px; font-weight:400; color:var(--text-3); }
   `]
 })
 export class ParametresComponent implements OnInit {
@@ -925,6 +1004,31 @@ export class ParametresComponent implements OnInit {
   verification  = signal<any>(null);
 creerSuivant  = true;
 reporterImpayes = true;
+
+// ── Santé de la migration ─────────────────────────────────────────────
+// Le backend rend des clés et des nombres ; les libellés vivent ici pour
+// rester traduits dans la langue de l'utilisateur.
+sante        = signal<any>(null);
+santeLoading = signal(false);
+
+chargerSanteMigration() {
+  this.santeLoading.set(true);
+  this.api.get<any>('/eleves/sante-migration/').subscribe({
+    next: res => { this.sante.set(res); this.santeLoading.set(false); },
+    error: () => {
+      this.santeLoading.set(false);
+      this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                     detail: this.translate.instant('sante.title') });
+    },
+  });
+}
+
+detailControle(c: { cle: string; nb: number; total: number | null; montant: number | null }): string {
+  return this.translate.instant('sante.' + c.cle + '_detail', {
+    n: c.nb, total: c.total ?? 0,
+    montant: (c.montant ?? 0).toLocaleString('fr-FR'),
+  });
+}
 
 // ── Report des reliquats (rattrapage d'un exercice déjà clôturé) ──────
 apercuReliquats  = signal<any>(null);

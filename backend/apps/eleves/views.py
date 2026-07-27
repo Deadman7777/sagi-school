@@ -370,6 +370,21 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Élève introuvable.'}, status=404)
         return Response(construire_parcours(eleve))
 
+    @action(detail=False, methods=['get'], url_path='sante-migration')
+    def sante_migration(self, request):
+        """État de complétude des données reprises — ce qui reste à compléter.
+
+        Une migration se termine progressivement : sans ce tableau, les trous
+        se découvrent au moment d'éditer un bilan, six mois plus tard."""
+        from .sante_migration import diagnostiquer
+
+        tenant   = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
+        return Response(diagnostiquer(tenant, exercice))
+
     @action(detail=False, methods=['get'], url_path='anciens')
     def anciens(self, request):
         """Base historique des élèves sortis (diplômés, transférés, abandons).
