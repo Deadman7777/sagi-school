@@ -83,7 +83,9 @@ MAPPING_RUBRIQUES = [
 
 # Défauts quand ni la rubrique ni la description ne matchent.
 DEFAUT_ENTREE = '706'   # démarche : toute entrée non identifiée = produit scolarité
-DEFAUT_SORTIE = '658'   # charges diverses
+# Compte dédié plutôt que « Charges diverses » : une sortie non identifiée
+# d'un journal de caisse migré est un héritage assumé, pas un fourre-tout.
+DEFAUT_SORTIE = '6588'  # charges reprises à la migration
 
 MOIS_FR = {
     'JANVIER': 1, 'FEVRIER': 2, 'MARS': 3, 'AVRIL': 4, 'MAI': 5, 'JUIN': 6,

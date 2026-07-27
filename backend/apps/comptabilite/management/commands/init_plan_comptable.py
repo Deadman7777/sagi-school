@@ -111,6 +111,14 @@ COMPTES_SYSCOHADA = [
     ('65',   'Autres charges',                                'CHARGE', 6, False),
     ('651',  'Pertes sur créances irrecouvrables',            'CHARGE', 6, False),
     ('658',  'Charges diverses',                              'CHARGE', 6, False),
+    # Dépenses reprises d'un journal de caisse à la migration, dont l'école
+    # n'a pas fourni le détail. Ce sont de VRAIES charges — les sortir de la
+    # classe 6 gonflerait le résultat — mais les laisser en « Charges
+    # diverses » présente comme un fourre-tout ce qui est en fait un héritage
+    # assumé. Un compte dédié le dit, et un banquier comprend au premier coup
+    # d'œil pourquoi la ligne est grosse.
+    ('6588', 'Charges reprises à la migration (détail non communiqué)',
+                                                              'CHARGE', 6, False),
     ('66',   'Charges de personnel',                          'CHARGE', 6, True),
     ('661',  'Appointements et salaires',                     'CHARGE', 6, True),
     ('662',  'Charges sociales salariales (IPRES)',           'CHARGE', 6, True),

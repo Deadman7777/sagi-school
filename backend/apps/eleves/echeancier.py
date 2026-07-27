@@ -168,6 +168,15 @@ def construire_echeancier(eleve, today=None):
         'reste':   round(max(du_hors - paye_hors, 0.0), 2),
     }
 
+    # ── Synthèse pour la famille ──────────────────────────────────────────
+    # Ce qui est EXIGIBLE aujourd'hui, séparé de ce qui viendra à échéance :
+    # un parent doit voir d'un coup d'œil ce qu'on lui réclame maintenant, et
+    # ne pas le confondre avec le total de l'année. L'inscription entre dans
+    # les retards — elle est due dès l'entrée, jamais « à venir ».
+    retards = round(hors['reste'] + sum(l['reste'] for l in sortie if l['echu']), 2)
+    a_venir = round(sum(l['reste'] for l in sortie if not l['echu']), 2)
+    anterieur = round(float(eleve.reliquat_restant or 0), 2)
+
     return {
         'lignes':          sortie,
         'hors_mensualite': hors,
@@ -175,5 +184,17 @@ def construire_echeancier(eleve, today=None):
             'du':    round(du_hors + sum(l['du'] for l in sortie), 2),
             'paye':  round(paye_hors + sum(l['paye'] for l in sortie), 2),
             'reste': round(hors['reste'] + sum(l['reste'] for l in sortie), 2),
+        },
+        'synthese': {
+            # Scolarité échue et non réglée, année en cours.
+            'retards':            retards,
+            # Ardoise des exercices antérieurs, nette de ce qui a déjà été réglé.
+            'impaye_anterieur':   anterieur,
+            # Tout ce qui est exigible aujourd'hui.
+            'total_anterieurs':   round(retards + anterieur, 2),
+            # Mensualités des mois non encore échus.
+            'mois_a_venir':       a_venir,
+            # Ce que la famille devra sur l'année entière, ardoise comprise.
+            'total_restant_du':   round(retards + anterieur + a_venir, 2),
         },
     }

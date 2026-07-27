@@ -89,10 +89,10 @@
   </tfoot>
 </table>
 
-<!-- Solde -->
+<!-- Solde de l'année en cours -->
 <table class="resultat-table {% if reste == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
   <tr>
-    <td class="rb-label">{% if reste == 0 %}Situation soldée ✓{% else %}Reste à payer{% endif %}</td>
+    <td class="rb-label">{% if reste == 0 %}Situation soldée ✓{% else %}Reste à payer (année en cours){% endif %}</td>
     <td class="rb-val {% if reste == 0 %}green{% else %}red{% endif %}">{{ reste|floatformat:0 }} FCFA</td>
   </tr>
 </table>
@@ -101,26 +101,81 @@
 <p style="padding:20px; text-align:center; color:#6b7280;">Aucun paiement enregistré pour cet exercice.</p>
 {% endif %}
 
-{% if reliquat_du %}
-<!-- Dette d'un exercice antérieur — hors du bloc ci-dessus (qui ne couvre que
-     l'année en cours) et affichée même sans aucun paiement cette année. -->
-<div class="section-title" style="margin-top:14px">Reliquat des années antérieures</div>
-<table class="resultat-table resultat-def">
-  <tr>
-    <td class="rb-label">Reliquat {{ reliquat_annee }} — reporté</td>
-    <td class="rb-val">{{ reliquat_du|floatformat:0 }} FCFA</td>
-  </tr>
+{% comment %}Détail mois par mois — le cœur du document pour une famille : un
+total ne dit pas quels mois sont soldés ni combien il manque sur celui en
+cours. Affiché même sans aucun paiement, c'est là qu'il est le plus utile.
+{% endcomment %}
+{% if echeancier %}
+<div class="section-title" style="margin-top:14px">Détail par mois</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:34%">Mois</th>
+      <th class="text-right" style="width:22%">Somme due</th>
+      <th class="text-right" style="width:22%">Somme payée</th>
+      <th class="text-right" style="width:22%">Reste</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in echeancier %}
+    <tr>
+      <td>{{ l.libelle }}{% if l.reste > 0 and l.echu %} <span style="color:#b91c1c">(en retard)</span>{% endif %}</td>
+      <td class="text-right">{{ l.du|floatformat:0 }}</td>
+      <td class="text-right green">{{ l.paye|floatformat:0 }}</td>
+      <td class="text-right {% if l.reste > 0 %}red{% endif %}">{{ l.reste|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% if hors_mensualite.du %}
+    <tr>
+      <td>Inscription et frais uniques</td>
+      <td class="text-right">{{ hors_mensualite.du|floatformat:0 }}</td>
+      <td class="text-right green">{{ hors_mensualite.paye|floatformat:0 }}</td>
+      <td class="text-right {% if hors_mensualite.reste > 0 %}red{% endif %}">{{ hors_mensualite.reste|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="bold">TOTAL</td>
+      <td class="text-right bold">{{ ech_totaux.du|floatformat:0 }}</td>
+      <td class="text-right bold">{{ ech_totaux.paye|floatformat:0 }}</td>
+      <td class="text-right bold">{{ ech_totaux.reste|floatformat:0 }}</td>
+    </tr>
+  </tfoot>
 </table>
-<table class="resultat-table {% if reliquat_restant == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
-  <tr>
-    <td class="rb-label">{% if reliquat_restant == 0 %}Reliquat soldé ✓{% else %}Reliquat restant dû{% endif %}</td>
-    <td class="rb-val {% if reliquat_restant == 0 %}green{% else %}red{% endif %}">{{ reliquat_restant|floatformat:0 }} FCFA</td>
-  </tr>
+
+{% comment %}Cascade volontaire : la famille doit distinguer ce qu'on lui
+réclame AUJOURD'HUI de ce qui viendra à échéance plus tard dans l'année.
+{% endcomment %}
+<div class="section-title" style="margin-top:14px">Situation récapitulative</div>
+<table>
+  <tbody>
+    <tr>
+      <td style="width:70%">Scolarité en retard (mois échus non réglés)</td>
+      <td class="text-right {% if synthese.retards > 0 %}red{% endif %}">{{ synthese.retards|floatformat:0 }} FCFA</td>
+    </tr>
+    <tr>
+      <td>Impayé des années antérieures{% if reliquat_annee %} ({{ reliquat_annee }}){% endif %}</td>
+      <td class="text-right {% if synthese.impaye_anterieur > 0 %}red{% endif %}">{{ synthese.impaye_anterieur|floatformat:0 }} FCFA</td>
+    </tr>
+    <tr>
+      <td class="bold">Total des reliquats antérieurs</td>
+      <td class="text-right bold {% if synthese.total_anterieurs > 0 %}red{% endif %}">{{ synthese.total_anterieurs|floatformat:0 }} FCFA</td>
+    </tr>
+    <tr>
+      <td>Reste des mois de l'année (non encore échus)</td>
+      <td class="text-right">{{ synthese.mois_a_venir|floatformat:0 }} FCFA</td>
+    </tr>
+  </tbody>
 </table>
-<table class="resultat-table {% if reste_global == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
+{% comment %}Bordure et fond EN LIGNE : xhtml2pdf n'applique pas la
+surcharge de classe (.resultat-def par-dessus .resultat-table), l'encadré
+restait vert en annonçant une dette.
+{% endcomment %}
+<table class="resultat-table" style="margin-top:6px; border:2px solid {% if synthese.total_restant_du == 0 %}#10b981{% else %}#ef4444{% endif %}; background:{% if synthese.total_restant_du == 0 %}#f0fdf4{% else %}#fef2f2{% endif %}">
   <tr>
-    <td class="rb-label">{% if reste_global == 0 %}Tout est soldé ✓{% else %}Dû total (toutes années){% endif %}</td>
-    <td class="rb-val {% if reste_global == 0 %}green{% else %}red{% endif %}">{{ reste_global|floatformat:0 }} FCFA</td>
+    <td class="rb-label">{% if synthese.total_restant_du == 0 %}Tout est soldé ✓{% else %}TOTAL RESTANT DÛ POUR L'ANNÉE{% endif %}</td>
+    <td class="rb-val" style="color:{% if synthese.total_restant_du == 0 %}#047857{% else %}#b91c1c{% endif %}">{{ synthese.total_restant_du|floatformat:0 }} FCFA</td>
   </tr>
 </table>
 {% endif %}

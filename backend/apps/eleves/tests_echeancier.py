@@ -15,7 +15,7 @@ from apps.tenants.models import Tenant
 from apps.users.models import User
 
 
-class EcheancierTest(APITestCase):
+class EcheancierBase(APITestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(nom='Shoumoul', code_etablissement='CSE')
         self.user = User.objects.create_user(
@@ -50,6 +50,8 @@ class EcheancierTest(APITestCase):
     def _e(self):
         return construire_echeancier(self.eleve, today=datetime.date(2026, 9, 15))
 
+
+class EcheancierTest(EcheancierBase):
     # ── Structure ─────────────────────────────────────────────────────────
     def test_une_ligne_par_mois_facture(self):
         e = self._e()
@@ -149,3 +151,72 @@ class EcheancierTest(APITestCase):
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.assertEqual(len(r.data['lignes']), 5)
         self.assertEqual(r.data['totaux']['du'], 415000)
+
+
+class SyntheseTest(EcheancierBase):
+    """La synthèse remise à la famille : exigible aujourd'hui vs à venir."""
+
+    def test_les_retards_ne_comptent_que_les_mois_echus(self):
+        # Au 15/09/2026 : août et septembre échus, oct/nov/déc à venir.
+        s = self._e()['synthese']
+
+        # 2 mois échus × 73 000 + inscription 50 000 non réglée
+        self.assertEqual(s['retards'], 196000)
+        self.assertEqual(s['mois_a_venir'], 219000)      # 3 × 73 000
+
+    def test_l_inscription_compte_dans_les_retards(self):
+        """Elle est due dès l'entrée : jamais « à venir »."""
+        self._payer(mensualite=146000, mois=[8, 9])      # les 2 mois échus soldés
+
+        s = self._e()['synthese']
+
+        self.assertEqual(s['retards'], 50000)            # reste l'inscription
+
+    def test_total_anterieurs_additionne_retards_et_ardoise(self):
+        self.eleve.reliquat_anterieur = 300000
+        self.eleve.save()
+
+        s = self._e()['synthese']
+
+        self.assertEqual(s['impaye_anterieur'], 300000)
+        self.assertEqual(s['total_anterieurs'], s['retards'] + 300000)
+
+    def test_total_restant_du_ajoute_les_mois_a_venir(self):
+        self.eleve.reliquat_anterieur = 300000
+        self.eleve.save()
+
+        s = self._e()['synthese']
+
+        self.assertEqual(s['total_restant_du'],
+                         s['total_anterieurs'] + s['mois_a_venir'])
+        # 196 000 + 300 000 + 219 000
+        self.assertEqual(s['total_restant_du'], 715000)
+
+    def test_sans_ardoise_le_total_egale_le_reste_de_l_annee(self):
+        e = self._e()
+        self.assertEqual(e['synthese']['total_restant_du'], e['totaux']['reste'])
+
+
+class SituationPDFTest(EcheancierBase):
+    """Le PDF remis à la famille porte bien le détail mensuel et la cascade."""
+
+    def test_le_pdf_se_genere(self):
+        self._payer(inscription=50000)
+        self._payer(mensualite=73000, mois=[8])
+
+        r = self.client.get(f'/api/eleves/{self.eleve.id}/situation-pdf/')
+
+        self.assertEqual(r.status_code, 200, r.content[:400])
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        self.assertGreater(len(r.content), 1000)
+
+    def test_le_pdf_se_genere_sans_aucun_paiement(self):
+        """C'est le cas où le détail est le plus utile — il ne doit pas planter."""
+        r = self.client.get(f'/api/eleves/{self.eleve.id}/situation-pdf/')
+        self.assertEqual(r.status_code, 200, r.content[:400])
+
+    def test_le_pdf_se_genere_avec_une_ardoise(self):
+        self.eleve.reliquat_anterieur = 300000
+        self.eleve.save()
+        r = self.client.get(f'/api/eleves/{self.eleve.id}/situation-pdf/')
+        self.assertEqual(r.status_code, 200, r.content[:400])
