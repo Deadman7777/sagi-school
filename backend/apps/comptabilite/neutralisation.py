@@ -38,8 +38,11 @@ def a_agregats_migration(tenant, exercice):
 def total_produits_reprises(tenant, exercice):
     """Somme des 706 crédités par les reprises actuellement en base."""
     from apps.paiements.models import Paiement
+    # statut='ACTIF' comme partout ailleurs (dashboard, report des reliquats) :
+    # une reprise annulée a déjà vu son 706 contre-passé par l'extourne. La
+    # neutraliser en plus retirerait le même produit deux fois.
     ids = list(Paiement.objects.filter(
-        tenant=tenant, exercice=exercice, mode_paiement='REPRISE'
+        tenant=tenant, exercice=exercice, mode_paiement='REPRISE', statut='ACTIF'
     ).values_list('id', flat=True))
     if not ids:
         return 0.0

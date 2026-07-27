@@ -160,7 +160,9 @@ def construire_echeancier(eleve, today=None):
 
     paye_hors = round(min(paye_hors, du_hors) if du_hors else paye_hors, 2)
     hors = {
-        'libelle': 'Inscription et frais uniques',
+        # Une CLÉ, pas un libellé : sinon la ligne serait en français dans un
+        # tableau arabe (même règle que sante_migration).
+        'cle':     'hors_mensualite',
         'du':      du_hors,
         'paye':    paye_hors,
         'reste':   round(max(du_hors - paye_hors, 0.0), 2),

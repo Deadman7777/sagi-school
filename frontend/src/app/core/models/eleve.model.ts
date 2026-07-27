@@ -113,7 +113,7 @@ export interface LigneEcheance {
  *  frais uniques, qui ne se rattachent à aucun mois. */
 export interface Echeancier {
   lignes: LigneEcheance[];
-  hors_mensualite: { libelle: string; du: number; paye: number; reste: number } | null;
+  hors_mensualite: { cle: string; du: number; paye: number; reste: number } | null;
   totaux: { du: number; paye: number; reste: number };
 }
 

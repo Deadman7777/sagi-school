@@ -120,6 +120,30 @@ export class ElevesService {
     return this.api.getBlob(`/eleves/${eleveId}/parcours-pdf/`);
   }
 
+  /** Enregistre un ancien élève dont aucune fiche n'existe (diplômé d'avant
+   *  la migration). Le matricule est calculé côté serveur sur sa promo réelle. */
+  creerAncien(data: {
+    nom_complet: string; genre?: string | null; date_naissance?: string;
+    date_entree: string; date_sortie?: string; statut: string;
+    nom_tuteur?: string; telephone_tuteur?: string;
+  }) {
+    return this.api.post<Eleve>('/eleves/ancien/', data);
+  }
+
+  /** Effectif par classe, sur le périmètre des élèves ACTIFS uniquement. */
+  getEffectifsClasses() {
+    return this.api.get<{
+      exercice: string; total: number;
+      classes: { classe_id: string | null; classe: string; section: string; nb: number }[];
+    }>('/eleves/effectifs-classes/');
+  }
+
+  /** Liste nominative d'une classe, SANS donnée financière. */
+  listeClassePDF(classeId?: string) {
+    const q = classeId ? `?classe=${encodeURIComponent(classeId)}` : '';
+    return this.api.getBlob(`/eleves/liste-classe-pdf/${q}`);
+  }
+
   // Base historique des sortis — indépendante de l'exercice actif.
   getAnciens(params?: { q?: string; statut?: string }) {
     return this.api.get<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;

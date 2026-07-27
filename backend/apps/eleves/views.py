@@ -9,10 +9,24 @@ from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
 from .models import Eleve, Section, Service
+from .parcours import STATUTS_SORTIE
 from apps.paiements.models import Exercice
 from .serializers import EleveSerializer, SectionSerializer, ServiceSerializer
 from django.db.models import Max
 from django.utils import timezone
+
+
+def _date(valeur):
+    """Date ISO venue du client, ou None. Tolère une chaîne vide."""
+    import datetime
+    if not valeur:
+        return None
+    if isinstance(valeur, datetime.date):
+        return valeur
+    try:
+        return datetime.date.fromisoformat(str(valeur)[:10])
+    except ValueError:
+        return None
 
 
 class SectionViewSet(viewsets.ModelViewSet):
@@ -73,8 +87,29 @@ class EleveViewSet(viewsets.ModelViewSet):
         # Les fiches de créance ne sont pas des élèves : elles n'existent que
         # pour porter au bilan l'ardoise d'un enfant déjà parti. Elles se
         # consultent depuis « Anciens élèves » (?creances=1 pour les voir ici).
-        if self.request.query_params.get('creances') not in ('1', 'true', 'True'):
+        veut_creances = self.request.query_params.get('creances') in ('1', 'true', 'True')
+        if not veut_creances:
             qs = qs.filter(fiche_creance=False)
+
+        # Les sortis (diplômés, transférés, abandons) ne sont plus des élèves
+        # actifs : les garder ici fausse l'effectif et les listes de classe.
+        # Ils vivent dans « Anciens élèves ». ?sortants=1 pour les revoir —
+        # l'école a parfois besoin d'y revenir, typiquement pour encaisser un
+        # dernier règlement après le départ.
+        # UNIQUEMENT sur la liste : get_object() passe par ce queryset, et
+        # exclure les sortants ici rendrait leur fiche impossible à ouvrir ou à
+        # corriger — on ne pourrait plus réinscrire un enfant revenu après un
+        # abandon, ni rectifier un statut posé par erreur.
+        #
+        # Trois demandes explicites restent par ailleurs prioritaires — les
+        # honorer et ne rien renvoyer serait absurde : ?sortants=1, un ?statut=
+        # de sortie, et ?creances=1 (une fiche de créance appartient par
+        # définition à un sortant).
+        if (self.action == 'list'
+                and self.request.query_params.get('sortants') not in ('1', 'true', 'True')
+                and not self.request.query_params.get('statut')
+                and not veut_creances):
+            qs = qs.exclude(statut__in=STATUTS_SORTIE)
 
         if section := self.request.query_params.get('section'):
             qs = qs.filter(section__nom=section)
@@ -352,6 +387,161 @@ class EleveViewSet(viewsets.ModelViewSet):
         return Response({'appliques': appliques, 'refuses': refuses,
                          'nb_appliques': len(appliques), 'nb_refuses': len(refuses),
                          'resume': resume_impayes_anterieurs(tenant, exercice)})
+
+    @action(detail=False, methods=['get'], url_path='effectifs-classes')
+    def effectifs_classes(self, request):
+        """Nombre d'élèves ACTIFS par classe, à l'instant présent.
+
+        Compté sur le même périmètre que la liste — sortis et fiches de créance
+        exclus — sinon l'effectif d'une classe annoncerait des enfants partis.
+        """
+        # Import local : évite un cycle eleves <-> comptabilite au chargement.
+        from apps.comptabilite.views import get_exercice
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'classes': [], 'total': 0})
+
+        qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
+                                   fiche_creance=False)
+              .exclude(statut__in=STATUTS_SORTIE))
+        lignes = list(qs.values('classe_id', 'classe__nom', 'section__nom')
+                        .annotate(nb=Count('id'))
+                        .order_by('section__nom', 'classe__nom'))
+        return Response({
+            'exercice': exercice.annee_scolaire,
+            'total':    qs.count(),
+            'classes': [{
+                'classe_id': str(l['classe_id']) if l['classe_id'] else None,
+                'classe':    l['classe__nom'] or 'Sans classe',
+                'section':   l['section__nom'] or '—',
+                'nb':        l['nb'],
+            } for l in lignes],
+        })
+
+    @action(detail=False, methods=['get'], url_path='liste-classe-pdf')
+    def liste_classe_pdf(self, request):
+        """Liste nominative d'une classe — SANS aucune donnée financière.
+
+        C'est le document qu'un enseignant affiche ou fait circuler : y faire
+        figurer ce que chaque famille doit exposerait la situation financière
+        des élèves à qui la liste passe entre les mains. Uniquement l'identité
+        et les dates, comme demandé.
+        """
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+
+        from apps.comptabilite.views import get_exercice
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return HttpResponse('Aucun exercice actif', status=404)
+
+        qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
+                                   fiche_creance=False)
+              .exclude(statut__in=STATUTS_SORTIE)
+              .select_related('classe', 'section'))
+        classe_id = request.query_params.get('classe')
+        if classe_id == 'sans':
+            qs = qs.filter(classe__isnull=True)
+            titre = 'Sans classe'
+        elif classe_id:
+            qs = qs.filter(classe_id=classe_id)
+            titre = qs.first().classe.nom if qs.exists() and qs.first().classe else ''
+        else:
+            titre = 'Toutes classes'
+
+        eleves = [{
+            'matricule':      e.matricule or '—',
+            'nom_complet':    e.nom_complet,
+            'genre':          e.genre or '',
+            'date_naissance': e.date_naissance,
+            'date_entree':    e.date_entree or e.date_inscription,
+            'classe':         e.classe.nom if e.classe else '—',
+        } for e in qs.order_by('nom_complet')]
+
+        html = render_to_string('pdf/liste_classe.html', {
+            'tenant': tenant, 'exercice': exercice, 'classe': titre,
+            'eleves': eleves, 'nb': len(eleves),
+            'date_edition': timezone.now(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        resp['Content-Disposition'] = (
+            f'attachment; filename="liste_{titre or "classe"}_{exercice.annee_scolaire}.pdf"')
+        return resp
+
+    @action(detail=False, methods=['post'], url_path='ancien')
+    def creer_ancien(self, request):
+        """Enregistre un ancien élève qui n'a jamais existé dans le système.
+
+        Une école qui migre garde la mémoire de ses diplômés bien avant SAGI
+        SCHOOL. Sans ce point d'entrée, cette base est perdue : l'import et le
+        formulaire ordinaire réclament une section et un tarif, or on ne veut
+        ici que l'identité et les dates.
+
+        La fiche est créée sur l'exercice actif — c'est le seul point d'ancrage
+        disponible — mais son statut de sortie la tient hors de la liste et des
+        effectifs. Son matricule porte la promo de sa VRAIE date d'entrée, pas
+        celle de la saisie (voir matricules.annee_promo).
+        """
+        from core.models import log_audit
+
+        from .matricules import identite_nouvel_eleve
+
+        tenant = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif.'}, status=400)
+
+        data = request.data
+        nom = (data.get('nom_complet') or '').strip()
+        if not nom:
+            return Response({'nom_complet': 'Le nom est obligatoire.'}, status=400)
+
+        statut = data.get('statut') or 'DIPLOME'
+        if statut not in STATUTS_SORTIE:
+            return Response(
+                {'statut': f"Statut attendu parmi {', '.join(STATUTS_SORTIE)}."},
+                status=400)
+
+        entree = _date(data.get('date_entree'))
+        sortie = _date(data.get('date_sortie'))
+        if not entree:
+            return Response({'date_entree': "La date d'entrée est obligatoire."},
+                            status=400)
+        if sortie and sortie < entree:
+            return Response(
+                {'date_sortie': "La sortie ne peut pas précéder l'entrée."},
+                status=400)
+
+        identite = identite_nouvel_eleve(tenant, exercice, date_entree=entree)
+        eleve = Eleve.objects.create(
+            tenant=tenant, exercice=exercice, nom_complet=nom,
+            genre=data.get('genre') or '',
+            date_naissance=_date(data.get('date_naissance')),
+            lieu_naissance=data.get('lieu_naissance') or '',
+            nom_tuteur=data.get('nom_tuteur') or '',
+            telephone_tuteur=data.get('telephone_tuteur') or '',
+            statut=statut, date_sortie=sortie,
+            # date_inscription porte la vraie entrée : c'est elle que lit le
+            # regroupement par enfant et le rebasage des matricules.
+            date_inscription=entree,
+            **identite)
+        log_audit(request, 'CREER', 'Eleve', str(eleve.id),
+                  description=f"Ancien élève enregistré : {nom} ({identite['matricule']})")
+        return Response(EleveSerializer(eleve).data, status=201)
 
     @action(detail=True, methods=['get'], url_path='echeancier')
     def echeancier(self, request, pk=None):
