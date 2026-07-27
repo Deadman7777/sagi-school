@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
-         ParcoursEleve, AncienEleve } from '../models/eleve.model';
+         ParcoursEleve, AncienEleve, Echeancier } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -105,6 +105,11 @@ export class ElevesService {
 
   fichePDF(eleveId: string) {
     return this.api.getBlob(`/eleves/${eleveId}/fiche-pdf/`);
+  }
+
+  // Dû mois par mois : un total ne dit rien à une famille qui règle au mois.
+  getEcheancier(eleveId: string) {
+    return this.api.get<Echeancier>(`/eleves/${eleveId}/echeancier/`);
   }
 
   // Scolarité complète d'un enfant, toutes années confondues.
