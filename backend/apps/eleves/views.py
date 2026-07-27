@@ -1384,6 +1384,14 @@ class SituationElevePDFView(APIView):
         reste        = round(max(0.0, total_attendu - total_paye), 0)
         reliquat     = eleve.reliquat_restant
 
+        # Détail mois par mois + synthèse : c'est ce que la famille lit en
+        # premier. Sans lui, le document ne donnait qu'un total, inutilisable
+        # pour un parent qui règle au mois.
+        from .echeancier import NOMS_MOIS, construire_echeancier
+        ech = construire_echeancier(eleve)
+        for ligne in ech['lignes']:
+            ligne['libelle'] = f"{NOMS_MOIS.get(ligne['mois'], ligne['mois'])} {ligne['annee']}"
+
         context = {
             'tenant':         tenant,
             'eleve':          eleve,
@@ -1391,6 +1399,10 @@ class SituationElevePDFView(APIView):
             'exercice':       exercice,
             'date_edition':   timezone.now(),
             'paiements':      paiements_list,
+            'echeancier':     ech['lignes'],
+            'hors_mensualite': ech['hors_mensualite'],
+            'ech_totaux':     ech['totaux'],
+            'synthese':       ech['synthese'],
             'total_paye':     round(total_paye, 0),
             'total_attendu':  round(total_attendu, 0),
             'reste':          reste,
