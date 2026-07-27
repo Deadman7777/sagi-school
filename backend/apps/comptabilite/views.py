@@ -515,22 +515,44 @@ class CompteResultatView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _sum(self, entries, prefixes, field='debit'):
+        """Contribution NETTE des comptes au compte de résultat.
+
+        Un compte de produit contribue pour `crédit − débit`, un compte de
+        charge pour `débit − crédit` : sommer le seul sens naturel ignore les
+        annulations et les neutralisations de migration. C'est ce qui affichait
+        29 877 500 de scolarité chez Shoumoul (crédit brut) là où le net valait
+        13 410 500 — le tableau de bord, lui, nettait déjà (dashboard/views.py).
+        """
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p)
-        agg = entries.filter(q).aggregate(t=Sum(field))
-        return float(agg['t'] or 0)
+        agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
+        debit, credit = float(agg['d'] or 0), float(agg['c'] or 0)
+        return credit - debit if field == 'credit' else debit - credit
 
     def _detail(self, entries, prefixes, field='debit', plan_dict=None):
+        """Détail compte par compte, en montant NET comme les totaux.
+
+        Sans le netting, la ligne d'un compte contredit le total auquel elle
+        est censée participer : chez Shoumoul, « Prestations de services —
+        Scolarité » affichait 29 877 500 (crédit brut) sous un total produits
+        de 13 410 500, déjà net.
+        """
         _plan = plan_dict or PLAN_COMPTABLE
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p)
-        rows = entries.filter(q).values('no_compte').annotate(t=Sum(field)).order_by('no_compte')
-        return [{'compte': r['no_compte'],
-                 'libelle': _plan.get(r['no_compte'], r['no_compte']),
-                 'montant': round(float(r['t'] or 0), 2)}
-                for r in rows if float(r['t'] or 0) > 0]
+        rows = (entries.filter(q).values('no_compte')
+                .annotate(d=Sum('debit'), c=Sum('credit')).order_by('no_compte'))
+        out = []
+        for r in rows:
+            debit, credit = float(r['d'] or 0), float(r['c'] or 0)
+            montant = credit - debit if field == 'credit' else debit - credit
+            if montant > 0:
+                out.append({'compte': r['no_compte'],
+                            'libelle': _plan.get(r['no_compte'], r['no_compte']),
+                            'montant': round(montant, 2)})
+        return out
 
     def get(self, request):
         tenant   = get_tenant(request)
