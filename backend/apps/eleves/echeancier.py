@@ -52,6 +52,45 @@ def _annee_du_mois(exercice, num):
     return debut.year if num >= debut.month else debut.year + 1
 
 
+def _mois_precedent(annee, mois):
+    return (annee - 1, 12) if mois == 1 else (annee, mois - 1)
+
+
+def _dernier_jour(annee, mois):
+    import calendar
+    return calendar.monthrange(annee, mois)[1]
+
+
+def date_exigibilite(tenant, annee, mois):
+    """Date à partir de laquelle la mensualité d'un mois est réclamable.
+
+    C'est LE réglage qui décide de ce qu'une famille voit comme « en retard ».
+    Les écoles ne collectent pas au même moment :
+
+      ANTICIPE   — on paie avant le mois. L'échéance tombe le mois PRÉCÉDENT
+                   (Shoumoul : juillet se règle avant que juillet commence).
+      DEBUT_MOIS — exigible dès le mois entamé. Comportement historique, et
+                   défaut, pour qu'aucune école ne voie ses chiffres bouger
+                   sans avoir touché au réglage.
+      FIN_MOIS   — exigible une fois le mois consommé, donc le mois SUIVANT.
+
+    Le jour est plafonné au dernier jour réel du mois : un 28 par défaut évite
+    déjà le problème, mais une école qui saisit 28 en février doit obtenir le
+    28 février, pas une erreur.
+    """
+    import datetime
+
+    mode = getattr(tenant, 'echeance_mensualite', 'DEBUT_MOIS') or 'DEBUT_MOIS'
+    jour = int(getattr(tenant, 'jour_echeance', 1) or 1)
+
+    if mode == 'ANTICIPE':
+        annee, mois = _mois_precedent(annee, mois)
+    elif mode == 'FIN_MOIS':
+        annee, mois = (annee + 1, 1) if mois == 12 else (annee, mois + 1)
+
+    return datetime.date(annee, mois, min(jour, _dernier_jour(annee, mois)))
+
+
 def _services(eleve):
     """(montant mensuel, [(mois|None, montant)] pour les services uniques)."""
     mensuel, uniques = 0.0, []
@@ -128,6 +167,16 @@ def construire_echeancier(eleve, today=None):
         else:
             non_imputes += montant_mois
 
+    # Correction manuelle de l'école : elle FAIT FOI sur la répartition.
+    # Son total est verrouillé côté API sur le montant réellement encaissé, donc
+    # la somme des lignes continue d'égaler le total payé.
+    manuelle = {int(k): float(v) for k, v in (eleve.imputation_mois or {}).items()
+                if int(k) in lignes}
+    if manuelle:
+        for m in lignes:
+            lignes[m]['paye'] = manuelle.get(m, 0.0)
+        non_imputes = 0.0
+
     # Règle 2 : le reliquat non désigné solde les mois les plus anciens.
     for m in mois:
         if non_imputes <= 0:
@@ -144,17 +193,32 @@ def construire_echeancier(eleve, today=None):
     if non_imputes > 0 and mois:
         lignes[mois[-1]]['paye'] += non_imputes
 
+    # Mois encaissés dès l'inscription : leur échéance est la date d'entrée de
+    # l'élève, pas leur tour dans le calendrier. Une école qui prend la
+    # dernière mensualité à l'inscription la réclame en septembre, pas en juin.
+    tenant = eleve.tenant
+    entree = eleve.date_entree or eleve.date_inscription or exercice.date_debut
+    a_inscription = set()
+    if mois:
+        if getattr(tenant, 'premier_mois_a_inscription', False):
+            a_inscription.add(mois[0])
+        if getattr(tenant, 'dernier_mois_a_inscription', False):
+            a_inscription.add(mois[-1])
+
     sortie = []
     for m in mois:
         ligne = lignes[m]
         paye = round(ligne['paye'], 2)
         reste = round(max(ligne['du'] - paye, 0.0), 2)
-        echu = datetime.date(ligne['annee'], m, 1) <= today
+        exigible = (entree if m in a_inscription
+                    else date_exigibilite(tenant, ligne['annee'], m))
         sortie.append({
             **ligne,
-            'paye':   paye,
-            'reste':  reste,
-            'echu':   echu,
+            'paye':       paye,
+            'reste':      reste,
+            'exigible_le': exigible,
+            'a_inscription': m in a_inscription,
+            'echu':       exigible <= today,
             'statut': 'SOLDE' if reste <= 0 else ('PARTIEL' if paye > 0 else 'IMPAYE'),
         })
 
