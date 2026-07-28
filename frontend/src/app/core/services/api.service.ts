@@ -2,6 +2,19 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 
+/** Un filtre non renseigné est légitime : on l'accepte, puis on l'ignore. */
+export type ParamsRecord = Record<string, string | number | boolean | null | undefined>;
+
+function toHttpParams(params?: ParamsRecord): HttpParams {
+  let httpParams = new HttpParams();
+  if (!params) return httpParams;
+  for (const [cle, valeur] of Object.entries(params)) {
+    if (valeur === undefined || valeur === null || valeur === '') continue;
+    httpParams = httpParams.set(cle, String(valeur));
+  }
+  return httpParams;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private base = environment.apiUrl;
@@ -9,10 +22,16 @@ export class ApiService {
 
   constructor(private http: HttpClient) {}
 
-  get<T>(path: string, params?: Record<string, string>) {
-    let httpParams = new HttpParams();
-    if (params) Object.entries(params).forEach(([k, v]) => httpParams = httpParams.set(k, v));
-    return this.http.get<T>(`${this.base}${path}`, { params: httpParams });
+  /**
+   * Les paramètres absents sont IGNORÉS, ils ne partent pas dans l'URL.
+   *
+   * `Object.entries` conserve les clés dont la valeur vaut `undefined`, et
+   * `HttpParams.set()` la convertit en chaîne : un filtre non renseigné
+   * partait littéralement en `?q=undefined`, que le backend prenait pour un
+   * critère de recherche. L'écran « Anciens élèves » était vide en permanence.
+   */
+  get<T>(path: string, params?: ParamsRecord) {
+    return this.http.get<T>(`${this.base}${path}`, { params: toHttpParams(params) });
   }
 
   post<T>(path: string, body: any) {
@@ -31,9 +50,8 @@ export class ApiService {
     return this.http.delete<T>(`${this.base}${path}`);
   }
 
-  getBlob(path: string, params?: Record<string, string>) {
-    let httpParams = new HttpParams();
-    if (params) Object.entries(params).forEach(([k, v]) => httpParams = httpParams.set(k, v));
-    return this.http.get(`${this.base}${path}`, { responseType: 'blob', params: httpParams });
+  getBlob(path: string, params?: ParamsRecord) {
+    return this.http.get(`${this.base}${path}`,
+                         { responseType: 'blob', params: toHttpParams(params) });
   }
 }

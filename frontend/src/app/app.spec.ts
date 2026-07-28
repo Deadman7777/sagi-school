@@ -14,10 +14,8 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
-    const fixture = TestBed.createComponent(App);
-    await fixture.whenStable();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, frontend');
-  });
+  // Le test « should render title » du squelette `ng new` a été retiré : il
+  // attendait « Hello, frontend » dans un <h1>, contenu disparu le jour où
+  // l'application a été écrite. Il échouait depuis, et une suite rouge en
+  // permanence est une suite que personne ne lance.
 });

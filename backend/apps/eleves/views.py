@@ -592,6 +592,147 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
         return Response(diagnostiquer(tenant, exercice))
 
+    @action(detail=True, methods=['post'], url_path='imputation')
+    def imputation(self, request, pk=None):
+        """Saisit le montant réellement réglé pour chaque mois.
+
+        Attend {"imputation": {"7": 60000, "8": 30000}} — dict vide pour revenir
+        à la répartition automatique.
+
+        Sert d'abord à préciser des données MIGRÉES : la reprise enregistre un
+        « déjà payé » global, sans détail mensuel, et l'école connaît souvent la
+        vraie ventilation. Le total saisi peut donc s'écarter de ce que porte la
+        reprise — l'écart y est reporté.
+
+        La trésorerie n'est JAMAIS touchée : une reprise s'écrit
+        411 D / 706 C / 890 D / 411 C, pas un franc de caisse. En revanche, un
+        écart qui dépasse la reprise viendrait forcément d'un encaissement réel
+        et là on refuse : corriger de l'argent reçu passe par la modification du
+        paiement, qui écrit au grand livre.
+        """
+        from django.db import transaction
+
+        from apps.comptabilite.neutralisation import neutraliser_reprises
+        from apps.paiements.models import Paiement
+        from apps.paiements.reprise import creer_paiement_reprise
+        from core.models import log_audit
+
+        from .echeancier import construire_echeancier, mois_factures
+
+        def recharger():
+            e = (Eleve.objects.filter(tenant=tenant, pk=pk)
+                 .select_related('section', 'exercice')
+                 .prefetch_related('abonnements__service').first())
+            return e
+
+        tenant = get_tenant(request)
+        eleve = recharger()
+        if not eleve:
+            return Response({'error': 'Élève introuvable.'}, status=404)
+        exercice = eleve.exercice
+        if not exercice:
+            return Response({'error': "L'élève n'est rattaché à aucun exercice."}, status=400)
+        if exercice.cloture:
+            return Response(
+                {'error': f"L'exercice {exercice.annee_scolaire} est clôturé."}, status=400)
+
+        brut = request.data.get('imputation')
+        if brut is None or not isinstance(brut, dict):
+            return Response(
+                {'imputation': 'Attendu : un objet {mois: montant}.'}, status=400)
+
+        # Retour à l'automatique.
+        if not brut:
+            eleve.imputation_mois = {}
+            eleve.save(update_fields=['imputation_mois'])
+            return Response(construire_echeancier(eleve))
+
+        factures = set(mois_factures(eleve))
+        propre = {}
+        for cle, valeur in brut.items():
+            try:
+                mois, montant = int(cle), round(float(valeur or 0), 2)
+            except (TypeError, ValueError):
+                return Response({'imputation': 'Mois et montants numériques attendus.'},
+                                status=400)
+            if mois not in factures:
+                return Response(
+                    {'imputation': f"Le mois {mois} n'est pas facturé à cet élève."},
+                    status=400)
+            if montant < 0:
+                return Response({'imputation': 'Un montant payé ne peut pas être négatif.'},
+                                status=400)
+            propre[str(mois)] = montant
+
+        # Ce que les paiements portent aujourd'hui, imputation manuelle mise de côté.
+        eleve.imputation_mois = {}
+        reel = round(sum(l['paye'] for l in construire_echeancier(eleve)['lignes']), 2)
+        saisi = round(sum(propre.values()), 2)
+        ecart = round(saisi - reel, 2)
+
+        reprise = Paiement.objects.filter(tenant=tenant, exercice=exercice,
+                                          eleve=eleve, mode_paiement='REPRISE',
+                                          statut='ACTIF').first()
+        repris = float(reprise.montant_mensualite) if reprise else 0.0
+
+        if abs(ecart) > 0.01:
+            nouveau_repris = round(repris + ecart, 2)
+            if nouveau_repris < 0:
+                return Response({'imputation':
+                                 f"Le total saisi ({saisi:,.0f} FCFA) descend sous les "
+                                 f"encaissements réels. Seule la part reprise à la "
+                                 f"migration ({repris:,.0f} FCFA) est corrigeable ici ; "
+                                 f"pour un paiement encaissé, modifiez le paiement."},
+                                status=400)
+            with transaction.atomic():
+                montants = {
+                    'montant_inscription': float(reprise.montant_inscription) if reprise else 0.0,
+                    'montant_mensualite':  nouveau_repris,
+                    'montant_uniforme':    float(reprise.montant_uniforme) if reprise else 0.0,
+                    'montant_fournitures': float(reprise.montant_fournitures) if reprise else 0.0,
+                    'montant_divers':      float(reprise.montant_divers) if reprise else 0.0,
+                }
+                if reprise:
+                    JournalEntry.objects.filter(
+                        tenant=tenant, exercice=exercice,
+                        source='PAIEMENT', source_id=reprise.id).delete()
+                    reprise.delete()
+                if sum(montants.values()) > 0:
+                    creer_paiement_reprise(tenant, exercice, eleve,
+                                           user=request.user, montants=montants)
+                # Recalculée en entier, jamais empilée (leçon des débits 706
+                # orphelins qui avaient mis les recettes à 0).
+                neutraliser_reprises(tenant, exercice)
+
+        eleve = recharger()
+        eleve.imputation_mois = propre
+        eleve.save(update_fields=['imputation_mois'])
+        log_audit(request, 'UPDATE', 'Eleve', str(eleve.id),
+                  description=(f"Répartition mensuelle du payé — {eleve.nom_complet}"
+                               + (f" (reprise ajustée de {ecart:+,.0f} FCFA)"
+                                  if abs(ecart) > 0.01 else "")))
+        reponse = construire_echeancier(eleve)
+        reponse['reprise_ajustee'] = round(ecart, 2) if abs(ecart) > 0.01 else 0
+        return Response(reponse)
+
+    @action(detail=False, methods=['get'], url_path='rappels')
+    def rappels(self, request):
+        """Qui relancer aujourd'hui, et combien la famille doit-elle.
+
+        Ne retient que ce qui est exigible au sens du réglage de l'école :
+        réclamer un mois pas encore dû décrédibiliserait les vrais rappels.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .rappels import eleves_a_rappeler, fenetre_rappel
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'fenetre': fenetre_rappel(tenant), 'lignes': [],
+                             'nb': 0, 'total_exigible': 0})
+        return Response(eleves_a_rappeler(tenant, exercice))
+
     @action(detail=False, methods=['get'], url_path='anciens')
     def anciens(self, request):
         """Base historique des élèves sortis (diplômés, transférés, abandons).

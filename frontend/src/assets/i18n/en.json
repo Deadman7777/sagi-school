@@ -315,7 +315,12 @@
     "ancien_refuse": "Former student not saved",
     "effectif_total": "Total",
     "liste_classe_export": "Export the list of",
-    "liste_classe_erreur": "Export failed"
+    "liste_classe_erreur": "Export failed",
+    "imput_corriger": "Adjust allocation",
+    "imput_aide": "Enter the amount actually paid for each month. Any gap with the current total ({{total}} FCFA) adjusts the migration carry-over — cash is never affected.",
+    "imput_ok": "Allocation updated",
+    "imput_refuse": "Allocation rejected",
+    "imput_reprise": "Migration carry-over adjusted by {{montant}} FCFA"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -487,7 +492,25 @@
     "cert_mention_validite": "Validity notice",
     "cert_texte_intro": "Custom introduction text (empty = standard text)",
     "cert_texte_conclusion": "Custom closing text (empty = standard text)",
-    "sauvegarde": "Backup"
+    "sauvegarde": "Backup",
+    "echeances": "Due dates",
+    "echeance_titre": "When monthly fees fall due",
+    "echeance_aide": "Decides what a family sees as “overdue”. A school collecting before the month and one collecting in arrears do not have the same overdue amounts on the same date.",
+    "echeance_mode": "A monthly fee falls due",
+    "echeance_jour": "Day of month for the due date (1 to 28)",
+    "echeance_premier_mois": "The 1st monthly fee is collected at registration",
+    "echeance_dernier_mois": "The last monthly fee is collected at registration",
+    "rappels_titre": "Payment reminders",
+    "rappels_aide": "Monthly reminder window. The system only chases what is genuinely due: claiming a month that is not yet owed would undermine real reminders.",
+    "rappels_actifs": "Enable monthly reminders",
+    "rappels_debut": "Reminders start (day of month)",
+    "rappels_limite": "Payment deadline (day of month)",
+    "rappels_etat": "This month’s window",
+    "rappels_ouverte": "Open",
+    "rappels_depassee": "Deadline passed",
+    "rappels_a_venir": "Not open yet",
+    "rappels_nb": "Families to chase",
+    "rappels_montant": "Amount due"
   },
   "cloture": {
     "title": "Year Closing",

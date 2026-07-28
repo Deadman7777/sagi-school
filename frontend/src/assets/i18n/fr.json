@@ -315,7 +315,12 @@
     "ancien_refuse": "Ancien élève non enregistré",
     "effectif_total": "Total",
     "liste_classe_export": "Exporter la liste de",
-    "liste_classe_erreur": "Export impossible"
+    "liste_classe_erreur": "Export impossible",
+    "imput_corriger": "Corriger la répartition",
+    "imput_aide": "Saisissez le montant réellement réglé pour chaque mois. Un écart avec le total actuel ({{total}} FCFA) ajuste la reprise de migration — la trésorerie n'est jamais touchée.",
+    "imput_ok": "Répartition corrigée",
+    "imput_refuse": "Répartition refusée",
+    "imput_reprise": "Reprise de migration ajustée de {{montant}} FCFA"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -487,7 +492,25 @@
     "cert_mention_validite": "Mention de validité",
     "cert_texte_intro": "Texte d'introduction personnalisé (vide = texte standard)",
     "cert_texte_conclusion": "Texte de conclusion personnalisé (vide = texte standard)",
-    "sauvegarde": "Sauvegarde"
+    "sauvegarde": "Sauvegarde",
+    "echeances": "Échéances",
+    "echeance_titre": "Exigibilité des mensualités",
+    "echeance_aide": "Décide de ce qu'une famille voit comme « en retard ». Une école qui encaisse avant le mois et une qui encaisse à terme échu n'ont pas les mêmes retards à la même date.",
+    "echeance_mode": "Une mensualité devient exigible",
+    "echeance_jour": "Jour du mois de l'échéance (1 à 28)",
+    "echeance_premier_mois": "La 1re mensualité est encaissée dès l'inscription",
+    "echeance_dernier_mois": "La dernière mensualité est encaissée dès l'inscription",
+    "rappels_titre": "Rappels de paiement",
+    "rappels_aide": "Fenêtre mensuelle de relance. Le système ne relance que sur ce qui est réellement exigible : réclamer un mois pas encore dû décrédibiliserait les vrais rappels.",
+    "rappels_actifs": "Activer les rappels mensuels",
+    "rappels_debut": "Début des rappels (jour du mois)",
+    "rappels_limite": "Dernier délai de paiement (jour du mois)",
+    "rappels_etat": "Fenêtre du mois en cours",
+    "rappels_ouverte": "Ouverte",
+    "rappels_depassee": "Dernier délai dépassé",
+    "rappels_a_venir": "Pas encore ouverte",
+    "rappels_nb": "Familles à relancer",
+    "rappels_montant": "Montant exigible"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

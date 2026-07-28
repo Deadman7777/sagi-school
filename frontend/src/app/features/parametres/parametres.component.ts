@@ -47,6 +47,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('ecole')">🏫 {{ 'parametres.infos_ecole' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'exercice'"
               (click)="onglet.set('exercice')">📅 {{ 'parametres.exercice' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'echeances'"
+              (click)="onglet.set('echeances'); chargerRappels()">⏰ {{ 'parametres.echeances' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'sections'"
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'services'"
@@ -65,6 +67,97 @@ import { MessageService } from 'primeng/api';
         (click)="onglet.set('cloture'); chargerVerification()">
         🔒 {{ 'cloture.title' | translate }}
       </button>
+    </div>
+
+
+    <!-- ══ ONGLET ÉCHÉANCES ET RAPPELS ══
+         Les écoles ne collectent pas au même moment : une qui encaisse avant
+         le mois et une qui encaisse à terme échu n'ont pas les mêmes retards.
+         Sans ce réglage, le document remis aux familles contredit la pratique
+         de l'établissement. -->
+    <div *ngIf="onglet() === 'echeances'">
+      <div class="form-card" *ngIf="ecole()">
+        <div class="fc-title">⏰ {{ 'parametres.echeance_titre' | translate }}</div>
+        <p class="fc-aide">{{ 'parametres.echeance_aide' | translate }}</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="ech-mode">{{ 'parametres.echeance_mode' | translate }}</label>
+            <p-select appendTo="body" inputId="ech-mode" [options]="modesEcheance"
+                      [(ngModel)]="ecole()!.echeance_mensualite"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label for="ech-jour">{{ 'parametres.echeance_jour' | translate }}</label>
+            <p-inputNumber inputId="ech-jour" [(ngModel)]="ecole()!.jour_echeance"
+                           mode="decimal" [min]="1" [max]="28" [showButtons]="true"
+                           styleClass="w-full" />
+          </div>
+          <div class="form-group full">
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.premier_mois_a_inscription" [binary]="true"
+                          inputId="ech-premier" />
+              <span>{{ 'parametres.echeance_premier_mois' | translate }}</span>
+            </label>
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.dernier_mois_a_inscription" [binary]="true"
+                          inputId="ech-dernier" />
+              <span>{{ 'parametres.echeance_dernier_mois' | translate }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card" *ngIf="ecole()">
+        <div class="fc-title">🔔 {{ 'parametres.rappels_titre' | translate }}</div>
+        <p class="fc-aide">{{ 'parametres.rappels_aide' | translate }}</p>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.rappel_actif" [binary]="true"
+                          inputId="rap-actif" />
+              <span>{{ 'parametres.rappels_actifs' | translate }}</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="rap-debut">{{ 'parametres.rappels_debut' | translate }}</label>
+            <p-inputNumber inputId="rap-debut" [(ngModel)]="ecole()!.rappel_jour_debut"
+                           mode="decimal" [min]="1" [max]="28" [showButtons]="true"
+                           styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label for="rap-limite">{{ 'parametres.rappels_limite' | translate }}</label>
+            <p-inputNumber inputId="rap-limite" [(ngModel)]="ecole()!.rappel_jour_limite"
+                           mode="decimal" [min]="1" [max]="28" [showButtons]="true"
+                           styleClass="w-full" />
+          </div>
+        </div>
+
+        <!-- État du mois en cours : le réglage devient concret. -->
+        <div class="rappel-etat" *ngIf="rappels() as r">
+          <div class="re-ligne">
+            <span>{{ 'parametres.rappels_etat' | translate }}</span>
+            <strong [class.ouverte]="r.fenetre.ouverte" [class.depassee]="r.fenetre.depassee">
+              {{ (r.fenetre.ouverte ? 'parametres.rappels_ouverte'
+                  : r.fenetre.depassee ? 'parametres.rappels_depassee'
+                  : 'parametres.rappels_a_venir') | translate }}
+            </strong>
+          </div>
+          <div class="re-ligne">
+            <span>{{ 'parametres.rappels_nb' | translate }}</span>
+            <strong [class.danger]="r.nb > 0">{{ r.nb }}</strong>
+          </div>
+          <div class="re-ligne">
+            <span>{{ 'parametres.rappels_montant' | translate }}</span>
+            <strong class="mono" [class.danger]="r.total_exigible > 0">
+              {{ r.total_exigible | number:'1.0-0' }} FCFA</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
+                  [loading]="saving()" (onClick)="sauvegarderEcole()" />
+      </div>
     </div>
 
     <!-- ══ ONGLET SANTÉ DE LA MIGRATION ══
@@ -1210,6 +1303,21 @@ chargerExercice() {
     });
   }
 
+  modesEcheance = [
+    { label: "Avant le mois (paiement d'avance)", value: 'ANTICIPE' },
+    { label: 'Dès le début du mois',              value: 'DEBUT_MOIS' },
+    { label: 'À la fin du mois (terme échu)',     value: 'FIN_MOIS' },
+  ];
+
+  rappels = signal<any | null>(null);
+
+  chargerRappels() {
+    this.api.get<any>('/eleves/rappels/').subscribe({
+      next: r => this.rappels.set(r),
+      error: () => this.rappels.set(null),
+    });
+  }
+
   sauvegarderEcole() {
     if (!this.ecole()) return;
     this.saving.set(true);
@@ -1218,8 +1326,20 @@ chargerExercice() {
         this.ecole.set(res);
         this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.nom_ecole') });
         this.saving.set(false);
+        // Les réglages d'échéance changent ce qui est « en retard » : on
+        // recharge pour que l'écran montre l'effet immédiatement.
+        if (this.onglet() === 'echeances') this.chargerRappels();
       },
-      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+      // Le backend refuse un jour hors bornes ou un délai antérieur au début
+      // des rappels, avec le motif : l'avaler ferait corriger à l'aveugle.
+      error: (err) => {
+        const d = err?.error || {};
+        const motif = d.jour_echeance || d.rappel_jour_debut || d.rappel_jour_limite
+                      || d.detail || this.translate.instant('parametres.sauvegarde_echouee');
+        this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: String(motif), life: 8000 });
+        this.saving.set(false);
+      }
     });
   }
 
