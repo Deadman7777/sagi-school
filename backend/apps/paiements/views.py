@@ -114,7 +114,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
         # règlement ventilé par mode, puis solde du 411. La part reliquat,
         # elle, ne constate aucun produit (déjà comptabilisé l'année d'origine).
         ecritures = lignes_paiement(
-            montant, float(paiement.total_exercice), ventilation, libelle)
+            montant, float(paiement.total_exercice), ventilation, libelle,
+            organisme=bool(paiement.organisme_id))
 
         for e in ecritures:
             JournalEntry.objects.create(
@@ -515,7 +516,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
         # 3 — Nouvelles écritures SYSCOHADA (règlement ventilé par mode)
         libelle_new = f"{paiement.eleve.nom_complet} - {no_piece_new}"
         ecritures_new = lignes_paiement(nouveau_total, part_exercice,
-                                        ventilation, libelle_new)
+                                        ventilation, libelle_new,
+                                        organisme=bool(nouveau.organisme_id))
         for e in ecritures_new:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,

@@ -54,6 +54,9 @@ COMPTES_SYSCOHADA = [
     ('408',  'Fournisseurs — factures non parvenues',         'BILAN', 4, False),
     ('41',   'Clients et comptes rattachés',                  'BILAN', 4, True),
     ('411',  'Clients (Parents / Élèves)',                    'BILAN', 4, True),
+    # Tiers payeurs (État, collectivité, ONG, fondation). Distingué du 411
+    # pour que le bilan dise ce que les partenaires institutionnels doivent.
+    ('4112', 'Créances sur organismes payeurs (bourses)',     'BILAN', 4, False),
     ('42',   'Personnel',                                     'BILAN', 4, True),
     ('421',  'Avances et acomptes sur salaires',              'BILAN', 4, True),
     ('422',  'Personnel — rémunérations dues',                'BILAN', 4, True),

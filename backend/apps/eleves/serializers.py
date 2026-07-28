@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Eleve, Section, Service, EleveService
+from .models import (Eleve, EleveService, Organisme,
+                     PriseEnChargeOrganisme, Section, Service)
 
 # Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
 # dans l'autre sens (nom → numéro) : deux tables homonymes seraient un piège.
@@ -52,6 +53,16 @@ class EleveSerializer(serializers.ModelSerializer):
     # Mois réellement dus + d'où ils viennent : l'école doit voir si le chiffre
     # est le sien ou celui du prorata, sinon elle ne sait pas quoi corriger.
     nb_mensualites_dues          = serializers.ReadOnlyField()
+    # Bourse : qui doit quoi. Le dû total ne bouge pas, il se répartit.
+    part_organisme               = serializers.ReadOnlyField()
+    part_famille                 = serializers.ReadOnlyField()
+    reste_organisme              = serializers.ReadOnlyField()
+    reste_famille                = serializers.ReadOnlyField()
+    organisme_nom                = serializers.SerializerMethodField()
+
+    def get_organisme_nom(self, obj):
+        pec = obj.pec_organisme
+        return pec.organisme.nom if pec else ''
     mois_dus_effectifs           = serializers.SerializerMethodField()
     mois_dus_origine             = serializers.SerializerMethodField()
 
@@ -265,4 +276,52 @@ class SectionSerializer(serializers.ModelSerializer):
                     elements.append({'libelle': libelle, 'montant': montant})
             attrs['composition_inscription'] = elements
             attrs['frais_inscription'] = round(sum(e['montant'] for e in elements), 2)
+        return attrs
+
+class OrganismeSerializer(serializers.ModelSerializer):
+    type_libelle = serializers.CharField(source='get_type_display', read_only=True)
+    nb_boursiers = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Organisme
+        fields = '__all__'
+        extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def get_nb_boursiers(self, obj):
+        # Annoté par la vue quand la liste est chargée : sinon une requête par
+        # organisme, et le tableau redevient lent dès qu'il y en a vingt.
+        if hasattr(obj, 'nb_boursiers_sql'):
+            return obj.nb_boursiers_sql
+        return obj.prises_en_charge.count()
+
+
+class PriseEnChargeOrganismeSerializer(serializers.ModelSerializer):
+    organisme_nom  = serializers.CharField(source='organisme.nom', read_only=True)
+    organisme_type = serializers.CharField(source='organisme.get_type_display',
+                                           read_only=True)
+    montant_annuel = serializers.ReadOnlyField()
+    eleve_nom      = serializers.CharField(source='eleve.nom_complet', read_only=True)
+    matricule      = serializers.CharField(source='eleve.matricule', read_only=True)
+
+    class Meta:
+        model  = PriseEnChargeOrganisme
+        fields = '__all__'
+        extra_kwargs = {
+            'tenant':   {'required': False, 'read_only': True},
+            'exercice': {'required': False},
+        }
+
+    def validate(self, attrs):
+        """Une prise en charge à zéro n'a pas de sens : elle laisserait croire
+        qu'un organisme suit l'élève alors qu'il ne doit rien."""
+        inscription = attrs.get('montant_inscription',
+                                getattr(self.instance, 'montant_inscription', 0))
+        mensualite = attrs.get('montant_mensualite',
+                               getattr(self.instance, 'montant_mensualite', 0))
+        services = attrs.get('couvre_services',
+                             getattr(self.instance, 'couvre_services', False))
+        if not (float(inscription or 0) or float(mensualite or 0) or services):
+            raise serializers.ValidationError(
+                "Indiquez au moins un montant pris en charge, ou cochez les "
+                "services : sinon l'organisme ne doit rien pour cet élève.")
         return attrs

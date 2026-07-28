@@ -5,7 +5,8 @@ import { ElevesService } from '../../../core/services/eleves.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Eleve, NiveauAlerte, PriseEnChargeStats, TypePEC, Service,
-         LigneImpayeAnterieur, AncienEleve, ParcoursEleve, Echeancier } from '../../../core/models/eleve.model';
+         LigneImpayeAnterieur, AncienEleve, ParcoursEleve, Echeancier,
+         Organisme, SuiviOrganisme } from '../../../core/models/eleve.model';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
@@ -24,7 +25,7 @@ import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 /** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
 type LigneImpayeEditable = LigneImpayeAnterieur & { montant0: number; note0: string };
 
-type OngletEleves = 'liste' | 'prise_en_charge' | 'anciens';
+type OngletEleves = 'liste' | 'prise_en_charge' | 'anciens' | 'organismes';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -36,6 +37,13 @@ interface PecForm {
   // d'un élève ne doit pas figer son calendrier au passage.
   moisAuto: boolean;
   mois_dus: number[];
+  // Bourse : organisme payeur et ce qu'il couvre. `organisme` à null retire
+  // la bourse — la totalité du dû revient alors à la famille.
+  organisme: string | null;
+  bourse_id: string | null;
+  bourse_inscription: number;
+  bourse_mensualite: number;
+  bourse_reference: string;
 }
 
 /** Mois de l'année, pour les cases à cocher des mois facturés. */
@@ -79,6 +87,11 @@ const MOIS_ANNEE = [
                   [outlined]="onglet() !== 'anciens'"
                   [pTooltip]="'eleves.anciens_aide' | translate"
                   (onClick)="allerOnglet('anciens')" />
+        <p-button [label]="'eleves.organismes' | translate" size="small"
+                  [severity]="onglet() === 'organismes' ? 'primary' : 'secondary'"
+                  [outlined]="onglet() !== 'organismes'"
+                  [pTooltip]="'eleves.organismes_aide' | translate"
+                  (onClick)="allerOnglet('organismes')" />
         <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
                   pTooltip="Exporter la liste en PDF"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
@@ -290,6 +303,130 @@ const MOIS_ANNEE = [
     <!-- ══════════════════════ ONGLET ANCIENS ÉLÈVES ══════════════════════ -->
     <!-- Base historique : indépendante de l'exercice affiché, on doit y
          retrouver un diplômé de 2019 comme un transféré de l'an dernier. -->
+
+    <!-- ══ ONGLET ORGANISMES PAYEURS ══
+         Une bourse ne réduit pas le dû, elle en change le débiteur. Ce
+         tableau répond à la seule question qui compte pour l'école : ce que
+         chaque organisme s'est engagé à couvrir, et ce qu'il a réellement
+         versé. -->
+    @if (onglet() === 'organismes') {
+      @if (suiviOrg(); as suivi) {
+        <div class="kpi-row" style="margin-bottom:14px">
+          <div class="kpi-mini">
+            <span class="km-val">{{ suivi.totaux.nb_organismes }}</span>
+            <span class="km-label">{{ 'eleves.organismes' | translate }}</span>
+          </div>
+          <div class="kpi-mini info">
+            <span class="km-val">{{ suivi.totaux.nb_boursiers }}</span>
+            <span class="km-label">{{ 'eleves.org_boursiers' | translate }}</span>
+          </div>
+          <div class="kpi-mini">
+            <span class="km-val">{{ suivi.totaux.couvert | number:'1.0-0' }}</span>
+            <span class="km-label">{{ 'eleves.org_couvert' | translate }}</span>
+          </div>
+          <div class="kpi-mini" style="border-color:#10b981">
+            <span class="km-val" style="color:#10b981">{{ suivi.totaux.recu | number:'1.0-0' }}</span>
+            <span class="km-label">{{ 'eleves.org_recu' | translate }}</span>
+          </div>
+          <div class="kpi-mini" [style.border-color]="suivi.totaux.reste > 0 ? '#ef4444' : ''">
+            <span class="km-val" [style.color]="suivi.totaux.reste > 0 ? '#ef4444' : ''">
+              {{ suivi.totaux.reste | number:'1.0-0' }}</span>
+            <span class="km-label">{{ 'eleves.org_reste' | translate }}</span>
+          </div>
+        </div>
+      }
+
+      <div class="filters-bar">
+        <p-button [label]="'eleves.org_nouveau' | translate" icon="pi pi-plus"
+                  severity="success" (onClick)="ouvrirOrganisme(null)" />
+      </div>
+
+      <div class="table-card">
+        <p-table [value]="suiviOrg()?.lignes || []" [loading]="chargementOrg()"
+                 dataKey="organisme_id" [rowHover]="true" styleClass="p-datatable-sm">
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width:3rem"></th>
+              <th>{{ 'eleves.org_nom' | translate }}</th>
+              <th>{{ 'eleves.org_type' | translate }}</th>
+              <th>{{ 'eleves.org_reference' | translate }}</th>
+              <th class="text-right">{{ 'eleves.org_boursiers' | translate }}</th>
+              <th class="text-right">{{ 'eleves.org_couvert' | translate }}</th>
+              <th class="text-right">{{ 'eleves.org_recu' | translate }}</th>
+              <th class="text-right">{{ 'eleves.org_reste' | translate }}</th>
+              <th>{{ 'eleves.actions' | translate }}</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-o let-expanded="expanded">
+            <tr>
+              <td>
+                <p-button type="button" [text]="true" [rounded]="true"
+                          [pRowToggler]="o" [disabled]="!o.nb_boursiers"
+                          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" />
+              </td>
+              <td class="bold">
+                {{ o.nom }}
+                @if (!o.actif) { <span class="org-inactif">{{ 'eleves.org_inactif' | translate }}</span> }
+              </td>
+              <td>{{ o.type }}</td>
+              <td class="mono" style="font-size:11px">{{ o.reference || '—' }}</td>
+              <td class="mono text-right">{{ o.nb_boursiers }}</td>
+              <td class="mono text-right">{{ o.couvert | number:'1.0-0' }}</td>
+              <td class="mono text-right success">{{ o.recu | number:'1.0-0' }}</td>
+              <td class="mono text-right" [class.danger]="o.reste > 0">
+                {{ o.reste | number:'1.0-0' }}</td>
+              <td>
+                <div class="btn-row">
+                  <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
+                            [pTooltip]="'common.modifier' | translate"
+                            (onClick)="ouvrirOrganisme(o.organisme_id)" />
+                  <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                            [pTooltip]="'common.supprimer' | translate"
+                            (onClick)="supprimerOrganisme(o)" />
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="rowexpansion" let-o>
+            <tr>
+              <td colspan="9" style="padding:0">
+                <table class="ech-table" style="margin:0">
+                  <thead>
+                    <tr>
+                      <th>{{ 'eleves.matricule' | translate }}</th>
+                      <th>{{ 'eleves.nom_complet' | translate }}</th>
+                      <th>{{ 'eleves.org_reference' | translate }}</th>
+                      <th class="num">{{ 'eleves.org_couvert' | translate }}</th>
+                      <th class="num">{{ 'eleves.org_recu' | translate }}</th>
+                      <th class="num">{{ 'eleves.org_reste' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (e of o.eleves; track e.eleve_id) {
+                      <tr>
+                        <td class="mono" style="font-size:11px">{{ e.matricule || '—' }}</td>
+                        <td>{{ e.nom_complet }}</td>
+                        <td class="mono" style="font-size:11px">{{ e.reference || '—' }}</td>
+                        <td class="mono num">{{ e.couvert | number:'1.0-0' }}</td>
+                        <td class="mono num success">{{ e.recu | number:'1.0-0' }}</td>
+                        <td class="mono num" [class.danger]="e.reste > 0">
+                          {{ e.reste | number:'1.0-0' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-3)">
+              {{ 'eleves.org_aucun' | translate }}
+            </td></tr>
+          </ng-template>
+        </p-table>
+      </div>
+    }
+
     @if (onglet() === 'anciens') {
       <div class="kpi-row" style="margin-bottom:14px">
         <div class="kpi-mini">
@@ -697,6 +834,25 @@ const MOIS_ANNEE = [
               }
             }
 
+            <!-- Bourse : le dû ne diminue pas, il change de débiteur. Le
+                 montrer évite qu'on réclame à une famille la part de l'État. -->
+            @if (e.part_organisme > 0) {
+              <div class="fiche-row">
+                <span>{{ 'eleves.org_pris_en_charge_par' | translate }}</span>
+                <strong>{{ e.organisme_nom }}</strong></div>
+              <div class="fiche-row"><span>{{ 'eleves.org_part' | translate }}</span>
+                <strong class="mono" [class.danger]="e.reste_organisme > 0">
+                  {{ e.part_organisme | number }} FCFA
+                  @if (e.reste_organisme > 0) {
+                    <span class="org-du">({{ e.reste_organisme | number }} {{ 'eleves.org_du' | translate }})</span>
+                  }
+                </strong></div>
+              <div class="fiche-row"><span>{{ 'eleves.org_part_famille' | translate }}</span>
+                <strong class="mono" [class.danger]="e.reste_famille > 0"
+                        [class.success]="e.reste_famille <= 0">
+                  {{ e.reste_famille | number }} FCFA</strong></div>
+            }
+
             <!-- L'ardoise des années antérieures est TOUJOURS affichée, même à
                  zéro : c'est la seule façon de voir d'un coup d'œil que le
                  reste à payer de l'année est bien tout ce que l'élève doit. -->
@@ -798,6 +954,36 @@ const MOIS_ANNEE = [
                    [placeholder]="'eleves.pec_observations_ph' | translate" />
           </div>
 
+          <!-- Bourse / organisme payeur. Placé ici parce que c'est la même
+               question — qui paie quoi — mais l'effet est inverse de la prise
+               en charge sociale au-dessus : le dû ne baisse pas, il change
+               de débiteur. -->
+          <div class="form-group full">
+            <label for="bourse-org">{{ 'eleves.org_bourse' | translate }}</label>
+            <p-select appendTo="body" inputId="bourse-org" [options]="organismesActifs()"
+                      [(ngModel)]="formPEC.organisme" optionLabel="nom" optionValue="id"
+                      styleClass="w-full" [showClear]="true"
+                      [placeholder]="'eleves.org_aucune_bourse' | translate" />
+            <small class="fc-aide-org">{{ 'eleves.org_bourse_aide' | translate }}</small>
+          </div>
+          @if (formPEC.organisme) {
+            <div class="form-group">
+              <label for="bourse-insc">{{ 'eleves.org_montant_inscription' | translate }}</label>
+              <p-inputNumber inputId="bourse-insc" [(ngModel)]="formPEC.bourse_inscription"
+                             [min]="0" mode="decimal" styleClass="w-full" placeholder="0" />
+            </div>
+            <div class="form-group">
+              <label for="bourse-mens">{{ 'eleves.org_montant_mensualite' | translate }}</label>
+              <p-inputNumber inputId="bourse-mens" [(ngModel)]="formPEC.bourse_mensualite"
+                             [min]="0" mode="decimal" styleClass="w-full" placeholder="0" />
+            </div>
+            <div class="form-group full">
+              <label for="bourse-ref">{{ 'eleves.org_bourse_reference' | translate }}</label>
+              <input pInputText id="bourse-ref" [(ngModel)]="formPEC.bourse_reference"
+                     class="w-full" [placeholder]="'eleves.org_bourse_reference_ph' | translate" />
+            </div>
+          }
+
           <!-- Mois facturés -->
           <div class="form-group full">
             <label>{{ 'eleves.mois_factures' | translate }}</label>
@@ -867,6 +1053,53 @@ const MOIS_ANNEE = [
       </ng-template>
     </p-dialog>
 
+
+
+    <!-- Dialog : créer / modifier un organisme payeur -->
+    <p-dialog [header]="'eleves.org_titre' | translate" [(visible)]="dialogOrgVisible"
+              [modal]="true" [style]="{width:'520px', maxWidth:'95vw'}" [draggable]="false">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="org-nom">{{ 'eleves.org_nom' | translate }} *</label>
+          <input pInputText id="org-nom" [(ngModel)]="formOrg.nom" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="org-type">{{ 'eleves.org_type' | translate }}</label>
+          <p-select appendTo="body" inputId="org-type" [options]="typesOrganisme"
+                    [(ngModel)]="formOrg.type" optionLabel="label" optionValue="value"
+                    styleClass="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="org-ref">{{ 'eleves.org_reference' | translate }}</label>
+          <input pInputText id="org-ref" [(ngModel)]="formOrg.reference" class="w-full"
+                 [placeholder]="'eleves.org_reference_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label for="org-contact">{{ 'eleves.org_contact' | translate }}</label>
+          <input pInputText id="org-contact" [(ngModel)]="formOrg.contact_nom" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label for="org-tel">{{ 'eleves.telephone' | translate }}</label>
+          <input pInputText id="org-tel" [(ngModel)]="formOrg.telephone" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label for="org-email">{{ 'eleves.email' | translate }}</label>
+          <input pInputText id="org-email" type="email" [(ngModel)]="formOrg.email" class="w-full" />
+        </div>
+        <div class="form-group full">
+          <label class="check-org">
+            <p-checkbox [(ngModel)]="formOrg.actif" [binary]="true" inputId="org-actif" />
+            <span>{{ 'eleves.org_actif' | translate }}</span>
+          </label>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="dialogOrgVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="enregistrerOrganisme()" />
+      </ng-template>
+    </p-dialog>
 
     <!-- Dialog : enregistrer un ancien élève inconnu du système -->
     <p-dialog [header]="'eleves.ancien_ajouter' | translate" [(visible)]="dialogAncienVisible"
@@ -1358,6 +1591,15 @@ const MOIS_ANNEE = [
                  text-transform:uppercase; letter-spacing:.5px; margin:10px 0 5px; }
     /* Le pied du dialogue fiche porte six actions : sans repli, les
        premières sortaient de la fenêtre. */
+    .fc-aide-org { font-size:10px; color:var(--text-3); margin-top:3px; display:block; }
+    .org-du { color:#ef4444; font-weight:600; font-size:10px; margin-left:4px; }
+    .org-inactif { margin-left:6px; padding:1px 6px; border-radius:8px;
+                   background:rgba(148,163,184,0.18); color:var(--text-3);
+                   font-size:9px; font-weight:700; text-transform:uppercase; }
+    .check-org { display:flex; align-items:center; gap:8px; font-size:12px;
+                 color:var(--text-2); text-transform:none; letter-spacing:0;
+                 cursor:pointer; }
+
     .fiche-actions { display:flex; flex-wrap:wrap; justify-content:flex-end;
                      gap:6px; width:100%; }
     @media (max-width: 560px) {
@@ -1691,6 +1933,7 @@ export class ElevesListeComponent implements OnInit {
     this.onglet.set(next);
     if (next === 'prise_en_charge' && !this.statsPEC()) this.chargerStatsPEC();
     if (next === 'anciens') this.chargerAnciens();
+    if (next === 'organismes') this.chargerOrganismes();
   }
 
   // ── Base historique des anciens élèves ──────────────────────────────────
@@ -1930,6 +2173,97 @@ export class ElevesListeComponent implements OnInit {
   }
 
   echeancier = signal<Echeancier | null>(null);
+
+  // ── Organismes payeurs ─────────────────────────────────────────────────
+  suiviOrg = signal<{ exercice: string; lignes: SuiviOrganisme[];
+                      totaux: any } | null>(null);
+  chargementOrg = signal(false);
+  dialogOrgVisible = false;
+  organismeEdite: string | null = null;
+  typesOrganisme = [
+    { label: 'État / Ministère',           value: 'ETAT' },
+    { label: 'Collectivité territoriale',  value: 'COLLECTIVITE' },
+    { label: 'ONG',                        value: 'ONG' },
+    { label: 'Fondation',                  value: 'FONDATION' },
+    { label: 'Entreprise',                 value: 'ENTREPRISE' },
+    { label: 'Autre',                      value: 'AUTRE' },
+  ];
+  formOrg: Partial<Organisme> = this.orgFormVide();
+
+  private orgFormVide(): Partial<Organisme> {
+    return { nom: '', type: 'ETAT', reference: '', contact_nom: '',
+             telephone: '', email: '', actif: true };
+  }
+
+  chargerOrganismes() {
+    this.chargementOrg.set(true);
+    this.elevesService.getSuiviOrganismes().subscribe({
+      next: r => { this.suiviOrg.set(r); this.chargementOrg.set(false); },
+      error: () => this.chargementOrg.set(false),
+    });
+  }
+
+  ouvrirOrganisme(id: string | null) {
+    this.organismeEdite = id;
+    if (!id) {
+      this.formOrg = this.orgFormVide();
+      this.dialogOrgVisible = true;
+      return;
+    }
+    // Le tableau de suivi ne porte pas tous les champs (contact, e-mail…) :
+    // on relit la fiche complète plutôt que d'éditer sur une vue partielle.
+    this.elevesService.getOrganismes().subscribe({
+      next: (liste) => {
+        this.formOrg = { ...(liste.find(o => o.id === id) || this.orgFormVide()) };
+        this.dialogOrgVisible = true;
+      },
+    });
+  }
+
+  enregistrerOrganisme() {
+    if (!this.formOrg.nom?.trim()) {
+      this.msg.add({ severity: 'warn',
+                     summary: this.translate.instant('eleves.champ_requis'),
+                     detail: this.translate.instant('eleves.org_nom') });
+      return;
+    }
+    this.saving.set(true);
+    const requete = this.organismeEdite
+      ? this.elevesService.majOrganisme(this.organismeEdite, this.formOrg)
+      : this.elevesService.creerOrganisme(this.formOrg);
+    requete.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogOrgVisible = false;
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('eleves.org_enregistre') });
+        this.chargerOrganismes();
+      },
+      error: (err) => {
+        this.saving.set(false);
+        const d = err?.error || {};
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('parametres.erreur'),
+                       detail: String(d.nom || d.error || ''), life: 8000 });
+      },
+    });
+  }
+
+  supprimerOrganisme(o: SuiviOrganisme) {
+    // Le serveur refuse déjà si des boursiers en dépendent, en donnant leur
+    // nombre : on le laisse trancher plutôt que de dupliquer la règle ici.
+    this.elevesService.supprimerOrganisme(o.organisme_id).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('eleves.org_supprime'),
+                       detail: o.nom });
+        this.chargerOrganismes();
+      },
+      error: (err) => this.msg.add({
+        severity: 'error', summary: this.translate.instant('parametres.erreur'),
+        detail: String(err?.error?.error || ''), life: 9000 }),
+    });
+  }
 
   // ── Correction de la répartition du payé ───────────────────────────────
   // On corrige QUI a payé quel mois, jamais COMBIEN a été encaissé : le total
@@ -2236,6 +2570,37 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  /** Attribue, met à jour ou retire la bourse selon ce qui a été saisi. */
+  private enregistrerBourse(eleveId: string) {
+    const f = this.formPEC;
+    if (!f.organisme) {
+      // Organisme vidé : on retire la bourse, tout le dû revient à la famille.
+      if (f.bourse_id) {
+        this.elevesService.retirerBourse(f.bourse_id).subscribe({
+          next: () => this.chargerEleves(), error: () => {} });
+      }
+      return;
+    }
+    const corps = {
+      eleve: eleveId, organisme: f.organisme,
+      montant_inscription: f.bourse_inscription || 0,
+      montant_mensualite:  f.bourse_mensualite  || 0,
+      reference: f.bourse_reference || '',
+    };
+    const requete = f.bourse_id
+      ? this.elevesService.majBourse(f.bourse_id, corps)
+      : this.elevesService.attribuerBourse(corps);
+    requete.subscribe({
+      next: () => this.chargerEleves(),
+      // Le serveur refuse une bourse à zéro, avec le motif : sinon l'école
+      // croirait qu'un organisme suit l'élève alors qu'il ne doit rien.
+      error: (err) => this.msg.add({
+        severity: 'error', summary: this.translate.instant('eleves.org_bourse_refusee'),
+        detail: String(err?.error?.non_field_errors?.[0] || err?.error?.detail || ''),
+        life: 9000 }),
+    });
+  }
+
   moisAnnee = MOIS_ANNEE;
 
   onMoisAutoChange() {
@@ -2253,10 +2618,16 @@ export class ElevesListeComponent implements OnInit {
       : [...mois, num].sort((a, b) => a - b);
   }
 
+  organismesActifs = signal<Organisme[]>([]);
+
   ouvrirPriseEnCharge(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     const saisis = eleve.mois_dus || [];
+    // Le formulaire est reconstruit AVANT les appels réseau : l'inverse
+    // écraserait la bourse relue, l'objet littéral remplaçant l'instance sur
+    // laquelle la réponse asynchrone venait d'écrire.
     this.formPEC = {
+      ...this.pecFormVide(),
       prise_en_charge:      eleve.prise_en_charge || null,
       pec_inscription:      eleve.pec_inscription || 0,
       pec_mensualite:       eleve.pec_mensualite  || 0,
@@ -2265,6 +2636,27 @@ export class ElevesListeComponent implements OnInit {
       mois_dus:             [...(saisis.length ? saisis : eleve.mois_dus_effectifs || [])],
     };
     this.dialogPECVisible = true;
+
+    // La liste des organismes n'est chargée qu'à l'ouverture : la plupart des
+    // écoles n'en ont aucun, inutile de la porter sur toute la liste.
+    if (!this.organismesActifs().length) {
+      this.elevesService.getOrganismes().subscribe({
+        next: (l) => this.organismesActifs.set(l.filter(o => o.actif)),
+        error: () => {},
+      });
+    }
+    this.elevesService.getBourses({ eleve: eleve.id }).subscribe({
+      next: (bourses) => {
+        const b = bourses[0];
+        if (!b) return;
+        this.formPEC.organisme          = b.organisme;
+        this.formPEC.bourse_id          = b.id;
+        this.formPEC.bourse_inscription = b.montant_inscription;
+        this.formPEC.bourse_mensualite  = b.montant_mensualite;
+        this.formPEC.bourse_reference   = b.reference;
+      },
+      error: () => {},
+    });
   }
 
   sauvegarderPEC() {
@@ -2281,6 +2673,7 @@ export class ElevesListeComponent implements OnInit {
     } as Partial<Eleve>;
     this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
+        this.enregistrerBourse(e.id);
         this.msg.add({ severity: 'success', summary: this.translate.instant('eleves.situation_enregistree'),
                        detail: e.nom_complet });
         this.dialogPECVisible = false;
@@ -2424,6 +2817,8 @@ export class ElevesListeComponent implements OnInit {
 
   private pecFormVide(): PecForm {
     return { prise_en_charge: null, pec_inscription: 0, pec_mensualite: 0,
-             obs_prise_en_charge: '', moisAuto: true, mois_dus: [] };
+             obs_prise_en_charge: '', moisAuto: true, mois_dus: [],
+             organisme: null, bourse_id: null, bourse_inscription: 0,
+             bourse_mensualite: 0, bourse_reference: '' };
   }
 }

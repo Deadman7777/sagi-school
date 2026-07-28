@@ -21,6 +21,11 @@ class PaiementSerializer(serializers.ModelSerializer):
     # constate un produit 706 (voir apps.paiements.ecritures).
     total_exercice = serializers.ReadOnlyField()
     eleve_nom = serializers.CharField(source='eleve.nom_complet', read_only=True)
+    # Qui règle : vide quand c'est la famille. Affiché sur le reçu et dans
+    # l'historique, pour qu'on ne confonde pas un versement d'organisme avec
+    # un règlement des parents.
+    organisme_nom = serializers.CharField(source='organisme.nom', read_only=True,
+                                          default='')
 
     class Meta:
         model  = Paiement

@@ -345,6 +345,62 @@ class Eleve(TenantModel):
         # être un Decimal (agrégat SQL) → sinon TypeError float − Decimal.
         return round(float(self.total_attendu) - float(self.total_paye), 2)
 
+    # ── Répartition du dû entre l'organisme et la famille ──────────────────
+    # Une bourse ne fait pas disparaître le dû, elle en change le débiteur.
+    # Tout ce qui suit sépare donc ce que doit un tiers de ce que doit la
+    # famille — sans quoi l'école croirait avoir encaissé ce qu'un organisme
+    # lui doit encore, ou réclamerait à des parents la part de l'État.
+    @property
+    def pec_organisme(self):
+        """La prise en charge par un organisme sur l'exercice de la fiche."""
+        if not self.exercice_id:
+            return None
+        for pec in self.prises_en_charge_organisme.all():
+            if pec.exercice_id == self.exercice_id:
+                return pec
+        return None
+
+    @property
+    def part_organisme(self):
+        """Montant que l'organisme doit à l'école pour cet élève.
+
+        Plafonné au dû réel : une convention qui couvre plus que la scolarité
+        ne crée pas une créance sur la différence."""
+        pec = self.pec_organisme
+        if not pec:
+            return 0.0
+        return round(min(pec.montant_annuel, float(self.total_attendu)), 2)
+
+    @property
+    def part_famille(self):
+        """Ce qui reste à la charge de la famille."""
+        return round(max(float(self.total_attendu) - self.part_organisme, 0.0), 2)
+
+    @property
+    def paye_organisme(self):
+        # Annotation quand elle existe (liste, dashboard) : sinon une requête
+        # par élève, et la liste de 300 fiches redevient injouable.
+        if hasattr(self, 'paye_organisme_sql'):
+            return round(float(self.paye_organisme_sql), 2)
+        from django.db.models import Sum
+        agg = self.paiements.filter(statut='ACTIF', organisme__isnull=False).aggregate(
+            t=Sum('montant_inscription') + Sum('montant_mensualite') +
+              Sum('montant_uniforme')    + Sum('montant_fournitures') +
+              Sum('montant_cantine')     + Sum('montant_divers'))
+        return round(float(agg['t'] or 0), 2)
+
+    @property
+    def reste_organisme(self):
+        return round(max(self.part_organisme - self.paye_organisme, 0.0), 2)
+
+    @property
+    def reste_famille(self):
+        """Ce que la famille doit encore. C'est CE montant qu'on lui réclame,
+        jamais le dû global : une famille n'a pas à être relancée parce que
+        l'État tarde à verser sa subvention."""
+        paye_famille = round(float(self.total_paye) - self.paye_organisme, 2)
+        return round(max(self.part_famille - paye_famille, 0.0), 2)
+
     # ── Reliquat antérieur (dette de l'exercice précédent) ────────────────
     @property
     def reliquat_paye(self):
@@ -411,9 +467,17 @@ class Eleve(TenantModel):
           - CRITIQUE  : 3 mois de retard ou plus
 
         total_paye / mensualites_payees peuvent provenir d'annotations pour éviter
-        les requêtes (cohérence garantie entre module Élèves et tableau de bord)."""
-        total = float(self.total_attendu)
+        les requêtes (cohérence garantie entre module Élèves et tableau de bord).
+
+        L'alerte juge la FAMILLE, pas l'élève : la part prise en charge par un
+        organisme et ce qu'il a versé sont retirés des deux côtés. Sans cela,
+        un boursier dont l'État n'a pas encore payé passerait CRITIQUE, et
+        l'école relancerait des parents qui ne doivent rien."""
+        part_organisme = self.part_organisme
         paye  = float(total_paye)
+        if part_organisme:
+            paye -= self.paye_organisme
+        total = float(self.total_attendu) - part_organisme
         if total <= 0 or paye >= total:
             return ('A_JOUR', 0)
 
@@ -522,3 +586,98 @@ class RappelEnvoye(TenantModel):
 
     def __str__(self):
         return f"{self.eleve} — {self.periode} ({self.statut})"
+
+
+class Organisme(TenantModel):
+    """Tiers qui prend en charge la scolarité d'élèves : État, collectivité,
+    ONG, fondation, entreprise.
+
+    À NE PAS confondre avec `Eleve.prise_en_charge`, qui est une REMISE : là,
+    l'école renonce à la somme et personne ne la paie. Ici, un tiers DOIT cet
+    argent à l'établissement. Confondre les deux ferait disparaître des
+    créances réelles du suivi financier — pour un centre de formation dont la
+    moitié des étudiants sont boursiers de l'État, c'est la moitié de ses
+    recettes qui deviendrait invisible.
+    """
+    TYPE_CHOICES = [
+        ('ETAT',         'État / Ministère'),
+        ('COLLECTIVITE', 'Collectivité territoriale'),
+        ('ONG',          'ONG'),
+        ('FONDATION',    'Fondation'),
+        ('ENTREPRISE',   'Entreprise'),
+        ('AUTRE',        'Autre'),
+    ]
+    nom          = models.CharField(max_length=200)
+    type         = models.CharField(max_length=20, choices=TYPE_CHOICES, default='AUTRE')
+    # Référence de la convention ou de l'arrêté : c'est ce que l'école cite
+    # quand elle relance, et ce qu'un contrôleur demande en premier.
+    reference    = models.CharField(max_length=100, blank=True,
+                                    help_text='Convention, arrêté, marché…')
+    contact_nom  = models.CharField(max_length=150, blank=True)
+    telephone    = models.CharField(max_length=20, blank=True)
+    email        = models.EmailField(blank=True)
+    adresse      = models.TextField(blank=True)
+    observations = models.TextField(blank=True)
+    actif        = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'organismes'
+        ordering = ['nom']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'nom'],
+                                    name='uniq_organisme_par_tenant'),
+        ]
+
+    def __str__(self):
+        return self.nom
+
+
+class PriseEnChargeOrganisme(TenantModel):
+    """Ce qu'un organisme prend en charge pour un élève, sur un exercice.
+
+    Les montants ont la même forme que la prise en charge sociale de la fiche
+    (une part sur l'inscription, une part par mensualité) : l'école raisonne
+    déjà ainsi, et le calcul du dû reste lisible.
+
+    La différence tient à la conséquence : ces montants ne DISPARAISSENT pas
+    du dû, ils CHANGENT de débiteur. La famille ne les doit plus, l'organisme
+    les doit.
+    """
+    eleve      = models.ForeignKey(Eleve, on_delete=models.CASCADE,
+                                   related_name='prises_en_charge_organisme')
+    organisme  = models.ForeignKey(Organisme, on_delete=models.PROTECT,
+                                   related_name='prises_en_charge')
+    # L'exercice est porté explicitement : une bourse se renouvelle année par
+    # année, et un boursier peut perdre sa bourse en cours de parcours.
+    exercice   = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE,
+                                   related_name='prises_en_charge_organisme')
+    montant_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    montant_mensualite  = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                              help_text='Par mensualité')
+    # Couvre les services optionnels (cantine, internat…) à 100 % ou pas du
+    # tout : les organismes raisonnent rarement au prorata sur ces postes.
+    couvre_services = models.BooleanField(default=False)
+    reference  = models.CharField(max_length=100, blank=True,
+                                  help_text="Numéro de bourse, décision d'attribution…")
+    observations = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'prises_en_charge_organisme'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'eleve', 'exercice'],
+                                    name='uniq_pec_organisme_par_eleve_exercice'),
+        ]
+
+    def __str__(self):
+        return f"{self.eleve} — {self.organisme}"
+
+    @property
+    def montant_annuel(self):
+        """Total pris en charge sur l'exercice, services compris."""
+        eleve = self.eleve
+        total = float(self.montant_inscription or 0)
+        total += float(self.montant_mensualite or 0) * eleve.nb_mensualites_dues
+        if self.couvre_services:
+            total += eleve.montant_services_annuel
+        return round(total, 2)

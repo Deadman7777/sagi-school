@@ -497,6 +497,21 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
 
         <!-- Mode(s) de paiement -->
         <div class="form-group" style="margin-top:12px">
+          <!-- Qui règle. Vide = la famille. Renseigné = un organisme verse la
+               part qu'il prend en charge — c'est ce qui distingue « la famille
+               est à jour » de « l'État a versé », deux situations qu'un même
+               total confondrait. Affiché seulement si l'école a des
+               organismes : inutile d'alourdir la saisie ailleurs. -->
+          <div *ngIf="organismes().length" style="margin-bottom:10px">
+            <label>Payé par</label>
+            <p-select appendTo="body" [options]="organismes()" [(ngModel)]="form.organisme"
+                      optionLabel="nom" optionValue="id" styleClass="w-full"
+                      [showClear]="true" placeholder="La famille" />
+            <small *ngIf="form.organisme" class="payeur-aide">
+              Ce versement soldera la part de l'organisme, pas celle de la famille.
+            </small>
+          </div>
+
           <div style="display:flex;align-items:center;justify-content:space-between">
             <label style="margin:0">Mode de paiement *</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
@@ -911,7 +926,9 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
     .danger { color:#ef4444; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .full { grid-column:1/-1; }
-  `]
+  
+    .payeur-aide { display:block; margin-top:4px; font-size:10px; color:#f59e0b; }
+`]
 })
 export class PaiementsComponent implements OnInit {
   onglet = signal('paiements');
@@ -1008,12 +1025,18 @@ export class PaiementsComponent implements OnInit {
     multi_mode:          false,
     modes_reglement:     [] as { mode: string; montant: number }[],
     observations:        '',
+    // Qui règle : null = la famille, sinon l'organisme qui verse sa part.
+    organisme:           null as string | null,
   };
 
   private translate = inject(TranslateService);
   private gouv = inject(GouvernanceService);
 
   modesPaiement: any[] = [];
+
+  /** Organismes payeurs actifs de l'école. Vide chez la plupart : le
+   *  sélecteur n'apparaît alors pas du tout. */
+  organismes = signal<{ id: string; nom: string }[]>([]);
 
   constructor(
     private paiementsService: PaiementsService,
@@ -1035,6 +1058,17 @@ export class PaiementsComponent implements OnInit {
     this.chargerStats();
     this.chargerExercice();
     this.chargerPlanCharges();
+    this.chargerOrganismes();
+  }
+
+  private chargerOrganismes() {
+    this.elevesService.getOrganismes().subscribe({
+      next: (l) => this.organismes.set(
+        l.filter(o => o.actif).map(o => ({ id: o.id, nom: o.nom }))),
+      // Silencieux : une école sans organisme n'a pas à voir une erreur pour
+      // une fonctionnalité qu'elle n'utilise pas.
+      error: () => this.organismes.set([]),
+    });
   }
 
   chargerPlanCharges() {
@@ -1199,6 +1233,10 @@ export class PaiementsComponent implements OnInit {
       montant_reliquat: 0,
       mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '',
       multi_mode: false, modes_reglement: [], observations: '',
+      // Le payeur n'est PAS conservé d'une saisie à l'autre, contrairement au
+      // mode : enchaîner deux reçus et attribuer le second à l'organisme par
+      // inadvertance fausserait le suivi des deux côtés.
+      organisme: null,
     };
   }
 
@@ -1291,6 +1329,7 @@ export class PaiementsComponent implements OnInit {
         ? this.form.modes_reglement.map(m => ({ mode: m.mode, montant: Number(m.montant) }))
         : [],
       observations:        this.form.observations,
+      organisme:           this.form.organisme || null,
       eleve:    this.eleveSelectionne.id,
       exercice: this.exerciceId,
     }).subscribe({

@@ -6,7 +6,14 @@ qu'un reliquat soit traité identiquement des deux côtés.
 from apps.comptabilite.tresorerie import lignes_tresorerie
 
 
-def lignes_paiement(total, part_exercice, ventilation, libelle):
+# Créances sur les organismes payeurs (État, ONG, fondation…), tenues à part
+# des créances familles restées en 411. Un bailleur ou un contrôleur demande
+# combien l'établissement attend de ses partenaires institutionnels : noyé
+# dans le 411, le chiffre est introuvable.
+COMPTE_CREANCE_ORGANISME = '4112'
+
+
+def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False):
     """Rend les lignes d'écriture d'un règlement d'élève.
 
     `part_exercice` = frais de l'année en cours → constatation de la créance
@@ -20,10 +27,16 @@ def lignes_paiement(total, part_exercice, ventilation, libelle):
 
     Dans les deux cas la trésorerie est débitée du montant réellement encaissé
     (`total`), ventilé par mode, et le 411 est soldé d'autant.
+
+    `organisme=True` : le versement vient d'un tiers payeur. Sa créance a été
+    constatée à l'attribution de la bourse (4112 D / 706 C, voir
+    eleves.creances_organisme) — l'encaissement se contente donc de solder le
+    4112, sans reconstater de produit. Le faire ici compterait la subvention
+    deux fois, exactement comme pour un reliquat.
     """
     ecritures = []
     ordre = 1
-    if part_exercice > 0:
+    if part_exercice > 0 and not organisme:
         ecritures += [
             dict(ordre=1, no_compte='411', debit=part_exercice, credit=0,
                  libelle=f"Créance scolarité — {libelle}"),
@@ -32,10 +45,12 @@ def lignes_paiement(total, part_exercice, ventilation, libelle):
         ]
         ordre = 3
 
+    compte_creance = COMPTE_CREANCE_ORGANISME if organisme else '411'
     tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre)
     ecritures += tresor
     ecritures.append(
-        dict(ordre=ordre + len(tresor), no_compte='411', debit=0, credit=total,
+        dict(ordre=ordre + len(tresor), no_compte=compte_creance,
+             debit=0, credit=total,
              libelle=f"Règlement — {libelle}"))
     return ecritures
 
