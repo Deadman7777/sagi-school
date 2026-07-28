@@ -250,6 +250,17 @@ def construire_echeancier(eleve, today=None):
             'reste': round(hors['reste'] + sum(l['reste'] for l in sortie), 2),
         },
         'synthese': {
+            # Part prise en charge par un organisme (bourse) : elle ne
+            # disparaît pas du dû, elle change de débiteur. La distinguer est
+            # indispensable dans un document remis aux parents — leur annoncer
+            # la dette de l'État serait à la fois faux et blessant.
+            'organisme_nom':      (eleve.pec_organisme.organisme.nom
+                                   if eleve.pec_organisme else ''),
+            'part_organisme':     eleve.part_organisme,
+            'reste_organisme':    eleve.reste_organisme,
+            # Ce que la FAMILLE devra sur l'année, ardoise comprise.
+            'total_restant_du_famille': round(
+                max(retards + anterieur + a_venir - eleve.reste_organisme, 0.0), 2),
             # Scolarité échue et non réglée, année en cours.
             'retards':            retards,
             # Ardoise des exercices antérieurs, nette de ce qui a déjà été réglé.

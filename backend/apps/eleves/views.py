@@ -8,10 +8,13 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import Eleve, Section, Service
+from .models import (Eleve, Organisme, PriseEnChargeOrganisme, Section,
+                     Service)
 from .parcours import STATUTS_SORTIE
 from apps.paiements.models import Exercice
-from .serializers import EleveSerializer, SectionSerializer, ServiceSerializer
+from .serializers import (EleveSerializer, OrganismeSerializer,
+                          PriseEnChargeOrganismeSerializer, SectionSerializer,
+                          ServiceSerializer)
 from django.db.models import Max
 from django.utils import timezone
 
@@ -49,6 +52,127 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
+
+
+class OrganismeViewSet(viewsets.ModelViewSet):
+    """Organismes qui prennent en charge la scolarité : État, ONG, fondation…"""
+    serializer_class   = OrganismeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (Organisme.objects.filter(tenant=get_tenant(self.request))
+                .annotate(nb_boursiers_sql=Count('prises_en_charge')))
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def destroy(self, request, *args, **kwargs):
+        """Un organisme qui suit des boursiers ne se supprime pas.
+
+        Le PROTECT du modèle lèverait une 500 illisible : on répond ici avec
+        le motif et le nombre d'élèves concernés, pour que l'école sache quoi
+        faire — retirer les bourses d'abord, ou simplement désactiver.
+        """
+        organisme = self.get_object()
+        nb = organisme.prises_en_charge.count()
+        if nb:
+            return Response(
+                {'error': f"« {organisme.nom} » suit {nb} boursier(s). Retirez "
+                          f"leurs prises en charge d'abord, ou désactivez "
+                          f"l'organisme pour le sortir des listes."},
+                status=400)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=['get'], url_path='suivi')
+    def suivi(self, request):
+        """Position financière de chaque organisme : couvert, reçu, dû.
+
+        C'est le tableau qui justifie la fonctionnalité — sans lui, une école
+        sait qu'un ministère finance des étudiants, mais pas s'il a payé.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'lignes': [], 'totaux': {}})
+
+        lignes = []
+        for organisme in Organisme.objects.filter(tenant=tenant):
+            pecs = (PriseEnChargeOrganisme.objects
+                    .filter(tenant=tenant, organisme=organisme, exercice=exercice)
+                    .select_related('eleve__section')
+                    .prefetch_related('eleve__abonnements__service'))
+            couvert = recu = 0.0
+            eleves = []
+            for pec in pecs:
+                eleve = pec.eleve
+                part  = eleve.part_organisme
+                paye  = eleve.paye_organisme
+                couvert += part
+                recu    += paye
+                eleves.append({
+                    'eleve_id':   str(eleve.id),
+                    'matricule':  eleve.matricule or '',
+                    'nom_complet': eleve.nom_complet,
+                    'reference':  pec.reference,
+                    'couvert':    part,
+                    'recu':       paye,
+                    'reste':      round(max(part - paye, 0.0), 2),
+                })
+            if not eleves and not organisme.actif:
+                continue
+            lignes.append({
+                'organisme_id': str(organisme.id),
+                'nom':          organisme.nom,
+                'type':         organisme.get_type_display(),
+                'reference':    organisme.reference,
+                'contact':      organisme.telephone or organisme.email,
+                'actif':        organisme.actif,
+                'nb_boursiers': len(eleves),
+                'couvert':      round(couvert, 2),
+                'recu':         round(recu, 2),
+                'reste':        round(max(couvert - recu, 0.0), 2),
+                'eleves':       sorted(eleves, key=lambda e: e['nom_complet']),
+            })
+
+        lignes.sort(key=lambda l: l['reste'], reverse=True)
+        return Response({
+            'exercice': exercice.annee_scolaire,
+            'lignes':   lignes,
+            'totaux': {
+                'nb_organismes': len(lignes),
+                'nb_boursiers':  sum(l['nb_boursiers'] for l in lignes),
+                'couvert':       round(sum(l['couvert'] for l in lignes), 2),
+                'recu':          round(sum(l['recu'] for l in lignes), 2),
+                'reste':         round(sum(l['reste'] for l in lignes), 2),
+            },
+        })
+
+
+class PriseEnChargeOrganismeViewSet(viewsets.ModelViewSet):
+    """Attribution d'une bourse à un élève, pour un exercice."""
+    serializer_class   = PriseEnChargeOrganismeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = (PriseEnChargeOrganisme.objects
+              .filter(tenant=get_tenant(self.request))
+              .select_related('organisme', 'eleve'))
+        if eleve := self.request.query_params.get('eleve'):
+            qs = qs.filter(eleve_id=eleve)
+        if organisme := self.request.query_params.get('organisme'):
+            qs = qs.filter(organisme_id=organisme)
+        return qs
+
+    def perform_create(self, serializer):
+        tenant = get_tenant(self.request)
+        # L'exercice n'est pas demandé au client : une bourse s'attribue
+        # toujours sur l'année en cours, et le laisser choisir ouvrirait la
+        # porte à des attributions sur une année clôturée.
+        exercice = serializer.validated_data.get('exercice') or Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        serializer.save(tenant=tenant, exercice=exercice)
 
 
 class EleveViewSet(viewsets.ModelViewSet):

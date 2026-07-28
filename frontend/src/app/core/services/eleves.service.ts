@@ -2,7 +2,8 @@ import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
-         ParcoursEleve, AncienEleve, Echeancier } from '../models/eleve.model';
+         ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
+         SuiviOrganisme } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -149,6 +150,31 @@ export class ElevesService {
     const q = classeId ? `?classe=${encodeURIComponent(classeId)}` : '';
     return this.api.getBlob(`/eleves/liste-classe-pdf/${q}`);
   }
+
+  // ── Organismes payeurs et bourses ────────────────────────────────────
+  getOrganismes()                    { return this.api.get<Organisme[]>('/eleves/organismes/'); }
+  creerOrganisme(o: Partial<Organisme>)  { return this.api.post<Organisme>('/eleves/organismes/', o); }
+  majOrganisme(id: string, o: Partial<Organisme>) {
+    return this.api.patch<Organisme>(`/eleves/organismes/${id}/`, o);
+  }
+  supprimerOrganisme(id: string)     { return this.api.delete<void>(`/eleves/organismes/${id}/`); }
+
+  /** Position financière de chaque organisme : couvert, reçu, dû. */
+  getSuiviOrganismes() {
+    return this.api.get<{ exercice: string; lignes: SuiviOrganisme[];
+                          totaux: { nb_organismes: number; nb_boursiers: number;
+                                    couvert: number; recu: number; reste: number } }>(
+      '/eleves/organismes/suivi/');
+  }
+
+  getBourses(params?: { eleve?: string; organisme?: string }) {
+    return this.api.get<Bourse[]>('/eleves/bourses/', params);
+  }
+  attribuerBourse(b: Partial<Bourse>) { return this.api.post<Bourse>('/eleves/bourses/', b); }
+  majBourse(id: string, b: Partial<Bourse>) {
+    return this.api.patch<Bourse>(`/eleves/bourses/${id}/`, b);
+  }
+  retirerBourse(id: string)          { return this.api.delete<void>(`/eleves/bourses/${id}/`); }
 
   // Base historique des sortis — indépendante de l'exercice actif.
   getAnciens(params?: { q?: string; statut?: string }) {

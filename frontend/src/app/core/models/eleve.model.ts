@@ -95,6 +95,12 @@ export interface Eleve {
   mois_dus_effectifs: number[];
   mois_dus_origine: 'SAISI' | 'PRORATA';
   nb_mensualites_dues: number;
+  // Bourse : le dû ne diminue pas, il change de débiteur.
+  part_organisme: number;
+  part_famille: number;
+  reste_organisme: number;
+  reste_famille: number;
+  organisme_nom: string;
 }
 
 /** Une échéance mensuelle : ce qui est dû ce mois-là, et ce qui reste. */
@@ -229,4 +235,56 @@ export interface PaginatedResponse<T> {
   next: string | null;
   previous: string | null;
   results: T[];
+}
+
+
+/** Tiers qui prend en charge la scolarité : État, collectivité, ONG… */
+export interface Organisme {
+  id: string;
+  nom: string;
+  type: 'ETAT' | 'COLLECTIVITE' | 'ONG' | 'FONDATION' | 'ENTREPRISE' | 'AUTRE';
+  type_libelle: string;
+  reference: string;
+  contact_nom: string;
+  telephone: string;
+  email: string;
+  adresse: string;
+  observations: string;
+  actif: boolean;
+  nb_boursiers: number;
+}
+
+/** Ce qu'un organisme prend en charge pour un élève, sur un exercice.
+ *  À ne pas confondre avec la prise en charge sociale de la fiche : celle-ci
+ *  change le débiteur, elle ne réduit pas le dû. */
+export interface Bourse {
+  id: string;
+  eleve: string;
+  eleve_nom: string;
+  matricule: string;
+  organisme: string;
+  organisme_nom: string;
+  organisme_type: string;
+  montant_inscription: number;
+  montant_mensualite: number;
+  couvre_services: boolean;
+  montant_annuel: number;
+  reference: string;
+  observations: string;
+}
+
+/** Position financière d'un organisme : ce qu'il couvre, ce qu'il a versé. */
+export interface SuiviOrganisme {
+  organisme_id: string;
+  nom: string;
+  type: string;
+  reference: string;
+  contact: string;
+  actif: boolean;
+  nb_boursiers: number;
+  couvert: number;
+  recu: number;
+  reste: number;
+  eleves: { eleve_id: string; matricule: string; nom_complet: string;
+            reference: string; couvert: number; recu: number; reste: number }[];
 }

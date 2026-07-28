@@ -170,3 +170,163 @@ class ContraintesTest(OrganismeBase):
         with self.assertRaises(IntegrityError):
             Organisme.objects.create(tenant=self.tenant,
                                      nom='Ministère de la Formation', type='ETAT')
+
+
+class ApiOrganismesTest(OrganismeBase):
+    def test_creer_un_organisme(self):
+        r = self.client.post('/api/eleves/organismes/', {
+            'nom': 'Fondation Sonatel', 'type': 'FONDATION',
+            'reference': 'Convention 2026-04'}, format='json')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        self.assertEqual(r.data['type_libelle'], 'Fondation')
+
+    def test_un_organisme_avec_boursiers_ne_se_supprime_pas(self):
+        self._boursier()
+        r = self.client.delete(f'/api/eleves/organismes/{self.etat.id}/')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('boursier', str(r.data).lower())
+
+    def test_un_organisme_sans_boursier_se_supprime(self):
+        ong = Organisme.objects.create(tenant=self.tenant, nom='ONG Y', type='ONG')
+        self.assertEqual(
+            self.client.delete(f'/api/eleves/organismes/{ong.id}/').status_code, 204)
+
+    def test_attribuer_une_bourse(self):
+        r = self.client.post('/api/eleves/bourses/', {
+            'eleve': str(self.eleve.id), 'organisme': str(self.etat.id),
+            'montant_inscription': 100000, 'montant_mensualite': 30000,
+            'reference': 'Bourse 2026-0042'}, format='json')
+
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        self.assertEqual(self._relire().part_organisme, 400000)
+
+    def test_une_bourse_vide_est_refusee(self):
+        r = self.client.post('/api/eleves/bourses/', {
+            'eleve': str(self.eleve.id), 'organisme': str(self.etat.id)},
+            format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_retirer_une_bourse_rend_le_du_a_la_famille(self):
+        pec = self._boursier(inscription=100000, mensualite=30000)
+        self.client.delete(f'/api/eleves/bourses/{pec.id}/')
+        self.assertEqual(self._relire().part_famille, 600000)
+
+
+class SuiviFinancierTest(OrganismeBase):
+    def test_le_suivi_donne_couvert_recu_et_reste(self):
+        self._boursier(inscription=100000, mensualite=30000)   # 400 000
+        self._payer(150000, organisme=self.etat)
+
+        r = self.client.get('/api/eleves/organismes/suivi/')
+
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        ligne = r.data['lignes'][0]
+        self.assertEqual(ligne['nom'], 'Ministère de la Formation')
+        self.assertEqual((ligne['couvert'], ligne['recu'], ligne['reste']),
+                         (400000, 150000, 250000))
+        self.assertEqual(ligne['nb_boursiers'], 1)
+
+    def test_le_suivi_liste_les_boursiers(self):
+        self._boursier()
+        eleves = self.client.get('/api/eleves/organismes/suivi/').data['lignes'][0]['eleves']
+        self.assertEqual(eleves[0]['nom_complet'], 'Awa NDIAYE')
+
+    def test_les_totaux_somment_les_lignes(self):
+        self._boursier(inscription=100000, mensualite=30000)
+        self._payer(150000, organisme=self.etat)
+
+        d = self.client.get('/api/eleves/organismes/suivi/').data
+
+        self.assertEqual(d['totaux']['couvert'],
+                         sum(l['couvert'] for l in d['lignes']))
+        self.assertEqual(d['totaux']['reste'], 250000)
+
+    def test_un_versement_de_la_famille_ne_compte_pas_pour_l_organisme(self):
+        self._boursier(inscription=100000, mensualite=30000)
+        self._payer(200000)                       # la famille
+
+        ligne = self.client.get('/api/eleves/organismes/suivi/').data['lignes'][0]
+
+        self.assertEqual(ligne['recu'], 0)
+        self.assertEqual(ligne['reste'], 400000)
+
+
+class PaiementOrganismeApiTest(OrganismeBase):
+    """Un versement d'organisme se saisit comme un paiement ordinaire."""
+
+    def test_enregistrer_un_versement_d_organisme(self):
+        self._boursier(inscription=100000, mensualite=30000)     # 400 000
+
+        r = self.client.post('/api/paiements/paiements/', {
+            'eleve': str(self.eleve.id), 'exercice': str(self.ex.id),
+            'montant_inscription': 100000, 'montant_mensualite': 0,
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_cantine': 0, 'montant_divers': 0,
+            'mode_paiement': 'VIREMENT', 'organisme': str(self.etat.id),
+        }, format='json')
+
+        self.assertEqual(r.status_code, 201, r.content[:400])
+        self.assertEqual(r.data['organisme_nom'], 'Ministère de la Formation')
+
+        e = self._relire()
+        self.assertEqual(e.paye_organisme, 100000)
+        self.assertEqual(e.reste_organisme, 300000)
+        self.assertEqual(e.reste_famille, 200000)   # inchangé
+
+    def test_sans_organisme_le_versement_est_celui_de_la_famille(self):
+        self._boursier(inscription=100000, mensualite=30000)
+
+        self.client.post('/api/paiements/paiements/', {
+            'eleve': str(self.eleve.id), 'exercice': str(self.ex.id),
+            'montant_inscription': 200000, 'montant_mensualite': 0,
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_cantine': 0, 'montant_divers': 0,
+            'mode_paiement': 'ESPECE',
+        }, format='json')
+
+        e = self._relire()
+        self.assertEqual(e.paye_organisme, 0)
+        self.assertEqual(e.reste_famille, 0)
+        self.assertEqual(e.reste_organisme, 400000)
+
+
+class SyntheseBoursierTest(OrganismeBase):
+    """La synthèse remise à la famille sépare sa part de celle de l'organisme."""
+
+    def _synthese(self):
+        from apps.eleves.echeancier import construire_echeancier
+        return construire_echeancier(
+            self._relire(), today=datetime.date(2026, 12, 15))['synthese']
+
+    def test_sans_bourse_le_total_famille_egale_le_total(self):
+        s = self._synthese()
+        self.assertEqual(s['total_restant_du_famille'], s['total_restant_du'])
+        self.assertEqual(s['organisme_nom'], '')
+
+    def test_avec_bourse_la_famille_ne_doit_que_sa_part(self):
+        self._boursier(inscription=100000, mensualite=30000)   # 400 000
+
+        s = self._synthese()
+
+        self.assertEqual(s['organisme_nom'], 'Ministère de la Formation')
+        self.assertEqual(s['reste_organisme'], 400000)
+        self.assertEqual(s['total_restant_du_famille'],
+                         s['total_restant_du'] - 400000)
+
+    def test_un_boursier_integral_ne_doit_rien_a_sa_famille(self):
+        self._boursier()                                       # bourse totale
+        self.assertEqual(self._synthese()['total_restant_du_famille'], 0)
+
+    def test_le_versement_de_l_organisme_ne_reduit_pas_la_part_famille(self):
+        self._boursier(inscription=100000, mensualite=30000)
+        avant = self._synthese()['total_restant_du_famille']
+
+        self._payer(400000, organisme=self.etat)
+
+        self.assertEqual(self._synthese()['total_restant_du_famille'], avant)
+
+    def test_le_pdf_de_situation_se_genere_pour_un_boursier(self):
+        self._boursier(inscription=100000, mensualite=30000)
+        r = self.client.get(f'/api/eleves/{self.eleve.id}/situation-pdf/')
+        self.assertEqual(r.status_code, 200, r.content[:400])
+        self.assertEqual(r['Content-Type'], 'application/pdf')
