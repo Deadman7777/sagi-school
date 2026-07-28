@@ -479,3 +479,46 @@ class EleveService(TenantModel):
 
     def __str__(self):
         return f"{self.eleve} → {self.service}"
+
+
+class RappelEnvoye(TenantModel):
+    """Trace d'un rappel de paiement envoyé à une famille.
+
+    Sert d'abord de garde-fou : on n'écrit ici qu'une fois par élève et par
+    mois, et l'envoi refuse tout doublon. Harceler une famille avec le même
+    message trois fois dans la journée abîme la relation bien plus qu'un
+    rappel oublié — et une école qui s'est fait ce reproche une fois
+    n'utilisera plus jamais la fonction.
+
+    C'est ensuite l'historique : qui a été prévenu, quand, sur quel numéro, et
+    ce que le fournisseur a répondu. Un parent qui affirme n'avoir rien reçu
+    se vérifie ici.
+    """
+    STATUT_CHOICES = [
+        ('ENVOYE',    'Envoyé'),
+        ('ECHEC',     'Échec'),
+        ('SIMULE',    'Simulé (aucun envoi réel)'),
+    ]
+    eleve      = models.ForeignKey(Eleve, on_delete=models.CASCADE,
+                                   related_name='rappels')
+    # Période couverte : « 2026-07 ». C'est la clé d'unicité, pas la date
+    # d'envoi — relancer le 3 puis le 28 du même mois reste UN rappel.
+    periode    = models.CharField(max_length=7)
+    canal      = models.CharField(max_length=10, default='SMS')
+    destinataire = models.CharField(max_length=40)
+    message    = models.TextField()
+    montant    = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    statut     = models.CharField(max_length=10, choices=STATUT_CHOICES,
+                                  default='ENVOYE')
+    detail     = models.TextField(blank=True, help_text='Réponse du fournisseur')
+
+    class Meta:
+        db_table = 'rappels_envoyes'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'eleve', 'periode'],
+                                    name='uniq_rappel_par_mois'),
+        ]
+
+    def __str__(self):
+        return f"{self.eleve} — {self.periode} ({self.statut})"

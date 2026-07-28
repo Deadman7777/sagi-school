@@ -90,3 +90,136 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
         'nb':             len(lignes),
         'total_exigible': round(sum(l['total_exigible'] for l in lignes), 2),
     }
+
+
+# ── Envoi des rappels ─────────────────────────────────────────────────────
+MESSAGE_DEFAUT = ("{ecole} : la scolarite de {eleve} presente un solde de "
+                  "{montant} FCFA. Merci de regulariser avant le {limite}.")
+
+
+def composer_message(tenant, ligne, today=None):
+    """Texte du rappel, gabarit de l'école ou message par défaut.
+
+    Volontairement sans accents dans le défaut : beaucoup de passerelles SMS
+    facturent au segment et un caractère accentué fait basculer le message en
+    UCS-2, divisant la longueur utile par deux. Une école qui tient à ses
+    accents garde la main via son propre gabarit.
+    """
+    today = today or datetime.date.today()
+    gabarit = (getattr(tenant, 'rappel_message', '') or '').strip() or MESSAGE_DEFAUT
+    valeurs = {
+        'ecole':   tenant.nom,
+        'eleve':   ligne['nom_complet'],
+        'montant': f"{ligne['total_exigible']:,.0f}".replace(',', ' '),
+        'mois':    f"{today.month:02d}/{today.year}",
+        'limite':  f"{int(getattr(tenant, 'rappel_jour_limite', 10) or 10)}",
+    }
+    try:
+        return gabarit.format(**valeurs)
+    except (KeyError, IndexError):
+        # Un gabarit fautif ne doit pas empêcher le rappel de partir : on
+        # retombe sur le défaut plutôt que de planter en pleine campagne.
+        return MESSAGE_DEFAUT.format(**valeurs)
+
+
+def _envoyer_sms(tenant, destinataire, message, timeout=10):
+    """Appelle la passerelle de l'école. Rend (succes, detail).
+
+    Transport générique : URL, méthode et gabarit de corps viennent des
+    paramètres. Aucun opérateur n'est imposé, et brancher un nouvel
+    agrégateur ne demande pas de toucher au code.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = (getattr(tenant, 'sms_url', '') or '').strip()
+    if not url:
+        return False, 'Aucune URL de passerelle SMS configurée.'
+
+    gabarit = getattr(tenant, 'sms_gabarit', None) or {}
+    corps = {cle: str(val).replace('{destinataire}', destinataire)
+                          .replace('{message}', message)
+             for cle, val in gabarit.items()}
+    entetes = {str(k): str(v) for k, v in (getattr(tenant, 'sms_entetes', None) or {}).items()}
+    entetes.setdefault('Content-Type', 'application/json')
+
+    try:
+        if (getattr(tenant, 'sms_methode', 'POST') or 'POST').upper() == 'GET':
+            from urllib.parse import urlencode
+            requete = urllib.request.Request(
+                f"{url}{'&' if '?' in url else '?'}{urlencode(corps)}",
+                headers=entetes, method='GET')
+        else:
+            requete = urllib.request.Request(
+                url, data=_json.dumps(corps).encode('utf-8'),
+                headers=entetes, method='POST')
+        with urllib.request.urlopen(requete, timeout=timeout) as reponse:
+            return True, f"HTTP {reponse.status}"
+    except urllib.error.HTTPError as exc:
+        return False, f"HTTP {exc.code} — {exc.read()[:200].decode('utf-8', 'replace')}"
+    except Exception as exc:                      # réseau coupé, DNS, timeout…
+        return False, f"{type(exc).__name__} : {exc}"
+
+
+def envoyer_rappels(tenant, exercice, today=None, forcer=False):
+    """Envoie le rappel du mois aux familles en retard. Idempotent.
+
+    Trois protections, dans cet ordre — parce qu'un message parti par erreur à
+    des centaines de familles ne se rattrape pas :
+
+      1. la fenêtre de rappel doit être ouverte (sauf `forcer`) ;
+      2. un élève déjà prévenu ce mois-ci est sauté, quoi qu'il arrive ;
+      3. sans `sms_actif` ET sans passerelle configurée, tout est SIMULÉ :
+         journalisé, rien n'est émis. C'est le défaut.
+
+    Rend un compte rendu {envoyes, simules, echecs, ignores, lignes}.
+    """
+    from .models import RappelEnvoye
+
+    today = today or datetime.date.today()
+    periode = f"{today.year}-{today.month:02d}"
+    fenetre = fenetre_rappel(tenant, today)
+
+    if not forcer and not fenetre['ouverte']:
+        return {'envoyes': 0, 'simules': 0, 'echecs': 0, 'ignores': 0,
+                'lignes': [], 'fenetre': fenetre,
+                'motif': "Hors de la fenêtre de rappel de l'école."}
+
+    reel = bool(getattr(tenant, 'sms_actif', False)) and bool(
+        (getattr(tenant, 'sms_url', '') or '').strip())
+
+    deja = set(RappelEnvoye.objects.filter(
+        tenant=tenant, periode=periode).values_list('eleve_id', flat=True))
+
+    rapport = {'envoyes': 0, 'simules': 0, 'echecs': 0, 'ignores': 0,
+               'lignes': [], 'fenetre': fenetre, 'reel': reel, 'periode': periode}
+
+    for ligne in eleves_a_rappeler(tenant, exercice, today)['lignes']:
+        if ligne['eleve_id'] in {str(i) for i in deja}:
+            rapport['ignores'] += 1
+            continue
+        if not ligne['contact']:
+            rapport['ignores'] += 1
+            rapport['lignes'].append({**ligne, 'statut': 'SANS_CONTACT'})
+            continue
+
+        message = composer_message(tenant, ligne, today)
+        if reel:
+            succes, detail = _envoyer_sms(tenant, ligne['contact'], message)
+            statut = 'ENVOYE' if succes else 'ECHEC'
+        else:
+            statut, detail = 'SIMULE', 'Mode simulation — aucun envoi réel.'
+
+        # L'échec est tracé comme le succès : sans cela, une passerelle en
+        # panne ferait retenter le même élève à chaque passage de la journée.
+        RappelEnvoye.objects.create(
+            tenant=tenant, eleve_id=ligne['eleve_id'], periode=periode,
+            canal='SMS', destinataire=ligne['contact'], message=message,
+            montant=ligne['total_exigible'], statut=statut, detail=detail[:500])
+
+        rapport['envoyes' if statut == 'ENVOYE' else
+                'simules' if statut == 'SIMULE' else 'echecs'] += 1
+        rapport['lignes'].append({**ligne, 'statut': statut, 'detail': detail})
+
+    return rapport
