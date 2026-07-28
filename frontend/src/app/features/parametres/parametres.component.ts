@@ -154,6 +154,71 @@ import { MessageService } from 'primeng/api';
         </div>
       </div>
 
+
+      <div class="form-card" *ngIf="ecole()">
+        <div class="fc-title">📲 {{ 'parametres.sms_titre' | translate }}</div>
+        <p class="fc-aide">{{ 'parametres.sms_aide' | translate }}</p>
+
+        <div class="sms-etat" [class.reel]="ecole()!.sms_actif && ecole()!.sms_url">
+          {{ (ecole()!.sms_actif && ecole()!.sms_url
+              ? 'parametres.sms_mode_reel' : 'parametres.sms_mode_simulation') | translate }}
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.sms_actif" [binary]="true" inputId="sms-actif" />
+              <span>{{ 'parametres.sms_actif' | translate }}</span>
+            </label>
+          </div>
+          <div class="form-group full">
+            <label for="sms-msg">{{ 'parametres.sms_message' | translate }}</label>
+            <textarea pInputText id="sms-msg" rows="3" class="w-full"
+                      [(ngModel)]="ecole()!.rappel_message"
+                      [placeholder]="'parametres.sms_message_ph' | translate"></textarea>
+            <small class="fc-aide">{{ 'parametres.sms_variables' | translate }}</small>
+          </div>
+          <div class="form-group full">
+            <label for="sms-url">{{ 'parametres.sms_url' | translate }}</label>
+            <input pInputText id="sms-url" [(ngModel)]="ecole()!.sms_url" class="w-full"
+                   placeholder="https://…" />
+          </div>
+          <div class="form-group">
+            <label for="sms-methode">{{ 'parametres.sms_methode' | translate }}</label>
+            <p-select appendTo="body" inputId="sms-methode" [options]="methodesSms"
+                      [(ngModel)]="ecole()!.sms_methode" optionLabel="label"
+                      optionValue="value" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label for="sms-gabarit">{{ 'parametres.sms_gabarit' | translate }}</label>
+            <input pInputText id="sms-gabarit" [(ngModel)]="gabaritSms" class="w-full"
+                   placeholder='{"to": "{destinataire}", "text": "{message}"}' />
+          </div>
+          <div class="form-group full">
+            <label for="sms-entetes">{{ 'parametres.sms_entetes' | translate }}</label>
+            <input pInputText id="sms-entetes" [(ngModel)]="entetesSms" class="w-full"
+                   placeholder='{"Authorization": "Bearer …"}' />
+          </div>
+        </div>
+
+        <div class="actions-row" style="gap:8px">
+          <p-button [label]="'parametres.sms_envoyer' | translate" icon="pi pi-send"
+                    severity="warn" [loading]="envoiEnCours()"
+                    (onClick)="envoyerRappels()" />
+        </div>
+
+        <div class="rappel-etat" *ngIf="dernierEnvoi() as env">
+          <div class="re-ligne"><span>{{ 'parametres.sms_envoyes' | translate }}</span>
+            <strong>{{ env.envoyes }}</strong></div>
+          <div class="re-ligne"><span>{{ 'parametres.sms_simules' | translate }}</span>
+            <strong>{{ env.simules }}</strong></div>
+          <div class="re-ligne"><span>{{ 'parametres.sms_echecs' | translate }}</span>
+            <strong [class.danger]="env.echecs > 0">{{ env.echecs }}</strong></div>
+          <div class="re-ligne"><span>{{ 'parametres.sms_ignores' | translate }}</span>
+            <strong>{{ env.ignores }}</strong></div>
+        </div>
+      </div>
+
       <div class="actions-row">
         <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
                   [loading]="saving()" (onClick)="sauvegarderEcole()" />
@@ -1310,6 +1375,57 @@ chargerExercice() {
   ];
 
   rappels = signal<any | null>(null);
+  dernierEnvoi = signal<any | null>(null);
+  envoiEnCours = signal(false);
+  methodesSms = [{ label: 'POST', value: 'POST' }, { label: 'GET', value: 'GET' }];
+
+  /** Gabarit et en-têtes saisis en JSON brut : l'école colle la doc de son
+   *  agrégateur telle quelle, sans qu'on impose un formulaire par opérateur. */
+  get gabaritSms(): string { return JSON.stringify(this.ecole()?.sms_gabarit || {}); }
+  set gabaritSms(v: string) { this.affecterJson('sms_gabarit', v); }
+  get entetesSms(): string { return JSON.stringify(this.ecole()?.sms_entetes || {}); }
+  set entetesSms(v: string) { this.affecterJson('sms_entetes', v); }
+
+  private affecterJson(champ: 'sms_gabarit' | 'sms_entetes', valeur: string) {
+    const e = this.ecole();
+    if (!e) return;
+    try {
+      e[champ] = valeur.trim() ? JSON.parse(valeur) : {};
+    } catch {
+      // Saisie en cours : on ne casse rien, la validation se fera à
+      // l'enregistrement plutôt qu'à chaque frappe.
+    }
+  }
+
+  envoyerRappels() {
+    this.envoiEnCours.set(true);
+    this.api.post<any>('/eleves/rappels/envoyer/', {}).subscribe({
+      next: r => {
+        this.envoiEnCours.set(false);
+        this.dernierEnvoi.set(r);
+        this.chargerRappels();
+        if (r.motif) {
+          this.msg.add({ severity: 'info', summary: this.translate.instant('parametres.sms_titre'),
+                         detail: r.motif, life: 8000 });
+          return;
+        }
+        // Dire sans ambiguïté si des messages sont RÉELLEMENT partis : c'est
+        // la seule information qui compte avant de recommencer.
+        this.msg.add({
+          severity: r.echecs ? 'warn' : 'success',
+          summary: this.translate.instant(
+            r.reel ? 'parametres.sms_envoi_reel' : 'parametres.sms_envoi_simule'),
+          detail: `${r.envoyes + r.simules} · ${r.echecs} ${this.translate.instant('parametres.sms_echecs')}`,
+          life: 8000,
+        });
+      },
+      error: (err) => {
+        this.envoiEnCours.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: String(err?.error?.error || ''), life: 8000 });
+      },
+    });
+  }
 
   chargerRappels() {
     this.api.get<any>('/eleves/rappels/').subscribe({

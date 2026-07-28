@@ -733,6 +733,56 @@ class EleveViewSet(viewsets.ModelViewSet):
                              'nb': 0, 'total_exigible': 0})
         return Response(eleves_a_rappeler(tenant, exercice))
 
+    @action(detail=False, methods=['post'], url_path='rappels/envoyer')
+    def envoyer_rappels_action(self, request):
+        """Déclenche l'envoi des rappels du mois (bouton de l'écran Paramètres).
+
+        Sans envoi SMS activé ET sans passerelle configurée, tout est SIMULÉ :
+        journalisé, rien n'est émis. C'est le défaut, et c'est voulu — un
+        message parti par erreur à des centaines de familles ne se rattrape pas.
+
+        `forcer` permet de sortir de la fenêtre de rappel ; un élève déjà
+        prévenu ce mois-ci reste sauté quoi qu'il arrive.
+        """
+        from apps.comptabilite.views import get_exercice
+        from core.models import log_audit
+
+        from .rappels import envoyer_rappels
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif.'}, status=400)
+
+        rapport = envoyer_rappels(
+            tenant, exercice,
+            forcer=str(request.data.get('forcer', '')).lower() in ('1', 'true'))
+        log_audit(request, 'ENVOYER', 'Rappel', str(tenant.id),
+                  description=(f"Rappels {rapport.get('periode', '')} : "
+                               f"{rapport['envoyes']} envoyé(s), "
+                               f"{rapport['simules']} simulé(s), "
+                               f"{rapport['echecs']} échec(s)"))
+        return Response(rapport)
+
+    @action(detail=False, methods=['get'], url_path='rappels/historique')
+    def historique_rappels(self, request):
+        """Les 100 derniers rappels — un parent qui dit n'avoir rien reçu se
+        vérifie ici."""
+        from .models import RappelEnvoye
+
+        lignes = (RappelEnvoye.objects.filter(tenant=get_tenant(request))
+                  .select_related('eleve')[:100])
+        return Response({'lignes': [{
+            'id':          str(r.id),
+            'eleve':       r.eleve.nom_complet,
+            'periode':     r.periode,
+            'destinataire': r.destinataire,
+            'montant':     float(r.montant),
+            'statut':      r.statut,
+            'detail':      r.detail,
+            'envoye_le':   r.created_at,
+        } for r in lignes]})
+
     @action(detail=False, methods=['get'], url_path='anciens')
     def anciens(self, request):
         """Base historique des élèves sortis (diplômés, transférés, abandons).

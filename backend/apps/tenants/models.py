@@ -66,6 +66,30 @@ class Tenant(TimeStampedModel):
         default=1, help_text='Jour du mois où commencent les rappels (1 à 28)')
     rappel_jour_limite = models.PositiveSmallIntegerField(
         default=10, help_text='Dernier délai de paiement dans le mois (1 à 28)')
+
+    # ── Envoi automatique des rappels (SMS) ───────────────────────────────
+    # Rien ne part tant que l'école n'a pas explicitement activé l'envoi ET
+    # renseigné un fournisseur : un message envoyé par erreur à des centaines
+    # de familles ne se rattrape pas. Le défaut est donc « simulation », qui
+    # journalise tout sans rien émettre — l'école vérifie ses textes d'abord.
+    sms_actif = models.BooleanField(
+        default=False, help_text='Envoyer réellement les rappels par SMS')
+    # Transport volontairement générique : une URL, une méthode, un gabarit de
+    # corps. N'importe quel agrégateur se branche sans toucher au code, et
+    # aucun opérateur n'est imposé à l'école.
+    sms_url = models.URLField(blank=True, help_text='URL de l\'API SMS du fournisseur')
+    sms_methode = models.CharField(max_length=6, default='POST',
+                                   choices=[('POST', 'POST'), ('GET', 'GET')])
+    sms_entetes = models.JSONField(default=dict, blank=True,
+                                   help_text='En-têtes HTTP (autorisation, etc.)')
+    # Gabarit du corps envoyé au fournisseur. {destinataire} et {message} y
+    # sont remplacés. Ex. {"to": "{destinataire}", "text": "{message}"}
+    sms_gabarit = models.JSONField(default=dict, blank=True,
+                                   help_text='Corps de la requête ({destinataire}, {message})')
+    # Texte du rappel. Variables : {eleve} {montant} {ecole} {mois} {limite}
+    rappel_message = models.TextField(
+        blank=True,
+        help_text='Message envoyé. Variables : {eleve} {montant} {ecole} {mois} {limite}')
     actif     = models.BooleanField(default=True)
 
     class Meta:
