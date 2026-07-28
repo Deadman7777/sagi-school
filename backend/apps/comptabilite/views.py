@@ -80,6 +80,10 @@ PLAN_COMPTABLE = {
     '409':   'Fournisseurs débiteurs (avances et acomptes versés)',
     '41':    'Clients et comptes rattachés',
     '411':   'Clients (Parents / Élèves)',
+    # Tiers payeurs, tenus à part du 411 : un bailleur demande combien
+    # l'établissement attend de ses partenaires institutionnels, et le chiffre
+    # est introuvable s'il est noyé dans les créances des familles.
+    '4112':  'Créances sur organismes payeurs (bourses)',
     '412':   'Clients — effets à recevoir',
     '413':   'Clients — avances et acomptes reçus sur commandes',
     '416':   'Clients douteux ou litigieux',

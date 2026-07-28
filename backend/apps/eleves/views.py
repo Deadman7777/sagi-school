@@ -166,13 +166,25 @@ class PriseEnChargeOrganismeViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        from .creances_organisme import appliquer
+
         tenant = get_tenant(self.request)
         # L'exercice n'est pas demandé au client : une bourse s'attribue
         # toujours sur l'année en cours, et le laisser choisir ouvrirait la
         # porte à des attributions sur une année clôturée.
         exercice = serializer.validated_data.get('exercice') or Exercice.objects.filter(
             tenant=tenant, cloture=False).order_by('-date_debut').first()
-        serializer.save(tenant=tenant, exercice=exercice)
+        pec = serializer.save(tenant=tenant, exercice=exercice)
+        appliquer(pec)
+
+    def perform_update(self, serializer):
+        from .creances_organisme import appliquer
+        appliquer(serializer.save())
+
+    def perform_destroy(self, instance):
+        from .creances_organisme import supprimer_creance
+        supprimer_creance(instance)
+        instance.delete()
 
 
 class EleveViewSet(viewsets.ModelViewSet):

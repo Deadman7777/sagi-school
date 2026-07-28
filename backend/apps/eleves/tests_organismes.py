@@ -330,3 +330,122 @@ class SyntheseBoursierTest(OrganismeBase):
         r = self.client.get(f'/api/eleves/{self.eleve.id}/situation-pdf/')
         self.assertEqual(r.status_code, 200, r.content[:400])
         self.assertEqual(r['Content-Type'], 'application/pdf')
+
+
+class CreanceComptableTest(OrganismeBase):
+    """La bourse est une créance ferme : elle s'écrit au grand livre.
+
+    Sinon le compte 4112 resterait vide et le bilan ne dirait pas ce que les
+    partenaires institutionnels doivent — c'est pourtant la première question
+    d'un bailleur devant un centre de formation public.
+    """
+
+    def _solde(self, compte):
+        from django.db.models import Sum
+        from apps.comptabilite.models import JournalEntry
+        agg = (JournalEntry.objects.filter(tenant=self.tenant, exercice=self.ex,
+                                           no_compte=compte)
+               .aggregate(d=Sum('debit'), c=Sum('credit')))
+        return round(float(agg['d'] or 0) - float(agg['c'] or 0), 2)
+
+    def _equilibre(self):
+        from django.db.models import Sum
+        from apps.comptabilite.models import JournalEntry
+        agg = (JournalEntry.objects.filter(tenant=self.tenant, exercice=self.ex)
+               .aggregate(d=Sum('debit'), c=Sum('credit')))
+        return round(float(agg['d'] or 0), 2), round(float(agg['c'] or 0), 2)
+
+    def _attribuer(self, inscription=100000, mensualite=30000):
+        return self.client.post('/api/eleves/bourses/', {
+            'eleve': str(self.eleve.id), 'organisme': str(self.etat.id),
+            'montant_inscription': inscription, 'montant_mensualite': mensualite,
+        }, format='json')
+
+    def test_l_attribution_constate_la_creance(self):
+        self._attribuer()                                   # 400 000
+
+        self.assertEqual(self._solde('4112'), 400000)
+        self.assertEqual(self._solde('706'), -400000)       # produit crédité
+        d, c = self._equilibre()
+        self.assertEqual(d, c)
+
+    def test_corriger_la_bourse_ne_laisse_qu_une_ecriture(self):
+        """Auto-réparateur : dix corrections, une seule pièce."""
+        r = self._attribuer(mensualite=30000)
+        bourse_id = r.data['id']
+
+        for montant in (40000, 20000, 10000):
+            self.client.patch(f'/api/eleves/bourses/{bourse_id}/',
+                              {'montant_mensualite': montant}, format='json')
+
+        # 100 000 + 10 000 × 10
+        self.assertEqual(self._solde('4112'), 200000)
+        from apps.comptabilite.models import JournalEntry
+        self.assertEqual(
+            JournalEntry.objects.filter(tenant=self.tenant,
+                                        source='CREANCE_ORGANISME').count(), 2)
+
+    def test_retirer_la_bourse_efface_la_creance(self):
+        r = self._attribuer()
+        self.client.delete(f"/api/eleves/bourses/{r.data['id']}/")
+
+        self.assertEqual(self._solde('4112'), 0)
+        self.assertEqual(self._solde('706'), 0)
+
+    def test_le_versement_solde_le_4112_sans_reconstater_de_produit(self):
+        """Le piège : recréditer 706 à l'encaissement compterait la subvention
+        deux fois."""
+        self._attribuer()                                   # 4112 D 400 000
+
+        self.client.post('/api/paiements/paiements/', {
+            'eleve': str(self.eleve.id), 'exercice': str(self.ex.id),
+            'montant_inscription': 400000, 'montant_mensualite': 0,
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_cantine': 0, 'montant_divers': 0,
+            'mode_paiement': 'VIREMENT', 'organisme': str(self.etat.id),
+        }, format='json')
+
+        self.assertEqual(self._solde('4112'), 0)            # créance soldée
+        self.assertEqual(self._solde('706'), -400000)       # produit UNE fois
+        d, c = self._equilibre()
+        self.assertEqual(d, c)
+
+    def test_le_solde_4112_egale_ce_que_l_organisme_doit_encore(self):
+        self._attribuer()                                   # 400 000
+        self.client.post('/api/paiements/paiements/', {
+            'eleve': str(self.eleve.id), 'exercice': str(self.ex.id),
+            'montant_inscription': 150000, 'montant_mensualite': 0,
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_cantine': 0, 'montant_divers': 0,
+            'mode_paiement': 'VIREMENT', 'organisme': str(self.etat.id),
+        }, format='json')
+
+        self.assertEqual(self._solde('4112'), 250000)
+        self.assertEqual(self._relire().reste_organisme, 250000)
+
+    def test_un_reglement_de_famille_ne_touche_pas_le_4112(self):
+        self._attribuer()
+        self.client.post('/api/paiements/paiements/', {
+            'eleve': str(self.eleve.id), 'exercice': str(self.ex.id),
+            'montant_inscription': 200000, 'montant_mensualite': 0,
+            'montant_uniforme': 0, 'montant_fournitures': 0,
+            'montant_cantine': 0, 'montant_divers': 0,
+            'mode_paiement': 'ESPECE',
+        }, format='json')
+
+        self.assertEqual(self._solde('4112'), 400000)       # intact
+        self.assertEqual(self._solde('411'), 0)             # créance famille soldée
+
+    def test_le_bilan_montre_la_creance_sur_l_organisme(self):
+        """Le but de tout ce lot : qu'un bailleur puisse lire au bilan ce que
+        les partenaires institutionnels doivent."""
+        self._attribuer()                                   # 400 000
+
+        r = self.client.get('/api/comptabilite/bilan/')
+
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        creances = r.data['actif']['circulant_ao']['creances']
+        ligne = next((c for c in creances if c['compte'] == '4112'), None)
+        self.assertIsNotNone(ligne, f"4112 absent du bilan : {creances}")
+        self.assertEqual(ligne['montant'], 400000)
+        self.assertIn('organismes', ligne['libelle'].lower())
