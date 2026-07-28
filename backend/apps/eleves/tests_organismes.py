@@ -449,3 +449,59 @@ class CreanceComptableTest(OrganismeBase):
         self.assertIsNotNone(ligne, f"4112 absent du bilan : {creances}")
         self.assertEqual(ligne['montant'], 400000)
         self.assertIn('organismes', ligne['libelle'].lower())
+
+
+class ContenuSituationPdfTest(OrganismeBase):
+    """Ce que le document DIT, pas seulement qu'il se génère.
+
+    Les tests précédents vérifiaient un code 200 : ils sont restés verts alors
+    que le gabarit affichait encore le dû global à une famille boursière.
+    """
+
+    def _html(self):
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+
+        from apps.eleves.echeancier import NOMS_MOIS, construire_echeancier
+
+        eleve = self._relire()
+        ech = construire_echeancier(eleve)
+        for ligne in ech['lignes']:
+            ligne['libelle'] = f"{NOMS_MOIS[ligne['mois']]} {ligne['annee']}"
+        return render_to_string('pdf/situation_eleve.html', {
+            'tenant': self.tenant, 'eleve': eleve,
+            'section_nom': eleve.section.nom, 'exercice': self.ex,
+            'date_edition': timezone.now(), 'paiements': [],
+            'echeancier': ech['lignes'], 'hors_mensualite': ech['hors_mensualite'],
+            'ech_totaux': ech['totaux'], 'synthese': ech['synthese'],
+            'total_paye': eleve.total_paye, 'total_attendu': eleve.total_attendu,
+            'reste': eleve.reste_a_payer, 'reliquat_du': 0, 'reliquat_restant': 0,
+            'reliquat_annee': '', 'reste_global': 0, 'nb_paiements': 0,
+        })
+
+    def test_sans_bourse_le_total_est_celui_de_l_annee(self):
+        html = self._html()
+        self.assertIn("TOTAL RESTANT DÛ POUR L'ANNÉE", html)
+        self.assertNotIn('PAR LA FAMILLE', html)
+
+    def test_avec_bourse_le_total_est_celui_de_la_famille(self):
+        self._boursier(inscription=100000, mensualite=30000)   # 400 000
+
+        html = self._html()
+
+        self.assertIn('TOTAL RESTANT DÛ PAR LA FAMILLE', html)
+        self.assertIn('Ministère de la Formation', html)
+        # La part du tiers apparaît en déduction, pas dans le total réclamé.
+        self.assertIn('à sa charge', html)
+
+    def test_un_boursier_integral_ne_se_voit_rien_reclamer(self):
+        self._boursier()                                       # bourse totale
+        self.assertIn('Rien à votre charge', self._html())
+
+    def test_aucun_commentaire_de_gabarit_n_est_imprime(self):
+        """Django ne gère {# #} que sur UNE ligne : un commentaire multi-ligne
+        se retrouverait imprimé dans le document remis aux parents."""
+        self._boursier()
+        html = self._html()
+        self.assertNotIn('{#', html)
+        self.assertNotIn('{% comment', html)

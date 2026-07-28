@@ -166,16 +166,26 @@ réclame AUJOURD'HUI de ce qui viendra à échéance plus tard dans l'année.
       <td>Reste des mois de l'année (non encore échus)</td>
       <td class="text-right">{{ synthese.mois_a_venir|floatformat:0 }} FCFA</td>
     </tr>
+    {% if synthese.reste_organisme %}
+    <tr>
+      <td>Pris en charge par {{ synthese.organisme_nom }} — à sa charge</td>
+      <td class="text-right green">- {{ synthese.reste_organisme|floatformat:0 }} FCFA</td>
+    </tr>
+    {% endif %}
   </tbody>
 </table>
 {% comment %}Bordure et fond EN LIGNE : xhtml2pdf n'applique pas la
 surcharge de classe (.resultat-def par-dessus .resultat-table), l'encadré
 restait vert en annonçant une dette.
 {% endcomment %}
-<table class="resultat-table" style="margin-top:6px; border:2px solid {% if synthese.total_restant_du == 0 %}#10b981{% else %}#ef4444{% endif %}; background:{% if synthese.total_restant_du == 0 %}#f0fdf4{% else %}#fef2f2{% endif %}">
+{% comment %}Le total mis en avant est celui de la FAMILLE : lui annoncer la
+dette d'un organisme serait faux, et blessant pour une famille boursière qui
+n'a rien à régler. La part du tiers reste visible juste au-dessus.
+{% endcomment %}
+<table class="resultat-table" style="margin-top:6px; border:2px solid {% if synthese.total_restant_du_famille == 0 %}#10b981{% else %}#ef4444{% endif %}; background:{% if synthese.total_restant_du_famille == 0 %}#f0fdf4{% else %}#fef2f2{% endif %}">
   <tr>
-    <td class="rb-label">{% if synthese.total_restant_du == 0 %}Tout est soldé ✓{% else %}TOTAL RESTANT DÛ POUR L'ANNÉE{% endif %}</td>
-    <td class="rb-val" style="color:{% if synthese.total_restant_du == 0 %}#047857{% else %}#b91c1c{% endif %}">{{ synthese.total_restant_du|floatformat:0 }} FCFA</td>
+    <td class="rb-label">{% if synthese.total_restant_du_famille == 0 %}Rien à votre charge ✓{% else %}TOTAL RESTANT DÛ{% if synthese.organisme_nom %} PAR LA FAMILLE{% else %} POUR L'ANNÉE{% endif %}{% endif %}</td>
+    <td class="rb-val" style="color:{% if synthese.total_restant_du_famille == 0 %}#047857{% else %}#b91c1c{% endif %}">{{ synthese.total_restant_du_famille|floatformat:0 }} FCFA</td>
   </tr>
 </table>
 {% endif %}
