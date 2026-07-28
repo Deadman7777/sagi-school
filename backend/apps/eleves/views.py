@@ -65,7 +65,11 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         qs = Eleve.objects.filter(tenant=tenant).select_related(
             'section', 'exercice', 'reliquat_exercice_origine'
-        ).prefetch_related('paiements', 'abonnements__service').annotate(
+        ).prefetch_related(
+            'paiements', 'abonnements__service',
+            # Sans ce prefetch, part_organisme déclenche une requête par élève.
+            'prises_en_charge_organisme__organisme',
+        ).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
                 Sum('paiements__montant_mensualite')  +
@@ -80,6 +84,23 @@ class EleveViewSet(viewsets.ModelViewSet):
             reliquat_paye_sql=Coalesce(
                 Sum('paiements__montant_reliquat',
                     filter=Q(paiements__statut='ACTIF')),
+                Value(0), output_field=DecimalField()
+            ),
+            # Ce qu'un organisme a versé pour cet élève — distingué du reste
+            # pour que l'alerte ne juge que la famille.
+            paye_organisme_sql=Coalesce(
+                Sum('paiements__montant_inscription',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
+                Sum('paiements__montant_mensualite',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
+                Sum('paiements__montant_uniforme',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
+                Sum('paiements__montant_fournitures',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
+                Sum('paiements__montant_cantine',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
+                Sum('paiements__montant_divers',
+                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)),
                 Value(0), output_field=DecimalField()
             ),
         )

@@ -63,6 +63,13 @@ class Paiement(TenantModel):
     # Mois scolaires couverts par la mensualité (numéros 1-12), pour le suivi mensuel
     # et la gestion des paiements anticipés. Ex. [10, 11, 12].
     mois_regles         = models.JSONField(default=list, blank=True)
+    # Qui a payé. NULL = la famille. Renseigné = un organisme règle la part
+    # qu'il prend en charge — c'est ce qui permet de distinguer « la famille
+    # est à jour » de « l'État a versé », deux situations qu'un même total
+    # confondrait.
+    organisme           = models.ForeignKey('eleves.Organisme', null=True, blank=True,
+                                            on_delete=models.PROTECT,
+                                            related_name='paiements')
     # Détail des services optionnels réglés dans ce paiement (itemisation reçu).
     # Ex. [{"nom": "Cantine", "montant": 10000}]. Le montant est inclus dans montant_divers.
     services_regles     = models.JSONField(default=list, blank=True)
