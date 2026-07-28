@@ -128,6 +128,15 @@ class Eleve(TenantModel):
     # (entrée en fin de mois, vacances, arrangement particulier).
     mois_dus              = models.JSONField(default=list, blank=True,
                                              help_text='Mois facturés (1-12) — vide = prorata automatique')
+    # Répartition du déjà-payé sur les mois, corrigée à la main par l'école :
+    # {"7": 60000, "8": 30000}. VIDE = imputation automatique (mois désignés
+    # par les paiements, puis les plus anciens ouverts).
+    # Le TOTAL est verrouillé sur ce qui a réellement été encaissé : cette
+    # correction déplace de l'argent entre les mois, elle n'en crée pas.
+    # Corriger un MONTANT encaissé passe par la modification du paiement, qui
+    # écrit au grand livre — sinon la fiche et la comptabilité divergeraient.
+    imputation_mois       = models.JSONField(default=dict, blank=True,
+                                             help_text='Répartition manuelle du payé par mois')
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
     # Date de départ de l'établissement (diplôme, transfert, abandon). Arrête
     # l'horloge des arriérés : sans elle, un abandon de mars continue

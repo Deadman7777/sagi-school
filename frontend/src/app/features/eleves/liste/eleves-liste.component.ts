@@ -616,7 +616,27 @@ const MOIS_ANNEE = [
                  règle au mois. Chargé à l'ouverture de la fiche. -->
             @if (echeancier(); as ech) {
               @if (ech.lignes.length) {
-                <div class="ech-titre">{{ 'eleves.ech_titre' | translate }}</div>
+                <div class="ech-titre">
+                  {{ 'eleves.ech_titre' | translate }}
+                  @if (!editionImputation()) {
+                    <button type="button" class="fiche-edit" (click)="ouvrirImputation(ech)">
+                      <i class="pi pi-pencil"></i> {{ 'eleves.imput_corriger' | translate }}
+                    </button>
+                  } @else {
+                    <span class="imput-actions">
+                      <button type="button" class="fiche-edit" (click)="editionImputation.set(false)">
+                        {{ 'common.annuler' | translate }}
+                      </button>
+                      <button type="button" class="fiche-edit valider"
+                              (click)="enregistrerImputation(e.id)">
+                        <i class="pi pi-check"></i> {{ 'common.enregistrer' | translate }}
+                      </button>
+                    </span>
+                  }
+                </div>
+                @if (editionImputation()) {
+                  <p class="imput-aide">{{ 'eleves.imput_aide' | translate:{ total: (ech.totaux.paye | number:'1.0-0') } }}</p>
+                }
                 <table class="ech-table">
                   <caption class="sr-only">
                     {{ 'eleves.ech_caption' | translate }}
@@ -639,9 +659,18 @@ const MOIS_ANNEE = [
                           }
                         </td>
                         <td class="mono num">{{ l.du | number:'1.0-0' }}</td>
-                        <td class="mono num success">{{ l.paye | number:'1.0-0' }}</td>
-                        <td class="mono num" [class.danger]="l.reste > 0">
-                          {{ l.reste | number:'1.0-0' }}</td>
+                        @if (editionImputation()) {
+                          <td class="num">
+                            <input type="number" class="imput-input" min="0"
+                                   [attr.aria-label]="l.nom"
+                                   [(ngModel)]="brouillonImputation[l.mois]" />
+                          </td>
+                          <td class="mono num">—</td>
+                        } @else {
+                          <td class="mono num success">{{ l.paye | number:'1.0-0' }}</td>
+                          <td class="mono num" [class.danger]="l.reste > 0">
+                            {{ l.reste | number:'1.0-0' }}</td>
+                        }
                       </tr>
                     }
                     @if (ech.hors_mensualite; as h) {
@@ -1322,6 +1351,15 @@ const MOIS_ANNEE = [
     /* Échéancier mensuel */
     .ech-titre { font-size:10px; font-weight:700; color:var(--text-3);
                  text-transform:uppercase; letter-spacing:.5px; margin:10px 0 5px; }
+    .imput-actions { display:inline-flex; gap:4px; }
+    .fiche-edit.valider { color:#00d4aa; }
+    .imput-aide { font-size:10px; color:var(--text-3); margin:0 0 6px; }
+    .imput-input { width:100%; max-width:110px; padding:2px 4px; font-size:11px;
+                   text-align:right; background:var(--surface); color:var(--text);
+                   border:1px solid var(--border); border-radius:4px;
+                   font-family:inherit; }
+    .imput-input:focus-visible { outline:2px solid #00d4aa; outline-offset:1px; }
+
     .ech-table { width:100%; border-collapse:collapse; font-size:11px; }
     .ech-table th { text-align:left; color:var(--text-3); font-weight:600;
                     padding:3px 4px; border-bottom:1px solid var(--border); }
@@ -1878,6 +1916,50 @@ export class ElevesListeComponent implements OnInit {
   }
 
   echeancier = signal<Echeancier | null>(null);
+
+  // ── Correction de la répartition du payé ───────────────────────────────
+  // On corrige QUI a payé quel mois, jamais COMBIEN a été encaissé : le total
+  // est verrouillé côté serveur sur le grand livre. Corriger une somme reçue
+  // passe par la modification du paiement, qui écrit en comptabilité.
+  editionImputation = signal(false);
+  brouillonImputation: Record<number, number> = {};
+
+  ouvrirImputation(ech: Echeancier) {
+    this.brouillonImputation = {};
+    for (const l of ech.lignes) this.brouillonImputation[l.mois] = l.paye;
+    this.editionImputation.set(true);
+  }
+
+  enregistrerImputation(eleveId: string) {
+    const imputation: Record<string, number> = {};
+    for (const [mois, montant] of Object.entries(this.brouillonImputation)) {
+      imputation[mois] = Number(montant) || 0;
+    }
+    this.elevesService.corrigerImputation(eleveId, imputation).subscribe({
+      next: (ech: any) => {
+        this.editionImputation.set(false);
+        this.echeancier.set(ech);
+        // Dire explicitement que la reprise a bougé : l'école doit savoir que
+        // sa saisie a corrigé une donnée migrée, pas seulement un affichage.
+        const ajuste = Number(ech?.reprise_ajustee || 0);
+        this.msg.add({
+          severity: 'success',
+          summary: this.translate.instant('eleves.imput_ok'),
+          detail: ajuste ? this.translate.instant('eleves.imput_reprise',
+                                                  { montant: ajuste.toLocaleString('fr-FR') }) : '',
+        });
+        this.chargerEleves();
+      },
+      // Le serveur refuse un total qui ne correspond pas à l'encaissé, en
+      // disant lequel : c'est l'information dont l'école a besoin.
+      error: (err) => {
+        const d = err?.error || {};
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('eleves.imput_refuse'),
+                       detail: String(d.imputation || d.error || ''), life: 9000 });
+      },
+    });
+  }
 
   // ── Enregistrement d'un ancien élève inconnu du système ────────────────
   dialogAncienVisible = false;

@@ -112,6 +112,12 @@ export class ElevesService {
     return this.api.get<Echeancier>(`/eleves/${eleveId}/echeancier/`);
   }
 
+  /** Corrige la répartition du payé par mois. Le total est verrouillé côté
+   *  serveur sur ce qui a réellement été encaissé — on déplace, on ne crée pas. */
+  corrigerImputation(eleveId: string, imputation: Record<string, number>) {
+    return this.api.post<Echeancier>(`/eleves/${eleveId}/imputation/`, { imputation });
+  }
+
   // Scolarité complète d'un enfant, toutes années confondues.
   getParcours(eleveId: string) {
     return this.api.get<ParcoursEleve>(`/eleves/${eleveId}/parcours/`);
@@ -147,7 +153,7 @@ export class ElevesService {
   // Base historique des sortis — indépendante de l'exercice actif.
   getAnciens(params?: { q?: string; statut?: string }) {
     return this.api.get<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;
-                          total_du: number }>('/eleves/anciens/', params as any);
+                          total_du: number }>('/eleves/anciens/', params);
   }
 
   // Impayés antérieurs (migration) — saisie en lot d'un montant par élève.
