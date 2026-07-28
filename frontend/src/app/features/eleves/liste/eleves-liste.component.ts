@@ -515,7 +515,8 @@ const MOIS_ANNEE = [
 
     <!-- ══════════════════════════ DIALOG FICHE ══════════════════════════ -->
     <p-dialog header="Fiche Élève" [(visible)]="dialogFicheVisible"
-              [modal]="true" [style]="{width:'620px'}" [draggable]="false">
+              [modal]="true" [style]="{width:'620px', maxWidth:'95vw'}"
+              [draggable]="false">
       @if (eleveSelectionne()) {
         @let e = eleveSelectionne()!;
         <div class="fiche-grid">
@@ -720,17 +721,21 @@ const MOIS_ANNEE = [
         </div>
       }
       <ng-template pTemplate="footer">
-        <p-button label="Modifier" severity="warn" icon="pi pi-pencil"
-                  (onClick)="ouvrirModifier(eleveSelectionne())" />
-        <p-button [label]="'eleves.parcours' | translate" severity="help" icon="pi pi-history"
-                  (onClick)="ouvrirParcours(eleveSelectionne()!.id)" />
-        <p-button label="Exporter la fiche" severity="info" icon="pi pi-file-pdf"
-                  [loading]="exportantFiche()" (onClick)="telechargerFichePDF(eleveSelectionne()!)" />
-        <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
-                  (onClick)="genererCertificat(eleveSelectionne())" />
-        <p-button label="Situation financière" severity="success" icon="pi pi-wallet"
-                  (onClick)="telechargerSituationPDF(eleveSelectionne()!)" />
-        <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
+        <!-- Six boutons sur une ligne débordaient du dialogue : le pied de
+             page de PrimeNG ne passe pas à la ligne tout seul. -->
+        <div class="fiche-actions">
+          <p-button label="Modifier" severity="warn" icon="pi pi-pencil"
+                    (onClick)="ouvrirModifier(eleveSelectionne())" />
+          <p-button [label]="'eleves.parcours' | translate" severity="help" icon="pi pi-history"
+                    (onClick)="ouvrirParcours(eleveSelectionne()!.id)" />
+          <p-button label="Exporter la fiche" severity="info" icon="pi pi-file-pdf"
+                    [loading]="exportantFiche()" (onClick)="telechargerFichePDF(eleveSelectionne()!)" />
+          <p-button label="Certificat de scolarité" severity="danger" icon="pi pi-file-pdf"
+                    (onClick)="genererCertificat(eleveSelectionne())" />
+          <p-button label="Situation financière" severity="success" icon="pi pi-wallet"
+                    (onClick)="telechargerSituationPDF(eleveSelectionne()!)" />
+          <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
+        </div>
       </ng-template>
     </p-dialog>
 
@@ -1351,6 +1356,15 @@ const MOIS_ANNEE = [
     /* Échéancier mensuel */
     .ech-titre { font-size:10px; font-weight:700; color:var(--text-3);
                  text-transform:uppercase; letter-spacing:.5px; margin:10px 0 5px; }
+    /* Le pied du dialogue fiche porte six actions : sans repli, les
+       premières sortaient de la fenêtre. */
+    .fiche-actions { display:flex; flex-wrap:wrap; justify-content:flex-end;
+                     gap:6px; width:100%; }
+    @media (max-width: 560px) {
+      .fiche-actions { justify-content:stretch; }
+      .fiche-actions ::ng-deep .p-button { flex:1 1 auto; }
+    }
+
     .imput-actions { display:inline-flex; gap:4px; }
     .fiche-edit.valider { color:#00d4aa; }
     .imput-aide { font-size:10px; color:var(--text-3); margin:0 0 6px; }
