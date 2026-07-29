@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Value, DecimalField, F, Q
+from django.db.models import Sum, Count, Prefetch, Value, DecimalField, F, Q
 from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
@@ -11,7 +11,7 @@ from core.tenant import get_tenant
 from .models import (Eleve, Organisme, PriseEnChargeOrganisme, Section,
                      Service)
 from .parcours import STATUTS_SORTIE
-from apps.paiements.models import Exercice
+from apps.paiements.models import Exercice, Paiement
 from .serializers import (EleveSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
@@ -245,12 +245,20 @@ class EleveViewSet(viewsets.ModelViewSet):
         if not tenant:
             return Eleve.objects.none()
 
+        from .echeancier import PREFETCH_PAIEMENTS
+
         qs = Eleve.objects.filter(tenant=tenant).select_related(
-            'section', 'exercice', 'reliquat_exercice_origine'
+            # `tenant` : l'échéancier y lit le réglage d'exigibilité, et
+            # l'alerte de chaque fiche vient désormais de l'échéancier.
+            'tenant', 'section', 'exercice', 'reliquat_exercice_origine'
         ).prefetch_related(
             'paiements', 'abonnements__service',
             # Sans ce prefetch, part_organisme déclenche une requête par élève.
             'prises_en_charge_organisme__organisme',
+            # Les paiements actifs, sous le nom que l'échéancier va chercher.
+            Prefetch('paiements',
+                     queryset=Paiement.objects.filter(statut='ACTIF'),
+                     to_attr=PREFETCH_PAIEMENTS),
         ).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
@@ -1704,9 +1712,13 @@ class ElevesListePDFView(APIView):
                 f'attachment; filename="liste_eleves_{exercice.annee_scolaire}.pdf"')
             return resp
 
-        qs = Eleve.objects.filter(
+        # `precharger` : l'alerte de chaque élève vient désormais de son
+        # échéancier, qui a besoin des paiements. Sans le préchargement, une
+        # liste de 300 fiches ferait 300 requêtes de plus.
+        from .echeancier import precharger
+        qs = precharger(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
-        ).select_related('section', 'exercice').prefetch_related('paiements', 'abonnements__service').annotate(
+        )).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
                 Sum('paiements__montant_mensualite')  +

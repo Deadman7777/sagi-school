@@ -129,6 +129,7 @@
     "section_col": "Section",
     "reste_col": "Balance",
     "arriere_col": "Overdue",
+    "ardoise_col": "Prior debt",
     "alerte_col": "Alert",
     "tel_col": "Phone",
     "legende_intro": "Only students behind on monthly fees already due appear here. The level depends on the number of unpaid months:",
@@ -139,7 +140,8 @@
     "niveau_ok": "OK — Balance",
     "niveau_ok_sub": "Up to date, upcoming months remain",
     "conseils": "System advice",
-    "conseils_tous": "See all advice (Tax module)"
+    "conseils_tous": "See all advice (Tax module)",
+    "legende_montant": "The amount claimed is what the FAMILY owes today: unpaid due monthly fees, plus any debt carried over from previous years. A sponsor's share (scholarship) is deducted — parents are not chased because the State is late paying."
   },
   "eleves": {
     "title": "Students & Payments",

@@ -129,6 +129,7 @@
     "section_col": "Section",
     "reste_col": "Reste",
     "arriere_col": "Arriéré",
+    "ardoise_col": "Dont ardoise",
     "alerte_col": "Alerte",
     "tel_col": "Tél",
     "legende_intro": "Seuls les élèves en retard sur des mensualités déjà échues figurent ici. Le niveau dépend du nombre de mois impayés :",
@@ -139,7 +140,8 @@
     "niveau_ok": "OK — Reliquat",
     "niveau_ok_sub": "À jour, reste les mois à venir",
     "conseils": "Conseils du système",
-    "conseils_tous": "Voir tous les conseils (module Fiscal)"
+    "conseils_tous": "Voir tous les conseils (module Fiscal)",
+    "legende_montant": "Le montant réclamé est ce que la FAMILLE doit aujourd'hui : mensualités échues impayées, plus l'ardoise des exercices antérieurs. La part prise en charge par un organisme (bourse) en est retirée — on ne relance pas des parents parce que l'État tarde à verser."
   },
   "eleves": {
     "title": "Élèves & Paiements",
