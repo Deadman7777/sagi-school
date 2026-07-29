@@ -1,5 +1,16 @@
 {% extends "pdf/base.html" %}
-{% block page_style %}@page { size: A4 landscape; margin: 10mm; }{% endblock %}
+{% comment %}A4 paysage = 842 x 595 pt (voir base.html pour le pourquoi des
+points plutôt que des millimètres).{% endcomment %}
+{% block page_style %}
+@page {
+  size: A4 landscape;
+  @frame contenu { left: 28pt; top: 28pt; width: 786pt; height: 523pt; }
+  @frame pied {
+    -pdf-frame-content: pied-de-page;
+    left: 28pt; top: 555pt; width: 786pt; height: 28pt;
+  }
+}
+{% endblock %}
 {% block doc_title %}Balance Générale{% endblock %}
 {% block content %}
 <style>
