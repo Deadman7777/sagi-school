@@ -771,6 +771,75 @@ class EleveViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Aucun exercice actif trouvé.'}, status=400)
         return Response(diagnostiquer(tenant, exercice))
 
+    @action(detail=True, methods=['post'], url_path='montants-mois')
+    def montants_mois(self, request, pk=None):
+        """Fixe le montant DÛ de certains mois, quand il diffère du tarif.
+
+        Attend {"montants": {"7": 30000}} — dict vide pour tout remettre au
+        tarif ordinaire.
+
+        Deux usages du terrain, indissociables du mois d'entrée : une réduction
+        sur un mois entamé à mi-parcours (entré le 16, il ne le vivra qu'à
+        moitié), et un mois déjà réglé dans les frais d'inscription, donc à 0.
+
+        Zéro est une valeur LÉGITIME, distincte de « pas de montant saisi » :
+        c'est toute la raison d'un dict plutôt que d'une liste de couples.
+
+        Contrairement à l'imputation du payé, aucun total n'est verrouillé ici :
+        ce que l'école facture lui appartient. C'est l'argent REÇU qui doit
+        s'accorder au grand livre, pas le tarif décidé.
+        """
+        from .echeancier import construire_echeancier, mois_factures
+
+        eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
+                 .select_related('section', 'exercice')
+                 .prefetch_related('abonnements__service').first())
+        if not eleve:
+            return Response({'error': 'Élève introuvable.'}, status=404)
+        if eleve.exercice and eleve.exercice.cloture:
+            return Response(
+                {'error': f"L'exercice {eleve.exercice.annee_scolaire} est clôturé."},
+                status=400)
+
+        brut = request.data.get('montants')
+        if brut is None or not isinstance(brut, dict):
+            return Response({'montants': 'Attendu : un objet {mois: montant}.'},
+                            status=400)
+
+        factures = set(mois_factures(eleve))
+        propre = {}
+        for cle, valeur in brut.items():
+            try:
+                mois, montant = int(cle), round(float(valeur or 0), 2)
+            except (TypeError, ValueError):
+                return Response({'montants': 'Mois et montants numériques attendus.'},
+                                status=400)
+            if mois not in factures:
+                return Response(
+                    {'montants': f"Le mois {mois} n'est pas facturé à cet élève."},
+                    status=400)
+            if montant < 0:
+                return Response({'montants': 'Un montant dû ne peut pas être négatif.'},
+                                status=400)
+            propre[str(mois)] = montant
+
+        # Descendre un mois SOUS ce qui y a déjà été encaissé creuserait un
+        # trop-perçu : on refuse en le disant, comme pour les mois dus.
+        ech = construire_echeancier(eleve)
+        deja = {l['mois']: l['paye'] for l in ech['lignes']}
+        trop = [m for m in propre if deja.get(int(m), 0) > float(propre[m]) + 0.01]
+        if trop:
+            from .echeancier import NOMS_MOIS
+            noms = ', '.join(NOMS_MOIS.get(int(m), m) for m in sorted(trop, key=int))
+            return Response({'montants':
+                             f"Déjà encaissé plus que ce montant pour : {noms}. "
+                             f"Corrigez d'abord la répartition ou le paiement."},
+                            status=400)
+
+        eleve.montants_mois = propre
+        eleve.save(update_fields=['montants_mois'])
+        return Response(construire_echeancier(eleve))
+
     @action(detail=True, methods=['post'], url_path='imputation')
     def imputation(self, request, pk=None):
         """Saisit le montant réellement réglé pour chaque mois.

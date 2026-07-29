@@ -354,7 +354,10 @@
     "export_financier": "Export financier",
     "export_financier_aide": "Liste des élèves avec attendu, payé, reste et niveau d'alerte",
     "export_nominatif": "Liste nominative",
-    "export_nominatif_aide": "Identité et dates seulement — document destiné à circuler, sans aucun montant"
+    "export_nominatif_aide": "Identité et dates seulement — document destiné à circuler, sans aucun montant",
+    "mois_montant": "Montant dû pour",
+    "mois_montant_aide": "Laissez vide pour le tarif ordinaire. Saisissez un montant réduit pour un mois entamé en cours de route, ou 0 si le mois est déjà réglé dans les frais d'inscription.",
+    "mois_montant_refuse": "Montants mensuels non enregistrés"
   },
   "paiements": {
     "title": "Saisie des Paiements",

@@ -123,24 +123,19 @@ def construire_echeancier(eleve, today=None):
     exercice = eleve.exercice
     mois = mois_factures(eleve)
     svc_mensuel, svc_uniques = _services(eleve)
-    mensualite = eleve.frais_mensualite_effectif      # déjà nette de la PEC
-    du_mensuel = round(mensualite + svc_mensuel, 2)
 
+    # Le dû de chaque mois vient de la fiche : montant saisi s'il existe,
+    # tarif ordinaire sinon. Une seule définition, partagée avec
+    # total_attendu — sans quoi le détail contredirait son propre total.
     lignes = {m: {'mois': m, 'nom': NOMS_MOIS.get(m, str(m)),
                   'annee': _annee_du_mois(exercice, m),
-                  'du': du_mensuel, 'paye': 0.0}
+                  'du': eleve.du_du_mois(m),
+                  'montant_saisi': str(m) in (eleve.montants_mois or {}),
+                  'paye': 0.0}
               for m in mois}
 
     # ── Hors mensualité : inscription et frais uniques ────────────────────
-    section = eleve.section
-    du_hors = 0.0
-    if section:
-        du_hors += max(float(section.frais_inscription or 0)
-                       - eleve.montant_pec_inscription, 0.0)
-        du_hors += float(section.frais_uniforme or 0)
-        du_hors += float(section.frais_fournitures or 0)
-    du_hors += sum(montant for _, montant in svc_uniques)
-    du_hors = round(du_hors, 2)
+    du_hors = eleve.du_hors_mensualite
 
     paye_hors = 0.0
     non_imputes = 0.0     # mensualités payées sans mois désigné

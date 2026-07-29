@@ -113,6 +113,12 @@ export class ElevesService {
     return this.api.get<Echeancier>(`/eleves/${eleveId}/echeancier/`);
   }
 
+  /** Fixe le montant DÛ de certains mois — réduction sur un mois entamé,
+   *  ou mois déjà réglé dans les frais d'inscription. Objet vide = tarif. */
+  definirMontantsMois(eleveId: string, montants: Record<string, number>) {
+    return this.api.post<Echeancier>(`/eleves/${eleveId}/montants-mois/`, { montants });
+  }
+
   /** Corrige la répartition du payé par mois. Le total est verrouillé côté
    *  serveur sur ce qui a réellement été encaissé — on déplace, on ne crée pas. */
   corrigerImputation(eleveId: string, imputation: Record<string, number>) {

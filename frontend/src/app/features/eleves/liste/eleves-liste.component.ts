@@ -37,6 +37,10 @@ interface PecForm {
   // d'un élève ne doit pas figer son calendrier au passage.
   moisAuto: boolean;
   mois_dus: number[];
+  // Montant dû par mois quand il diffère du tarif : réduction sur un mois
+  // entamé en cours de route, ou mois déjà réglé dans les frais
+  // d'inscription. Vide pour un mois = tarif ordinaire.
+  montants_mois: Record<number, number | null>;
   // Bourse : organisme payeur et ce qu'il couvre. `organisme` à null retire
   // la bourse — la totalité du dû revient alors à la famille.
   organisme: string | null;
@@ -1004,14 +1008,24 @@ const MOIS_ANNEE = [
             @if (!formPEC.moisAuto) {
               <div class="mois-grille">
                 @for (m of moisAnnee; track m.num) {
-                  <label class="mois-case" [class.actif]="formPEC.mois_dus.includes(m.num)">
-                    <p-checkbox [ngModel]="formPEC.mois_dus.includes(m.num)"
-                                [binary]="true" [ngModelOptions]="{standalone:true}"
-                                (onChange)="basculerMois(m.num)" />
-                    <span>{{ m.nom }}</span>
-                  </label>
+                  <div class="mois-case" [class.actif]="formPEC.mois_dus.includes(m.num)">
+                    <label class="mois-coche">
+                      <p-checkbox [ngModel]="formPEC.mois_dus.includes(m.num)"
+                                  [binary]="true" [ngModelOptions]="{standalone:true}"
+                                  (onChange)="basculerMois(m.num)" />
+                      <span>{{ m.nom }}</span>
+                    </label>
+                    @if (formPEC.mois_dus.includes(m.num)) {
+                      <input type="number" class="mois-montant" min="0"
+                             [attr.aria-label]="('eleves.mois_montant' | translate) + ' ' + m.nom"
+                             [placeholder]="tarifMensuelStandard()"
+                             [(ngModel)]="formPEC.montants_mois[m.num]"
+                             [ngModelOptions]="{standalone:true}" />
+                    }
+                  </div>
                 }
               </div>
+              <p class="mois-aide">{{ 'eleves.mois_montant_aide' | translate }}</p>
               <div class="mois-resume">
                 {{ 'eleves.mois_resume' | translate:{ n: formPEC.mois_dus.length } }}
                 @if (formPEC.mois_dus.length === 0) {
@@ -1654,10 +1668,18 @@ const MOIS_ANNEE = [
                        letter-spacing:0; cursor:pointer; }
     .mois-mode-hint { color:var(--text-3); }
     .mois-grille { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
-    .mois-case { display:flex; align-items:center; gap:6px; padding:5px 7px;
-                 border:1px solid var(--border); border-radius:6px; cursor:pointer;
+    .mois-case { display:flex; flex-direction:column; gap:4px; padding:5px 7px;
+                 border:1px solid var(--border); border-radius:6px;
                  font-size:11px; color:var(--text-2); text-transform:none;
                  letter-spacing:0; }
+    .mois-coche { display:flex; align-items:center; gap:6px; cursor:pointer;
+                  text-transform:none; letter-spacing:0; }
+    .mois-montant { width:100%; padding:2px 4px; font-size:10px; text-align:right;
+                    background:var(--surface); color:var(--text);
+                    border:1px solid var(--border); border-radius:4px;
+                    font-family:inherit; }
+    .mois-montant:focus-visible { outline:2px solid #00d4aa; outline-offset:1px; }
+    .mois-aide { font-size:10px; color:var(--text-3); margin:6px 0 0; }
     .mois-case.actif { border-color:#00d4aa; color:var(--text); }
     .mois-resume { margin-top:8px; font-size:11px; color:var(--text-3); }
     .mois-alerte { color:#f59e0b; font-weight:600; }
@@ -2585,6 +2607,25 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  /** Enregistre les montants mensuels dérogatoires. Un champ laissé vide
+   *  signifie « tarif ordinaire » et n'est donc pas transmis. */
+  private enregistrerMontantsMois(eleveId: string) {
+    const montants: Record<string, number> = {};
+    for (const [mois, valeur] of Object.entries(this.formPEC.montants_mois)) {
+      if (valeur === null || valeur === undefined || String(valeur).trim() === '') continue;
+      if (!this.formPEC.mois_dus.includes(Number(mois))) continue;
+      montants[mois] = Number(valeur);
+    }
+    this.elevesService.definirMontantsMois(eleveId, montants).subscribe({
+      next: () => this.chargerEleves(),
+      // Le serveur refuse un montant sous ce qui est déjà encaissé, en
+      // nommant le mois : l'avaler ferait corriger à l'aveugle.
+      error: (err) => this.msg.add({
+        severity: 'error', summary: this.translate.instant('eleves.mois_montant_refuse'),
+        detail: String(err?.error?.montants || err?.error?.error || ''), life: 9000 }),
+    });
+  }
+
   /** Attribue, met à jour ou retire la bourse selon ce qui a été saisi. */
   private enregistrerBourse(eleveId: string) {
     const f = this.formPEC;
@@ -2628,9 +2669,24 @@ export class ElevesListeComponent implements OnInit {
 
   basculerMois(num: number) {
     const mois = this.formPEC.mois_dus;
-    this.formPEC.mois_dus = mois.includes(num)
-      ? mois.filter(m => m !== num)
-      : [...mois, num].sort((a, b) => a - b);
+    if (mois.includes(num)) {
+      this.formPEC.mois_dus = mois.filter(m => m !== num);
+      // Décocher un mois efface son montant : le garder ferait réapparaître
+      // un tarif oublié si l'école recoche le mois des semaines plus tard.
+      delete this.formPEC.montants_mois[num];
+    } else {
+      this.formPEC.mois_dus = [...mois, num].sort((a, b) => a - b);
+    }
+  }
+
+  /** Tarif ordinaire, affiché en filigrane des champs laissés vides. */
+  tarifMensuelStandard(): string {
+    const e = this.eleveSelectionne();
+    if (!e) return '';
+    const section = this.sections().find(s => s.id === e.section);
+    if (!section) return '';
+    const net = Math.max(section.frais_mensualite - (e.montant_pec_mensualite_mensuel || 0), 0);
+    return String(Math.round(net));
   }
 
   organismesActifs = signal<Organisme[]>([]);
@@ -2649,6 +2705,7 @@ export class ElevesListeComponent implements OnInit {
       obs_prise_en_charge:  eleve.obs_prise_en_charge  || '',
       moisAuto:             saisis.length === 0,
       mois_dus:             [...(saisis.length ? saisis : eleve.mois_dus_effectifs || [])],
+      montants_mois:        { ...(eleve.montants_mois || {}) },
     };
     this.dialogPECVisible = true;
 
@@ -2689,6 +2746,7 @@ export class ElevesListeComponent implements OnInit {
     this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
         this.enregistrerBourse(e.id);
+        this.enregistrerMontantsMois(e.id);
         this.msg.add({ severity: 'success', summary: this.translate.instant('eleves.situation_enregistree'),
                        detail: e.nom_complet });
         this.dialogPECVisible = false;
@@ -2833,6 +2891,7 @@ export class ElevesListeComponent implements OnInit {
   private pecFormVide(): PecForm {
     return { prise_en_charge: null, pec_inscription: 0, pec_mensualite: 0,
              obs_prise_en_charge: '', moisAuto: true, mois_dus: [],
+             montants_mois: {},
              organisme: null, bourse_id: null, bourse_inscription: 0,
              bourse_mensualite: 0, bourse_reference: '' };
   }
