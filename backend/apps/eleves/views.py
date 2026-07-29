@@ -1033,10 +1033,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         tenant   = eleve.tenant
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
-        section  = eleve.section
-        type_pec         = eleve.type_pec or ''
-        taux_inscription = float(eleve.taux_pec_inscription or 0) / 100.0
-        taux_mensualite  = float(eleve.taux_pec_mensualite  or 0) / 100.0
+        section = eleve.section
 
         # ── Frais bruts de la section ──────────────────────────────────
         fees_bruts = {
@@ -1046,18 +1043,24 @@ class EleveViewSet(viewsets.ModelViewSet):
             'fournitures': float(section.frais_fournitures) if section else 0,
         }
 
-        # ── Frais nets selon le type de prise en charge ────────────────
-        def _appliquer_pec(nature, montant):
-            if type_pec == 'TOTALE':
-                if nature == 'inscription': return round(montant * (1 - taux_inscription), 2)
-                if nature == 'mensualite':  return round(montant * (1 - taux_mensualite),  2)
-            elif type_pec == 'INSCRIPTION' and nature == 'inscription':
-                return round(montant * (1 - taux_inscription), 2)
-            elif type_pec == 'MENSUALITES' and nature == 'mensualite':
-                return round(montant * (1 - taux_mensualite), 2)
-            return montant
-
-        fees_nets = {k: _appliquer_pec(k, v) for k, v in fees_bruts.items()}
+        # ── Frais nets de prise en charge ──────────────────────────────
+        # Les montants viennent de la FICHE, via les mêmes propriétés que le
+        # suivi financier. Cet endroit recalculait la prise en charge à partir
+        # des anciens taux (type_pec, taux_pec_*), que la migration 0024 a
+        # remis à zéro en rendant les montants seuls maîtres : le calcul
+        # rendait donc le tarif BRUT depuis. L'écran de paiement réclamait la
+        # mensualité entière à un élève pris en charge, et le solde du reçu
+        # contredisait celui de sa fiche.
+        #
+        # Deux calculs séparés d'une même chose finissent toujours par
+        # diverger : il n'y en a plus qu'un.
+        fees_nets = {
+            'inscription': round(max(fees_bruts['inscription']
+                                     - eleve.montant_pec_inscription, 0.0), 2),
+            'mensualite':  eleve.frais_mensualite_effectif,
+            'uniforme':    fees_bruts['uniforme'],
+            'fournitures': fees_bruts['fournitures'],
+        }
 
         # ── Déjà payé par catégorie pour cet exercice ──────────────────
         if exercice:
