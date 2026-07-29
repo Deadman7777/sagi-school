@@ -350,7 +350,11 @@
     "org_pris_en_charge_par": "Pris en charge par",
     "org_part": "Part de l'organisme",
     "org_part_famille": "Reste à la charge de la famille",
-    "org_du": "encore dû"
+    "org_du": "encore dû",
+    "export_financier": "Export financier",
+    "export_financier_aide": "Liste des élèves avec attendu, payé, reste et niveau d'alerte",
+    "export_nominatif": "Liste nominative",
+    "export_nominatif_aide": "Identité et dates seulement — document destiné à circuler, sans aucun montant"
   },
   "paiements": {
     "title": "Saisie des Paiements",

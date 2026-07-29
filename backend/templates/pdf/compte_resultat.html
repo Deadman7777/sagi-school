@@ -1,14 +1,6 @@
 {% extends "pdf/base.html" %}
 {% block doc_title %}Compte de Résultat{% endblock %}
 {% block content %}
-<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
-  Compte de Résultat — {{ exercice.annee_scolaire }}
-</h2>
-<p style="color:#374151;font-size:12px;margin-bottom:14px">
-  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
-  &mdash; Système {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
-</p>
-
 <!-- KPIs -->
 <table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
   <tr>

@@ -4,48 +4,69 @@
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: Arial, sans-serif; font-size:12px; color:#1a1a2e; }
+  body { font-family: Arial, sans-serif; font-size:11px; color:#111827; }
 
-  .header-table { width:100%; border-bottom:3px solid #00745a; padding-bottom:12px; margin-bottom:14px; }
-  .logo { font-size:20px; font-weight:bold; color:#00745a; }
-  .sub  { font-size:11px; color:#374151; text-transform:uppercase; letter-spacing:1px; }
-  .doc-title { font-size:15px; font-weight:bold; color:#1a1a2e; text-align:right; }
-  .doc-meta  { font-size:10px; color:#374151; margin-top:4px; text-align:right; }
+  /* En-tête compacte : logo et identité sur une seule ligne, au lieu du logo
+     empilé au-dessus du nom. Le nom de l'école n'y figure qu'UNE fois — il
+     était répété dans le bandeau d'identification juste en dessous. */
+  .header-table { width:100%; border-bottom:2px solid #00745a;
+                  padding-bottom:6px; margin-bottom:8px; }
+  .header-table td { vertical-align:middle; }
+  .logo-img { max-height:34px; max-width:34px; }
+  .logo { font-size:15px; font-weight:bold; color:#00745a; }
+  .sub  { font-size:8px; color:#4b5563; text-transform:uppercase; letter-spacing:.6px; }
+  .doc-title { font-size:13px; font-weight:bold; color:#111827; text-align:right; }
+  .doc-meta  { font-size:8.5px; color:#4b5563; margin-top:2px; text-align:right; }
 
-  .school-band { width:100%; border:1px solid #e0e0e0; background:#f8f9fa; margin-bottom:14px; }
-  .school-band td { padding:8px 12px; border-right:1px solid #e0e0e0; vertical-align:top; }
-  .school-band td:last-child { border-right:none; }
-  .sb-label { font-size:10px; color:#6b7280; text-transform:uppercase; }
-  .sb-value { font-size:12px; font-weight:bold; color:#1a1a2e; margin-top:2px; }
+  /* Bandeau d'identification sur une seule ligne de texte : quatre cellules
+     bordées coûtaient 40 pt de hauteur pour quatre valeurs courtes. */
+  .school-band { width:100%; border-bottom:1px solid #e5e7eb; margin-bottom:10px; }
+  .school-band td { padding:0 0 6px 0; font-size:9px; color:#111827; }
+  .sb-label { color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
 
   .content { }
 
-  table { width:100%; border-collapse:collapse; margin-bottom:14px; }
-  thead th { background:#1a1a2e; color:white; padding:7px 10px; font-size:11px; text-align:left; }
-  tbody tr:nth-child(even) { background:#f8f9fa; }
-  tbody td { padding:6px 10px; border-bottom:1px solid #eee; font-size:11px; }
-  tfoot td { background:#e8f0fe; font-weight:bold; padding:7px 10px; border-top:2px solid #1a1a2e; }
+  /* Lignes plus serrées, texte plus contrasté : on gagne environ six lignes
+     par page A4 sans rien perdre en lisibilité — le gris clair d'origine
+     était le vrai problème, pas la taille. */
+  table { width:100%; border-collapse:collapse; margin-bottom:10px; }
+  thead th { background:#1a1a2e; color:white; padding:5px 7px; font-size:9.5px;
+             text-align:left; }
+  tbody tr:nth-child(even) { background:#f6f7f9; }
+  tbody td { padding:4px 7px; border-bottom:1px solid #e8e8e8; font-size:10px;
+             color:#111827; }
+  tfoot td { background:#e8f0fe; font-weight:bold; padding:5px 7px;
+             border-top:2px solid #1a1a2e; font-size:10px; }
 
-  .section-title { font-size:12px; font-weight:bold; color:#1a1a2e; border-left:4px solid #00745a; padding-left:8px; margin:16px 0 8px; }
+  /* Tableau dense : xhtml2pdf AJOUTE le remplissage aux largeurs en
+     pourcentage au lieu de l'y inclure. Au-delà de sept colonnes, la dernière
+     sort de la page. Cette classe réduit le remplissage pour que la somme
+     tienne réellement dans la largeur utile. */
+  .dense th { padding:4px 4px; font-size:9px; }
+  .dense td { padding:3px 4px; font-size:9.5px; }
 
-  .kpi-table { width:100%; margin-bottom:14px; table-layout:auto; }
-  .kpi-table td { padding:10px; text-align:center; border:1px solid #e0e0e0; }
-  .kb-label { font-size:10px; color:#6b7280; text-transform:uppercase; }
-  .kb-val   { font-size:15px; font-weight:bold; margin-top:4px; }
+  .section-title { font-size:10.5px; font-weight:bold; color:#111827;
+                   border-left:3px solid #00745a; padding-left:6px;
+                   margin:10px 0 5px; }
+
+  .kpi-table { width:100%; margin-bottom:10px; table-layout:auto; }
+  .kpi-table td { padding:6px; text-align:center; border:1px solid #e0e0e0; }
+  .kb-label { font-size:8.5px; color:#4b5563; text-transform:uppercase; }
+  .kb-val   { font-size:13px; font-weight:bold; margin-top:2px; }
   .kb-green { color:#047857; }
   .kb-blue  { color:#0369a1; }
   .kb-teal  { color:#00745a; }
   .kb-orange { color:#b45309; }
 
-  .resultat-table { width:100%; border:2px solid #00745a; background:#f0fdf4; margin-top:10px; }
-  .resultat-table td { padding:12px 16px; }
+  .resultat-table { width:100%; border:2px solid #00745a; background:#f0fdf4; margin-top:8px; }
+  .resultat-table td { padding:8px 12px; }
   .resultat-bene { border-color:#10b981; background:#f0fdf4; }
   .resultat-def  { border-color:#ef4444; background:#fef2f2; }
   .rb-label { font-size:12px; font-weight:bold; }
   .rb-val   { font-size:18px; font-weight:bold; text-align:right; }
 
-  .footer-table { width:100%; border-top:1px solid #e0e0e0; margin-top:10px; }
-  .footer-table td { padding:5px 0; font-size:10px; color:#6b7280; }
+  .footer-table { width:100%; border-top:1px solid #e0e0e0; margin-top:8px; }
+  .footer-table td { padding:4px 0; font-size:8.5px; color:#4b5563; }
 
   .text-right { text-align:right; }
   .text-center { text-align:center; }
@@ -55,23 +76,26 @@
   .teal  { color:#00745a; }
   .blue  { color:#0369a1; }
 
-  {% block page_style %}@page { size: A4; margin: 12mm; }{% endblock %}
+  {% block page_style %}@page { size: A4; margin: 10mm 10mm 9mm 10mm; }{% endblock %}
 </style>
 </head>
 <body>
 
 <table class="header-table">
   <tr>
-    <td style="width:50%">
-      {% if tenant.logo %}<img src="{{ tenant.logo }}" style="max-height:55px; max-width:160px; margin-bottom:4px;"><br>{% endif %}
+    {% if tenant.logo %}
+    <td style="width:42px">
+      <img src="{{ tenant.logo }}" class="logo-img">
+    </td>
+    {% endif %}
+    <td>
       <div class="logo">{{ tenant.nom|default:"SAGI SCHOOL" }}</div>
       <div class="sub">Système de Gestion Scolaire &middot; by HADY GESMAN</div>
     </td>
-    <td style="width:50%; text-align:right">
+    <td style="width:42%; text-align:right">
       <div class="doc-title">{% block doc_title %}Document{% endblock %}</div>
       <div class="doc-meta">
-        Édité le {{ date_edition|date:"d/m/Y à H:i" }}<br>
-        Exercice : {{ exercice.annee_scolaire }}
+        Édité le {{ date_edition|date:"d/m/Y à H:i" }}{% if exercice %} &middot; Exercice {{ exercice.annee_scolaire }}{% endif %}
       </div>
     </td>
   </tr>
@@ -80,25 +104,19 @@
 <table class="school-band">
   <tr>
     <td>
-      <div class="sb-label">Établissement</div>
-      <div class="sb-value">{{ tenant.nom }}</div>
+      <span class="sb-label">Ville</span> <strong>{{ tenant.ville|default:"—" }}</strong>
     </td>
     <td>
-      <div class="sb-label">Ville</div>
-      <div class="sb-value">{{ tenant.ville }}</div>
+      <span class="sb-label">Exercice</span>
+      <strong>{{ exercice.date_debut|date:"d/m/Y" }} → {{ exercice.date_fin|date:"d/m/Y" }}</strong>
     </td>
     <td>
-      <div class="sb-label">Exercice</div>
-      <div class="sb-value">{{ exercice.date_debut|date:"d/m/Y" }} → {{ exercice.date_fin|date:"d/m/Y" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">RCCM</div>
-      <div class="sb-value">{{ tenant.rccm|default:"—" }}</div>
+      <span class="sb-label">RCCM</span> <strong>{{ tenant.rccm|default:"—" }}</strong>
     </td>
     {% if tenant.numero_autorisation %}
     <td>
-      <div class="sb-label">N° Autorisation</div>
-      <div class="sb-value">{{ tenant.numero_autorisation }}</div>
+      <span class="sb-label">N° Autorisation</span>
+      <strong>{{ tenant.numero_autorisation }}</strong>
     </td>
     {% endif %}
   </tr>

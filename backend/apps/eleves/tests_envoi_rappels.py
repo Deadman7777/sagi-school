@@ -160,12 +160,13 @@ class MessageTest(EnvoiBase):
 
 class ApiEtCommandeTest(EnvoiBase):
     def test_endpoint_envoi(self):
-        # Fenêtre ouverte tout le mois : le test ne doit pas dépendre du jour
-        # réel où il tourne.
-        self.tenant.rappel_jour_debut, self.tenant.rappel_jour_limite = 1, 28
-        self.tenant.save()
-
-        r = self.client.post('/api/eleves/rappels/envoyer/', {}, format='json')
+        # La date est FIGÉE, pas la fenêtre : le dernier délai étant plafonné à
+        # 28, élargir la fenêtre ne suffisait pas — le test tombait les 29, 30
+        # et 31 de chaque mois.
+        with patch('apps.eleves.rappels.datetime') as faux_dt:
+            faux_dt.date.today.return_value = self.JUILLET
+            faux_dt.date.side_effect = datetime.date
+            r = self.client.post('/api/eleves/rappels/envoyer/', {}, format='json')
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.assertEqual(r.data['simules'] + r.data['envoyes'] + r.data['ignores'], 1)
 

@@ -72,3 +72,47 @@ class CompteResultatNetTest(APITestCase):
 
         self.assertEqual(d['sig']['production_exercice'], 1000000)
         self.assertEqual(d['sig']['autres_charges'], 400000)
+
+
+class ANouveauxHorsResultatTest(CompteResultatNetTest):
+    """890 est le compte d'À-NOUVEAUX, pas un impôt.
+
+    Le préfixe « 89 » du compte de résultat le ramassait et le présentait en
+    « Impôt sur le résultat » : le résultat net s'en trouvait faussé du montant
+    des à-nouveaux, et une ligne « 890 | 890 » sans libellé apparaissait dans
+    les charges d'un document officiel.
+    """
+
+    def test_890_n_entre_ni_dans_les_charges_ni_dans_le_resultat(self):
+        self._je('706', 0, 1000000)
+        self._je('661', 300000, 0, 'CHARGE')
+        # À-nouveaux d'une reprise : 411 D / 890 C, plus un 890 D d'ouverture.
+        self._je('890', 115000, 0, 'MIGRATION')
+
+        d = self._resultat()
+
+        self.assertEqual(d['total_charges'], 300000)
+        self.assertEqual(d['resultat_net'], 700000)
+        self.assertFalse(any(l['compte'] == '890' for l in d['detail_charges']))
+
+    def test_le_total_egale_toujours_la_somme_des_lignes(self):
+        """Un total supérieur à la somme affichée est le plus sûr moyen de
+        faire douter d'un état financier."""
+        self._je('706', 0, 1000000)
+        self._je('661', 300000, 0, 'CHARGE')
+        self._je('890', 115000, 0, 'MIGRATION')
+
+        d = self._resultat()
+
+        self.assertEqual(d['total_charges'],
+                         sum(l['montant'] for l in d['detail_charges']))
+
+    def test_un_vrai_compte_89x_reste_compte(self):
+        """Seul 890 est écarté : l'impôt sur le résultat doit rester."""
+        self._je('706', 0, 1000000)
+        self._je('891', 50000, 0, 'CHARGE')
+
+        d = self._resultat()
+
+        self.assertEqual(d['total_charges'], 50000)
+        self.assertTrue(any(l['compte'] == '891' for l in d['detail_charges']))

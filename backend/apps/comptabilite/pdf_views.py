@@ -222,12 +222,17 @@ class ExportPDFView(APIView):
             caht    = _sum_paiements(paiements)
             systeme = _detecter_systeme(caht)
 
+            # 890 = à-nouveaux, pas un impôt (voir CompteResultatView).
+            HORS_RESULTAT = ('890',)
+
             def _sum(prefixes, field='debit'):
                 # Contribution NETTE (voir CompteResultatView._sum) : le PDF doit
                 # dire la même chose que l'écran, sinon deux vérités officielles.
                 q = Q()
                 for p in prefixes: q |= Q(no_compte__startswith=p)
-                agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
+                agg = entries.filter(q).exclude(
+                    no_compte__in=HORS_RESULTAT).aggregate(
+                    d=Sum('debit'), c=Sum('credit'))
                 debit, credit = float(agg['d'] or 0), float(agg['c'] or 0)
                 return credit - debit if field == 'credit' else debit - credit
 
@@ -235,7 +240,8 @@ class ExportPDFView(APIView):
                 # Montant NET, comme l'écran (voir CompteResultatView._detail).
                 q = Q()
                 for p in prefixes: q |= Q(no_compte__startswith=p)
-                rows = (entries.filter(q).values('no_compte')
+                rows = (entries.filter(q).exclude(no_compte__in=HORS_RESULTAT)
+                        .values('no_compte')
                         .annotate(d=Sum('debit'), c=Sum('credit')).order_by('no_compte'))
                 out = []
                 for r in rows:
@@ -283,10 +289,14 @@ class ExportPDFView(APIView):
                 Q(no_compte__startswith='82') | Q(no_compte__startswith='84') |
                 Q(no_compte__startswith='86') | Q(no_compte__startswith='88')
             ).aggregate(t_d=Sum('debit'), t_c=Sum('credit'))
+            # 890 (à-nouveaux) exclu comme dans le détail : sans cela le total
+            # des charges dépassait la somme des lignes affichées, ce qui est le
+            # plus sûr moyen de faire douter d'un état financier.
             _haoc_agg = entries.filter(
                 Q(no_compte__startswith='81') | Q(no_compte__startswith='83') |
                 Q(no_compte__startswith='87') | Q(no_compte__startswith='89')
-            ).aggregate(t_d=Sum('debit'), t_c=Sum('credit'))
+            ).exclude(no_compte__in=HORS_RESULTAT).aggregate(
+                t_d=Sum('debit'), t_c=Sum('credit'))
             total_produits = round(
                 float(_7agg['t_c'] or 0) - float(_7agg['t_d'] or 0) +
                 max(float(_haop_agg['t_c'] or 0) - float(_haop_agg['t_d'] or 0), 0), 2)
