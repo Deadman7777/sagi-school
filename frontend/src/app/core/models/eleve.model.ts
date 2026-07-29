@@ -6,6 +6,8 @@ export interface Section {
   frais_uniforme: number;
   frais_fournitures: number;
   total_annuel: number;
+  /** Place de la section dans les listes exportées, choisie par l'école. */
+  ordre?: number;
 }
 
 export type PeriodiciteService = 'UNIQUE' | 'MENSUEL';

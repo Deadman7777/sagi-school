@@ -48,21 +48,22 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
     Les sortants sont exclus — on ne relance pas une famille dont l'enfant a
     quitté l'établissement au titre de la scolarité de l'année.
     """
-    from .echeancier import construire_echeancier
+    from .echeancier import construire_echeancier, precharger
     from .models import Eleve
     from .parcours import STATUTS_SORTIE
 
     today = today or datetime.date.today()
     lignes = []
-    qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
-          .exclude(statut__in=STATUTS_SORTIE)
-          .select_related('section', 'classe')
-          .prefetch_related('abonnements__service'))
+    qs = precharger(
+        Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
+        .exclude(statut__in=STATUTS_SORTIE))
 
     for eleve in qs:
         ech = construire_echeancier(eleve, today=today)
         synth = ech['synthese']
-        if synth['total_anterieurs'] < seuil:
+        # Net de ce que l'organisme n'a pas encore versé : sans cette nuance,
+        # la famille d'un boursier reçoit un SMS pour la dette de l'État.
+        if synth['total_exigible_famille'] < seuil:
             continue
         retard_mois = [l for l in ech['lignes'] if l['echu'] and l['reste'] > 0]
         lignes.append({
@@ -78,9 +79,9 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
                             or eleve.nom_mere or ''),
             'nb_mois_retard':   len(retard_mois),
             'mois_retard':      [l['nom'] for l in retard_mois],
-            'retards':          synth['retards'],
+            'retards':          synth['retards_famille'],
             'impaye_anterieur': synth['impaye_anterieur'],
-            'total_exigible':   synth['total_anterieurs'],
+            'total_exigible':   synth['total_exigible_famille'],
         })
 
     lignes.sort(key=lambda l: l['total_exigible'], reverse=True)

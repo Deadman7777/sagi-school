@@ -359,6 +359,7 @@ import { ApiService } from '../../core/services/api.service';
                 <span><p-tag value="CRITIQUE" severity="danger" /> {{ 'dashboard.legende_critique' | translate }}</span>
               </div>
               <div class="al-note">ℹ️ {{ 'dashboard.legende_reliquat' | translate }}</div>
+              <div class="al-note">💰 {{ 'dashboard.legende_montant' | translate }}</div>
             </div>
 
             <p-table [value]="alertes()" styleClass="p-datatable-sm" [rows]="10" [paginator]="true">
@@ -367,6 +368,7 @@ import { ApiService } from '../../core/services/api.service';
                   <th>{{ 'dashboard.nom_col'     | translate }}</th>
                   <th>{{ 'dashboard.section_col' | translate }}</th>
                   <th>{{ 'dashboard.arriere_col' | translate }}</th>
+                  <th>{{ 'dashboard.ardoise_col' | translate }}</th>
                   <th>{{ 'dashboard.retard_60'   | translate }}</th>
                   <th>{{ 'dashboard.alerte_col'  | translate }}</th>
                   <th>{{ 'dashboard.tel_col'     | translate }}</th>
@@ -377,7 +379,14 @@ import { ApiService } from '../../core/services/api.service';
                   <td class="bold">{{ e.nom_complet }}</td>
                   <td>{{ e.section }}</td>
                   <td class="mono danger">{{ e.montant_arriere | number:'1.0-0' }} FCFA</td>
-                  <td>{{ e.mois_arrieres?.join(', ') }}</td>
+                  <!-- Sans cette colonne, un montant gonflé par une dette de
+                       l'an dernier semble contredire les mois listés à côté. -->
+                  <td class="mono">
+                    @if (e.impaye_anterieur > 0) {
+                      {{ e.impaye_anterieur | number:'1.0-0' }} FCFA
+                    } @else { — }
+                  </td>
+                  <td>{{ e.mois_arrieres?.join(', ') || '—' }}</td>
                   <td><p-tag [value]="e.niveau_alerte" [severity]="alerteSeverity(e.niveau_alerte)" /></td>
                   <td class="mono">{{ e.telephone }}</td>
                 </tr>

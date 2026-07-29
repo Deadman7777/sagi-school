@@ -129,6 +129,7 @@
     "section_col": "Section",
     "reste_col": "Reste",
     "arriere_col": "Arriéré",
+    "ardoise_col": "Dont ardoise",
     "alerte_col": "Alerte",
     "tel_col": "Tél",
     "legende_intro": "Seuls les élèves en retard sur des mensualités déjà échues figurent ici. Le niveau dépend du nombre de mois impayés :",
@@ -139,7 +140,8 @@
     "niveau_ok": "OK — Reliquat",
     "niveau_ok_sub": "À jour, reste les mois à venir",
     "conseils": "Conseils du système",
-    "conseils_tous": "Voir tous les conseils (module Fiscal)"
+    "conseils_tous": "Voir tous les conseils (module Fiscal)",
+    "legende_montant": "Le montant réclamé est ce que la FAMILLE doit aujourd'hui : mensualités échues impayées, plus l'ardoise des exercices antérieurs. La part prise en charge par un organisme (bourse) en est retirée — on ne relance pas des parents parce que l'État tarde à verser."
   },
   "eleves": {
     "title": "Élèves & Paiements",
@@ -357,7 +359,12 @@
     "export_nominatif_aide": "Identité et dates seulement — document destiné à circuler, sans aucun montant",
     "mois_montant": "Montant dû pour",
     "mois_montant_aide": "Laissez vide pour le tarif ordinaire. Saisissez un montant réduit pour un mois entamé en cours de route, ou 0 si le mois est déjà réglé dans les frais d'inscription.",
-    "mois_montant_refuse": "Montants mensuels non enregistrés"
+    "mois_montant_refuse": "Montants mensuels non enregistrés",
+    "tri_export": "Ordre de la liste",
+    "tri_export_aide": "Ordre des élèves dans les listes PDF. Dans tous les cas, les élèves sont rangés par matricule, du plus ancien au plus récent.",
+    "tri_section": "Par section",
+    "tri_classe": "Par classe",
+    "tri_matricule": "Par matricule seul"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -566,7 +573,9 @@
     "sms_envoyes": "Envoyés",
     "sms_simules": "Simulés",
     "sms_echecs": "Échecs",
-    "sms_ignores": "Ignorés (déjà prévenus ou sans numéro)"
+    "sms_ignores": "Ignorés (déjà prévenus ou sans numéro)",
+    "ordre_affichage": "Ordre",
+    "ordre_affichage_aide": "L'ordre décide de la place de chaque section dans les listes PDF : mettez 1 sur celle qui doit venir en premier (l'internat Tahfiiz, par exemple), 2 sur la suivante, et ainsi de suite. À l'intérieur d'une section, les élèves restent rangés par matricule."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

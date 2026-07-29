@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, Value, DecimalField, F, Q
+from django.db.models import Sum, Count, Prefetch, Value, DecimalField, F, Q
 from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
@@ -11,7 +11,7 @@ from core.tenant import get_tenant
 from .models import (Eleve, Organisme, PriseEnChargeOrganisme, Section,
                      Service)
 from .parcours import STATUTS_SORTIE
-from apps.paiements.models import Exercice
+from apps.paiements.models import Exercice, Paiement
 from .serializers import (EleveSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
@@ -54,7 +54,8 @@ class ServiceViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=get_tenant(self.request))
 
 
-def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None):
+def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
+                              groupe='classe'):
     """Contexte d'une liste d'élèves SANS aucune donnée financière.
 
     Une liste de classe circule : elle est affichée, photocopiée, passée entre
@@ -84,6 +85,8 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None):
         qs = qs.filter(section__nom=section)
         titre = f"{titre} — {section}" if titre != 'Toutes classes' else section
 
+    from .tri import trier
+
     eleves = [{
         'matricule':      e.matricule or '—',
         'nom_complet':    e.nom_complet,
@@ -91,13 +94,26 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None):
         'date_naissance': e.date_naissance,
         'date_entree':    e.date_entree or e.date_inscription,
         'classe':         e.classe.nom if e.classe else '—',
-    } for e in qs.order_by('classe__nom', 'nom_complet')]
+        'section':        e.section.nom if e.section else '—',
+    } for e in trier(qs, groupe)]
+
+    # Sur une liste d'UNE classe, la colonne serait la même valeur répétée ;
+    # sur la liste globale, c'est l'information qui manque. Même raisonnement
+    # pour la section : regroupé par section, sans la colonne, le lecteur ne
+    # voit pas sur quoi repose l'ordre des lignes qu'il a sous les yeux.
+    montrer_classe  = not classe_id
+    montrer_section = groupe == 'section' and not section
 
     return {'tenant': tenant, 'exercice': exercice, 'classe': titre,
             'eleves': eleves, 'nb': len(eleves), 'date_edition': timezone.now(),
-            # Sur une liste d'UNE classe, la colonne serait la même valeur
-            # répétée ; sur la liste globale, c'est l'information qui manque.
-            'montrer_classe': not classe_id}
+            'montrer_classe':  montrer_classe,
+            'montrer_section': montrer_section,
+            # Largeur calculée ici : un gabarit Django ne sait pas compter, et
+            # des pourcentages qui ne tombent pas juste déforment la table
+            # (xhtml2pdf AJOUTE le padding à la largeur demandée). Le nom
+            # absorbe ce que les colonnes optionnelles laissent : 53 % à lui
+            # seul, moins 16 pour la section et 12 pour la classe.
+            'largeur_nom': 53 - 16 * montrer_section - 12 * montrer_classe}
 
 
 class OrganismeViewSet(viewsets.ModelViewSet):
@@ -245,12 +261,20 @@ class EleveViewSet(viewsets.ModelViewSet):
         if not tenant:
             return Eleve.objects.none()
 
+        from .echeancier import PREFETCH_PAIEMENTS
+
         qs = Eleve.objects.filter(tenant=tenant).select_related(
-            'section', 'exercice', 'reliquat_exercice_origine'
+            # `tenant` : l'échéancier y lit le réglage d'exigibilité, et
+            # l'alerte de chaque fiche vient désormais de l'échéancier.
+            'tenant', 'section', 'exercice', 'reliquat_exercice_origine'
         ).prefetch_related(
             'paiements', 'abonnements__service',
             # Sans ce prefetch, part_organisme déclenche une requête par élève.
             'prises_en_charge_organisme__organisme',
+            # Les paiements actifs, sous le nom que l'échéancier va chercher.
+            Prefetch('paiements',
+                     queryset=Paiement.objects.filter(statut='ACTIF'),
+                     to_attr=PREFETCH_PAIEMENTS),
         ).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
@@ -648,8 +672,11 @@ class EleveViewSet(viewsets.ModelViewSet):
         if not exercice:
             return HttpResponse('Aucun exercice actif', status=404)
 
+        # Une liste d'UNE classe n'a pas de groupe à ordonner : reste
+        # l'ancienneté, que `trier` applique de toute façon.
         contexte = contexte_liste_nominative(
-            tenant, exercice, request.query_params.get('classe'))
+            tenant, exercice, request.query_params.get('classe'),
+            groupe=request.query_params.get('tri', 'matricule'))
         titre = contexte['classe']
         html = render_to_string('pdf/liste_classe.html', contexte)
         buf = BytesIO()
@@ -1690,11 +1717,16 @@ class ElevesListePDFView(APIView):
         # qui circule — affiché, photocopié, passé entre des mains
         # d'enseignants et d'élèves. Y faire figurer ce que chaque famille doit
         # exposerait leur situation à tous ceux qui le lisent.
+        # Ordre de sortie choisi par l'école : ses sections dans SON ordre,
+        # ses classes, ou toute l'école en un seul fil d'ancienneté.
+        groupe = request.query_params.get('tri') or 'section'
+
         if request.query_params.get('financier') in ('0', 'false', 'False', 'non'):
             contexte = contexte_liste_nominative(
                 tenant, exercice,
                 request.query_params.get('classe'),
-                request.query_params.get('section'))
+                request.query_params.get('section'),
+                groupe=groupe)
             html = render_to_string('pdf/liste_classe.html', contexte)
             buf = BytesIO()
             if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
@@ -1704,9 +1736,13 @@ class ElevesListePDFView(APIView):
                 f'attachment; filename="liste_eleves_{exercice.annee_scolaire}.pdf"')
             return resp
 
-        qs = Eleve.objects.filter(
+        # `precharger` : l'alerte de chaque élève vient désormais de son
+        # échéancier, qui a besoin des paiements. Sans le préchargement, une
+        # liste de 300 fiches ferait 300 requêtes de plus.
+        from .echeancier import precharger
+        qs = precharger(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
-        ).select_related('section', 'exercice').prefetch_related('paiements', 'abonnements__service').annotate(
+        )).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription') +
                 Sum('paiements__montant_mensualite')  +
@@ -1716,7 +1752,7 @@ class ElevesListePDFView(APIView):
                 Sum('paiements__montant_divers'),
                 Value(0), output_field=DecimalField()
             )
-        ).order_by('section__nom', 'numero')
+        )
 
         filtre_statut = request.query_params.get('statut', '')
         filtre_alerte = request.query_params.get('alerte', '')
@@ -1735,7 +1771,11 @@ class ElevesListePDFView(APIView):
         total_paye_global    = 0.0
         nb_critique = nb_urgent = nb_attention = nb_a_jour = 0
 
-        for e in qs:
+        # Même tri que la liste nominative : les deux documents doivent se
+        # lire ligne à ligne l'un en face de l'autre.
+        from .tri import trier
+
+        for e in trier(qs, groupe):
             attendu = float(e.total_attendu)
             paye    = float(e.total_paye_sql or 0)
             reste   = round(max(0.0, attendu - paye), 0)

@@ -28,12 +28,15 @@ exposerait la situation des élèves à qui la liste passe entre les mains.
   <thead>
     <tr>
       <th style="width:4%">N°</th>
-      <th style="width:17%">Matricule</th>
-      <th style="width:{% if montrer_classe %}27{% else %}35{% endif %}%">Nom et prénom</th>
-      {% if montrer_classe %}<th style="width:14%">Classe</th>{% endif %}
-      <th style="width:7%">Genre</th>
-      <th style="width:16%">Date de naissance</th>
-      <th style="width:15%">Date d'entrée</th>
+      <th style="width:13%">Matricule</th>
+      <th style="width:{{ largeur_nom }}%">Nom et prénom</th>
+      {% comment %}16 % pour la section : « INTERNAT TAHFIIZ » doit tenir sur
+      une ligne, sinon chaque interne coûte une ligne double.{% endcomment %}
+      {% if montrer_section %}<th style="width:16%">Section</th>{% endif %}
+      {% if montrer_classe %}<th style="width:12%">Classe</th>{% endif %}
+      <th style="width:6%">Genre</th>
+      <th style="width:12%">Naissance</th>
+      <th style="width:12%">Entrée</th>
     </tr>
   </thead>
   <tbody>
@@ -42,13 +45,14 @@ exposerait la situation des élèves à qui la liste passe entre les mains.
       <td>{{ forloop.counter }}</td>
       <td>{{ e.matricule }}</td>
       <td>{{ e.nom_complet }}</td>
+      {% if montrer_section %}<td>{{ e.section }}</td>{% endif %}
       {% if montrer_classe %}<td>{{ e.classe }}</td>{% endif %}
       <td>{{ e.genre|default:"—" }}</td>
       <td>{% if e.date_naissance %}{{ e.date_naissance|date:"d/m/Y" }}{% else %}—{% endif %}</td>
       <td>{% if e.date_entree %}{{ e.date_entree|date:"d/m/Y" }}{% else %}—{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="7">Aucun élève à lister.</td></tr>
+    <tr><td colspan="8">Aucun élève à lister.</td></tr>
     {% endfor %}
   </tbody>
 </table>

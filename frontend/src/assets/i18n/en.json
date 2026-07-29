@@ -129,6 +129,7 @@
     "section_col": "Section",
     "reste_col": "Balance",
     "arriere_col": "Overdue",
+    "ardoise_col": "Prior debt",
     "alerte_col": "Alert",
     "tel_col": "Phone",
     "legende_intro": "Only students behind on monthly fees already due appear here. The level depends on the number of unpaid months:",
@@ -139,7 +140,8 @@
     "niveau_ok": "OK — Balance",
     "niveau_ok_sub": "Up to date, upcoming months remain",
     "conseils": "System advice",
-    "conseils_tous": "See all advice (Tax module)"
+    "conseils_tous": "See all advice (Tax module)",
+    "legende_montant": "The amount claimed is what the FAMILY owes today: unpaid due monthly fees, plus any debt carried over from previous years. A sponsor's share (scholarship) is deducted — parents are not chased because the State is late paying."
   },
   "eleves": {
     "title": "Students & Payments",
@@ -357,7 +359,12 @@
     "export_nominatif_aide": "Identity and dates only — meant to circulate, without any amount",
     "mois_montant": "Amount due for",
     "mois_montant_aide": "Leave empty for the standard fee. Enter a reduced amount for a month started mid-way, or 0 if the month is already covered by the registration fee.",
-    "mois_montant_refuse": "Monthly amounts not saved"
+    "mois_montant_refuse": "Monthly amounts not saved",
+    "tri_export": "List order",
+    "tri_export_aide": "Order of students in PDF lists. In every case students are arranged by registration number, oldest first.",
+    "tri_section": "By section",
+    "tri_classe": "By class",
+    "tri_matricule": "By registration number only"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -566,7 +573,9 @@
     "sms_envoyes": "Sent",
     "sms_simules": "Simulated",
     "sms_echecs": "Failures",
-    "sms_ignores": "Skipped (already notified or no number)"
+    "sms_ignores": "Skipped (already notified or no number)",
+    "ordre_affichage": "Order",
+    "ordre_affichage_aide": "This order decides where each section appears in PDF lists: put 1 on the one that must come first (the Tahfiiz boarding school, for instance), 2 on the next, and so on. Within a section, students stay arranged by registration number."
   },
   "cloture": {
     "title": "Year Closing",

@@ -29,6 +29,57 @@ NOMS_MOIS = {1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
              5: 'Mai', 6: 'Juin', 7: 'Juillet', 8: 'Août',
              9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre'}
 
+# Attribut où `precharger` dépose les paiements actifs d'un élève. Sa présence
+# évite une requête par fiche : indispensable dès qu'on parcourt une école
+# entière (tableau de bord, liste des élèves, campagne de rappels).
+PREFETCH_PAIEMENTS = 'paiements_echeancier'
+
+
+def precharger(qs):
+    """Prépare un queryset d'élèves pour un parcours d'échéanciers.
+
+    Sans cela, construire l'échéancier de 500 élèves fait plusieurs milliers
+    de requêtes — le tableau de bord d'une école moyenne s'écroule. Quatre
+    sources se cachaient derrière une simple boucle : les paiements, la prise
+    en charge par un organisme (relue à chaque propriété qui la consulte), ce
+    que l'organisme a versé, et le reliquat déjà encaissé.
+    """
+    from django.db.models import DecimalField, Prefetch, Q, Sum, Value
+    from django.db.models.functions import Coalesce
+
+    from apps.paiements.models import Paiement
+
+    actif    = Q(paiements__statut='ACTIF')
+    organism = actif & Q(paiements__organisme__isnull=False)
+
+    # `tenant` : l'échéancier y lit le réglage d'exigibilité de chaque mois.
+    return qs.select_related('tenant', 'section', 'exercice', 'classe').prefetch_related(
+        'abonnements__service',
+        # `pec_organisme` parcourt cette relation, et les propriétés qui en
+        # dépendent l'appellent chacune à leur tour.
+        'prises_en_charge_organisme__organisme',
+        Prefetch('paiements',
+                 queryset=Paiement.objects.filter(statut='ACTIF').only(
+                     'eleve_id', 'montant_inscription', 'montant_mensualite',
+                     'montant_uniforme', 'montant_fournitures', 'montant_cantine',
+                     'montant_divers', 'mois_regles', 'services_regles'),
+                 to_attr=PREFETCH_PAIEMENTS),
+    ).annotate(
+        # Noms attendus par les propriétés du modèle, qui les préfèrent à
+        # leur propre requête.
+        paye_organisme_sql=Coalesce(
+            Sum('paiements__montant_inscription', filter=organism) +
+            Sum('paiements__montant_mensualite',  filter=organism) +
+            Sum('paiements__montant_uniforme',    filter=organism) +
+            Sum('paiements__montant_fournitures', filter=organism) +
+            Sum('paiements__montant_cantine',     filter=organism) +
+            Sum('paiements__montant_divers',      filter=organism),
+            Value(0), output_field=DecimalField()),
+        reliquat_paye_sql=Coalesce(
+            Sum('paiements__montant_reliquat', filter=actif),
+            Value(0), output_field=DecimalField()),
+    )
+
 
 def mois_factures(eleve):
     """Les numéros de mois réellement facturés à cet élève, dans l'ordre.
@@ -116,9 +167,18 @@ def construire_echeancier(eleve, today=None):
     today = today or datetime.date.today()
 
     # Une fiche de créance ne doit rien au titre de l'année : pas d'échéancier.
+    # La synthèse est rendue quand même, à zéro : une absence de clé ferait
+    # planter tout appelant qui lit la synthèse sans connaître ce cas.
     if eleve.fiche_creance or not eleve.exercice_id:
         return {'lignes': [], 'hors_mensualite': None,
-                'totaux': {'du': 0.0, 'paye': 0.0, 'reste': 0.0}}
+                'totaux': {'du': 0.0, 'paye': 0.0, 'reste': 0.0},
+                'synthese': {
+                    'organisme_nom': '', 'part_organisme': 0.0,
+                    'reste_organisme': 0.0, 'total_restant_du_famille': 0.0,
+                    'retards': 0.0, 'retards_famille': 0.0,
+                    'impaye_anterieur': 0.0, 'total_anterieurs': 0.0,
+                    'total_exigible_famille': 0.0,
+                    'mois_a_venir': 0.0, 'total_restant_du': 0.0}}
 
     exercice = eleve.exercice
     mois = mois_factures(eleve)
@@ -140,12 +200,16 @@ def construire_echeancier(eleve, today=None):
     paye_hors = 0.0
     non_imputes = 0.0     # mensualités payées sans mois désigné
 
-    for p in Paiement.objects.filter(
+    regles = getattr(eleve, PREFETCH_PAIEMENTS, None)
+    if regles is None:
+        regles = Paiement.objects.filter(
             tenant=eleve.tenant, exercice=exercice,
             eleve=eleve, statut='ACTIF').only(
             'montant_inscription', 'montant_mensualite', 'montant_uniforme',
             'montant_fournitures', 'montant_cantine', 'montant_divers',
-            'mois_regles', 'services_regles'):
+            'mois_regles', 'services_regles')
+
+    for p in regles:
         paye_hors += (float(p.montant_inscription or 0)
                       + float(p.montant_uniforme or 0)
                       + float(p.montant_fournitures or 0))
@@ -200,6 +264,14 @@ def construire_echeancier(eleve, today=None):
         if getattr(tenant, 'dernier_mois_a_inscription', False):
             a_inscription.add(mois[-1])
 
+    # L'horloge des retards S'ARRÊTE à la date de sortie : un élève parti en
+    # mars ne doit pas voir ses arriérés grossir jusqu'en décembre. Sans ce
+    # plafond, toute fiche d'abandon finit CRITIQUE et l'alerte ne veut plus
+    # rien dire.
+    reference = today
+    if eleve.date_sortie and eleve.date_sortie < today:
+        reference = eleve.date_sortie
+
     sortie = []
     for m in mois:
         ligne = lignes[m]
@@ -213,7 +285,7 @@ def construire_echeancier(eleve, today=None):
             'reste':      reste,
             'exigible_le': exigible,
             'a_inscription': m in a_inscription,
-            'echu':       exigible <= today,
+            'echu':       exigible <= reference,
             'statut': 'SOLDE' if reste <= 0 else ('PARTIEL' if paye > 0 else 'IMPAYE'),
         })
 
@@ -258,6 +330,13 @@ def construire_echeancier(eleve, today=None):
                 max(retards + anterieur + a_venir - eleve.reste_organisme, 0.0), 2),
             # Scolarité échue et non réglée, année en cours.
             'retards':            retards,
+            # Les mêmes retards, nets de ce que l'organisme n'a pas encore
+            # versé. C'est CE montant qui déclenche une relance : une famille
+            # n'a pas à être appelée parce que l'État tarde à payer sa bourse.
+            'retards_famille':    round(max(retards - eleve.reste_organisme, 0.0), 2),
+            # Tout ce qui est exigible aujourd'hui de la FAMILLE, ardoise comprise.
+            'total_exigible_famille': round(
+                max(retards + anterieur - eleve.reste_organisme, 0.0), 2),
             # Ardoise des exercices antérieurs, nette de ce qui a déjà été réglé.
             'impaye_anterieur':   anterieur,
             # Tout ce qui est exigible aujourd'hui.
@@ -268,3 +347,53 @@ def construire_echeancier(eleve, today=None):
             'total_restant_du':   round(retards + anterieur + a_venir, 2),
         },
     }
+
+
+# ── Alerte de paiement ────────────────────────────────────────────────────
+# Seuil en francs : sous 1 FCFA, c'est un arrondi, pas une dette. Sans lui, un
+# centime résiduel ferait apparaître une famille soldée dans la liste d'appels.
+SEUIL_ALERTE = 1.0
+
+POIDS_ALERTE = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2, 'OK': 3, 'A_JOUR': 4}
+
+
+def alerte_depuis_echeancier(ech):
+    """Traduit un échéancier en alerte de relance.
+
+    Rend {niveau, nb_mois, montant, mois} où `montant` est ce que la FAMILLE
+    doit réellement aujourd'hui et `mois` les mois échus qu'elle n'a pas
+    soldés — les vrais, pas les derniers du calendrier.
+
+    Niveaux, inchangés :
+      A_JOUR    rien d'exigible, rien à venir
+      OK        à jour, mais il reste des mois non échus
+      ATTENTION 1 mois de retard (ou des frais d'entrée impayés)
+      URGENT    2 mois
+      CRITIQUE  3 mois ou plus
+
+    Une dette d'un exercice antérieur ne fixe pas le niveau — elle a son
+    propre suivi — mais elle entre dans le montant réclamé, parce que c'est
+    bien cette somme-là qu'on demande à la famille.
+    """
+    synth = ech['synthese']
+    montant = synth['total_exigible_famille']
+    if montant < SEUIL_ALERTE:
+        # « OK » veut dire : rien d'exigible, mais la famille devra encore
+        # quelque chose plus tard. Un boursier intégral, lui, ne devra jamais
+        # rien — c'est A_JOUR, et le reste à venir appartient à l'organisme.
+        return {'niveau': 'OK' if synth['total_restant_du_famille'] >= SEUIL_ALERTE
+                          else 'A_JOUR',
+                'nb_mois': 0, 'montant': 0.0, 'mois': []}
+
+    impayes = [l for l in ech['lignes'] if l['echu'] and l['reste'] >= SEUIL_ALERTE]
+    nb = len(impayes)
+    if nb >= 3:
+        niveau = 'CRITIQUE'
+    elif nb == 2:
+        niveau = 'URGENT'
+    else:
+        # nb == 0 : seuls l'inscription ou une ardoise restent dus. C'est
+        # exigible, donc ça se signale — au niveau le plus bas.
+        niveau = 'ATTENTION'
+    return {'niveau': niveau, 'nb_mois': nb, 'montant': montant,
+            'mois': [l['nom'] for l in impayes]}

@@ -512,57 +512,39 @@ class Eleve(TenantModel):
         elapsed_incl = (today.year - debut.year) * 12 + (today.month - debut.month) + 1
         return max(0, min(elapsed_incl - mois_avant, self.nb_mensualites_dues))
 
-    def niveau_alerte_detail(self, total_paye, mensualites_payees, today=None):
-        """Source de vérité unique des alertes paiement → (niveau, nb_mois_arrieres).
+    def situation_alerte(self, today=None):
+        """Source de vérité unique des alertes paiement.
 
-        Niveaux :
-          - A_JOUR    : rien dû / entièrement payé
-          - OK        : reliquat sur les mois à venir, mais aucun arriéré (à jour)
-          - ATTENTION : 1 mois de retard
-          - URGENT    : 2 mois de retard
-          - CRITIQUE  : 3 mois de retard ou plus
+        Rend {niveau, nb_mois, montant, mois} — voir
+        `echeancier.alerte_depuis_echeancier` pour les niveaux.
 
-        total_paye / mensualites_payees peuvent provenir d'annotations pour éviter
-        les requêtes (cohérence garantie entre module Élèves et tableau de bord).
+        Tout vient de l'ÉCHÉANCIER, le même que celui affiché sur la fiche.
+        Le calcul précédent multipliait les mois écoulés depuis l'inscription
+        par une mensualité uniforme : il ignorait les mois réellement
+        facturés, le montant saisi pour un mois donné, le réglage
+        d'exigibilité de l'école et les imputations corrigées à la main. Un
+        tableau de bord qui réclame ce que la fiche ne réclame pas fait
+        appeler des familles qui ne doivent rien — le pire défaut possible
+        pour cet écran.
 
-        L'alerte juge la FAMILLE, pas l'élève : la part prise en charge par un
-        organisme et ce qu'il a versé sont retirés des deux côtés. Sans cela,
-        un boursier dont l'État n'a pas encore payé passerait CRITIQUE, et
-        l'école relancerait des parents qui ne doivent rien."""
-        part_organisme = self.part_organisme
-        paye  = float(total_paye)
-        if part_organisme:
-            paye -= self.paye_organisme
-        total = float(self.total_attendu) - part_organisme
-        if total <= 0 or paye >= total:
-            return ('A_JOUR', 0)
+        Pour parcourir une école entière, précharger le queryset avec
+        `echeancier.precharger` : sinon, une requête de paiements par fiche.
+        """
+        from .echeancier import alerte_depuis_echeancier, construire_echeancier
+        return alerte_depuis_echeancier(construire_echeancier(self, today=today))
 
-        mensualite = self.frais_mensualite_effectif  # tient compte de la prise en charge
-        if mensualite <= 0:
-            ratio = paye / total if total > 0 else 0
-            return ('URGENT' if ratio < 0.5 else 'ATTENTION', 0)
+    def niveau_alerte_detail(self, total_paye=None, mensualites_payees=None, today=None):
+        """(niveau, nb_mois_arrieres) — conservé pour les appelants existants.
 
-        arrieres = max(0.0, self.mois_echus(today) * mensualite - float(mensualites_payees))
-        nb_arr   = int(round(arrieres / mensualite))
-        if nb_arr <= 0:
-            return ('OK', 0)
-        if nb_arr >= 3:
-            return ('CRITIQUE', nb_arr)
-        if nb_arr == 2:
-            return ('URGENT', nb_arr)
-        return ('ATTENTION', nb_arr)
+        Les deux premiers arguments ne servent plus : les montants sont lus
+        dans l'échéancier, qui les impute mois par mois.
+        """
+        etat = self.situation_alerte(today)
+        return (etat['niveau'], etat['nb_mois'])
 
     @property
     def niveau_alerte(self):
-        from django.db.models import Sum
-        agg = self.paiements.filter(statut='ACTIF').aggregate(
-            tp=Sum('montant_inscription') + Sum('montant_mensualite') +
-               Sum('montant_uniforme')    + Sum('montant_fournitures') +
-               Sum('montant_cantine')     + Sum('montant_divers'),
-            tm=Sum('montant_mensualite'),
-        )
-        niveau, _ = self.niveau_alerte_detail(agg['tp'] or 0, agg['tm'] or 0)
-        return niveau
+        return self.situation_alerte()['niveau']
 
 
 class Service(TenantModel):

@@ -154,19 +154,27 @@ class DashboardKPIView(APIView):
                 Sum('paiements__montant_divers',      filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
-            mensualites_payees_sql=Coalesce(
-                Sum('paiements__montant_mensualite', filter=_pf),
-                Value(0), output_field=DecimalField()
-            ),
         ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
-        # Mêmes niveaux que le module Élèves (source de vérité : Eleve.niveau_alerte_detail)
+        # Mêmes niveaux que le module Élèves et que la carte « à relancer » :
+        # une seule source, l'échéancier (Eleve.situation_alerte).
+        #
+        # MÊME PÉRIMÈTRE que la carte, aussi : sortants et fiches de créance
+        # exclus. Un compteur annonçant « 3 CRITIQUE » au-dessus d'une liste
+        # qui n'en montre qu'un donne exactement l'impression d'un logiciel
+        # qui se trompe.
+        from apps.eleves.echeancier import precharger
+        from apps.eleves.parcours import STATUTS_SORTIE
+
+        relancables = precharger(
+            Eleve.objects.filter(tenant=tenant, exercice=exercice,
+                                 fiche_creance=False)
+            .exclude(statut__in=STATUTS_SORTIE))
+
         critique = urgent = attention = ok = a_jour = 0
         compteur = {'CRITIQUE': 0, 'URGENT': 0, 'ATTENTION': 0, 'OK': 0, 'A_JOUR': 0}
-        for e in eleves:
-            niveau, _ = e.niveau_alerte_detail(
-                e.total_paye_sql or 0, e.mensualites_payees_sql or 0, today)
-            compteur[niveau] += 1
+        for e in relancables:
+            compteur[e.situation_alerte(today)['niveau']] += 1
         critique, urgent, attention, ok, a_jour = (
             compteur['CRITIQUE'], compteur['URGENT'], compteur['ATTENTION'],
             compteur['OK'], compteur['A_JOUR'])
@@ -263,6 +271,12 @@ class DashboardKPIView(APIView):
 
 
 class DashboardAlerteView(APIView):
+    """Les élèves à relancer — strictement ceux que leur fiche dit débiteurs.
+
+    Cet écran ne calcule plus rien : il lit l'échéancier, exactement comme la
+    fiche de l'élève et comme la campagne de rappels. C'est la seule façon de
+    ne jamais faire appeler une famille à jour.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -276,81 +290,48 @@ class DashboardAlerteView(APIView):
         if not exercice:
             return Response([])
 
-        from dateutil.relativedelta import relativedelta
-        from django.db.models import Prefetch
-        from apps.eleves.views import MOIS_FR
+        from apps.eleves.echeancier import (POIDS_ALERTE, alerte_depuis_echeancier,
+                                            construire_echeancier, precharger)
+        from apps.eleves.parcours import STATUTS_SORTIE
 
-        today    = timezone.now().date()
-        debut    = exercice.date_debut
-        nb_total = exercice.nb_mensualites
+        today = timezone.now().date()
 
-        # Mois de l'exercice échus à ce jour (du début jusqu'au mois courant inclus)
-        mois_exercice = []
-        for i in range(nb_total):
-            md = debut + relativedelta(months=i)
-            if (md.year, md.month) > (today.year, today.month):
-                break
-            mois_exercice.append((i, md.year, md.month))
-
-        eleves = Eleve.objects.filter(
-            tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice').prefetch_related(
-            'abonnements__service',
-            Prefetch('paiements',
-                     queryset=Paiement.objects.filter(statut='ACTIF').only(
-                         'eleve_id', 'montant_mensualite', 'mois_regles',
-                         'montant_inscription', 'montant_uniforme',
-                         'montant_fournitures', 'montant_cantine', 'montant_divers'),
-                     to_attr='paiements_actifs'),
-        )
+        # Les fiches de créance (dette d'un organisme) et les sortants sont
+        # hors relance : on ne réclame pas une scolarité à une famille dont
+        # l'enfant est parti, ni à des parents quand c'est l'État qui doit.
+        eleves = precharger(
+            Eleve.objects.filter(tenant=tenant, exercice=exercice,
+                                 fiche_creance=False)
+            .exclude(statut__in=STATUTS_SORTIE))
 
         data = []
         for e in eleves:
-            mensualite = e.frais_mensualite_effectif  # après prise en charge
-            if mensualite <= 0:
-                continue  # pas d'échéancier mensuel → pas d'arriéré calculable ici
+            ech   = construire_echeancier(e, today=today)
+            etat  = alerte_depuis_echeancier(ech)
+            if etat['niveau'] in ('A_JOUR', 'OK'):
+                continue
 
-            # Mois effectivement réglés (via mois_regles) + montants payés
-            mois_payes  = set()
-            mens_payees = 0.0
-            total_paye  = 0.0
-            for p in e.paiements_actifs:
-                mm = float(p.montant_mensualite or 0)
-                mens_payees += mm
-                total_paye  += (mm + float(p.montant_inscription or 0) +
-                                float(p.montant_uniforme or 0) + float(p.montant_fournitures or 0) +
-                                float(p.montant_cantine or 0) + float(p.montant_divers or 0))
-                for num in (p.mois_regles or []):
-                    mois_payes.add(int(num))
-
-            # Niveau + nb de mois d'arriéré : MÊME source de vérité que le module Élèves
-            alerte, nb_arr = e.niveau_alerte_detail(total_paye, mens_payees, today)
-            if alerte in ('A_JOUR', 'OK') or nb_arr <= 0:
-                continue  # à jour sur les mensualités échues → pas d'arriéré (exclu)
-
-            # Mois concernés : ceux dus (au prorata de l'entrée) non couverts par mois_regles
-            insc = e.date_inscription or debut
-            mois_avant_entree = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
-            mois_dus  = [(y, m) for (i, y, m) in mois_exercice if i >= mois_avant_entree]
-            non_payes = [(y, m) for (y, m) in mois_dus if m not in mois_payes]
-            source    = non_payes if len(non_payes) >= nb_arr else mois_dus
-            libelles  = [MOIS_FR.get(m, str(m)) for (y, m) in source[-nb_arr:]]
-            montant_arriere = round(nb_arr * mensualite)
-
+            synth = ech['synthese']
             data.append({
-                'id':              str(e.id),
-                'nom_complet':     e.nom_complet,
-                'section':         e.section.nom if e.section else '',
-                'telephone':       e.telephone_pere,
-                'montant_arriere': montant_arriere,
-                'mois_arrieres':   libelles,
-                'nb_mois_arrieres': nb_arr,
-                'reste_a_payer':   round(float(e.total_attendu) - total_paye, 0),
-                'niveau_alerte':   alerte,
+                'id':               str(e.id),
+                'nom_complet':      e.nom_complet,
+                'section':          e.section.nom if e.section else '',
+                'telephone':        (e.telephone_tuteur or e.telephone_pere
+                                     or e.telephone_mere or ''),
+                # Ce qui est exigible AUJOURD'HUI de la famille : c'est le
+                # montant qu'on lui réclamera au téléphone.
+                'montant_arriere':  etat['montant'],
+                'mois_arrieres':    etat['mois'],
+                'nb_mois_arrieres': etat['nb_mois'],
+                # Le reste de l'année, mois à venir compris — à ne pas
+                # confondre avec ce qui est dû maintenant.
+                'reste_a_payer':    synth['total_restant_du_famille'],
+                'impaye_anterieur': synth['impaye_anterieur'],
+                'niveau_alerte':    etat['niveau'],
             })
 
-        POIDS = {'CRITIQUE': 0, 'URGENT': 1, 'ATTENTION': 2}
-        data.sort(key=lambda x: (POIDS.get(x['niveau_alerte'], 9), -x['montant_arriere']))
+        data.sort(key=lambda x: (POIDS_ALERTE.get(x['niveau_alerte'], 9),
+                                 -x['montant_arriere']))
         return Response(data)
 
 
