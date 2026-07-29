@@ -519,6 +519,17 @@ class BalanceView(APIView):
 class CompteResultatView(APIView):
     permission_classes = [IsAuthenticated]
 
+    # 890 est le compte d'À-NOUVEAUX de l'application (contrepartie des
+    # reprises, des reliquats reportés et des neutralisations de migration),
+    # pas un impôt. Le préfixe « 89 » du compte de résultat le ramassait et le
+    # présentait en « Impôt sur le résultat » : le résultat net s'en trouvait
+    # faussé du montant des à-nouveaux, et une ligne « 890 | 890 » sans libellé
+    # apparaissait dans les charges.
+    HORS_RESULTAT = ('890',)
+
+    def _hors_resultat(self, qs):
+        return qs.exclude(no_compte__in=self.HORS_RESULTAT)
+
     def _sum(self, entries, prefixes, field='debit'):
         """Contribution NETTE des comptes au compte de résultat.
 
@@ -531,7 +542,8 @@ class CompteResultatView(APIView):
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p)
-        agg = entries.filter(q).aggregate(d=Sum('debit'), c=Sum('credit'))
+        agg = self._hors_resultat(entries.filter(q)).aggregate(
+            d=Sum('debit'), c=Sum('credit'))
         debit, credit = float(agg['d'] or 0), float(agg['c'] or 0)
         return credit - debit if field == 'credit' else debit - credit
 
@@ -547,7 +559,7 @@ class CompteResultatView(APIView):
         q = Q()
         for p in prefixes:
             q |= Q(no_compte__startswith=p)
-        rows = (entries.filter(q).values('no_compte')
+        rows = (self._hors_resultat(entries.filter(q)).values('no_compte')
                 .annotate(d=Sum('debit'), c=Sum('credit')).order_by('no_compte'))
         out = []
         for r in rows:
@@ -635,10 +647,10 @@ class CompteResultatView(APIView):
             Q(no_compte__startswith='82') | Q(no_compte__startswith='84') |
             Q(no_compte__startswith='86') | Q(no_compte__startswith='88')
         ).aggregate(d=Sum('debit'), c=Sum('credit'))
-        _haoc_agg = entries.filter(
+        _haoc_agg = self._hors_resultat(entries.filter(
             Q(no_compte__startswith='81') | Q(no_compte__startswith='83') |
             Q(no_compte__startswith='87') | Q(no_compte__startswith='89')
-        ).aggregate(d=Sum('debit'), c=Sum('credit'))
+        )).aggregate(d=Sum('debit'), c=Sum('credit'))
         total_produits = round(
             float(_7agg['c'] or 0) - float(_7agg['d'] or 0) +
             max(float(_haop_agg['c'] or 0) - float(_haop_agg['d'] or 0), 0), 2)
