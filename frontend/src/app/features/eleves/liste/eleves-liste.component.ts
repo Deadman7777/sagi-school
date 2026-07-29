@@ -96,6 +96,14 @@ const MOIS_ANNEE = [
                   [outlined]="onglet() !== 'organismes'"
                   [pTooltip]="'eleves.organismes_aide' | translate"
                   (onClick)="allerOnglet('organismes')" />
+        <!-- L'ordre des listes exportées appartient à l'école : ses sections
+             dans SON ordre (réglé dans Paramètres), ses classes, ou toute
+             l'école en un seul fil d'ancienneté. Dans tous les cas les élèves
+             sont rangés par matricule, du plus ancien au plus récent. -->
+        <p-select [options]="optionsTri" [(ngModel)]="triExport" optionLabel="label"
+                  optionValue="value" size="small" styleClass="tri-select"
+                  [pTooltip]="'eleves.tri_export_aide' | translate"
+                  [ariaLabel]="'eleves.tri_export' | translate" />
         <p-button icon="pi pi-file-pdf" [label]="'eleves.export_financier' | translate"
                   severity="danger" size="small"
                   [pTooltip]="'eleves.export_financier_aide' | translate"
@@ -1502,6 +1510,9 @@ const MOIS_ANNEE = [
     <app-import-eleves-dialog [(visible)]="dialogImportVisible" (importe)="chargerEleves()" />
   `,
   styles: [`
+    /* Assez large pour « Par matricule seul » sans pousser les boutons
+       d'export hors de la barre. */
+    :host ::ng-deep .tri-select { min-width:170px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
@@ -1749,6 +1760,18 @@ export class ElevesListeComponent implements OnInit {
   exportant     = signal(false);
   exportantFiche = signal(false);
   onglet        = signal<OngletEleves>('liste');
+
+  // Regroupement des listes exportées. « section » par défaut : c'est
+  // l'ordre historique du document, aucune école ne voit ses listes changer
+  // sans l'avoir demandé.
+  triExport = 'section';
+  get optionsTri() {
+    return [
+      { value: 'section',   label: this.translate.instant('eleves.tri_section') },
+      { value: 'classe',    label: this.translate.instant('eleves.tri_classe') },
+      { value: 'matricule', label: this.translate.instant('eleves.tri_matricule') },
+    ];
+  }
 
   // Base historique des sortis — indépendante de l'exercice affiché.
   anciens             = signal<AncienEleve[]>([]);
@@ -2516,7 +2539,7 @@ export class ElevesListeComponent implements OnInit {
    */
   exporterListePDF(financier = true) {
     this.exportant.set(true);
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { tri: this.triExport };
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
     if (this.exerciceSel)  params['exercice'] = this.exerciceSel;
     if (financier) {

@@ -47,21 +47,28 @@
 <table class="dense">
   <thead>
     <tr>
-      <th style="width:5%">N°</th>
-      <th style="width:23%">Nom Complet</th>
-      <th style="width:12%">Section</th>
-      <th style="width:6%" class="text-center">G/F</th>
-      <th style="width:6%" class="text-center">PEC</th>
-      <th style="width:12%" class="text-right">Attendu</th>
-      <th style="width:12%" class="text-right">Payé</th>
-      <th style="width:12%" class="text-right">Reste</th>
-      <th style="width:12%">Alerte</th>
+      {# Matricule : la liste est triée dessus, sans la colonne l'ordre est illisible. #}
+      <th style="width:4%">N°</th>
+      <th style="width:12%">Matricule</th>
+      <th style="width:21%">Nom Complet</th>
+      {% comment %}16 % : « INTERNAT TAHFIIZ » doit tenir sur une ligne, sinon
+      la moitié de l'école coûte une ligne double et le document déborde d'une
+      page. `{# … #}` ne ferme PAS sur plusieurs lignes — il s'imprimerait
+      tel quel dans le PDF.{% endcomment %}
+      <th style="width:16%">Section</th>
+      <th style="width:4%" class="text-center">G/F</th>
+      <th style="width:4%" class="text-center">PEC</th>
+      <th style="width:10%" class="text-right">Attendu</th>
+      <th style="width:10%" class="text-right">Payé</th>
+      <th style="width:10%" class="text-right">Reste</th>
+      <th style="width:9%">Alerte</th>
     </tr>
   </thead>
   <tbody>
     {% for e in eleves %}
     <tr>
-      <td>{{ e.numero }}</td>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ e.matricule }}</td>
       <td class="bold">{{ e.nom_complet }}</td>
       <td>{{ e.section_nom }}</td>
       <td class="text-center">{{ e.genre }}</td>
@@ -83,7 +90,7 @@
   </tbody>
   <tfoot>
     <tr>
-      <td colspan="5" class="bold">TOTAUX — {{ nb_eleves }} élève(s)</td>
+      <td colspan="6" class="bold">TOTAUX — {{ nb_eleves }} élève(s)</td>
       <td class="text-right bold">{{ total_attendu|floatformat:0 }}</td>
       <td class="text-right bold green">{{ total_paye|floatformat:0 }}</td>
       <td class="text-right bold {% if total_reste > 0 %}red{% else %}green{% endif %}">{{ total_reste|floatformat:0 }}</td>

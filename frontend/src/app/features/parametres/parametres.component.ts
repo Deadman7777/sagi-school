@@ -418,9 +418,23 @@ import { MessageService } from 'primeng/api';
                   (onClick)="ouvrirDialogSection()" />
       </div>
 
+      <div class="sc-aide">ℹ️ {{ 'parametres.ordre_affichage_aide' | translate }}</div>
+
       <div class="sections-list">
         <div class="section-card" *ngFor="let s of sections(); let i = index">
-          <div class="sc-name">{{ s.nom }}</div>
+          <div class="sc-head">
+            <div class="sc-name">{{ s.nom }}</div>
+            <!-- L'ordre des sections dans les listes exportées appartient à
+                 l'école : un complexe veut son internat avant sa demi-pension,
+                 pas l'ordre alphabétique. -->
+            <div class="sc-ordre">
+              <label [attr.for]="'ordre-' + s.id">{{ 'parametres.ordre_affichage' | translate }}</label>
+              <p-inputNumber [inputId]="'ordre-' + s.id" [(ngModel)]="s.ordre"
+                             [min]="0" [max]="999" [showButtons]="true"
+                             buttonLayout="horizontal" incrementButtonIcon="pi pi-plus"
+                             decrementButtonIcon="pi pi-minus" inputStyleClass="text-center" />
+            </div>
+          </div>
           <div class="sc-frais-grid">
             <div class="sc-frais">
               <span>{{ 'parametres.inscription_frais' | translate }}</span>
@@ -977,6 +991,11 @@ import { MessageService } from 'primeng/api';
     .sections-list { display:flex; flex-direction:column; gap:14px; }
     .section-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
     .sc-name { font-size:15px; font-weight:600; color:#00d4aa; margin-bottom:14px; }
+    .sc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+    .sc-ordre { display:flex; align-items:center; gap:8px; }
+    .sc-ordre label { font-size:12px; color:var(--text-2); white-space:nowrap; }
+    .sc-ordre :is(input) { width:56px; }
+    .sc-aide { font-size:12px; color:var(--text-2); margin:-4px 0 14px; line-height:1.5; }
     .sc-frais-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .sc-frais { display:flex; flex-direction:column; gap:6px; }
     .sc-frais span { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; }
