@@ -31,29 +31,30 @@
     <td><div class="kb-label">Critiques</div><div class="kb-val red">{{ nb_critique }}</div></td>
     <td><div class="kb-label">Urgents</div><div class="kb-val kb-orange">{{ nb_urgent }}</div></td>
     <td><div class="kb-label">En attention</div><div class="kb-val" style="color:#ca8a04">{{ nb_attention }}</div></td>
-    <td></td>
+    <td><div class="kb-label">À jour</div>
+        <div class="kb-val kb-green">{{ nb_a_jour }}</div></td>
   </tr>
 </table>
 {% endif %}
 
 <div class="section-title">
   BASE DES ÉLÈVES — {{ exercice.annee_scolaire }}
+  <span style="font-weight:normal;color:#6b7280">(montants en FCFA)</span>
   {% if filtre_statut %} &nbsp;·&nbsp; Statut : {{ filtre_statut }}{% endif %}
   {% if filtre_alerte %} &nbsp;·&nbsp; Alerte : {{ filtre_alerte }}{% endif %}
 </div>
 
-<table>
+<table class="dense">
   <thead>
     <tr>
-      <th style="width:4%">N°</th>
-      <th style="width:20%">Nom Complet</th>
-      <th style="width:11%">Section</th>
-      <th style="width:4%" class="text-center">G/F</th>
-      <th style="width:9%">Statut</th>
-      <th style="width:4%" class="text-center">PEC</th>
-      <th style="width:13%" class="text-right">Attendu (FCFA)</th>
-      <th style="width:12%" class="text-right">Payé (FCFA)</th>
-      <th style="width:12%" class="text-right">Reste (FCFA)</th>
+      <th style="width:5%">N°</th>
+      <th style="width:24%">Nom Complet</th>
+      <th style="width:14%">Section</th>
+      <th style="width:5%" class="text-center">G/F</th>
+      <th style="width:5%" class="text-center">PEC</th>
+      <th style="width:12%" class="text-right">Attendu</th>
+      <th style="width:12%" class="text-right">Payé</th>
+      <th style="width:12%" class="text-right">Reste</th>
       <th style="width:11%">Alerte</th>
     </tr>
   </thead>
@@ -64,12 +65,11 @@
       <td class="bold">{{ e.nom_complet }}</td>
       <td>{{ e.section_nom }}</td>
       <td class="text-center">{{ e.genre }}</td>
-      <td style="font-size:10px">{{ e.statut }}</td>
       <td class="text-center">{% if e.prise_en_charge %}&#10003;{% else %}—{% endif %}</td>
       <td class="text-right">{{ e.total_attendu|floatformat:0 }}</td>
       <td class="text-right green">{{ e.total_paye|floatformat:0 }}</td>
       <td class="text-right {% if e.reste > 0 %}red{% else %}green{% endif %}">{{ e.reste|floatformat:0 }}</td>
-      <td style="font-size:10px;font-weight:bold;
+      <td style="font-size:9px;font-weight:bold;
         {% if e.niveau_alerte == 'CRITIQUE' %}color:#dc2626;
         {% elif e.niveau_alerte == 'URGENT' %}color:#ea580c;
         {% elif e.niveau_alerte == 'ATTENTION' %}color:#ca8a04;
@@ -83,7 +83,7 @@
   </tbody>
   <tfoot>
     <tr>
-      <td colspan="6" class="bold">TOTAUX — {{ nb_eleves }} élève(s)</td>
+      <td colspan="5" class="bold">TOTAUX — {{ nb_eleves }} élève(s)</td>
       <td class="text-right bold">{{ total_attendu|floatformat:0 }}</td>
       <td class="text-right bold green">{{ total_paye|floatformat:0 }}</td>
       <td class="text-right bold {% if total_reste > 0 %}red{% else %}green{% endif %}">{{ total_reste|floatformat:0 }}</td>

@@ -167,3 +167,112 @@ class BaseActiveTest(APITestCase):
                             {'classe': str(self.classe.id)})
         self.assertEqual(r.status_code, 200, r.content[:200])
         self.assertEqual(r['Content-Type'], 'application/pdf')
+
+
+class ExportListePdfTest(BaseActiveTest):
+    """L'export PDF a le même périmètre que la liste à l'écran.
+
+    Il incluait tout le monde : diplômés d'il y a des années, abandons, et
+    jusqu'aux fiches de créance — qui ne sont pas des élèves mais des
+    porteuses d'ardoise. L'effectif annoncé était donc faux.
+    """
+
+    def _export(self, **params):
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        from apps.eleves.views import ElevesListePDFView
+        req = APIRequestFactory().get('/api/eleves/export-pdf/', params)
+        force_authenticate(req, user=self.user)
+        req.tenant = self.tenant
+        return ElevesListePDFView.as_view()(req)
+
+    def _nb_annonce(self, **params):
+        """Le nombre d'élèves que le document affiche, lu dans son contexte."""
+        from unittest.mock import patch
+        capture = {}
+        vrai = __import__('django.template.loader', fromlist=['render_to_string'])
+        with patch.object(vrai, 'render_to_string',
+                          side_effect=lambda t, ctx: capture.update(ctx) or '<html></html>'):
+            self._export(**params)
+        return capture.get('nb_eleves')
+
+    def test_les_sortants_sont_exclus(self):
+        self._eleve('Awa NDIAYE')
+        self._eleve('Bina FALL', statut='DIPLOME')
+        self._eleve('Cheikh SOW', statut='ABANDONNE')
+
+        self.assertEqual(self._nb_annonce(), 1)
+
+    def test_les_fiches_de_creance_sont_exclues(self):
+        self._eleve('Awa NDIAYE')
+        self._eleve('Ancien endetté', statut='DIPLOME', fiche_creance=True)
+
+        self.assertEqual(self._nb_annonce(), 1)
+
+    def test_un_filtre_statut_explicite_reste_honore(self):
+        self._eleve('Awa NDIAYE')
+        self._eleve('Bina FALL', statut='DIPLOME')
+
+        self.assertEqual(self._nb_annonce(statut='DIPLOME'), 1)
+
+    def test_le_document_se_genere(self):
+        self._eleve('Awa NDIAYE')
+        r = self._export()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+
+    def test_variante_nominative_sans_donnees_financieres(self):
+        """La liste qui circule ne doit porter aucun montant."""
+        from unittest.mock import patch
+        capture = {}
+        loader = __import__('django.template.loader', fromlist=['render_to_string'])
+        with patch.object(loader, 'render_to_string',
+                          side_effect=lambda t, ctx: capture.update(
+                              {'_gabarit': t, **ctx}) or '<html></html>'):
+            self._export(financier='0')
+
+        self.assertEqual(capture['_gabarit'], 'pdf/liste_classe.html')
+        champs = set(capture['eleves'][0]) if capture['eleves'] else set()
+        for interdit in ('total_attendu', 'total_paye', 'reste', 'niveau_alerte'):
+            self.assertNotIn(interdit, champs)
+
+    def test_variante_nominative_filtrable_par_classe(self):
+        self._eleve('Awa NDIAYE')
+        from apps.academique.models import Classe
+        autre = Classe.objects.create(tenant=self.tenant, nom='CI B')
+        self._eleve('Bina FALL', classe=autre)
+
+        from unittest.mock import patch
+        capture = {}
+        loader = __import__('django.template.loader', fromlist=['render_to_string'])
+        with patch.object(loader, 'render_to_string',
+                          side_effect=lambda t, ctx: capture.update(ctx) or '<html></html>'):
+            self._export(financier='0', classe=str(autre.id))
+
+        self.assertEqual([e['nom_complet'] for e in capture['eleves']], ['Bina FALL'])
+        self.assertEqual(capture['classe'], 'CI B')
+
+    def test_la_variante_nominative_exclut_aussi_les_sortants(self):
+        self._eleve('Awa NDIAYE')
+        self._eleve('Bina FALL', statut='DIPLOME')
+
+        from unittest.mock import patch
+        capture = {}
+        loader = __import__('django.template.loader', fromlist=['render_to_string'])
+        with patch.object(loader, 'render_to_string',
+                          side_effect=lambda t, ctx: capture.update(ctx) or '<html></html>'):
+            self._export(financier='0')
+
+        self.assertEqual(capture['nb'], 1)
+
+    def test_par_defaut_l_export_reste_financier(self):
+        self._eleve('Awa NDIAYE')
+        from unittest.mock import patch
+        capture = {}
+        loader = __import__('django.template.loader', fromlist=['render_to_string'])
+        with patch.object(loader, 'render_to_string',
+                          side_effect=lambda t, ctx: capture.update(
+                              {'_gabarit': t, **ctx}) or '<html></html>'):
+            self._export()
+
+        self.assertEqual(capture['_gabarit'], 'pdf/eleves.html')

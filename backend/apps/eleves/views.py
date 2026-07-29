@@ -54,6 +54,52 @@ class ServiceViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=get_tenant(self.request))
 
 
+def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None):
+    """Contexte d'une liste d'élèves SANS aucune donnée financière.
+
+    Une liste de classe circule : elle est affichée, photocopiée, passée entre
+    des mains d'enseignants et d'élèves. Y faire figurer ce que chaque famille
+    doit exposerait leur situation à tous ceux qui la lisent. Ce contexte ne
+    porte donc que l'identité et les dates.
+
+    Partagé par l'export global et l'export par classe : deux constructions
+    séparées finiraient par diverger, et l'une des deux laisserait passer un
+    montant.
+    """
+    qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
+                               fiche_creance=False)
+          .exclude(statut__in=STATUTS_SORTIE)
+          .select_related('classe', 'section'))
+
+    if classe_id == 'sans':
+        qs, titre = qs.filter(classe__isnull=True), 'Sans classe'
+    elif classe_id:
+        qs = qs.filter(classe_id=classe_id)
+        premiere = qs.first()
+        titre = premiere.classe.nom if premiere and premiere.classe else ''
+    else:
+        titre = 'Toutes classes'
+
+    if section:
+        qs = qs.filter(section__nom=section)
+        titre = f"{titre} — {section}" if titre != 'Toutes classes' else section
+
+    eleves = [{
+        'matricule':      e.matricule or '—',
+        'nom_complet':    e.nom_complet,
+        'genre':          e.genre or '',
+        'date_naissance': e.date_naissance,
+        'date_entree':    e.date_entree or e.date_inscription,
+        'classe':         e.classe.nom if e.classe else '—',
+    } for e in qs.order_by('classe__nom', 'nom_complet')]
+
+    return {'tenant': tenant, 'exercice': exercice, 'classe': titre,
+            'eleves': eleves, 'nb': len(eleves), 'date_edition': timezone.now(),
+            # Sur une liste d'UNE classe, la colonne serait la même valeur
+            # répétée ; sur la liste globale, c'est l'information qui manque.
+            'montrer_classe': not classe_id}
+
+
 class OrganismeViewSet(viewsets.ModelViewSet):
     """Organismes qui prennent en charge la scolarité : État, ONG, fondation…"""
     serializer_class   = OrganismeSerializer
@@ -602,34 +648,10 @@ class EleveViewSet(viewsets.ModelViewSet):
         if not exercice:
             return HttpResponse('Aucun exercice actif', status=404)
 
-        qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
-                                   fiche_creance=False)
-              .exclude(statut__in=STATUTS_SORTIE)
-              .select_related('classe', 'section'))
-        classe_id = request.query_params.get('classe')
-        if classe_id == 'sans':
-            qs = qs.filter(classe__isnull=True)
-            titre = 'Sans classe'
-        elif classe_id:
-            qs = qs.filter(classe_id=classe_id)
-            titre = qs.first().classe.nom if qs.exists() and qs.first().classe else ''
-        else:
-            titre = 'Toutes classes'
-
-        eleves = [{
-            'matricule':      e.matricule or '—',
-            'nom_complet':    e.nom_complet,
-            'genre':          e.genre or '',
-            'date_naissance': e.date_naissance,
-            'date_entree':    e.date_entree or e.date_inscription,
-            'classe':         e.classe.nom if e.classe else '—',
-        } for e in qs.order_by('nom_complet')]
-
-        html = render_to_string('pdf/liste_classe.html', {
-            'tenant': tenant, 'exercice': exercice, 'classe': titre,
-            'eleves': eleves, 'nb': len(eleves),
-            'date_edition': timezone.now(),
-        })
+        contexte = contexte_liste_nominative(
+            tenant, exercice, request.query_params.get('classe'))
+        titre = contexte['classe']
+        html = render_to_string('pdf/liste_classe.html', contexte)
         buf = BytesIO()
         if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
             return HttpResponse('Erreur génération PDF.', status=500)
@@ -1592,6 +1614,24 @@ class ElevesListePDFView(APIView):
         if not exercice:
             return HttpResponse('Aucun exercice', status=404)
 
+        # Variante NOMINATIVE : identité et dates seulement. C'est le document
+        # qui circule — affiché, photocopié, passé entre des mains
+        # d'enseignants et d'élèves. Y faire figurer ce que chaque famille doit
+        # exposerait leur situation à tous ceux qui le lisent.
+        if request.query_params.get('financier') in ('0', 'false', 'False', 'non'):
+            contexte = contexte_liste_nominative(
+                tenant, exercice,
+                request.query_params.get('classe'),
+                request.query_params.get('section'))
+            html = render_to_string('pdf/liste_classe.html', contexte)
+            buf = BytesIO()
+            if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+                return HttpResponse('Erreur génération PDF.', status=500)
+            resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+            resp['Content-Disposition'] = (
+                f'attachment; filename="liste_eleves_{exercice.annee_scolaire}.pdf"')
+            return resp
+
         qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         ).select_related('section', 'exercice').prefetch_related('paiements', 'abonnements__service').annotate(
@@ -1610,11 +1650,18 @@ class ElevesListePDFView(APIView):
         filtre_alerte = request.query_params.get('alerte', '')
         if filtre_statut:
             qs = qs.filter(statut=filtre_statut)
+        else:
+            # Même périmètre que la liste à l'écran : ni les sortis (diplômés,
+            # transférés, abandons), ni les fiches de créance — qui ne sont pas
+            # des élèves mais des porteuses d'ardoise. Les laisser gonflait
+            # l'effectif du document et y faisait figurer des enfants partis
+            # depuis des années. Un ?statut= explicite reste honoré.
+            qs = qs.filter(fiche_creance=False).exclude(statut__in=STATUTS_SORTIE)
 
         eleves_data = []
         total_attendu_global = 0.0
         total_paye_global    = 0.0
-        nb_critique = nb_urgent = nb_attention = 0
+        nb_critique = nb_urgent = nb_attention = nb_a_jour = 0
 
         for e in qs:
             attendu = float(e.total_attendu)
@@ -1625,6 +1672,7 @@ class ElevesListePDFView(APIView):
             if alerte == 'CRITIQUE':   nb_critique  += 1
             elif alerte == 'URGENT':   nb_urgent    += 1
             elif alerte == 'ATTENTION': nb_attention += 1
+            else:                       nb_a_jour    += 1
 
             total_attendu_global += attendu
             total_paye_global    += paye
@@ -1660,6 +1708,7 @@ class ElevesListePDFView(APIView):
             'nb_critique':       nb_critique,
             'nb_urgent':         nb_urgent,
             'nb_attention':      nb_attention,
+            'nb_a_jour':         nb_a_jour,
             'filtre_statut':     filtre_statut,
             'filtre_alerte':     filtre_alerte,
         }

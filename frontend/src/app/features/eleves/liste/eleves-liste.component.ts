@@ -92,9 +92,14 @@ const MOIS_ANNEE = [
                   [outlined]="onglet() !== 'organismes'"
                   [pTooltip]="'eleves.organismes_aide' | translate"
                   (onClick)="allerOnglet('organismes')" />
-        <p-button icon="pi pi-file-pdf" label="Export PDF" severity="danger" size="small"
-                  pTooltip="Exporter la liste en PDF"
+        <p-button icon="pi pi-file-pdf" [label]="'eleves.export_financier' | translate"
+                  severity="danger" size="small"
+                  [pTooltip]="'eleves.export_financier_aide' | translate"
                   [loading]="exportant()" (onClick)="exporterListePDF()" />
+        <p-button icon="pi pi-users" [label]="'eleves.export_nominatif' | translate"
+                  severity="secondary" size="small" [outlined]="true"
+                  [pTooltip]="'eleves.export_nominatif_aide' | translate"
+                  [loading]="exportant()" (onClick)="exporterListePDF(false)" />
         <p-button icon="pi pi-file-import" [label]="'eleves.import_btn' | translate"
                   severity="info" size="small"
                   [pTooltip]="'eleves.import_titre' | translate" [disabled]="estAnneeCloturee()"
@@ -2481,18 +2486,28 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
-  exporterListePDF() {
+  /**
+   * `financier` à faux produit la liste NOMINATIVE : identité et dates
+   * seulement. C'est le document qui circule — affiché, photocopié, passé
+   * entre des mains d'enseignants et d'élèves. Les filtres d'alerte n'y ont
+   * pas de sens et ne sont donc pas transmis.
+   */
+  exporterListePDF(financier = true) {
     this.exportant.set(true);
     const params: Record<string, string> = {};
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
-    if (this.filtreAlerte) params['alerte']  = this.filtreAlerte;
     if (this.exerciceSel)  params['exercice'] = this.exerciceSel;
+    if (financier) {
+      if (this.filtreAlerte) params['alerte'] = this.filtreAlerte;
+    } else {
+      params['financier'] = '0';
+    }
     this.elevesService.exporterListePDF(params).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = `eleves_liste.pdf`;
+        link.download = financier ? 'eleves_liste.pdf' : 'eleves_liste_nominative.pdf';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

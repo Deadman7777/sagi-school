@@ -350,7 +350,11 @@
     "org_pris_en_charge_par": "Sponsored by",
     "org_part": "Organisation’s share",
     "org_part_famille": "Family’s share",
-    "org_du": "still owed"
+    "org_du": "still owed",
+    "export_financier": "Financial export",
+    "export_financier_aide": "Student list with expected, paid, remaining and alert level",
+    "export_nominatif": "Name list",
+    "export_nominatif_aide": "Identity and dates only — meant to circulate, without any amount"
   },
   "paiements": {
     "title": "Payment Entry",

@@ -24,15 +24,16 @@ exposerait la situation des élèves à qui la liste passe entre les mains.
   </tr>
 </table>
 
-<table>
+<table class="dense">
   <thead>
     <tr>
       <th style="width:4%">N°</th>
-      <th style="width:18%">Matricule</th>
-      <th style="width:34%">Nom et prénom</th>
-      <th style="width:8%">Genre</th>
-      <th style="width:18%">Date de naissance</th>
-      <th style="width:18%">Date d'entrée</th>
+      <th style="width:17%">Matricule</th>
+      <th style="width:{% if montrer_classe %}27{% else %}35{% endif %}%">Nom et prénom</th>
+      {% if montrer_classe %}<th style="width:14%">Classe</th>{% endif %}
+      <th style="width:7%">Genre</th>
+      <th style="width:16%">Date de naissance</th>
+      <th style="width:15%">Date d'entrée</th>
     </tr>
   </thead>
   <tbody>
@@ -41,12 +42,13 @@ exposerait la situation des élèves à qui la liste passe entre les mains.
       <td>{{ forloop.counter }}</td>
       <td>{{ e.matricule }}</td>
       <td>{{ e.nom_complet }}</td>
+      {% if montrer_classe %}<td>{{ e.classe }}</td>{% endif %}
       <td>{{ e.genre|default:"—" }}</td>
       <td>{% if e.date_naissance %}{{ e.date_naissance|date:"d/m/Y" }}{% else %}—{% endif %}</td>
       <td>{% if e.date_entree %}{{ e.date_entree|date:"d/m/Y" }}{% else %}—{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="6">Aucun élève dans cette classe.</td></tr>
+    <tr><td colspan="7">Aucun élève à lister.</td></tr>
     {% endfor %}
   </tbody>
 </table>

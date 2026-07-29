@@ -350,7 +350,11 @@
     "org_pris_en_charge_par": "متكفّل بها من",
     "org_part": "حصة الجهة",
     "org_part_famille": "حصة الأسرة",
-    "org_du": "ما زال مستحقاً"
+    "org_du": "ما زال مستحقاً",
+    "export_financier": "تصدير مالي",
+    "export_financier_aide": "قائمة التلاميذ مع المستحق والمدفوع والمتبقي ومستوى التنبيه",
+    "export_nominatif": "قائمة اسمية",
+    "export_nominatif_aide": "الهوية والتواريخ فقط — وثيقة معدّة للتداول، دون أي مبلغ"
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
