@@ -137,6 +137,16 @@ class Eleve(TenantModel):
     # écrit au grand livre — sinon la fiche et la comptabilité divergeraient.
     imputation_mois       = models.JSONField(default=dict, blank=True,
                                              help_text='Répartition manuelle du payé par mois')
+    # Montant DÛ pour un mois donné, quand il diffère de la mensualité
+    # standard : {"7": 30000}. Vide = tarif normal.
+    # Deux usages du terrain, indissociables du mois d'entrée :
+    #   - un élève entré le 16 juillet à qui l'école accorde une réduction
+    #     sur juillet, qu'il n'aura vécu qu'à moitié ;
+    #   - un mois déjà réglé dans les frais d'inscription, donc à 0.
+    # Zéro est une valeur légitime et distincte de « pas de montant saisi » :
+    # d'où un dict, où seule la présence de la clé compte.
+    montants_mois         = models.JSONField(default=dict, blank=True,
+                                             help_text='Montant dû par mois quand il diffère du tarif')
     statut                = models.CharField(max_length=20, choices=STATUT_CHOICES, default='INSCRIT')
     # Date de départ de l'établissement (diplôme, transfert, abandon). Arrête
     # l'horloge des arriérés : sans elle, un abandon de mars continue
@@ -320,11 +330,57 @@ class Eleve(TenantModel):
         Une fiche de créance ne doit RIEN au titre de l'année : l'enfant a
         quitté l'établissement, la fiche n'existe que pour porter son ardoise
         (qui, elle, est dans reliquat_anterieur). Lui compter la scolarité
-        reviendrait à facturer une année qu'il ne fera pas."""
+        reviendrait à facturer une année qu'il ne fera pas.
+
+        Le total est la somme du hors-mensualité et de CHAQUE mois facturé,
+        et non plus « mensualité × nombre de mois » : un montant saisi pour un
+        mois particulier (réduction d'entrée en cours de mois, mois inclus dans
+        les frais d'inscription) doit se retrouver dans le total. Le calculer
+        autrement ferait diverger la fiche de son propre échéancier."""
         if self.fiche_creance:
             return 0.0
-        base = max(self.total_theorique - self.montant_pec_annuel, 0.0)
-        return round(base + self.montant_services_annuel, 2)
+        total = self.du_hors_mensualite
+        for mois in self.mois_factures:
+            total += self.du_du_mois(mois)
+        return round(total, 2)
+
+    @property
+    def du_hors_mensualite(self):
+        """Inscription nette de prise en charge, uniforme, fournitures et
+        services à paiement unique. Rien de mensuel ici."""
+        if not self.section:
+            return round(sum(float(ab.service.montant or 0)
+                             for ab in self.abonnements.all()
+                             if ab.service.periodicite != 'MENSUEL'), 2)
+        total = max(float(self.section.frais_inscription)
+                    - self.montant_pec_inscription, 0.0)
+        total += float(self.section.frais_uniforme)
+        total += float(self.section.frais_fournitures)
+        total += sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+                     if ab.service.periodicite != 'MENSUEL')
+        return round(total, 2)
+
+    @property
+    def du_mensuel_standard(self):
+        """Ce que coûte un mois ordinaire : mensualité nette + services mensuels."""
+        mensuel = sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+                      if ab.service.periodicite == 'MENSUEL')
+        return round(self.frais_mensualite_effectif + mensuel, 2)
+
+    @property
+    def mois_factures(self):
+        """Les numéros de mois facturés, saisis ou déduits du prorata."""
+        from .echeancier import mois_factures
+        return mois_factures(self)
+
+    def du_du_mois(self, mois):
+        """Montant dû pour UN mois : celui saisi par l'école s'il existe,
+        sinon le tarif ordinaire. Zéro saisi vaut zéro, pas « non saisi »."""
+        saisis = self.montants_mois or {}
+        cle = str(int(mois))
+        if cle in saisis:
+            return round(float(saisis[cle] or 0), 2)
+        return self.du_mensuel_standard
 
     @property
     def total_paye(self):

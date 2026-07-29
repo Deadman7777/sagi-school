@@ -92,6 +92,8 @@ export interface Eleve {
   // fait foi ; renseigné, il prime. `mois_dus_origine` dit lequel des deux
   // s'applique — sans quoi l'école ne sait pas si le chiffre est le sien.
   mois_dus: number[];
+  // Montant dû par mois quand il diffère du tarif ordinaire.
+  montants_mois: Record<number, number>;
   mois_dus_effectifs: number[];
   mois_dus_origine: 'SAISI' | 'PRORATA';
   nb_mensualites_dues: number;
