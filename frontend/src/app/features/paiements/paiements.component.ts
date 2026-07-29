@@ -318,14 +318,51 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
         </div>
       }
 
-      <!-- Badge Prise en charge -->
-      @if (saisieDonnees()?.taux_pec > 0) {
-        <div style="background:rgba(124,58,237,0.1);border:1px solid #7c3aed;border-radius:6px;padding:8px 14px;font-size:12px;color:#a78bfa;margin-bottom:10px">
-          🤝 Prise en charge : <strong>{{ saisieDonnees()!.taux_pec }}%</strong>
-          ({{ saisieDonnees()!.prise_en_charge }})
-          — Montants réduits automatiquement.
+      <!-- Prise en charge, décomposée : le tarif de l'école, la part prise en
+           charge, ce qui reste à la famille. Le guichet ne voyait qu'un
+           pourcentage — qu'il ne pouvait pas vérifier, et qui ne veut plus rien
+           dire depuis que les montants font foi : le badge ne s'affichait donc
+           jamais. Un parent qui demande pourquoi on lui réclame 65 000 quand le
+           tarif est de 73 000 obtient maintenant sa réponse à l'écran. -->
+      @if (saisieDonnees()?.pec?.annuel?.pec > 0) {
+        <div class="pec-box">
+          <div class="pec-titre">
+            🤝 Prise en charge
+            @if (saisieDonnees()!.pec.organisme) {
+              — <strong>{{ saisieDonnees()!.pec.organisme }}</strong>
+            } @else if (saisieDonnees()!.pec.libelle) {
+              — <strong>{{ saisieDonnees()!.pec.libelle }}</strong>
+            }
+          </div>
+          <div class="pec-grille">
+            <span></span>
+            <span class="pec-th">Dû réel</span>
+            <span class="pec-th">Prise en charge</span>
+            <span class="pec-th">À payer</span>
+            @if (saisieDonnees()!.pec.inscription.pec > 0) {
+              <span class="pec-lib">Inscription</span>
+              <span class="mono">{{ saisieDonnees()!.pec.inscription.brut | number:'1.0-0' }}</span>
+              <span class="mono pec-part">− {{ saisieDonnees()!.pec.inscription.pec | number:'1.0-0' }}</span>
+              <strong class="mono">{{ saisieDonnees()!.pec.inscription.net | number:'1.0-0' }}</strong>
+            }
+            @if (saisieDonnees()!.pec.mensuel.pec > 0) {
+              <span class="pec-lib">Par mois</span>
+              <span class="mono">{{ saisieDonnees()!.pec.mensuel.brut | number:'1.0-0' }}</span>
+              <span class="mono pec-part">− {{ saisieDonnees()!.pec.mensuel.pec | number:'1.0-0' }}</span>
+              <strong class="mono">{{ saisieDonnees()!.pec.mensuel.net | number:'1.0-0' }}</strong>
+            }
+            <span class="pec-lib">Sur l'année</span>
+            <span class="mono">{{ saisieDonnees()!.pec.annuel.brut | number:'1.0-0' }}</span>
+            <span class="mono pec-part">− {{ saisieDonnees()!.pec.annuel.pec | number:'1.0-0' }}</span>
+            <strong class="mono">{{ saisieDonnees()!.pec.annuel.net | number:'1.0-0' }}</strong>
+          </div>
+          @if (saisieDonnees()!.pec.mensuel.pec > 0) {
+            <div class="pec-aide">
+              « Par mois » comprend les services mensuels auxquels l'élève est abonné.
+            </div>
+          }
           @if (saisieDonnees()?.obs_prise_en_charge) {
-            <span style="color:var(--text-3)"> · {{ saisieDonnees()!.obs_prise_en_charge }}</span>
+            <div class="pec-aide">{{ saisieDonnees()!.obs_prise_en_charge }}</div>
           }
         </div>
       }
@@ -420,18 +457,28 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
             <div class="form-group full" style="margin-bottom:10px">
               <label>Mois concerné(s) <span style="color:var(--text-3);font-weight:400">— cocher plusieurs pour anticiper</span></label>
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+                <!-- Un mois entamé porte son reste : c'est la seule façon de
+                     voir, au guichet, qu'un acompte a déjà été versé dessus. -->
                 @for (m of saisieDonnees()!.mois_ecole; track m.num) {
                   <button type="button" [disabled]="!m.du"
-                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.paye ? 'var(--pos-bg)' : 'var(--surface)')"
+                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.statut === 'SOLDE' ? 'var(--pos-bg)' : (m.statut === 'PARTIEL' ? 'rgba(245,158,11,0.14)' : 'var(--surface)'))"
+                    [style.border-color]="m.statut === 'PARTIEL' && !moisSelected(m.num) ? 'rgba(245,158,11,0.45)' : 'var(--border)'"
                     [style.color]="moisSelected(m.num) ? '#06281f' : (m.du ? 'var(--text)' : 'var(--text-5)')"
                     style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer"
                     (click)="toggleMois(m.num)">
-                    {{ m.label }}{{ m.paye ? ' ✓' : '' }}
+                    {{ m.label }}
+                    @if (m.statut === 'SOLDE') { ✓ }
+                    @else if (m.statut === 'PARTIEL') {
+                      <span class="mois-reste" [style.color]="moisSelected(m.num) ? '#06281f' : '#f59e0b'">
+                        reste {{ m.reste | number:'1.0-0' }}
+                      </span>
+                    }
                   </button>
                 }
               </div>
             </div>
           }
+
           <div class="montants-grid">
             <div class="form-group">
               <label>Mensualité
@@ -461,7 +508,8 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
             <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
               @for (sv of form.services; track sv.id) {
                 <div style="display:flex;align-items:center;gap:8px">
-                  <p-checkbox [(ngModel)]="sv.inclus" [binary]="true" />
+                  <p-checkbox [(ngModel)]="sv.inclus" [binary]="true"
+                              (onChange)="onToggleService(sv)" />
                   <span style="flex:1;font-size:13px;color:var(--text)">{{ sv.nom }}</span>
                   <p-inputNumber [(ngModel)]="sv.montant" [min]="0" mode="decimal"
                                  [disabled]="!sv.inclus" styleClass="w-32" inputStyleClass="text-right" />
@@ -489,10 +537,53 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
           </div>
         }
 
-        <!-- Total -->
-        <div class="total-bar">
-          <span>Total à encaisser</span>
-          <span class="total-val">{{ totalForm() | number:'1.0-0' }} FCFA</span>
+        <!-- Ce que l'école réclame pour cette échéance. Ce bloc ne bouge PAS
+             quand on change les montants encaissés : le dû est le dû, le versé
+             est le versé. Les confondre, c'est annoncer « soldé » à une famille
+             qui vient de régler la moitié du mois. -->
+        @if (duSaisie().net > 0) {
+          <div class="du-box">
+            <div class="du-titre">Dû pour {{ libelleEcheance() }}</div>
+            @if (duSaisie().pec > 0) {
+              <div class="du-row"><span>Dû réel</span>
+                <span class="mono">{{ duSaisie().brut | number:'1.0-0' }}</span></div>
+              <div class="du-row"><span>Prise en charge</span>
+                <span class="mono pec-part">− {{ duSaisie().pec | number:'1.0-0' }}</span></div>
+            }
+            <div class="du-row"><span>Montant réel à payer</span>
+              <span class="mono">{{ duSaisie().net | number:'1.0-0' }}</span></div>
+            @if (duSaisie().verse > 0) {
+              <div class="du-row"><span>Déjà versé</span>
+                <span class="mono success">− {{ duSaisie().verse | number:'1.0-0' }}</span></div>
+            }
+            <div class="du-row du-total"><span>Reste à payer</span>
+              <strong class="mono">{{ duSaisie().reste | number:'1.0-0' }} FCFA</strong></div>
+          </div>
+        }
+
+        <!-- Ce qu'on encaisse vraiment, et ce qu'il restera. Le montant versé
+             n'est pas une donnée de plus : c'est la somme des lignes ci-dessus,
+             vue depuis le guichet. Le saisir les ventile (scolarité d'abord,
+             services ensuite), les modifier le met à jour — un seul état, pas
+             deux qui finissent par se contredire. -->
+        <div class="total-bar verse-bar">
+          <div class="verse-champ">
+            <label>Montant versé</label>
+            <p-inputNumber [(ngModel)]="montantVerse" [min]="0" mode="decimal"
+                           styleClass="verse-input" inputStyleClass="text-right" />
+          </div>
+          <div class="verse-solde">
+            @if (resteApresVersement() > 0) {
+              <span class="verse-lib">Reste dû après ce paiement</span>
+              <strong class="mono danger">{{ resteApresVersement() | number:'1.0-0' }} FCFA</strong>
+            } @else if (resteApresVersement() < 0) {
+              <span class="verse-lib">Avance au-delà de l'échéance</span>
+              <strong class="mono" style="color:#f59e0b">{{ -resteApresVersement() | number:'1.0-0' }} FCFA</strong>
+            } @else {
+              <span class="verse-lib">Après ce paiement</span>
+              <strong class="mono success">✅ Échéance soldée</strong>
+            }
+          </div>
         </div>
 
         <!-- Mode(s) de paiement -->
@@ -888,6 +979,41 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
                     border-radius:8px; padding:10px 12px; margin-top:10px; }
     .reliquat-box .fee-hint { color:#f97316; }
     .reliquat-aide { font-size:11px; color:var(--text-3); margin-top:5px; }
+    /* Prise en charge — violet, comme partout ailleurs dans l'application. */
+    .pec-box   { border:1px solid #7c3aed; background:rgba(124,58,237,0.1);
+                 border-radius:6px; padding:9px 14px; margin-bottom:10px; }
+    .pec-titre { font-size:12px; color:#a78bfa; margin-bottom:7px; }
+    .pec-grille{ display:grid; grid-template-columns:1fr auto auto auto; gap:3px 14px;
+                 align-items:baseline; }
+    .pec-th    { font-size:9px; text-transform:uppercase; letter-spacing:.4px;
+                 color:var(--text-3); text-align:right; }
+    .pec-lib   { font-size:12px; color:var(--text-2); }
+    .pec-grille .mono, .pec-grille strong { text-align:right; }
+    .pec-part  { color:#a78bfa; }
+    .pec-aide  { font-size:10px; color:var(--text-3); margin-top:6px; font-style:italic; }
+    /* Reste d'un mois entamé, sur son bouton. */
+    .mois-reste { font-size:10px; margin-left:4px; font-family:monospace; }
+    /* Ce que l'école réclame pour l'échéance en cours. */
+    .du-box   { border:1px solid var(--border); background:var(--surface);
+                border-radius:8px; padding:10px 14px; margin-top:14px; }
+    .du-titre { font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+                color:var(--text-3); margin-bottom:6px; }
+    .du-row   { display:flex; justify-content:space-between; align-items:baseline;
+                font-size:12px; padding:2px 0; color:var(--text-2); }
+    .du-total { border-top:1px solid var(--border); margin-top:5px; padding-top:6px;
+                color:var(--text); }
+    .du-total strong { font-size:15px; }
+    /* Le versement réel, en face du reste. */
+    .verse-bar   { align-items:flex-end; gap:16px; }
+    .verse-champ { display:flex; flex-direction:column; gap:5px; }
+    .verse-champ label { font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+                         color:var(--text-2); }
+    ::ng-deep .verse-input input { font-size:18px !important; font-weight:700 !important;
+                                   max-width:150px; }
+    .verse-solde { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+    .verse-lib   { font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+                   color:var(--text-3); }
+    .verse-solde strong { font-size:16px; }
     /* Recherche élève */
     .search-eleve-wrap { margin-bottom:14px; }
     .search-label      { display:block; font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
@@ -1019,7 +1145,12 @@ export class PaiementsComponent implements OnInit {
     // ventilation multi-mode, puisqu'elle est bien encaissée.
     montant_reliquat:    0,
     mois_regles:         [] as number[],
-    services:            [] as { id: string; nom: string; tarif: number; montant: number; inclus: boolean }[],
+    // `du` = ce que le service coûte dans ce contexte (tarif × mois cochés pour
+    // un service mensuel) ; `montant` = ce qu'on en encaisse. Deux champs, parce
+    // que ce sont deux choses : un versement partiel les sépare.
+    services:            [] as { id: string; nom: string; periodicite: string;
+                                 tarif: number; du: number; montant: number;
+                                 inclus: boolean }[],
     mode_paiement:       '',
     // Paiement multi-mode : un même règlement réparti sur plusieurs modes.
     multi_mode:          false,
@@ -1151,26 +1282,31 @@ export class PaiementsComponent implements OnInit {
   onEleveClear()              { this.changerEleve(); }
 
   private appliquerAutoRemplissage(data: any) {
-    const reste = data.reste || {};
-    const nets  = data.fees_nets || {};
     if (this.typePaiement === 'INSCRIPTION') {
-      this.form.montant_inscription  = reste.inscription  || 0;
-      this.form.montant_uniforme     = reste.uniforme     || 0;
-      this.form.montant_fournitures  = reste.fournitures  || 0;
       this.form.montant_mensualite   = 0;
       this.form.montant_cantine      = 0;
       this.form.mois_regles          = [];
     } else {
-      // Pré-sélectionne le 1er mois dû non encore réglé
-      const dus = (data.mois_ecole || []).filter((m: any) => m.du && !m.paye);
-      this.form.mois_regles          = dus.length ? [dus[0].num] : [];
-      this.form.montant_mensualite   = (nets.mensualite || 0) * this.form.mois_regles.length;
+      // Le 1er mois qu'il reste à SOLDER — et non le 1er mois « non payé ».
+      // Un mois réglé pour moitié se croyait payé : l'écran sautait par-dessus
+      // et proposait le suivant, laissant l'acompte sans suite.
+      const ouverts = (data.mois_ecole || []).filter((m: any) => m.du && m.reste > 0);
+      this.form.mois_regles          = ouverts.length ? [ouverts[0].num] : [];
       this.form.montant_inscription  = 0;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
     }
-    this.construireServices();
     this.form.montant_divers = 0;
+    this.construireServices();
+    this.proposerLeResteDu();
+  }
+
+  /** Pré-remplit le versement avec ce qu'il reste réellement à payer sur
+   *  l'échéance — acomptes déjà encaissés déduits. */
+  private proposerLeResteDu() {
+    this.montantVerse = this.duSaisie().reste
+                      + (Number(this.form.montant_reliquat) || 0)
+                      + (Number(this.form.montant_divers) || 0);
   }
 
   // Services abonnés proposés selon le contexte du paiement :
@@ -1186,21 +1322,28 @@ export class PaiementsComponent implements OnInit {
     if (this.typePaiement === 'INSCRIPTION') {
       retenus = tous
         .filter((s: any) => s.periodicite === 'UNIQUE' && !s.mois_unique)
-        .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
-                            montant: Math.round(s.montant || 0) }));
+        .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE',
+                            tarif: s.montant || 0, du: Math.round(s.montant || 0) }));
     } else {
       const nb = this.form.mois_regles.length;
       retenus = [
         ...tous.filter((s: any) => s.periodicite === 'MENSUEL')
-               .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
-                                   montant: Math.round((s.montant || 0) * nb) })),
+               .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'MENSUEL',
+                                   tarif: s.montant || 0, du: Math.round((s.montant || 0) * nb) })),
         ...tous.filter((s: any) => s.periodicite === 'UNIQUE' && s.mois_unique &&
                                    this.form.mois_regles.includes(s.mois_unique))
-               .map((s: any) => ({ id: s.id, nom: s.nom, tarif: s.montant || 0,
-                                   montant: Math.round(s.montant || 0) })),
+               .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE',
+                                   tarif: s.montant || 0, du: Math.round(s.montant || 0) })),
       ];
     }
-    this.form.services = retenus.map(s => ({ ...s, inclus: inclusAvant.get(s.id) ?? true }));
+    this.form.services = retenus.map(s => ({ ...s, montant: s.du,
+                                             inclus: inclusAvant.get(s.id) ?? true }));
+  }
+
+  /** Recocher un service en repropose le tarif : après une ventilation qui l'a
+   *  laissé à zéro, il rentrerait sinon dans le reçu pour rien. */
+  onToggleService(sv: { du: number; montant: number; inclus: boolean }) {
+    if (sv.inclus && !Number(sv.montant)) sv.montant = sv.du;
   }
 
   servicesTotal(): number {
@@ -1217,13 +1360,143 @@ export class PaiementsComponent implements OnInit {
     const i = this.form.mois_regles.indexOf(num);
     if (i >= 0) this.form.mois_regles.splice(i, 1);
     else        this.form.mois_regles.push(num);
-    // Le montant mensualité suit le nombre de mois sélectionnés (tarif × nb mois)
-    const tarif = this.saisieDonnees()?.fees_nets?.mensualite || 0;
-    const nb    = this.form.mois_regles.length;
-    this.form.montant_mensualite = Math.round(tarif * nb);
     // Services : les mensuels suivent le nb de mois, les uniques « mois X »
     // n'apparaissent que si leur mois est coché
     this.construireServices();
+    // Le montant proposé suit ce qui reste dû sur les mois cochés — acomptes
+    // déduits. Il valait « tarif × nb de mois », ce qui réclamait une seconde
+    // fois un mois déjà entamé.
+    this.proposerLeResteDu();
+  }
+
+  // ── Ce qui est dû, ce qui est versé ─────────────────────────────────────
+  // Deux notions qu'un seul champ « montant » confondait. Le DÛ vient de
+  // l'échéancier — la même source que la fiche, les alertes et les relances ;
+  // le VERSÉ vient du formulaire. Un versement partiel les sépare, et c'est
+  // exactement le cas qu'on ne savait pas saisir.
+
+  /** Les mois cochés, avec le dû que l'échéancier leur reconnaît. */
+  private moisChoisis(): any[] {
+    return (this.saisieDonnees()?.mois_ecole || [])
+      .filter((m: any) => this.form.mois_regles.includes(m.num));
+  }
+
+  /** Total mensuel des services de l'élève. Leur dû est déjà compris dans celui
+   *  du mois (`du_mensuel_standard`) : il faut donc le retrancher pour isoler la
+   *  part « mensualité », sans quoi la ligne serait comptée deux fois. */
+  private servicesMensuelsDus(): number {
+    return (this.saisieDonnees()?.services || [])
+      .filter((s: any) => s.periodicite === 'MENSUEL')
+      .reduce((a: number, s: any) => a + (Number(s.montant) || 0), 0);
+  }
+
+  /** Dû de la seule ligne « Mensualité » pour les mois cochés. */
+  private duMensualite(): number {
+    const svc = this.servicesMensuelsDus();
+    return this.moisChoisis()
+      .reduce((a, m) => a + Math.max((Number(m.montant) || 0) - svc, 0), 0);
+  }
+
+  /** Dû des services proposés dans ce contexte. En mensualité, seuls les
+   *  services PONCTUELS s'ajoutent : celui des mensuels est déjà dans le dû du
+   *  mois. */
+  private servicesProposesDus(): number {
+    return (this.form.services || [])
+      .filter(s => this.typePaiement === 'INSCRIPTION' || s.periodicite === 'UNIQUE')
+      .reduce((a, s) => a + (Number(s.du) || 0), 0);
+  }
+
+  /** Dû réel, part prise en charge, dû net, déjà versé et reste — pour CETTE
+   *  échéance. Indépendant des montants saisis : c'est ce que l'école réclame. */
+  duSaisie(): { brut: number; pec: number; net: number; verse: number; reste: number } {
+    const d = this.saisieDonnees();
+    if (!d) return { brut: 0, pec: 0, net: 0, verse: 0, reste: 0 };
+    const svc = this.servicesProposesDus();
+    if (this.typePaiement === 'INSCRIPTION') {
+      const b = d.fees_bruts || {}, n = d.fees_nets || {},
+            p = d.deja_paye  || {}, r = d.reste     || {};
+      const somme = (o: any) => (o.inscription || 0) + (o.uniforme || 0) + (o.fournitures || 0);
+      return {
+        brut:  Math.round(somme(b) + svc),
+        pec:   d.pec?.inscription?.pec || 0,
+        net:   Math.round(somme(n) + svc),
+        verse: Math.round(somme(p)),
+        reste: Math.round(somme(r) + svc),
+      };
+    }
+    const mois = this.moisChoisis();
+    const cumul = (cle: string) => mois.reduce((a, m) => a + (Number(m[cle]) || 0), 0);
+    return {
+      brut:  Math.round(cumul('du_brut') + svc),
+      pec:   Math.round(cumul('pec')),
+      net:   Math.round(cumul('montant') + svc),
+      verse: Math.round(cumul('verse')),
+      reste: Math.round(cumul('reste') + svc),
+    };
+  }
+
+  /** L'échéance en cours de règlement, en clair. */
+  libelleEcheance(): string {
+    if (this.typePaiement === 'INSCRIPTION') return "l'inscription";
+    const noms = this.moisChoisis().map(m => m.label);
+    return noms.length ? noms.join(', ') : 'ce paiement';
+  }
+
+  /** Montant réellement remis par la famille. Ce n'est pas un état de plus :
+   *  c'est la somme des lignes du formulaire, vue depuis le guichet. Le saisir
+   *  les ventile, les modifier le met à jour — un seul état, jamais deux. */
+  get montantVerse(): number {
+    return this.totalForm();
+  }
+  set montantVerse(v: number) {
+    this.ventiler(Number(v) || 0);
+  }
+
+  /** Part du versement qui règle l'échéance : hors reliquat d'une année
+   *  antérieure et hors « divers », qui paient autre chose. */
+  private verseSurEcheance(): number {
+    return this.totalForm()
+         - (Number(this.form.montant_reliquat) || 0)
+         - (Number(this.form.montant_divers)   || 0);
+  }
+
+  /** Ce que la famille devra encore sur cette échéance après ce versement.
+   *  Négatif = elle a payé au-delà (avance). */
+  resteApresVersement(): number {
+    return Math.round((this.duSaisie().reste - this.verseSurEcheance()) * 100) / 100;
+  }
+
+  /** Répartit un montant versé sur les lignes du formulaire, dans l'ordre où
+   *  une école impute : la scolarité d'abord, les services ensuite. Un
+   *  versement partiel remplit donc la mensualité avant la cantine, et ce que la
+   *  famille n'a pas donné reste visiblement dû. L'excédent va sur la scolarité :
+   *  une avance sur l'année n'est pas un produit divers.
+   *
+   *  Le reliquat et les « divers » ne bougent pas — ils règlent autre chose que
+   *  l'échéance, les diluer ici fausserait les deux suivis à la fois. */
+  private ventiler(verse: number) {
+    const d = this.saisieDonnees();
+    if (!d) return;
+    const fixe = (Number(this.form.montant_reliquat) || 0)
+               + (Number(this.form.montant_divers)   || 0);
+    let reste = Math.max(0, Math.round(verse) - fixe);
+    const prendre = (du: number) => {
+      const part = Math.min(Math.max(du, 0), reste);
+      reste -= part;
+      return part;
+    };
+    if (this.typePaiement === 'INSCRIPTION') {
+      const r = d.reste || {};
+      this.form.montant_inscription = prendre(r.inscription || 0);
+      this.form.montant_uniforme    = prendre(r.uniforme    || 0);
+      this.form.montant_fournitures = prendre(r.fournitures || 0);
+      for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
+      this.form.montant_inscription += reste;
+    } else {
+      this.form.montant_mensualite = prendre(this.duMensualite());
+      for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
+      this.form.montant_mensualite += reste;
+    }
   }
 
   private resetForm() {
