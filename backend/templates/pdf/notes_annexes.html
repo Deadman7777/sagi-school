@@ -1,14 +1,6 @@
 {% extends "pdf/base.html" %}
 {% block doc_title %}Notes Annexes{% endblock %}
 {% block content %}
-<h2 style="color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px">
-  Notes Annexes aux États Financiers — {{ exercice.annee_scolaire }}
-</h2>
-<p style="color:#374151;font-size:12px;margin-bottom:14px">
-  Édité le {{ date_edition|date:"d/m/Y H:i" }} &mdash; {{ tenant.nom }}
-  &mdash; {{ systeme }} &mdash; CAHT : {{ caht|floatformat:0 }} FCFA
-</p>
-
 <!-- Note 1 -->
 <div class="section-title">Note 1 — Présentation de l'entité et de l'exercice</div>
 <table cellspacing="0" cellpadding="5">
