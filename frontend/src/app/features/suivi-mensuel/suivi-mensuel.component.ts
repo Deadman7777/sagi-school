@@ -102,6 +102,62 @@ import { Eleve } from '../../core/models/eleve.model';
 <!-- ════ VUE GLOBALE MENSUELLE ════ -->
 @if (onglet() === 'global') {
 
+  <!-- ════ SCOLARITÉ ATTENDUE PAR MOIS ════
+       Le suivi ne montrait que l'encaissé : utile pour constater, inutile pour
+       décider. Ce tableau dit ce que l'école DEVRAIT rentrer chaque mois
+       d'après la situation de chaque élève (prorata d'entrée, prise en charge,
+       montants saisis à la main). La source est l'échéancier, celle qui fait
+       déjà foi sur la fiche et les relances : la prévision ne peut pas
+       contredire ce qu'on réclame réellement aux familles. -->
+  @if (moisAvecPrevision().length) {
+    <div class="table-card" style="margin-bottom:18px">
+      <div class="prev-header">
+        <div>
+          <h3 class="prev-title">📆 Scolarité à encaisser par mois</h3>
+          <span class="prev-sub">Mensualités et services mensuels dus — hors frais d'entrée</span>
+        </div>
+        <div class="prev-total">
+          <span class="prev-total-lib">Reste à encaisser sur l'année</span>
+          <strong class="mono">{{ totalScolariteReste() | number:'1.0-0' }} FCFA</strong>
+        </div>
+      </div>
+      <p-table [value]="moisAvecPrevision()" styleClass="p-datatable-sm" [showGridlines]="true">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Mois</th>
+            <th class="tr">Élèves concernés</th>
+            <th class="tr">Envisagé</th>
+            <th class="tr">Encaissé</th>
+            <th class="tr">Reste</th>
+            <th class="tr">Taux</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-m>
+          <tr>
+            <td class="bold">{{ m.mois }}</td>
+            <td class="mono tr">{{ m.nb_eleves_dus }}</td>
+            <td class="mono tr bold">{{ m.scolarite_prevue | number:'1.0-0' }}</td>
+            <td class="mono tr teal">{{ m.scolarite_encaissee | number:'1.0-0' }}</td>
+            <td class="mono tr" [class.red]="m.scolarite_reste > 0">
+              {{ m.scolarite_reste | number:'1.0-0' }}
+            </td>
+            <td class="mono tr">{{ tauxMois(m) }} %</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="footer">
+          <tr>
+            <td class="bold">TOTAL EXERCICE</td>
+            <td></td>
+            <td class="mono tr bold">{{ totalScolaritePrevue() | number:'1.0-0' }}</td>
+            <td class="mono tr bold teal">{{ totalScolariteEncaissee() | number:'1.0-0' }}</td>
+            <td class="mono tr bold red">{{ totalScolariteReste() | number:'1.0-0' }}</td>
+            <td></td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  }
+
   <!-- Graphique en barres -->
   @if (globalData().length > 0) {
     <div class="bar-section">
@@ -538,6 +594,16 @@ import { Eleve } from '../../core/models/eleve.model';
     .danger    { color:#ef4444; }
     .warn-txt  { color:#f59e0b; }
     .tr        { text-align:right; }
+    .red       { color:#ef4444; }
+    /* Prévision de scolarité mensuelle */
+    .prev-header { display:flex; justify-content:space-between; align-items:flex-start;
+                   gap:16px; padding:16px 16px 12px; flex-wrap:wrap; }
+    .prev-title  { margin:0; font-size:15px; font-weight:600; color:var(--text); }
+    .prev-sub    { font-size:11px; color:var(--text-3); }
+    .prev-total  { display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+    .prev-total-lib { font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+                      color:var(--text-3); }
+    .prev-total strong { font-size:17px; color:#ef4444; }
     .empty-msg   { text-align:center; padding:40px; color:var(--text-3); }
     .empty-state { text-align:center; padding:60px; }
     .w-full { width:100%; }
@@ -557,6 +623,26 @@ export class SuiviMensuelComponent implements OnInit {
   loading     = signal(true);
 
   eleveSelectionne: any = null;
+
+  // ── Scolarité attendue mois par mois ────────────────────────────────────
+  // On n'affiche que les mois qui portent réellement un dû : aligner douze
+  // lignes à zéro pour une école dont l'année commence en octobre ne renseigne
+  // personne.
+  moisAvecPrevision = computed(() =>
+    this.globalData().filter(m => (m.scolarite_prevue || 0) > 0));
+
+  totalScolaritePrevue    = computed(() => this.sommeMois('scolarite_prevue'));
+  totalScolariteEncaissee = computed(() => this.sommeMois('scolarite_encaissee'));
+  totalScolariteReste     = computed(() => this.sommeMois('scolarite_reste'));
+
+  private sommeMois(champ: string): number {
+    return this.globalData().reduce((t, m) => t + (m[champ] || 0), 0);
+  }
+
+  tauxMois(m: any): number {
+    const prevu = m.scolarite_prevue || 0;
+    return prevu ? Math.round((m.scolarite_encaissee || 0) / prevu * 1000) / 10 : 0;
+  }
 
   ngOnInit() { this.chargerTout(); }
 

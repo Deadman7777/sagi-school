@@ -23,7 +23,7 @@ export class ComptabiliteService {
   getTableauFlux(exercice?: string)    { return this.api.get<any>('/comptabilite/tableau-flux/', this.exParams(exercice)); }
   getHistorique()     { return this.api.get<any>('/comptabilite/historique/'); }
   getNotesAnnexes(exercice?: string)   { return this.api.get<any>('/comptabilite/notes-annexes/', this.exParams(exercice)); }
-  getCharges()        { return this.api.get<any[]>('/comptabilite/charges/'); }
+  getCharges(q?: string) { return this.api.get<any[]>('/comptabilite/charges/', q ? { q } : {}); }
   creerCharge(data: any)      { return this.api.post<any>('/comptabilite/charges/', data); }
 
   // Import Excel des charges

@@ -24,6 +24,13 @@ class JournalEntry(TenantModel):
     # (comptes 6xx/2xx), sans dupliquer les montants. Une seule source : le ledger.
     ressource     = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
                                       on_delete=models.SET_NULL, related_name='ecritures')
+    # Imputation budgétaire explicite : à QUELLE ligne de budget cette charge
+    # se rattache. Le suivi ne pouvait s'appuyer que sur le numéro de compte,
+    # or une école utilise le même 6xx pour des dépenses budgétées et d'autres
+    # qui ne le sont pas — toutes comptaient comme du réalisé. Nullable :
+    # « hors budget » reste le cas normal, et rien n'oblige à imputer.
+    budget_ligne  = models.ForeignKey('comptabilite.BudgetLigne', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='ecritures')
 
     class Meta:
         db_table = 'journal_entries'
@@ -64,6 +71,22 @@ class BudgetLigne(TenantModel):
         ('VARIABLE', 'Charge variable'),
     ]
 
+    # D'où vient le RÉALISÉ de cette ligne. Le budget ne savait faire que
+    # « tout le compte » : une école qui passe sur son 658 une dépense budgétée
+    # et trois qui ne le sont pas voyait les quatre consommer son budget.
+    #
+    #   COMPTE     — tout ce qui passe sur le compte (comportement d'origine,
+    #                conservé par défaut : personne ne voit ses chiffres bouger)
+    #   IMPUTATION — seulement les charges rattachées explicitement à la ligne
+    #   PAIE       — seulement les écritures de paie. Une charge de personnel
+    #                saisie à la main À CÔTÉ du bulletin ne la compte pas deux
+    #                fois. Vaut pour tout poste alimenté par un module dédié.
+    REALISE_CHOICES = [
+        ('COMPTE',     'Tout ce qui passe sur ce compte'),
+        ('IMPUTATION', 'Seulement les charges rattachées à cette ligne'),
+        ('PAIE',       'Seulement la paie'),
+    ]
+
     exercice    = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='budget_lignes')
     no_compte   = models.CharField(max_length=10)
     libelle     = models.CharField(max_length=200)
@@ -90,17 +113,18 @@ class BudgetLigne(TenantModel):
     ressource = models.ForeignKey('gouvernance.Ressource', null=True, blank=True,
                                   on_delete=models.SET_NULL, related_name='budget_lignes')
 
+    mode_realise = models.CharField(max_length=12, choices=REALISE_CHOICES, default='COMPTE')
+
     class Meta:
         db_table = 'budget_lignes'
-        constraints = [
-            # Une ligne par (compte, projet) et par exercice : budget analytique.
-            # L'unicité de la ligne « générale » (projet vide) est garantie côté
-            # applicatif par update_or_create — portable sur toute version PostgreSQL.
-            models.UniqueConstraint(
-                fields=['tenant', 'exercice', 'no_compte', 'projet'],
-                name='uniq_budget_compte_projet'),
-        ]
-        ordering = ['no_compte']
+        # PLUS d'unicité sur (compte, projet). Une école budgète plusieurs
+        # postes sur un même compte — « Loyer école » et « Loyer internat » sont
+        # tous deux du 622. La contrainte faisait écraser la ligne précédente
+        # par update_or_create : dix postes saisis, six lignes affichées, et
+        # chaque ajout suivant gonflait un total sans jamais créer de ligne.
+        # Une ligne budgétaire est identifiée par son id, décrite par son
+        # libellé, et le compte n'est plus qu'une imputation comptable.
+        ordering = ['no_compte', 'libelle']
 
     def __str__(self):
         return f"Budget {self.no_compte} — {self.exercice.annee_scolaire}"

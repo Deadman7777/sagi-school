@@ -56,7 +56,7 @@
       <th>Date</th>
       <th>N° Reçu</th>
       <th>Mode</th>
-      <th class="text-right">Inscription</th>
+      <th class="text-right">{{ libelle_entree|default:"Inscription" }}</th>
       <th class="text-right">Mensualité</th>
       <th class="text-right">Uniforme</th>
       <th class="text-right">Fournitures</th>
@@ -127,7 +127,7 @@ cours. Affiché même sans aucun paiement, c'est là qu'il est le plus utile.
     {% endfor %}
     {% if hors_mensualite.du %}
     <tr>
-      <td>Inscription et frais uniques</td>
+      <td>{{ hors_mensualite.libelle|default:"Inscription" }} et frais uniques</td>
       <td class="text-right">{{ hors_mensualite.du|floatformat:0 }}</td>
       <td class="text-right green">{{ hors_mensualite.paye|floatformat:0 }}</td>
       <td class="text-right {% if hors_mensualite.reste > 0 %}red{% endif %}">{{ hors_mensualite.reste|floatformat:0 }}</td>

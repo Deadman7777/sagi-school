@@ -47,6 +47,15 @@ class PaiementViewSet(viewsets.ModelViewSet):
             qs = qs.filter(eleve_id=eleve_id)
         if mode := self.request.query_params.get('mode'):
             qs = qs.filter(mode_paiement=mode)
+        # Recherche : élève, matricule, n° de reçu ou observations. Retrouver un
+        # règlement supposait jusqu'ici de faire défiler toute l'année.
+        if q := (self.request.query_params.get('q') or '').strip():
+            from django.db.models import Q as _Q
+            qs = qs.filter(
+                _Q(eleve__nom_complet__icontains=q)
+                | _Q(eleve__matricule__icontains=q)
+                | _Q(no_piece__icontains=q)
+                | _Q(observations__icontains=q))
         return qs
 
     def perform_create(self, serializer):

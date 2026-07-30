@@ -1166,7 +1166,15 @@ class ChargeView(APIView):
             source__in=('CHARGE', 'PAIE', 'BUDGET'),
             debit__gt=0,
             no_compte__startswith='6',
-        ).order_by('-date_ecriture')
+        ).select_related('budget_ligne').order_by('-date_ecriture')
+
+        # Recherche : libellé, n° de pièce ou compte. Une école qui cherche une
+        # dépense de l'an dernier ne va pas la trouver en faisant défiler des
+        # centaines de lignes.
+        if q := (request.query_params.get('q') or '').strip():
+            charges = charges.filter(
+                Q(libelle__icontains=q) | Q(no_piece__icontains=q)
+                | Q(no_compte__startswith=q))
 
         # Masquer les écritures annulées/modifiées : leur contre-écriture les
         # référence par source_id (le journal, lui, garde tout — SYSCOHADA).
@@ -1186,6 +1194,9 @@ class ChargeView(APIView):
             'montant':        float(c.debit),
             'source':         c.source,
             'libelle_compte': self.PLAN_CHARGES.get(c.no_compte, c.no_compte),
+            # Ligne de budget consommée, s'il y en a une — « hors budget » sinon.
+            'budget_ligne_id':      str(c.budget_ligne_id) if c.budget_ligne_id else None,
+            'budget_ligne_libelle': c.budget_ligne.libelle if c.budget_ligne else '',
         } for c in charges])
 
     def post(self, request):
@@ -1253,12 +1264,21 @@ class ChargeView(APIView):
             *tresor,
         ]
 
+        # Imputation budgétaire : à quelle ligne de budget cette charge se
+        # rattache. Portée par la seule ligne de CHARGE (le débit 6xx) — la
+        # porter aussi sur le règlement compterait la dépense deux fois.
+        budget_ligne = None
+        if bid := data.get('budget_ligne_id'):
+            budget_ligne = BudgetLigne.objects.filter(
+                tenant=tenant, exercice=exercice, id=bid).first()
+
         for e in ecritures:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece, date_ecriture=date,
                 source='CHARGE', source_id=None,
-                projet=projet, ressource=ressource, **e
+                projet=projet, ressource=ressource,
+                budget_ligne=budget_ligne if e['ordre'] == 1 else None, **e
             )
 
         return Response({'success': True, 'no_piece': no_piece,
@@ -1304,6 +1324,9 @@ class ChargeView(APIView):
                 # La contre-écriture porte la même dimension : la consommation
                 # nette (débit−crédit) de la ressource/projet se dénoue à zéro.
                 projet=e.projet, ressource=e.ressource,
+                # Idem pour l'imputation budgétaire : sans elle, la contre-écriture
+                # ne déduirait pas la dépense du réalisé de sa ligne.
+                budget_ligne=e.budget_ligne,
             )
 
         # 2 — Nouvelle charge avec les données modifiées
@@ -1368,12 +1391,22 @@ class ChargeView(APIView):
                  libelle=f"Règlement {libelle_fourn} — {libelle_new}"),
             *tresor_new,
         ]
+        # Imputation budgétaire : celle fournie, sinon celle d'origine — modifier
+        # le montant d'une charge ne doit pas la faire sortir de son budget.
+        if 'budget_ligne_id' in data_new:
+            bid = data_new.get('budget_ligne_id')
+            budget_new = (BudgetLigne.objects.filter(tenant=tenant, exercice=exercice,
+                                                     id=bid).first() if bid else None)
+        else:
+            budget_new = entry.budget_ligne
+
         for e in ecritures_new:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_new, date_ecriture=date_new,
                 source=source_piece, source_id=None,
-                projet=projet_new, ressource=ressource_new, **e
+                projet=projet_new, ressource=ressource_new,
+                budget_ligne=budget_new if e['ordre'] == 1 else None, **e
             )
 
         from core.models import log_audit
@@ -1422,6 +1455,9 @@ class ChargeView(APIView):
                 ordre=e.ordre,
                 # Même dimension : la consommation nette de la ressource se dénoue.
                 projet=e.projet, ressource=e.ressource,
+                # Et la même imputation, sinon une charge annulée resterait
+                # consommée dans le réalisé de sa ligne de budget.
+                budget_ligne=e.budget_ligne,
             )
 
         from core.models import log_audit
@@ -1578,21 +1614,36 @@ MOIS_NOMS   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','No
 class BudgetView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def _realise_par_mois(self, tenant, exercice, no_compte, projet=None):
-        """Réalisé NET par mois pour un compte (et ses sous-comptes) :
-        débits − crédits, pour que les annulations/modifications par
-        contre-écriture (crédit sur le 6xx) soient bien déduites.
+    def _realise_par_mois(self, tenant, exercice, ligne):
+        """Réalisé NET par mois d'une ligne de budget : débits − crédits, pour
+        que les annulations/modifications par contre-écriture (crédit sur le
+        6xx) soient bien déduites.
 
-        Si `projet` est fourni (ligne de budget analytique), le réalisé est
-        filtré sur ce projet — sinon on agrège tout le compte (budget général)."""
-        qs = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice,
-            source__in=('CHARGE', 'PAIE', 'BUDGET'),
-        ).filter(
-            Q(no_compte=no_compte) | Q(no_compte__startswith=no_compte)
-        )
-        if projet is not None:
-            qs = qs.filter(projet=projet)
+        CE QUI COMPTE dépend du mode de la ligne (`mode_realise`) :
+
+          COMPTE      tout ce qui passe sur le compte et ses sous-comptes.
+                      C'est le comportement d'origine, et il reste le défaut.
+          IMPUTATION  seulement les écritures rattachées À CETTE ligne. C'est la
+                      réponse au cas où un même 6xx sert à des dépenses
+                      budgétées et à d'autres qui ne le sont pas.
+          PAIE        seulement les écritures de paie sur le compte. Un salaire
+                      saisi à la main à côté du bulletin ne le compte pas deux
+                      fois.
+
+        Si la ligne porte un projet (budget analytique), le réalisé est filtré
+        sur ce projet — sinon on agrège tout le compte (budget général)."""
+        if ligne.mode_realise == 'IMPUTATION':
+            qs = JournalEntry.objects.filter(
+                tenant=tenant, exercice=exercice, budget_ligne=ligne)
+        else:
+            sources = (('PAIE',) if ligne.mode_realise == 'PAIE'
+                       else ('CHARGE', 'PAIE', 'BUDGET'))
+            qs = JournalEntry.objects.filter(
+                tenant=tenant, exercice=exercice, source__in=sources,
+                no_compte__startswith=ligne.no_compte,
+            )
+            if ligne.projet_id is not None:
+                qs = qs.filter(projet_id=ligne.projet_id)
         qs = qs.annotate(
             mois=ExtractMonth('date_ecriture')
         ).values('mois').annotate(d=Sum('debit'), c=Sum('credit'))
@@ -1617,7 +1668,7 @@ class BudgetView(APIView):
         mois_realise = [0.0] * 12
 
         for l in lignes:
-            realise_mois = self._realise_par_mois(tenant, exercice, l.no_compte, l.projet)
+            realise_mois = self._realise_par_mois(tenant, exercice, l)
             mois_data = []
             t_prevu = t_realise = 0.0
 
@@ -1646,6 +1697,7 @@ class BudgetView(APIView):
                 'no_compte':   l.no_compte,
                 'libelle':     l.libelle or plan.get(l.no_compte, l.no_compte),
                 'type_charge': l.type_charge,
+                'mode_realise': l.mode_realise,
                 'mois':        mois_data,
                 'total_prevu': round(t_prevu, 2),
                 'total_realise': round(t_realise, 2),
@@ -1697,21 +1749,43 @@ class BudgetView(APIView):
         if rid:
             ressource = Ressource.objects.filter(tenant=tenant, id=rid).first()
 
-        defaults = {
-            'libelle':     libelle,
-            'type_charge': request.data.get('type_charge', 'FIXE'),
-            'ressource':   ressource,
+        mode = request.data.get('mode_realise') or 'COMPTE'
+        if mode not in dict(BudgetLigne.REALISE_CHOICES):
+            mode = 'COMPTE'
+
+        champs = {
+            'libelle':      libelle,
+            'type_charge':  request.data.get('type_charge', 'FIXE'),
+            'projet':       projet,
+            'ressource':    ressource,
+            'no_compte':    no_compte,
+            'mode_realise': mode,
         }
         # Montants mensuels
         for champ in MOIS_CHAMPS:
             val = request.data.get(champ, 0)
-            defaults[champ] = float(val) if val else 0
+            champs[champ] = float(val) if val else 0
 
-        obj, created = BudgetLigne.objects.update_or_create(
-            tenant=tenant, exercice=exercice, no_compte=no_compte, projet=projet,
-            defaults=defaults,
-        )
-        return Response({'id': str(obj.id), 'no_compte': obj.no_compte}, status=201 if created else 200)
+        # Une ligne est identifiée par son ID, pas par son compte. Le budget
+        # était enregistré par update_or_create sur (compte, projet) : deux
+        # postes partageant un compte — « Loyer école » et « Loyer internat »
+        # sont tous deux du 622 — s'écrasaient l'un l'autre. Dix lignes saisies
+        # en donnaient six, et chaque ajout suivant se contentait de gonfler le
+        # total d'une ligne existante sans jamais en créer une nouvelle.
+        ligne_id = request.data.get('id')
+        obj = (BudgetLigne.objects.filter(tenant=tenant, exercice=exercice,
+                                          id=ligne_id).first()
+               if ligne_id else None)
+        if obj:
+            for k, v in champs.items():
+                setattr(obj, k, v)
+            obj.save()
+            created = False
+        else:
+            obj = BudgetLigne.objects.create(tenant=tenant, exercice=exercice, **champs)
+            created = True
+        return Response({'id': str(obj.id), 'no_compte': obj.no_compte},
+                        status=201 if created else 200)
 
     def delete(self, request, pk):
         tenant = get_tenant(request)
@@ -1768,6 +1842,11 @@ class BudgetComptabiliserView(APIView):
                 source='BUDGET', source_id=None,
                 no_compte=nc, debit=db, credit=cr,
                 libelle=lib, ordre=ordre,
+                # Comptabilisée DEPUIS la ligne : l'imputation est acquise. Sans
+                # elle, une ligne en mode « imputation » ne verrait pas sa propre
+                # dépense. Sur le débit 6xx seulement (ordre 1) : la porter aussi
+                # sur le règlement compterait la dépense deux fois.
+                budget_ligne=ligne if ordre == 1 else None,
             )
 
         return Response({'no_piece': no_piece, 'montant': montant, 'no_compte': no_compte})

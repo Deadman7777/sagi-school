@@ -306,7 +306,11 @@ def construire_echeancier(eleve, today=None):
         # Une CLÉ, pas un libellé : sinon la ligne serait en français dans un
         # tableau arabe (même règle que sante_migration).
         'cle':     'hors_mensualite',
-        'libelle': eleve.libelle_frais_entree,
+        # Le nom que l'école donne à son renouvellement — une saisie libre, donc
+        # intraduisible : elle prime sur la clé. VIDE hors renouvellement, pour
+        # que « Inscription » reste traduit et n'apparaisse pas en français dans
+        # un tableau arabe.
+        'libelle': eleve.libelle_frais_entree if eleve.renouvellement_du else '',
         'du':      du_hors,
         'paye':    paye_hors,
         'reste':   round(max(du_hors - paye_hors, 0.0), 2),
