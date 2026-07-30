@@ -67,6 +67,16 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
 
     <!-- Table paiements -->
     <div class="table-card">
+      <!-- Recherche : élève, matricule, n° de reçu ou observations. Retrouver un
+           règlement supposait de faire défiler toute l'année. -->
+      <div class="search-bar">
+        <input pInputText [(ngModel)]="recherchePaiement" (ngModelChange)="onRecherchePaiementChange()"
+               class="search-field" placeholder="🔍 Rechercher un règlement — élève, matricule, n° de reçu…" />
+        @if (recherchePaiement) {
+          <button type="button" class="search-x" (click)="effacerRecherchePaiement()"
+                  title="Effacer">✕</button>
+        }
+      </div>
       <p-table [value]="paiements()" [loading]="loading()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
         <ng-template pTemplate="header">
@@ -741,6 +751,16 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
         <app-import-charges-dialog [(visible)]="importChargesVisible"
                                    (importe)="chargerCharges()" />
 
+        <!-- Recherche : libellé, n° de pièce ou compte. -->
+        <div class="search-bar">
+          <input pInputText [(ngModel)]="rechercheCharge" (ngModelChange)="onRechercheChargeChange()"
+                 class="search-field" placeholder="🔍 Rechercher une charge — libellé, n° de pièce, compte…" />
+          @if (rechercheCharge) {
+            <button type="button" class="search-x" (click)="effacerRechercheCharge()"
+                    title="Effacer">✕</button>
+          }
+        </div>
+
         <p-table [value]="charges()" [loading]="loadingCharges()"
                 [paginator]="true" [rows]="20" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
@@ -762,6 +782,11 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
                 {{ c.libelle }}
                 @if (c.source === 'BUDGET') { <p-tag value="Budget" severity="info" [style]="{'font-size':'9px'}" /> }
                 @if (c.source === 'PAIE')   { <p-tag value="Paie"   severity="warn" [style]="{'font-size':'9px'}" /> }
+                <!-- Le poste consommé. Sans lui, impossible de savoir en lisant
+                     la liste si une dépense pèse sur un budget ou non. -->
+                @if (c.budget_ligne_libelle) {
+                  <span class="imput-tag">🔗 {{ c.budget_ligne_libelle }}</span>
+                }
               </td>
               <td class="mono danger" align="right">{{ c.montant | number:'1.0-0' }} FCFA</td>
               <td>
@@ -796,6 +821,20 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
                   placeholder="Ex : Facture eau juillet..." />
             <small style="color:var(--text-3);font-size:10px">Le compte de charge se remplit automatiquement d'après le libellé</small>
           </div>
+          <!-- Poste de budget consommé. Le budget se réglait sur le seul numéro
+               de compte : une dépense imprévue sur un 6xx budgété passait pour
+               du réalisé. Vide = hors budget, et c'est le cas normal. -->
+          @if (lignesBudget().length) {
+            <div class="form-group full">
+              <label>Imputer au budget</label>
+              <p-select appendTo="body" [options]="lignesBudget()" [(ngModel)]="nouvelleCharge.budget_ligne_id"
+                        optionLabel="libelle" optionValue="id" styleClass="w-full"
+                        [showClear]="true" [filter]="true" placeholder="— Hors budget —" />
+              <small style="color:var(--text-3);font-size:10px">
+                À laisser vide pour une dépense non budgétée.
+              </small>
+            </div>
+          }
           <div class="form-group full">
             <label>Compte de charge *</label>
             <p-select appendTo="body" [options]="planChargesPC()" [(ngModel)]="nouvelleCharge.no_compte"
@@ -1057,6 +1096,15 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
     .full { grid-column:1/-1; }
   
     .payeur-aide { display:block; margin-top:4px; font-size:10px; color:#f59e0b; }
+    /* Recherche en tête de liste (règlements, charges). */
+    .search-bar   { display:flex; align-items:center; gap:6px; padding:0 16px 12px; }
+    .search-field { flex:1; background:var(--surface-2); border:1px solid var(--border);
+                    color:var(--text); border-radius:6px; padding:8px 12px; font-size:13px; }
+    .search-x     { background:none; border:none; color:var(--text-3); cursor:pointer;
+                    font-size:14px; padding:4px 8px; }
+    .search-x:hover { color:var(--text); }
+    /* Poste de budget consommé par une charge. */
+    .imput-tag    { font-size:10px; color:#4fc3f7; margin-left:6px; white-space:nowrap; }
 `]
 })
 export class PaiementsComponent implements OnInit {
@@ -1212,9 +1260,24 @@ export class PaiementsComponent implements OnInit {
     });
   }
 
+  // ── Recherche d'un règlement ───────────────────────────────────────────
+  recherchePaiement = '';
+  private _timerPaiement: any = null;
+
+  onRecherchePaiementChange() {
+    clearTimeout(this._timerPaiement);
+    this._timerPaiement = setTimeout(() => this.chargerPaiements(), 300);
+  }
+
+  effacerRecherchePaiement() {
+    this.recherchePaiement = '';
+    this.chargerPaiements();
+  }
+
   chargerPaiements() {
     this.loading.set(true);
-    this.paiementsService.getPaiements().subscribe({
+    const q = this.recherchePaiement.trim();
+    this.paiementsService.getPaiements(q ? { q } : undefined).subscribe({
       next: res => { 
           const data = Array.isArray(res) ? res : (res.results || []);
           this.paiements.set(data); 
@@ -1742,9 +1805,41 @@ export class PaiementsComponent implements OnInit {
 
   chargerCharges() {
     this.loadingCharges.set(true);
-    this.compta.getCharges().subscribe({
+    this.compta.getCharges(this.rechercheCharge.trim() || undefined).subscribe({
       next: res => { this.charges.set(Array.isArray(res) ? res : []); this.loadingCharges.set(false); },
       error: () => this.loadingCharges.set(false),
+    });
+  }
+
+  // ── Recherche d'une charge ─────────────────────────────────────────────
+  // Libellé, n° de pièce ou compte. Retrouver une dépense de l'an dernier
+  // supposait de faire défiler des centaines de lignes.
+  rechercheCharge = '';
+  private _timerCharge: any = null;
+
+  onRechercheChargeChange() {
+    clearTimeout(this._timerCharge);
+    this._timerCharge = setTimeout(() => this.chargerCharges(), 300);
+  }
+
+  effacerRechercheCharge() {
+    this.rechercheCharge = '';
+    this.chargerCharges();
+  }
+
+  /** Lignes de budget de l'exercice — pour imputer une charge à un poste. */
+  lignesBudget = signal<{ id: string; libelle: string; no_compte: string }[]>([]);
+
+  chargerLignesBudget() {
+    this.compta.getBudget().subscribe({
+      next: (res: any) => this.lignesBudget.set(
+        (res?.lignes || []).map((l: any) => ({
+          id: l.id, no_compte: l.no_compte,
+          libelle: `${l.libelle} (${l.no_compte})`,
+        }))),
+      // Silencieux : une école sans budget n'a pas à voir une erreur pour une
+      // fonctionnalité qu'elle n'utilise pas.
+      error: () => this.lignesBudget.set([]),
     });
   }
 
@@ -1791,11 +1886,16 @@ export class PaiementsComponent implements OnInit {
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
       ressource_id: null, projet_id: null,
+      // Poste de budget consommé. Vide = dépense hors budget — le cas normal,
+      // et celui qu'on ne savait pas exprimer : toute charge sur un compte
+      // budgété était comptée comme réalisée, prévue ou non.
+      budget_ligne_id: null,
       multi_mode: false, modes_reglement: [] as { mode: string; montant: number }[],
     };
     this.compteSuggere = null;
     this.compteChargeVerrouille = false;
     this.dialogChargeVisible = true;
+    this.chargerLignesBudget();
     // Dimensions analytiques facultatives (gouvernance) — listes fraîches.
     this.gouv.getRessources().subscribe({
       next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),

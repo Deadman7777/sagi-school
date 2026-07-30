@@ -1536,9 +1536,12 @@ class SuiviMensuelView(APIView):
 
         # ── 2. Synthèse + sections + créances (itération unique sur les élèves) ─
         # Charger toutes les sections en une seule requête pour éviter les N+1
-        eleves_qs = Eleve.objects.filter(
-            tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
+        # `precharger` : l'échéancier de chaque élève est construit plus bas pour
+        # la prévision mensuelle. Sans lui, c'est plusieurs requêtes par fiche —
+        # une école de 500 élèves écroulerait la page.
+        from .echeancier import construire_echeancier, precharger
+        eleves_qs = precharger(Eleve.objects.filter(
+            tenant=tenant, exercice=exercice, statut='INSCRIT'))
 
         # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
         _pmt_sum = (
@@ -1564,11 +1567,26 @@ class SuiviMensuelView(APIView):
         nb_eleves     = 0
         sections_dict: dict = {}
         creances      = []
+        # Scolarité ATTENDUE mois par mois : ce que l'école devrait encaisser en
+        # janvier, en février… d'après la situation de chaque élève. Le suivi ne
+        # montrait que l'encaissé — utile pour constater, inutile pour décider.
+        # La source est l'échéancier, celle qui fait déjà foi sur la fiche et les
+        # relances : le prévu d'ici ne peut pas contredire ce qu'on réclame.
+        prevu_mois   = defaultdict(float)
+        reste_mois   = defaultdict(float)
+        nb_dus_mois  = defaultdict(int)
 
         for e in eleves_qs:
             att  = float(e.total_attendu)
             paye = pmt_eleve.get(e.id, 0.0)
             snom = e.section.nom if e.section else '—'
+
+            for ligne in construire_echeancier(e)['lignes']:
+                cle = (ligne['annee'], ligne['mois'])
+                prevu_mois[cle] += ligne['du']
+                reste_mois[cle] += ligne['reste']
+                if ligne['du'] > 0:
+                    nb_dus_mois[cle] += 1
 
             total_attendu += att
             nb_eleves     += 1
@@ -1591,6 +1609,18 @@ class SuiviMensuelView(APIView):
                 })
 
         creances.sort(key=lambda x: x['reste'], reverse=True)
+
+        # Report de la prévision sur les mois déjà construits plus haut. Elle ne
+        # porte que sur les MENSUALITÉS : l'inscription et les frais uniques ne
+        # sont pas mensuels, les étaler sur un mois donnerait une prévision que
+        # personne ne pourrait rapprocher de sa caisse.
+        for row in global_data:
+            cle = (row['annee'], row['mois_num'])
+            row['scolarite_prevue']  = round(prevu_mois.get(cle, 0.0), 2)
+            row['scolarite_reste']   = round(reste_mois.get(cle, 0.0), 2)
+            row['scolarite_encaissee'] = round(
+                max(row['scolarite_prevue'] - row['scolarite_reste'], 0.0), 2)
+            row['nb_eleves_dus']     = nb_dus_mois.get(cle, 0)
 
         # Total réellement encaissé = somme de tous les paiements de l'exercice
         total_paiements = sum(pmt_eleve.values())

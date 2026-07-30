@@ -983,6 +983,12 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
             <td class="mono bold">{{ l.no_compte }}</td>
             <td>{{ l.libelle }}
               <span *ngIf="l.projet_libelle" style="font-size:10px;color:#4fc3f7"> · 🎯 {{ l.projet_libelle }}</span>
+              <!-- Deux postes peuvent partager un compte : ce qui alimente leur
+                   réalisé doit se lire sans ouvrir la ligne. -->
+              <span *ngIf="l.mode_realise === 'IMPUTATION'" class="mode-tag"
+                    pTooltip="Réalisé : seulement les charges rattachées à cette ligne"> · 🔗 imputé</span>
+              <span *ngIf="l.mode_realise === 'PAIE'" class="mode-tag"
+                    pTooltip="Réalisé : seulement les bulletins de paie"> · 👥 paie</span>
             </td>
             <td>
               <p-tag [value]="l.type_charge === 'FIXE' ? 'Fixe' : 'Variable'"
@@ -1476,6 +1482,20 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       <div class="form-group" style="grid-column:1/-1">
         <label>Libellé</label>
         <input pInputText [(ngModel)]="formBudget.libelle" class="w-full" />
+        <small style="color:var(--text-3);font-size:10px">
+          C'est lui qui distingue deux postes d'un même compte — « Loyer école » et « Loyer internat » sont tous deux du 622.
+        </small>
+      </div>
+      <!-- D'OÙ vient le réalisé. Un même 6xx sert à des dépenses budgétées et à
+           d'autres qui ne le sont pas : sans ce choix, toutes consommaient le
+           budget. « Tout le compte » reste le défaut — rien ne bouge pour qui
+           n'y touche pas. -->
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Réalisé alimenté par</label>
+        <p-select appendTo="body" [options]="modesRealise"
+                  [(ngModel)]="formBudget.mode_realise" optionLabel="label" optionValue="value"
+                  styleClass="w-full" />
+        <small style="color:var(--text-3);font-size:10px">{{ aideModeRealise() }}</small>
       </div>
       <div class="form-group" *ngIf="projetsGouv().length">
         <label>Projet (budget analytique)</label>
@@ -1637,6 +1657,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     .mois-cell     { text-align:right; }
     .prevu-val     { display:block; color:var(--text); }
     .realise-small { display:block; font-size:9px; color:#00d4aa; }
+    .mode-tag      { font-size:10px; color:var(--text-3); white-space:nowrap; }
     .total-prevu   { color:var(--text); }
     .over-budget   { color:#ef4444; }
     /* Comparaison mensuelle budget */
@@ -1969,9 +1990,33 @@ comptesCredit = [
     });
   }
 
+  /** D'où une ligne tire son réalisé. « Tout le compte » est le comportement
+   *  d'origine et reste le défaut : activer le reste est une décision de
+   *  l'école, pas un changement qu'on lui impose. */
+  modesRealise = [
+    { label: 'Tout ce qui passe sur ce compte',            value: 'COMPTE' },
+    { label: 'Seulement les charges rattachées à cette ligne', value: 'IMPUTATION' },
+    { label: 'Seulement la paie',                          value: 'PAIE' },
+  ];
+
+  aideModeRealise(): string {
+    switch (this.formBudget?.mode_realise) {
+      case 'IMPUTATION':
+        return "À la saisie d'une charge, vous choisissez la ligne qu'elle consomme. "
+             + 'Les dépenses non rattachées restent hors budget.';
+      case 'PAIE':
+        return 'Seuls les bulletins de paie comptent. Un salaire ressaisi à la main '
+             + 'à côté du bulletin ne sera pas compté deux fois.';
+      default:
+        return 'Toute charge passée sur ce compte consomme le budget, '
+             + "y compris une dépense que vous n'aviez pas prévue.";
+    }
+  }
+
   ouvrirDialogBudget() {
     this.editBudgetMode = false;
-    const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE', projet_id: null, ressource_id: null };
+    const base: any = { no_compte: '', libelle: '', type_charge: 'FIXE',
+                        mode_realise: 'COMPTE', projet_id: null, ressource_id: null };
     for (let i = 1; i <= 12; i++) base[`m${String(i).padStart(2,'0')}`] = 0;
     this.formBudget = base;
     this.dialogBudgetVisible = true;
