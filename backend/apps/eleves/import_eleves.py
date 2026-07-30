@@ -274,6 +274,22 @@ def _mois_echus_import(exercice, date_insc, today):
     return max(0, min(elapsed_incl - mois_avant, nb_dues))
 
 
+def _frais_entree_import(tenant, exercice, section, date_insc):
+    """Frais d'entrée d'une ligne importée : inscription, ou renouvellement si
+    l'école en pratique un et que la date d'entrée du fichier est antérieure à
+    l'exercice.
+
+    Réplique `Eleve.frais_entree` pour l'import, où la fiche n'existe pas encore.
+    Sans cela le dû à ce jour serait surévalué de l'écart entre l'inscription et
+    le renouvellement, et le « déjà payé » reconstruit depuis la dette avec lui.
+    """
+    if not tenant.renouvellement_actif or not date_insc:
+        return float(section.frais_inscription)
+    from .matricules import annee_promo
+    ancien = annee_promo(exercice, date_insc) < exercice.date_debut.year
+    return float(section.frais_renouvellement if ancien else section.frais_inscription)
+
+
 def _genre(val):
     """-> ('G'|'F'|'', avertissement | None)"""
     n = _norm(val)
@@ -540,7 +556,8 @@ def analyser(fichier, tenant, exercice):
                 avert.append('Colonnes « déjà payé » ignorées au profit de '
                              '« À jour » / « Dette actuelle »')
             me = _mois_echus_import(exercice, date_insc, today)
-            fi = float(section.frais_inscription); fm = float(section.frais_mensualite)
+            fi = _frais_entree_import(tenant, exercice, section, date_insc)
+            fm = float(section.frais_mensualite)
             fu = float(section.frais_uniforme);    ff = float(section.frais_fournitures)
             du = fi + fu + ff + fm * me
             dette = dette_val if dette_fournie else 0.0
@@ -563,7 +580,8 @@ def analyser(fichier, tenant, exercice):
             montant_reprise = round(paye, 2)
         elif section is not None:
             montant_reprise = float(
-                (section.frais_inscription if rep_inscription else 0)
+                (_frais_entree_import(tenant, exercice, section, date_insc)
+                 if rep_inscription else 0)
                 + section.frais_mensualite * rep_mensualites
                 + (section.frais_uniforme if rep_uniforme else 0)
                 + (section.frais_fournitures if rep_fournitures else 0)

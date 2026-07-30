@@ -401,9 +401,12 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
         <div class="form-group full" style="margin-bottom:12px">
           <label>Type de paiement *</label>
           <div style="display:flex;gap:8px;margin-top:6px">
+            <!-- « Inscription », ou le mot de l'école pour le renouvellement
+                 d'un ancien élève : réclamer une inscription à un ndongo qui
+                 est là depuis quatre ans n'a aucun sens pour sa famille. -->
             <button [class]="typePaiement === 'INSCRIPTION' ? 'type-btn active-inscr' : 'type-btn'"
                     (click)="setTypePaiement('INSCRIPTION')">
-              🎓 Inscription / Frais d'entrée
+              🎓 {{ libelleEntree() }}
             </button>
             <button [class]="typePaiement === 'MENSUALITE' ? 'type-btn active-mens' : 'type-btn'"
                     (click)="setTypePaiement('MENSUALITE')">
@@ -416,7 +419,7 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
         @if (typePaiement === 'INSCRIPTION') {
           <div class="montants-grid">
             <div class="form-group">
-              <label>Inscription
+              <label>{{ libelleEntree() }}
                 @if (saisieDonnees()!.fees_nets.inscription > 0) {
                   <span class="fee-hint">Dû : {{ saisieDonnees()!.reste.inscription | number:'1.0-0' }}</span>
                 }
@@ -543,7 +546,7 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
              qui vient de régler la moitié du mois. -->
         @if (duSaisie().net > 0) {
           <div class="du-box">
-            <div class="du-titre">Dû pour {{ libelleEcheance() }}</div>
+            <div class="du-titre">Dû — {{ libelleEcheance() }}</div>
             @if (duSaisie().pec > 0) {
               <div class="du-row"><span>Dû réel</span>
                 <span class="mono">{{ duSaisie().brut | number:'1.0-0' }}</span></div>
@@ -1435,9 +1438,18 @@ export class PaiementsComponent implements OnInit {
     };
   }
 
-  /** L'échéance en cours de règlement, en clair. */
+  /** Ce que l'école appelle ses frais d'entrée pour CET élève : « Inscription »
+   *  pour un nouvel entrant, le mot de l'établissement (Renouvellement,
+   *  Réinscription…) pour un ancien. */
+  libelleEntree(): string {
+    return this.saisieDonnees()?.libelle_entree || 'Inscription';
+  }
+
+  /** L'échéance en cours de règlement, en clair. Sans article : le mot varie
+   *  d'une école à l'autre (« Renouvellement », « Réinscription »…) et aucun
+   *  article ne leur va à tous. */
   libelleEcheance(): string {
-    if (this.typePaiement === 'INSCRIPTION') return "l'inscription";
+    if (this.typePaiement === 'INSCRIPTION') return this.libelleEntree();
     const noms = this.moisChoisis().map(m => m.label);
     return noms.length ? noms.join(', ') : 'ce paiement';
   }

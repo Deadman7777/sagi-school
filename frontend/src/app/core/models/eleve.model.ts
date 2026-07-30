@@ -123,7 +123,14 @@ export interface LigneEcheance {
  *  frais uniques, qui ne se rattachent à aucun mois. */
 export interface Echeancier {
   lignes: LigneEcheance[];
-  hors_mensualite: { cle: string; du: number; paye: number; reste: number } | null;
+  hors_mensualite: {
+    cle: string;
+    /** Nom donné par l'école à son renouvellement — vide hors renouvellement,
+     *  la clé traduite prend alors la main. */
+    libelle: string;
+    du: number; paye: number; reste: number;
+    echu: boolean;
+  } | null;
   totaux: { du: number; paye: number; reste: number };
 }
 

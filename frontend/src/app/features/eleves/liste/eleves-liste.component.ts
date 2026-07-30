@@ -830,7 +830,9 @@ const MOIS_ANNEE = [
                     }
                     @if (ech.hors_mensualite; as h) {
                       <tr>
-                        <td>{{ 'eleves.ech_hors_mensualite' | translate }}</td>
+                        <!-- Le mot de l'école pour son renouvellement s'il y en
+                             a un ; sinon la clé traduite. -->
+                        <td>{{ h.libelle || ('eleves.ech_hors_mensualite' | translate) }}</td>
                         <td class="mono num">{{ h.du | number:'1.0-0' }}</td>
                         <td class="mono num success">{{ h.paye | number:'1.0-0' }}</td>
                         <td class="mono num" [class.danger]="h.reste > 0">

@@ -1022,6 +1022,7 @@ import { MessageService } from 'primeng/api';
     .cert-textarea { background:var(--surface-2); border:1px solid var(--border); border-radius:6px; color:var(--text);
                      padding:8px 10px; font-family:inherit; font-size:13px; resize:vertical; }
     .fc-title  { font-size:14px; font-weight:600; color:var(--text); margin-bottom:16px; }
+    .fc-hint   { font-size:11px; color:var(--text-3); line-height:1.45; }
 
     .form-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .form-group   { display:flex; flex-direction:column; gap:6px; }

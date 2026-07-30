@@ -1969,6 +1969,10 @@ class SituationElevePDFView(APIView):
             'section_nom':    eleve.section.nom if eleve.section else '—',
             'exercice':       exercice,
             'date_edition':   timezone.now(),
+            # « Inscription », ou le mot de l'école pour le renouvellement d'un
+            # ancien élève : le document part à la famille, il doit employer le
+            # vocabulaire qu'elle connaît.
+            'libelle_entree': eleve.libelle_frais_entree,
             'paiements':      paiements_list,
             'echeancier':     ech['lignes'],
             'hors_mensualite': ech['hors_mensualite'],
