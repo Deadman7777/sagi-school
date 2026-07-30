@@ -70,7 +70,7 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
     qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
                                fiche_creance=False)
           .exclude(statut__in=STATUTS_SORTIE)
-          .select_related('classe', 'section'))
+          .select_related('classe', 'section', 'tenant'))
 
     if classe_id == 'sans':
         qs, titre = qs.filter(classe__isnull=True), 'Sans classe'
@@ -560,7 +560,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         if request.method == 'GET':
             qs = Eleve.objects.filter(
                 tenant=tenant, exercice=exercice
-            ).select_related('section').annotate(
+            ).select_related('section', 'tenant').annotate(
                 reliquat_paye_sql=Coalesce(
                     _Sum('paiements__montant_reliquat',
                          filter=Q(paiements__statut='ACTIF')),
@@ -760,7 +760,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         """
         from .echeancier import construire_echeancier
         eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
         if not eleve:
             return Response({'error': 'Élève introuvable.'}, status=404)
@@ -819,7 +819,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         from .echeancier import construire_echeancier, mois_factures
 
         eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
         if not eleve:
             return Response({'error': 'Élève introuvable.'}, status=404)
@@ -896,7 +896,7 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         def recharger():
             e = (Eleve.objects.filter(tenant=tenant, pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
             return e
 
@@ -1085,7 +1085,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
-        qs = Eleve.objects.filter(tenant=tenant).select_related('section', 'exercice').order_by('nom_complet')
+        qs = Eleve.objects.filter(tenant=tenant).select_related('section', 'exercice', 'tenant').order_by('nom_complet')
         if exercice:
             qs = qs.filter(exercice=exercice)
 
@@ -1125,6 +1125,8 @@ class EleveViewSet(viewsets.ModelViewSet):
         from apps.paiements.models import Paiement
         from django.db.models import Sum as _Sum
 
+        from .echeancier import construire_echeancier
+
         eleve    = self.get_object()
         tenant   = eleve.tenant
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
@@ -1132,8 +1134,13 @@ class EleveViewSet(viewsets.ModelViewSet):
         section = eleve.section
 
         # ── Frais bruts de la section ──────────────────────────────────
+        # « inscription » = les frais d'ENTRÉE de l'année : l'inscription pour un
+        # nouvel élève, le renouvellement pour un ancien quand l'école en
+        # pratique un. La catégorie comptable reste la même (montant_inscription),
+        # seul le tarif et le libellé changent — sans quoi il faudrait un
+        # deuxième jeu de champs sur le paiement, le reçu et le grand livre.
         fees_bruts = {
-            'inscription': float(section.frais_inscription) if section else 0,
+            'inscription': eleve.frais_entree,
             'mensualite':  float(section.frais_mensualite)  if section else 0,
             'uniforme':    float(section.frais_uniforme)    if section else 0,
             'fournitures': float(section.frais_fournitures) if section else 0,
@@ -1151,7 +1158,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         # Deux calculs séparés d'une même chose finissent toujours par
         # diverger : il n'y en a plus qu'un.
         fees_nets = {
-            'inscription': round(max(fees_bruts['inscription']
+            'inscription': round(max(eleve.frais_entree
                                      - eleve.montant_pec_inscription, 0.0), 2),
             'mensualite':  eleve.frais_mensualite_effectif,
             'uniforme':    fees_bruts['uniforme'],
@@ -1201,32 +1208,54 @@ class EleveViewSet(viewsets.ModelViewSet):
             for ab in eleve.abonnements.all() if ab.service.actif
         ]
 
-        # ── Mois de l'année scolaire : dus (prorata entrée) + déjà réglés ────
+        # ── Mois de l'année scolaire : le dû, le versé et le reste, mois par mois
+        # Ces trois montants viennent de l'ÉCHÉANCIER, qui fait déjà foi sur la
+        # fiche, les alertes et les relances. La saisie n'avait ici qu'un
+        # booléen « payé », vrai dès qu'un paiement DÉSIGNAIT le mois — même
+        # s'il n'en couvrait qu'un tiers. Un mois réglé à moitié se croyait
+        # soldé : l'écran proposait le suivant et laissait le trou derrière lui.
+        # Encaisser un acompte était donc impossible sans perdre sa trace.
         nb_dus     = eleve.nb_mensualites_dues
-        mois_payes = set()
-        if exercice:
-            for p in pmt_qs.filter(statut='ACTIF'):
-                for mr in (p.mois_regles or []):
-                    mois_payes.add(int(mr))
+        ech        = construire_echeancier(eleve)
+        par_mois   = {ligne['mois']: ligne for ligne in ech['lignes']}
+        pec_mois   = eleve.montant_pec_mensualite_mensuel
         mois_ecole = []
         if exercice:
             nb_total = exercice.nb_mensualites
             debut    = exercice.date_debut
-            insc     = eleve.date_inscription or debut
-            # Index du 1er mois dû = mois écoulés entre le début d'exercice et l'entrée
-            debut_du = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
-            # Régime passager : la fenêtre due (entrée + nb mois convenus) peut
-            # dépasser la fin d'exercice → on affiche jusqu'à son dernier mois dû
-            nb_aff   = max(nb_total, debut_du + nb_dus) if eleve.regime == 'PASSAGER' else nb_total
             y, mo = debut.year, debut.month
-            for i in range(nb_aff):
-                mois_ecole.append({
-                    'num':   mo,
-                    'annee': y,
-                    'label': MOIS_FR.get(mo, str(mo)),
-                    'du':    debut_du <= i < debut_du + nb_dus,   # les mois avant l'entrée ne sont pas dus
-                    'paye':  mo in mois_payes,
-                })
+            # Fenêtre affichée : les mois de l'exercice, plus tout mois facturé
+            # qui tomberait au-delà (régime passager à cheval, mois saisis à la
+            # main). Un mois dû mais non affiché serait impayable depuis ici.
+            for i in range(12):
+                ligne = par_mois.get(mo)
+                if i < nb_total or ligne:
+                    du    = float(ligne['du'])    if ligne else 0.0
+                    paye  = float(ligne['paye'])  if ligne else 0.0
+                    # La réduction ne s'applique qu'aux mois au tarif ordinaire :
+                    # un montant saisi à la main POUR ce mois est le dû final,
+                    # il ne se laisse pas réduire une seconde fois.
+                    pec   = 0.0 if (ligne is None or ligne['montant_saisi']) else pec_mois
+                    mois_ecole.append({
+                        'num':     mo,
+                        'annee':   ligne['annee'] if ligne else y,
+                        'label':   MOIS_FR.get(mo, str(mo)),
+                        # Facturé à CET élève : c'est l'échéancier qui le dit, et
+                        # non plus un prorata recalculé ici qui ignorait les mois
+                        # saisis par l'école.
+                        'du':      bool(ligne),
+                        'du_brut': round(du + pec, 2),
+                        'pec':     round(pec, 2),
+                        'montant': round(du, 2),
+                        'verse':   round(paye, 2),
+                        'reste':   round(float(ligne['reste']) if ligne else 0.0, 2),
+                        # SOLDE / PARTIEL / IMPAYE — « payé » ne suffisait pas à
+                        # distinguer un mois soldé d'un mois entamé.
+                        'statut':  ligne['statut'] if ligne else '',
+                        'paye':    bool(ligne) and ligne['statut'] == 'SOLDE',
+                        'echu':    bool(ligne['echu']) if ligne else False,
+                        'montant_saisi': bool(ligne and ligne['montant_saisi']),
+                    })
                 mo += 1
                 if mo > 12:
                     mo = 1
@@ -1238,6 +1267,11 @@ class EleveViewSet(viewsets.ModelViewSet):
             'matricule':      eleve.matricule or '',
             'statut':         eleve.statut,
             'section_nom':    section.nom if section else '',
+            # Frais d'entrée : « Inscription », ou le mot de l'école pour le
+            # renouvellement d'un ancien élève. C'est ce libellé qui titre le
+            # champ, le bouton de type de paiement et la ligne du reçu.
+            'libelle_entree':   eleve.libelle_frais_entree,
+            'est_renouvelant':  eleve.renouvellement_du,
             # Prise en charge
             'prise_en_charge':        eleve.prise_en_charge or '',
             'type_pec':               eleve.type_pec or '',
@@ -1247,6 +1281,34 @@ class EleveViewSet(viewsets.ModelViewSet):
             'montant_pec_mensuel':    eleve.montant_pec_mensualite_mensuel,
             'montant_pec_annuel':     eleve.montant_pec_annuel,
             'obs_prise_en_charge':    eleve.obs_prise_en_charge or '',
+            # La prise en charge, décomposée : ce que l'école FACTURE, ce qu'un
+            # tiers (ou l'école elle-même) prend en charge, ce qui reste à la
+            # famille. Le guichet ne voyait que le montant net : impossible de
+            # répondre à un parent qui demande pourquoi on lui réclame 65 000
+            # quand le tarif affiché est de 73 000.
+            'pec': {
+                'libelle':   eleve.prise_en_charge or '',
+                'organisme': (eleve.pec_organisme.organisme.nom
+                              if eleve.pec_organisme else ''),
+                'inscription': {
+                    'brut': fees_bruts['inscription'],
+                    'pec':  eleve.montant_pec_inscription,
+                    'net':  fees_nets['inscription'],
+                },
+                # Le mois ORDINAIRE, services mensuels compris : c'est le
+                # montant que la famille reconnaît, pas la seule mensualité.
+                'mensuel': {
+                    'brut': round(eleve.du_mensuel_standard
+                                  + eleve.montant_pec_mensualite_mensuel, 2),
+                    'pec':  eleve.montant_pec_mensualite_mensuel,
+                    'net':  eleve.du_mensuel_standard,
+                },
+                'annuel': {
+                    'brut': round(total_annuel + eleve.montant_pec_annuel, 2),
+                    'pec':  eleve.montant_pec_annuel,
+                    'net':  total_annuel,
+                },
+            },
             # Montants
             'fees_bruts':    fees_bruts,
             'fees_nets':     fees_nets,
@@ -1311,7 +1373,7 @@ class SuiviMensuelView(APIView):
         # ── Raccourci rapide : détail individuel seulement ───────────────────
         if eleve_id:
             try:
-                eleve = Eleve.objects.select_related('section', 'exercice').get(
+                eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(
                     id=eleve_id, tenant=tenant
                 )
             except (Eleve.DoesNotExist, Exception):
@@ -1476,7 +1538,7 @@ class SuiviMensuelView(APIView):
         # Charger toutes les sections en une seule requête pour éviter les N+1
         eleves_qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
         _pmt_sum = (
@@ -1586,7 +1648,7 @@ class PriseEnChargeStatsView(APIView):
 
         eleves_tous = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # ── Totaux globaux ────────────────────────────────────────────────
         total_theorique_global       = 0.0
@@ -1855,7 +1917,7 @@ class SituationElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 
@@ -2019,7 +2081,7 @@ class FicheElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 

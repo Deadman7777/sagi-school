@@ -251,6 +251,9 @@ class SectionSerializer(serializers.ModelSerializer):
     frais_mensualite   = serializers.FloatField(required=False, default=0)
     frais_uniforme     = serializers.FloatField(required=False, default=0)
     frais_fournitures  = serializers.FloatField(required=False, default=0)
+    # Ce que paie un ancien élève à la place de l'inscription, quand l'école a
+    # activé le renouvellement.
+    frais_renouvellement = serializers.FloatField(required=False, default=0)
 
     class Meta:
         model  = Section

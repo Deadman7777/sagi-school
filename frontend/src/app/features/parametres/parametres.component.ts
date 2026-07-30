@@ -420,6 +420,47 @@ import { MessageService } from 'primeng/api';
 
       <div class="sc-aide">ℹ️ {{ 'parametres.ordre_affichage_aide' | translate }}</div>
 
+      <!-- ══ RENOUVELLEMENT ANNUEL ══
+           Un daara n'inscrit un ndongo qu'UNE fois. Les années suivantes, il
+           paie un renouvellement — souvent moins cher, et qui porte le nom que
+           l'école lui donne. Sans ce réglage, le système réclamait l'inscription
+           à tout le monde chaque année, et les écoles compensaient en inscrivant
+           une fausse prise en charge sur chaque ancien élève.
+
+           Décoché par défaut : une école classique ne voit rien changer. -->
+      <div class="form-card" *ngIf="ecole()">
+        <div class="fc-title">🔄 {{ 'parametres.renouv_titre' | translate }}</div>
+        <p class="fc-aide">{{ 'parametres.renouv_aide' | translate }}</p>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.renouvellement_actif" [binary]="true"
+                          inputId="renouv-actif" />
+              <span>{{ 'parametres.renouv_actif' | translate }}</span>
+            </label>
+          </div>
+          <ng-container *ngIf="ecole()!.renouvellement_actif">
+            <div class="form-group">
+              <label for="renouv-lib">{{ 'parametres.renouv_libelle' | translate }}</label>
+              <input pInputText id="renouv-lib" [(ngModel)]="ecole()!.libelle_renouvellement"
+                     class="w-full" placeholder="Renouvellement" />
+              <small class="fc-hint">{{ 'parametres.renouv_libelle_aide' | translate }}</small>
+            </div>
+            <div class="form-group">
+              <label for="renouv-mois">{{ 'parametres.renouv_mois' | translate }}</label>
+              <p-select appendTo="body" inputId="renouv-mois" [options]="moisRenouvOptions"
+                        [(ngModel)]="ecole()!.mois_renouvellement"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+              <small class="fc-hint">{{ 'parametres.renouv_mois_aide' | translate }}</small>
+            </div>
+          </ng-container>
+        </div>
+        <div class="sc-actions">
+          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
+                    size="small" (onClick)="sauvegarderEcole()" />
+        </div>
+      </div>
+
       <div class="sections-list">
         <div class="section-card" *ngFor="let s of sections(); let i = index">
           <div class="sc-head">
@@ -449,6 +490,14 @@ import { MessageService } from 'primeng/api';
             <div class="sc-frais">
               <span>{{ 'parametres.mensualite_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_mensualite" mode="decimal"
+                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+            </div>
+            <!-- Ce que paie un ANCIEN élève de ce niveau à la place de
+                 l'inscription. Masqué tant que l'école n'a pas activé le
+                 renouvellement : inutile d'encombrer les autres. -->
+            <div class="sc-frais" *ngIf="ecole()?.renouvellement_actif">
+              <span>{{ ecole()!.libelle_renouvellement || ('parametres.renouv_frais' | translate) }}</span>
+              <p-inputNumber [(ngModel)]="s.frais_renouvellement" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
             <!-- Uniforme / fournitures : désormais des éléments de la composition
@@ -1321,6 +1370,7 @@ chargerExercice() {
         frais_mensualite:   +s.frais_mensualite,
         frais_uniforme:     +s.frais_uniforme,
         frais_fournitures:  +s.frais_fournitures,
+        frais_renouvellement: +(s.frais_renouvellement || 0),
       }));
       this.sections.set(sections);
     }
@@ -1391,6 +1441,18 @@ chargerExercice() {
     { label: "Avant le mois (paiement d'avance)", value: 'ANTICIPE' },
     { label: 'Dès le début du mois',              value: 'DEBUT_MOIS' },
     { label: 'À la fin du mois (terme échu)',     value: 'FIN_MOIS' },
+  ];
+
+  /** Mois où le renouvellement devient réclamable. « Dès la rentrée » (null)
+   *  garde le comportement de l'inscription : exigible tout de suite. */
+  moisRenouvOptions = [
+    { label: 'Dès la rentrée', value: null },
+    { label: 'Janvier',   value: 1 },  { label: 'Février',   value: 2 },
+    { label: 'Mars',      value: 3 },  { label: 'Avril',     value: 4 },
+    { label: 'Mai',       value: 5 },  { label: 'Juin',      value: 6 },
+    { label: 'Juillet',   value: 7 },  { label: 'Août',      value: 8 },
+    { label: 'Septembre', value: 9 },  { label: 'Octobre',   value: 10 },
+    { label: 'Novembre',  value: 11 }, { label: 'Décembre',  value: 12 },
   ];
 
   rappels = signal<any | null>(null);

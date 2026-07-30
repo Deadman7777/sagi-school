@@ -58,6 +58,34 @@ class Tenant(TimeStampedModel):
     dernier_mois_a_inscription = models.BooleanField(
         default=False, help_text="La dernière mensualité est encaissée à l'inscription")
 
+    # ── Renouvellement annuel (daaras) ────────────────────────────────────
+    # Un daara n'inscrit un ndongo qu'UNE fois, à son arrivée. Les années
+    # suivantes, il ne paie plus l'inscription mais un renouvellement — souvent
+    # moins cher, et qui porte le nom que l'école lui donne.
+    #
+    # Sans ce réglage, le système réclamait l'inscription chaque année à tout le
+    # monde. Les écoles s'en sortaient en inscrivant une fausse prise en charge
+    # égale à l'inscription sur CHAQUE ancien élève, pour que le total annuel dû
+    # reste juste — une donnée fausse recopiée à la main tous les ans, qui faisait
+    # passer une école entière pour prise en charge.
+    #
+    # Désactivé par défaut : une école classique, qui réinscrit et refacture
+    # l'inscription tous les ans, ne voit rien changer.
+    renouvellement_actif = models.BooleanField(
+        default=False,
+        help_text="Les anciens élèves doivent un renouvellement, pas l'inscription")
+    libelle_renouvellement = models.CharField(
+        max_length=60, default='Renouvellement',
+        help_text="Le mot de l'école : Renouvellement, Réinscription, Droit de rentrée…")
+    # Mois calendaire à partir duquel le renouvellement est réclamable. VIDE =
+    # exigible dès le début de l'exercice, comme l'inscription. Les daaras
+    # ouvrent souvent la campagne bien après la rentrée (« à partir de
+    # janvier ») : sans ce réglage, tous leurs anciens élèves apparaîtraient en
+    # retard dès le premier jour et la liste de relance serait inexploitable.
+    mois_renouvellement = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        help_text='Mois (1-12) où le renouvellement devient exigible — vide = dès la rentrée')
+
     # ── Rappels de paiement ───────────────────────────────────────────────
     # Fenêtre mensuelle de relance : à partir de quel jour l'école commence à
     # rappeler, et jusqu'à quel jour la famille a pour régler.
