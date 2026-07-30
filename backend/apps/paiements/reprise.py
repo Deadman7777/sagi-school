@@ -13,6 +13,8 @@ de l'exercice, les canaux (caisse, banque, mobile money) ne bougent pas.
   2. 890 D / 411 C — règlement par bilan d'ouverture
 """
 import re
+from decimal import Decimal
+
 from django.db.models import Max
 
 from .models import Paiement
@@ -59,7 +61,10 @@ def creer_paiement_reprise(tenant, exercice, eleve, user=None, *,
     if montants is None:
         nb = min(int(nb_mensualites or 0), exercice.nb_mensualites)
         montants = {
-            'montant_inscription': section.frais_inscription if inscription else 0,
+            # Frais d'entrée réellement dus : le renouvellement chez un ancien
+            # élève. Reprendre l'inscription lui recréerait une dette qu'il n'a
+            # jamais eue.
+            'montant_inscription': Decimal(str(eleve.frais_entree)) if inscription else 0,
             'montant_mensualite':  section.frais_mensualite * nb,
             'montant_uniforme':    section.frais_uniforme if uniforme else 0,
             'montant_fournitures': section.frais_fournitures if fournitures else 0,

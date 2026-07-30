@@ -42,7 +42,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         tenant = self.get_tenant()
         if not tenant:
             return Paiement.objects.none()
-        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'exercice')
+        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'eleve__section', 'eleve__tenant', 'exercice')
         if eleve_id := self.request.query_params.get('eleve'):
             qs = qs.filter(eleve_id=eleve_id)
         if mode := self.request.query_params.get('mode'):
@@ -226,7 +226,12 @@ class PaiementViewSet(viewsets.ModelViewSet):
             # dossier, assurance, tenue…) et que le paiement couvre le total,
             # chaque élément figure sur le reçu. Paiement partiel → une seule
             # ligne (la ventilation par élément serait arbitraire).
-            compo = (p.eleve.section.composition_inscription or []) if p.eleve.section else []
+            # Un ancien élève règle un RENOUVELLEMENT, pas une inscription : le
+            # reçu doit porter le mot de l'école, et la composition de
+            # l'inscription ne le décrit pas.
+            renouvellement = p.eleve.renouvellement_du
+            compo = ([] if renouvellement else
+                     (p.eleve.section.composition_inscription or []) if p.eleve.section else [])
             somme_compo = sum(float(e.get('montant') or 0) for e in compo)
             if compo and abs(float(p.montant_inscription) - somme_compo) < 0.01:
                 for e in compo:
@@ -234,7 +239,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
                     if m:
                         lignes.append((e.get('libelle') or 'Inscription', m))
             else:
-                lignes.append(('Frais d\'inscription', float(p.montant_inscription)))
+                libelle = (p.eleve.libelle_frais_entree if renouvellement
+                           else "Frais d'inscription")
+                lignes.append((libelle, float(p.montant_inscription)))
         if p.montant_mensualite:
             label_mens = 'Mensualité scolaire'
             if mois_concernes:

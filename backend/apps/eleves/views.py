@@ -70,7 +70,7 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
     qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
                                fiche_creance=False)
           .exclude(statut__in=STATUTS_SORTIE)
-          .select_related('classe', 'section'))
+          .select_related('classe', 'section', 'tenant'))
 
     if classe_id == 'sans':
         qs, titre = qs.filter(classe__isnull=True), 'Sans classe'
@@ -560,7 +560,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         if request.method == 'GET':
             qs = Eleve.objects.filter(
                 tenant=tenant, exercice=exercice
-            ).select_related('section').annotate(
+            ).select_related('section', 'tenant').annotate(
                 reliquat_paye_sql=Coalesce(
                     _Sum('paiements__montant_reliquat',
                          filter=Q(paiements__statut='ACTIF')),
@@ -760,7 +760,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         """
         from .echeancier import construire_echeancier
         eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
         if not eleve:
             return Response({'error': 'Élève introuvable.'}, status=404)
@@ -819,7 +819,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         from .echeancier import construire_echeancier, mois_factures
 
         eleve = (Eleve.objects.filter(tenant=get_tenant(request), pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
         if not eleve:
             return Response({'error': 'Élève introuvable.'}, status=404)
@@ -896,7 +896,7 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         def recharger():
             e = (Eleve.objects.filter(tenant=tenant, pk=pk)
-                 .select_related('section', 'exercice')
+                 .select_related('section', 'exercice', 'tenant')
                  .prefetch_related('abonnements__service').first())
             return e
 
@@ -1085,7 +1085,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
-        qs = Eleve.objects.filter(tenant=tenant).select_related('section', 'exercice').order_by('nom_complet')
+        qs = Eleve.objects.filter(tenant=tenant).select_related('section', 'exercice', 'tenant').order_by('nom_complet')
         if exercice:
             qs = qs.filter(exercice=exercice)
 
@@ -1134,8 +1134,13 @@ class EleveViewSet(viewsets.ModelViewSet):
         section = eleve.section
 
         # ── Frais bruts de la section ──────────────────────────────────
+        # « inscription » = les frais d'ENTRÉE de l'année : l'inscription pour un
+        # nouvel élève, le renouvellement pour un ancien quand l'école en
+        # pratique un. La catégorie comptable reste la même (montant_inscription),
+        # seul le tarif et le libellé changent — sans quoi il faudrait un
+        # deuxième jeu de champs sur le paiement, le reçu et le grand livre.
         fees_bruts = {
-            'inscription': float(section.frais_inscription) if section else 0,
+            'inscription': eleve.frais_entree,
             'mensualite':  float(section.frais_mensualite)  if section else 0,
             'uniforme':    float(section.frais_uniforme)    if section else 0,
             'fournitures': float(section.frais_fournitures) if section else 0,
@@ -1153,7 +1158,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         # Deux calculs séparés d'une même chose finissent toujours par
         # diverger : il n'y en a plus qu'un.
         fees_nets = {
-            'inscription': round(max(fees_bruts['inscription']
+            'inscription': round(max(eleve.frais_entree
                                      - eleve.montant_pec_inscription, 0.0), 2),
             'mensualite':  eleve.frais_mensualite_effectif,
             'uniforme':    fees_bruts['uniforme'],
@@ -1262,6 +1267,11 @@ class EleveViewSet(viewsets.ModelViewSet):
             'matricule':      eleve.matricule or '',
             'statut':         eleve.statut,
             'section_nom':    section.nom if section else '',
+            # Frais d'entrée : « Inscription », ou le mot de l'école pour le
+            # renouvellement d'un ancien élève. C'est ce libellé qui titre le
+            # champ, le bouton de type de paiement et la ligne du reçu.
+            'libelle_entree':   eleve.libelle_frais_entree,
+            'est_renouvelant':  eleve.renouvellement_du,
             # Prise en charge
             'prise_en_charge':        eleve.prise_en_charge or '',
             'type_pec':               eleve.type_pec or '',
@@ -1363,7 +1373,7 @@ class SuiviMensuelView(APIView):
         # ── Raccourci rapide : détail individuel seulement ───────────────────
         if eleve_id:
             try:
-                eleve = Eleve.objects.select_related('section', 'exercice').get(
+                eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(
                     id=eleve_id, tenant=tenant
                 )
             except (Eleve.DoesNotExist, Exception):
@@ -1528,7 +1538,7 @@ class SuiviMensuelView(APIView):
         # Charger toutes les sections en une seule requête pour éviter les N+1
         eleves_qs = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
         _pmt_sum = (
@@ -1638,7 +1648,7 @@ class PriseEnChargeStatsView(APIView):
 
         eleves_tous = Eleve.objects.filter(
             tenant=tenant, exercice=exercice, statut='INSCRIT'
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # ── Totaux globaux ────────────────────────────────────────────────
         total_theorique_global       = 0.0
@@ -1907,7 +1917,7 @@ class SituationElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 
@@ -2071,7 +2081,7 @@ class FicheElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section', 'exercice').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 

@@ -154,7 +154,7 @@ class DashboardKPIView(APIView):
                 Sum('paiements__montant_divers',      filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
-        ).select_related('section', 'exercice').prefetch_related('abonnements__service')
+        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # Mêmes niveaux que le module Élèves et que la carte « à relancer » :
         # une seule source, l'échéancier (Eleve.situation_alerte).

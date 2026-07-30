@@ -14,6 +14,11 @@ class Section(TenantModel):
     # renseignée, frais_inscription = somme des éléments (calculée au save du
     # serializer) — les paiements/reçus continuent de travailler sur le total.
     composition_inscription = models.JSONField(default=list, blank=True)
+    # Ce que paie un ANCIEN élève à la place de l'inscription, quand l'école a
+    # activé le renouvellement (Tenant.renouvellement_actif). Le montant varie
+    # d'un niveau à l'autre comme l'inscription. Sans effet tant que le réglage
+    # de l'école est désactivé.
+    frais_renouvellement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     ordre              = models.IntegerField(default=0)
 
     class Meta:
@@ -23,9 +28,15 @@ class Section(TenantModel):
     def __str__(self):
         return self.nom
 
-    def total_annuel_pour(self, nb_mois):
-        """Total annuel brut pour un nombre de mensualités donné."""
-        return (self.frais_inscription + self.frais_uniforme +
+    def total_annuel_pour(self, nb_mois, frais_entree=None):
+        """Total annuel brut pour un nombre de mensualités donné.
+
+        `frais_entree` remplace l'inscription — c'est le renouvellement pour un
+        ancien élève d'une école qui en pratique un."""
+        from decimal import Decimal
+        entree = (self.frais_inscription if frais_entree is None
+                  else Decimal(str(frais_entree)))
+        return (entree + self.frais_uniforme +
                 self.frais_fournitures + (self.frais_mensualite * nb_mois))
 
     @property
@@ -240,20 +251,83 @@ class Eleve(TenantModel):
             return f'{self.MOIS_FR[d.month].capitalize()} {d.year}'
         return d.strftime('%d/%m/%Y')
 
+    # ── Frais d'entrée de l'année : inscription ou renouvellement ────────
+    # Un daara n'inscrit un ndongo qu'UNE fois, à son arrivée. Les années
+    # suivantes il ne paie plus l'inscription mais un renouvellement, souvent
+    # moins cher et parfois nommé autrement selon l'établissement.
+    #
+    # Le système réclamait l'inscription à tout le monde, chaque année. Les
+    # écoles s'en sortaient en inscrivant sur CHAQUE ancien élève une fausse
+    # prise en charge égale à l'inscription, pour que le total annuel dû reste
+    # juste : une donnée fausse, recopiée à la main tous les ans, qui faisait
+    # passer une école entière pour prise en charge.
+    @property
+    def est_renouvelant(self):
+        """L'élève était déjà dans l'établissement avant cet exercice.
+
+        Trois sources, dans cet ordre :
+
+          1. `date_entree` — figée à vie, recopiée à chaque réinscription. C'est
+             la bonne réponse dès que l'école a une année d'historique dans
+             l'application, ou qu'elle a passé le rebasage des matricules.
+          2. `annee_entree`, la promo, quand seule elle est renseignée.
+          3. `date_inscription` en dernier recours. Le formulaire de création
+             l'intitule « Date d'entrée » : c'est là que les écoles migrées ont
+             saisi la vraie date d'arrivée. Repositionnée au début de l'exercice
+             elle dira « nouveau », ce qui est le repli sûr.
+
+        Aucune de ces sources ne peut inventer un renouvellement : sans donnée,
+        l'élève est un nouvel entrant et doit son inscription. On ne retire pas
+        un dû sur une absence d'information."""
+        if not self.exercice_id:
+            return False
+        if self.annee_entree and not self.date_entree:
+            return self.annee_entree.strip() != (self.exercice.annee_scolaire or '').strip()
+        reference = self.date_entree or self.date_inscription
+        if not reference:
+            return False
+        from .matricules import annee_promo
+        return annee_promo(self.exercice, reference) < self.exercice.date_debut.year
+
+    @property
+    def renouvellement_du(self):
+        """L'école pratique le renouvellement ET cet élève y est soumis."""
+        return bool(getattr(self.tenant, 'renouvellement_actif', False)
+                    and self.est_renouvelant)
+
+    @property
+    def frais_entree(self):
+        """Ce que l'élève doit à l'entrée de l'année, avant prise en charge :
+        son inscription s'il arrive, son renouvellement s'il était déjà là."""
+        if not self.section:
+            return 0.0
+        return float(self.section.frais_renouvellement if self.renouvellement_du
+                     else self.section.frais_inscription)
+
+    @property
+    def libelle_frais_entree(self):
+        """« Inscription », ou le mot que l'école donne au renouvellement."""
+        if not self.renouvellement_du:
+            return 'Inscription'
+        return getattr(self.tenant, 'libelle_renouvellement', '') or 'Renouvellement'
+
     # ── Prise en charge ──────────────────────────────────────────────────
     @property
     def montant_pec_inscription(self):
-        """Montant pris en charge sur l'inscription — le champ fait foi.
+        """Montant pris en charge sur les frais d'entrée — le champ fait foi.
 
         Plus de repli sur l'ancien taux : il rendait 0 INSAISISSABLE. Une école
         qui retirait une prise en charge en remettant le montant à zéro voyait
         le taux reprendre la main et la réduction revenir intacte. Les taux ont
         été matérialisés en montants par la migration 0024, ils ne servent plus
-        qu'à l'historique."""
+        qu'à l'historique.
+
+        Plafonné aux frais d'entrée RÉELLEMENT dus : chez un ancien élève, c'est
+        le renouvellement. Plafonner sur l'inscription laisserait une prise en
+        charge dépasser le dû et rendrait un reste négatif."""
         if not self.section:
             return 0.0
-        return round(min(float(self.pec_inscription or 0),
-                         float(self.section.frais_inscription)), 2)
+        return round(min(float(self.pec_inscription or 0), self.frais_entree), 2)
 
     @property
     def montant_pec_mensualite_mensuel(self):
@@ -300,7 +374,8 @@ class Eleve(TenantModel):
         """Total annuel brut sans prise en charge (mensualité × nb de mensualités dues)."""
         if not self.section:
             return 0.0
-        return float(self.section.total_annuel_pour(self.nb_mensualites_dues))
+        return float(self.section.total_annuel_pour(self.nb_mensualites_dues,
+                                                    frais_entree=self.frais_entree))
 
     @property
     def frais_mensualite_effectif(self):
@@ -346,14 +421,16 @@ class Eleve(TenantModel):
 
     @property
     def du_hors_mensualite(self):
-        """Inscription nette de prise en charge, uniforme, fournitures et
-        services à paiement unique. Rien de mensuel ici."""
+        """Frais d'entrée nets de prise en charge, uniforme, fournitures et
+        services à paiement unique. Rien de mensuel ici.
+
+        Les frais d'entrée sont l'inscription pour un nouvel élève, le
+        renouvellement pour un ancien quand l'école en pratique un."""
         if not self.section:
             return round(sum(float(ab.service.montant or 0)
                              for ab in self.abonnements.all()
                              if ab.service.periodicite != 'MENSUEL'), 2)
-        total = max(float(self.section.frais_inscription)
-                    - self.montant_pec_inscription, 0.0)
+        total = max(self.frais_entree - self.montant_pec_inscription, 0.0)
         total += float(self.section.frais_uniforme)
         total += float(self.section.frais_fournitures)
         total += sum(float(ab.service.montant or 0) for ab in self.abonnements.all()

@@ -17,9 +17,12 @@ Deux règles d'imputation, dans cet ordre :
      égale le total payé : une ligne de détail ne doit jamais contredire le
      total auquel elle participe.
 
-L'inscription, l'uniforme, les fournitures et les services à paiement unique
-ne sont pas mensuels : ils forment une ligne « hors mensualité » à part, sinon
-ils gonfleraient arbitrairement le mois où ils ont été réglés.
+Les frais d'entrée (inscription pour un nouvel élève, renouvellement pour un
+ancien quand l'école en pratique un), l'uniforme, les fournitures et les
+services à paiement unique ne sont pas mensuels : ils forment une ligne « hors
+mensualité » à part, sinon ils gonfleraient arbitrairement le mois où ils ont
+été réglés. Cette ligne porte sa propre échéance : immédiate pour une
+inscription, au mois fixé par l'école pour un renouvellement.
 
 La dette des années antérieures (`reliquat_anterieur`) reste hors de cet
 échéancier — elle a son propre suivi, et la mélanger ferait passer toute une
@@ -290,22 +293,37 @@ def construire_echeancier(eleve, today=None):
         })
 
     paye_hors = round(min(paye_hors, du_hors) if du_hors else paye_hors, 2)
+    # Un daara ouvre souvent sa campagne de renouvellement bien après la rentrée
+    # (« à partir de janvier »). Avant ce mois, la somme est due mais pas encore
+    # réclamable : la compter dans les retards ferait apparaître TOUS les anciens
+    # élèves en défaut dès le premier jour de l'exercice, et la liste de relance
+    # ne servirait plus à rien. L'inscription, elle, reste exigible à l'entrée.
+    exigible_hors = None
+    if eleve.renouvellement_du and tenant.mois_renouvellement:
+        m = int(tenant.mois_renouvellement)
+        exigible_hors = datetime.date(_annee_du_mois(exercice, m), m, 1)
     hors = {
         # Une CLÉ, pas un libellé : sinon la ligne serait en français dans un
         # tableau arabe (même règle que sante_migration).
         'cle':     'hors_mensualite',
+        'libelle': eleve.libelle_frais_entree,
         'du':      du_hors,
         'paye':    paye_hors,
         'reste':   round(max(du_hors - paye_hors, 0.0), 2),
+        'exigible_le': exigible_hors,
+        'echu':    exigible_hors is None or exigible_hors <= reference,
     }
 
     # ── Synthèse pour la famille ──────────────────────────────────────────
     # Ce qui est EXIGIBLE aujourd'hui, séparé de ce qui viendra à échéance :
     # un parent doit voir d'un coup d'œil ce qu'on lui réclame maintenant, et
-    # ne pas le confondre avec le total de l'année. L'inscription entre dans
-    # les retards — elle est due dès l'entrée, jamais « à venir ».
-    retards = round(hors['reste'] + sum(l['reste'] for l in sortie if l['echu']), 2)
-    a_venir = round(sum(l['reste'] for l in sortie if not l['echu']), 2)
+    # ne pas le confondre avec le total de l'année. Les frais d'entrée suivent
+    # leur propre échéance : dès l'entrée pour une inscription, au mois fixé par
+    # l'école pour un renouvellement différé.
+    retards = round((hors['reste'] if hors['echu'] else 0.0)
+                    + sum(l['reste'] for l in sortie if l['echu']), 2)
+    a_venir = round((0.0 if hors['echu'] else hors['reste'])
+                    + sum(l['reste'] for l in sortie if not l['echu']), 2)
     anterieur = round(float(eleve.reliquat_restant or 0), 2)
 
     return {
