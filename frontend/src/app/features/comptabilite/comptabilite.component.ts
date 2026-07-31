@@ -896,6 +896,22 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
       <p-button label="+ Ligne budget" severity="success" [disabled]="estLectureSeule()" (onClick)="ouvrirDialogBudget()" />
     </div>
 
+    <!-- Des lignes existent sur un AUTRE exercice. Une école migrée en a
+         plusieurs, et ses lignes restent attachées à celui qui était actif
+         quand elle les a saisies. Sans ce message, l'écran vide ne distingue
+         pas « rien saisi » de « saisi ailleurs ». -->
+    <div class="autre-ex" *ngIf="budget()?.autres_exercices?.length">
+      <span>
+        📁 D'autres lignes budgétaires existent sur
+        <ng-container *ngFor="let a of budget()!.autres_exercices; let i = index">
+          <a class="autre-ex-lien" (click)="chargerBudget(a.id)">{{ a.annee }}</a>
+          ({{ a.nb_lignes }})<span *ngIf="i < budget()!.autres_exercices.length - 1">, </span>
+        </ng-container>
+      </span>
+      <a class="autre-ex-lien" *ngIf="budgetExerciceChoisi()"
+         (click)="chargerBudget()">↩ Revenir à l'exercice en cours</a>
+    </div>
+
     <!-- KPIs budget -->
     <div class="kpi-grid" *ngIf="budget()?.totaux">
       <div class="kpi-card" style="--acc:#0099ff">
@@ -1658,6 +1674,13 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     .prevu-val     { display:block; color:var(--text); }
     .realise-small { display:block; font-size:9px; color:#00d4aa; }
     .mode-tag      { font-size:10px; color:var(--text-3); white-space:nowrap; }
+    /* Lignes de budget vivant sur un autre exercice (école migrée). */
+    .autre-ex      { display:flex; justify-content:space-between; align-items:center;
+                     gap:12px; flex-wrap:wrap; background:rgba(79,195,247,0.08);
+                     border:1px solid rgba(79,195,247,0.3); border-radius:8px;
+                     padding:8px 14px; margin-bottom:14px; font-size:12px;
+                     color:var(--text-2); }
+    .autre-ex-lien { color:#4fc3f7; cursor:pointer; text-decoration:underline; }
     .total-prevu   { color:var(--text); }
     .over-budget   { color:#ef4444; }
     /* Comparaison mensuelle budget */
@@ -1970,9 +1993,13 @@ comptesCredit = [
   }
 
   // ── Budget ──────────────────────────────────────────────────────────────────
-  chargerBudget() {
+  /** Exercice consulté quand ce n'est pas celui en cours (école migrée). */
+  budgetExerciceChoisi = signal<string | null>(null);
+
+  chargerBudget(exerciceId?: string) {
+    this.budgetExerciceChoisi.set(exerciceId ?? null);
     this.loadingBudget.set(true);
-    this.compta.getBudget().subscribe({
+    this.compta.getBudget(exerciceId).subscribe({
       next: r => { this.budget.set(r); this.loadingBudget.set(false); },
       error: () => this.loadingBudget.set(false),
     });

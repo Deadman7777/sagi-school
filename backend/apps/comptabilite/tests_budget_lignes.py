@@ -243,3 +243,40 @@ class BudgetLignesTest(APITestCase):
         self._charge('622', 300000, libelle='Loyer école')
 
         self.assertEqual(len(self.client.get('/api/comptabilite/charges/').data), 2)
+
+    # ── Lignes vivant sur un autre exercice (école migrée) ────────────────
+    def test_les_lignes_d_un_autre_exercice_sont_signalees(self):
+        """Une école migrée a plusieurs exercices ; ses lignes restent sur celui
+        qui était actif quand elle les a saisies. L'écran n'en montrait qu'un,
+        sans dire lequel : des lignes bien présentes passaient pour perdues."""
+        self._ligne('622', 'Loyer', m01=100000)
+        ancien = Exercice.objects.create(
+            tenant=self.tenant, annee_scolaire='2025', nb_mensualites=12,
+            date_debut=datetime.date(2025, 1, 1), date_fin=datetime.date(2025, 12, 31))
+        BudgetLigne.objects.create(tenant=self.tenant, exercice=ancien,
+                                   no_compte='605', libelle='Ancienne ligne', m01=5000)
+
+        autres = self._budget()['autres_exercices']
+
+        self.assertEqual(len(autres), 1)
+        self.assertEqual(autres[0]['annee'], '2025')
+        self.assertEqual(autres[0]['nb_lignes'], 1)
+
+    def test_on_peut_consulter_le_budget_d_un_autre_exercice(self):
+        self._ligne('622', 'Loyer', m01=100000)
+        ancien = Exercice.objects.create(
+            tenant=self.tenant, annee_scolaire='2025', nb_mensualites=12,
+            date_debut=datetime.date(2025, 1, 1), date_fin=datetime.date(2025, 12, 31))
+        BudgetLigne.objects.create(tenant=self.tenant, exercice=ancien,
+                                   no_compte='605', libelle='Ancienne ligne', m01=5000)
+
+        r = self.client.get(f'/api/comptabilite/budget/?exercice={ancien.id}')
+
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual([l['libelle'] for l in r.data['lignes']], ['Ancienne ligne'])
+
+    def test_sans_autre_exercice_la_liste_est_vide(self):
+        """Le cas de toute école n'ayant qu'un exercice : aucun message."""
+        self._ligne('622', 'Loyer', m01=100000)
+
+        self.assertEqual(self._budget()['autres_exercices'], [])
