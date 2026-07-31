@@ -58,6 +58,7 @@ class Command(BaseCommand):
                       .select_related('exercice', 'tenant')
                       .order_by('nom_complet'))
         total = Eleve.objects.filter(tenant=tenant).count()
+        seuil = int(getattr(tenant, 'anciennete_renouvellement_mois', 12) or 12)
 
         self.stdout.write('')
         self.stdout.write(self.style.MIGRATE_HEADING(
@@ -65,10 +66,13 @@ class Command(BaseCommand):
             f"{len(fiches)} fiche(s) sans date d'entrée sur {total}"))
 
         if not fiches:
-            self.stdout.write("  Rien à faire.")
+            # « Rien à faire » ne répond pas à la question qu'on se pose en
+            # lançant cette commande : le renouvellement va-t-il s'appliquer, et
+            # à combien d'élèves ? On l'annonce donc quand même.
+            self.stdout.write("  Rien à rattraper — toutes les fiches ont leur "
+                              "date d'entrée.")
+            self._etat_actuel(tenant, seuil)
             return
-
-        seuil = int(getattr(tenant, 'anciennete_renouvellement_mois', 12) or 12)
         a_ecrire, anciens = [], 0
 
         for e in fiches:
@@ -103,3 +107,38 @@ class Command(BaseCommand):
                                       batch_size=500)
         self.stdout.write(self.style.SUCCESS(
             f"  {len(a_ecrire)} fiche(s) mises à jour."))
+        self._etat_actuel(tenant, seuil)
+
+    def _etat_actuel(self, tenant, seuil):
+        """Ce que le renouvellement donnera en l'état, réglages compris.
+
+        Sans ce compte-rendu, l'école active le renouvellement, saisit ses
+        montants, et n'a aucun moyen de savoir avant la première saisie de
+        paiement si la bascule a pris — ni sur combien d'élèves."""
+        eleves = list(Eleve.objects.filter(tenant=tenant, statut='INSCRIT')
+                      .select_related('exercice', 'tenant', 'section'))
+        if not eleves:
+            return
+
+        anciens = [e for e in eleves if e.est_renouvelant]
+        actif = getattr(tenant, 'renouvellement_actif', False)
+
+        self.stdout.write(
+            f"  Au seuil de {seuil} mois : {len(anciens)} ancien(s), "
+            f"{len(eleves) - len(anciens)} nouvel(le)s entrant(s) "
+            f"sur {len(eleves)} inscrit(s).")
+
+        if not actif:
+            self.stdout.write(self.style.WARNING(
+                "  Le renouvellement n'est PAS activé : ces anciens élèves "
+                "doivent encore l'inscription. Paramètres → Tarifs."))
+            return
+
+        # Un niveau à 0 est un renouvellement gratuit — décision légitime, mais
+        # rarement voulue quand on vient d'activer le réglage.
+        muets = sorted({e.section.nom for e in anciens
+                        if e.section and not e.section.frais_renouvellement})
+        if muets:
+            self.stdout.write(self.style.WARNING(
+                "  Niveau(x) sans montant de renouvellement — leurs anciens "
+                f"élèves ne devront rien : {', '.join(muets)}"))
