@@ -1,4 +1,4 @@
-from django.db.models import Sum, Q
+from django.db.models import Count, Sum, Q
 from django.db.models.functions import ExtractMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -1651,9 +1651,16 @@ class BudgetView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        # `request` transmis : le budget accepte `?exercice=<id>` comme les
+        # autres écrans de consultation. Une école MIGRÉE a plusieurs exercices,
+        # et ses lignes sont rattachées à celui qui était actif quand elle les a
+        # saisies. L'écran n'en montrait qu'un, sans dire lequel ni permettre
+        # d'en changer : des lignes bien présentes en base passaient pour
+        # perdues.
+        exercice = get_exercice(tenant, request)
         if not exercice:
-            return Response({'lignes': [], 'totaux': {}, 'exercice': None})
+            return Response({'lignes': [], 'totaux': {}, 'exercice': None,
+                             'exercice_id': None, 'autres_exercices': []})
 
         plan    = get_plan_dict(tenant)
         lignes  = BudgetLigne.objects.filter(
@@ -1708,8 +1715,23 @@ class BudgetView(APIView):
                 'ressource_libelle': l.ressource.libelle if l.ressource else '',
             })
 
+        # Les AUTRES exercices qui portent des lignes de budget. Sans cette
+        # liste, un écran vide ne distingue pas « rien saisi » de « saisi
+        # ailleurs » — et c'est la seconde hypothèse qui est vraie chez une
+        # école dont l'exercice a changé depuis.
+        autres = [
+            {'id': str(e['exercice_id']), 'annee': e['exercice__annee_scolaire'],
+             'nb_lignes': e['nb']}
+            for e in (BudgetLigne.objects.filter(tenant=tenant)
+                      .exclude(exercice=exercice)
+                      .values('exercice_id', 'exercice__annee_scolaire')
+                      .annotate(nb=Count('id')).order_by('-exercice__date_debut'))
+        ]
+
         return Response({
             'exercice': exercice.annee_scolaire,
+            'exercice_id': str(exercice.id),
+            'autres_exercices': autres,
             'lignes':   result,
             'totaux': {
                 'fixe':    {'prevu': round(total_fixe_prevu, 2), 'realise': round(total_fixe_realise, 2)},

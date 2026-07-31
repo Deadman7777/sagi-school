@@ -45,7 +45,7 @@ export class ComptabiliteService {
   supprimerCompte(no: string)               { return this.api.delete(`/comptabilite/plan-comptable/${no}/`); }
 
   // Budget prévisionnel
-  getBudget()                           { return this.api.get<any>('/comptabilite/budget/'); }
+  getBudget(exercice?: string) { return this.api.get<any>('/comptabilite/budget/', exercice ? { exercice } : {}); }
   sauvegarderBudgetLigne(data: unknown)            { return this.api.post<any>('/comptabilite/budget/', data); }
   supprimerBudgetLigne(id: string)                 { return this.api.delete(`/comptabilite/budget/${id}/`); }
   comptabiliserBudgetLigne(id: string, data: unknown) { return this.api.post<any>(`/comptabilite/budget/${id}/comptabiliser/`, data); }
