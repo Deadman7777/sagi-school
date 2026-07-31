@@ -69,16 +69,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Aucun exercice actif trouvé.")
         
-        # Générer no_piece automatique
-        from django.db.models import Max
-        import re
-        last = Paiement.objects.filter(tenant=tenant).aggregate(Max('no_piece'))['no_piece__max']
-        if last:
-            nums = re.findall(r'\d+', last)
-            next_num = int(nums[-1]) + 1 if nums else 1
-        else:
-            next_num = 1
-        no_piece = f"REC-{next_num:04d}"
+        # Numéro de reçu : séquence NUMÉRIQUE de l'école. Un Max() alphabétique
+        # rendait « REP-0005 » supérieur à « REC-0100 » — voir numerotation.py.
+        from .numerotation import prochain_no_piece
+        no_piece = prochain_no_piece(tenant, 'REC')
 
         # Un reliquat ne peut être encaissé que s'il a été reporté, et jamais
         # au-delà de ce qui reste ouvert — contrôlé avant toute écriture.

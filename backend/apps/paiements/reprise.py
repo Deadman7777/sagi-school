@@ -12,23 +12,18 @@ de l'exercice, les canaux (caisse, banque, mobile money) ne bougent pas.
   1. 411 D / 706 C — créance et produit scolarité (résultat de l'exercice)
   2. 890 D / 411 C — règlement par bilan d'ouverture
 """
-import re
 from decimal import Decimal
-
-from django.db.models import Max
 
 from .models import Paiement
 
 
 def _prochain_no_piece(tenant):
-    """REP-NNNN sur la même séquence numérique que les REC-NNNN du tenant."""
-    last = Paiement.objects.filter(tenant=tenant).aggregate(Max('no_piece'))['no_piece__max']
-    if last:
-        nums = re.findall(r'\d+', last)
-        suivant = int(nums[-1]) + 1 if nums else 1
-    else:
-        suivant = 1
-    return f"REP-{suivant:04d}"
+    """REP-NNNN sur la même séquence numérique que les REC-NNNN du tenant.
+
+    Le calcul vit dans numerotation.py : il portait ici le même défaut de tri
+    alphabétique que la génération des reçus."""
+    from .numerotation import prochain_no_piece
+    return prochain_no_piece(tenant, 'REP')
 
 
 def _mois_reprise(exercice, nb):
