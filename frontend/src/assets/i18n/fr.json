@@ -474,6 +474,8 @@
     "renouv_libelle_aide": "Ce mot apparaît sur les reçus et à la saisie : Renouvellement, Réinscription, Droit de rentrée…",
     "renouv_mois": "Exigible à partir de",
     "renouv_mois_aide": "Le mois où votre campagne commence. Avant lui, la somme est due mais n'entre ni dans les retards ni dans les relances.",
+    "renouv_anciennete": "Ancienneté requise",
+    "renouv_anciennete_aide": "À partir de combien de mois de présence un élève est-il considéré comme ancien ? Mesuré au premier jour de l'exercice, pour qu'il ne change pas de statut en cours d'année.",
     "renouv_frais": "Renouvellement",
     "uniforme_frais": "Uniforme",
     "fournitures_frais": "Fournitures",

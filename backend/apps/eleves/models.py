@@ -291,15 +291,14 @@ class Eleve(TenantModel):
         reference = self.date_entree or self.date_inscription
         if not reference:
             return False
-        # Une année révolue au premier jour de l'exercice. Un élève entré
-        # pendant l'exercice en cours en est forcément exclu : sa date d'entrée
-        # est postérieure au début, donc très loin d'un an d'ancienneté.
-        debut = self.exercice.date_debut
-        try:
-            un_an_avant = debut.replace(year=debut.year - 1)
-        except ValueError:                      # 29 février
-            un_an_avant = debut.replace(year=debut.year - 1, day=28)
-        return reference <= un_an_avant
+        # L'ancienneté exigée est un RÉGLAGE de l'école : Shoumoul retient
+        # 9 mois, une école qui raisonne en années pleines en retiendra 12.
+        # Mesurée au premier jour de l'exercice, pour qu'un élève ne change pas
+        # de statut en cours d'année. Un élève entré pendant l'exercice en cours
+        # en est forcément exclu : sa date d'entrée est postérieure au début.
+        from dateutil.relativedelta import relativedelta
+        mois = int(getattr(self.tenant, 'anciennete_renouvellement_mois', 12) or 12)
+        return reference <= self.exercice.date_debut - relativedelta(months=mois)
 
     @property
     def renouvellement_du(self):

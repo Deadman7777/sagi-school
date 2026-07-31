@@ -453,6 +453,16 @@ import { MessageService } from 'primeng/api';
                         optionLabel="label" optionValue="value" styleClass="w-full" />
               <small class="fc-hint">{{ 'parametres.renouv_mois_aide' | translate }}</small>
             </div>
+            <!-- Le seuil appartient au chef d'établissement : 9 mois chez l'un,
+                 une année pleine chez l'autre. -->
+            <div class="form-group">
+              <label for="renouv-anc">{{ 'parametres.renouv_anciennete' | translate }}</label>
+              <p-inputNumber inputId="renouv-anc"
+                             [(ngModel)]="ecole()!.anciennete_renouvellement_mois"
+                             mode="decimal" [min]="1" [max]="36" [showButtons]="true"
+                             suffix=" mois" styleClass="w-full" />
+              <small class="fc-hint">{{ 'parametres.renouv_anciennete_aide' | translate }}</small>
+            </div>
           </ng-container>
         </div>
         <div class="sc-actions">
