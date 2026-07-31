@@ -109,6 +109,9 @@ class Paiement(TenantModel):
 
     def save(self, *args, **kwargs):
         if not self.no_piece:
-            last = Paiement.objects.filter(exercice=self.exercice).count()
-            self.no_piece = f"REC-{str(last + 1).zfill(4)}"
+            # Un COMPTE de lignes ne donne pas un numéro libre : une annulation
+            # ou une pièce migrée le fait retomber sur un rang déjà pris. Même
+            # séquence que la vue, et vérifiée libre (voir numerotation.py).
+            from .numerotation import prochain_no_piece
+            self.no_piece = prochain_no_piece(self.tenant, 'REC')
         super().save(*args, **kwargs)
