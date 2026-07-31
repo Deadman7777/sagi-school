@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
@@ -158,7 +159,18 @@ export class ElevesService {
   }
 
   // ── Organismes payeurs et bourses ────────────────────────────────────
-  getOrganismes()                    { return this.api.get<Organisme[]>('/eleves/organismes/'); }
+  /** Toujours un TABLEAU, quelle que soit la pagination du serveur.
+   *
+   *  DRF pagine par défaut (PAGE_SIZE 500) : cette route rend donc
+   *  `{count, results}`, pas une liste. Les trois appelants faisaient
+   *  `.filter()` / `.find()` dessus et levaient une TypeError non rattrapée —
+   *  le sélecteur « Payé par » restait vide en permanence et la console de
+   *  l'écran Paiements crachait à chaque ouverture. Normalisé ICI, une fois :
+   *  corriger chaque appelant laisserait le prochain retomber dedans. */
+  getOrganismes() {
+    return this.api.get<Organisme[] | PaginatedResponse<Organisme>>('/eleves/organismes/')
+      .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
   creerOrganisme(o: Partial<Organisme>)  { return this.api.post<Organisme>('/eleves/organismes/', o); }
   majOrganisme(id: string, o: Partial<Organisme>) {
     return this.api.patch<Organisme>(`/eleves/organismes/${id}/`, o);
