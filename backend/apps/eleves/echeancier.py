@@ -65,7 +65,13 @@ def precharger(qs):
                  queryset=Paiement.objects.filter(statut='ACTIF').only(
                      'eleve_id', 'montant_inscription', 'montant_mensualite',
                      'montant_uniforme', 'montant_fournitures', 'montant_cantine',
-                     'montant_divers', 'mois_regles', 'services_regles'),
+                     'montant_divers', 'mois_regles', 'services_regles',
+                     # `created_at` : horodatage d'enregistrement. Il sert à
+                     # distinguer les règlements POSTÉRIEURS à une correction
+                     # manuelle d'imputation. `date_paiement` ne suffit pas :
+                     # elle est au jour près, et la correction comme le
+                     # règlement qui la suit tombent souvent le même jour.
+                     'created_at'),
                  to_attr=PREFETCH_PAIEMENTS),
     ).annotate(
         # Noms attendus par les propriétés du modèle, qui les préfèrent à
@@ -210,7 +216,12 @@ def construire_echeancier(eleve, today=None):
             eleve=eleve, statut='ACTIF').only(
             'montant_inscription', 'montant_mensualite', 'montant_uniforme',
             'montant_fournitures', 'montant_cantine', 'montant_divers',
-            'mois_regles', 'services_regles')
+            'mois_regles', 'services_regles', 'created_at')
+
+    # Part mensuelle de chaque règlement, gardée de côté : la correction
+    # manuelle ci-dessous a besoin de savoir LESQUELS sont postérieurs à elle.
+    parts_mensuelles = []          # [(horodatage, montant_mois, [mois désignés])]
+    total_mensuel = 0.0
 
     for p in regles:
         paye_hors += (float(p.montant_inscription or 0)
@@ -222,6 +233,9 @@ def construire_echeancier(eleve, today=None):
 
         montant_mois = float(p.montant_mensualite or 0) + svc
         designes = [int(x) for x in (p.mois_regles or []) if int(x) in lignes]
+        total_mensuel += montant_mois
+        parts_mensuelles.append(
+            (getattr(p, 'created_at', None), montant_mois, designes))
         if designes:
             part = montant_mois / len(designes)
             for m in designes:
@@ -229,15 +243,42 @@ def construire_echeancier(eleve, today=None):
         else:
             non_imputes += montant_mois
 
-    # Correction manuelle de l'école : elle FAIT FOI sur la répartition.
-    # Son total est verrouillé côté API sur le montant réellement encaissé, donc
-    # la somme des lignes continue d'égaler le total payé.
+    # Correction manuelle de l'école : elle fait foi sur la répartition du
+    # montant qu'elle TOTALISE, et de celui-là seulement.
+    #
+    # L'API verrouille son total sur les encaissements du jour où l'école la
+    # saisit. Elle ne peut donc rien dire des règlements qui SUIVENT. Or elle
+    # écrasait toute la répartition : un paiement encaissé après la correction
+    # disparaissait de la vue mensuelle, le reçu était juste, la fiche montrait
+    # le mois toujours en retard — et l'écart grandissait à chaque encaissement.
+    # Défaut réservé aux écoles ayant corrigé leurs données migrées.
     manuelle = {int(k): float(v) for k, v in (eleve.imputation_mois or {}).items()
                 if int(k) in lignes}
     if manuelle:
+        couvert = round(sum(manuelle.values()), 2)
         for m in lignes:
             lignes[m]['paye'] = manuelle.get(m, 0.0)
         non_imputes = 0.0
+        # Ce qui dépasse la correction, ce sont les règlements postérieurs : on
+        # les reprend du plus RÉCENT au plus ancien, jusqu'à épuisement de
+        # l'écart, en respectant les mois qu'ils désignent.
+        surplus = round(total_mensuel - couvert, 2)
+        if surplus > 0.01:
+            import datetime as _dt
+            _jamais = _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)
+            recents = sorted(parts_mensuelles,
+                             key=lambda t: t[0] or _jamais, reverse=True)
+            for _quand, montant_mois, designes in recents:
+                if surplus <= 0.01:
+                    break
+                part_totale = min(montant_mois, surplus)
+                surplus = round(surplus - part_totale, 2)
+                if designes:
+                    part = part_totale / len(designes)
+                    for m in designes:
+                        lignes[m]['paye'] += part
+                else:
+                    non_imputes += part_totale
 
     # Règle 2 : le reliquat non désigné solde les mois les plus anciens.
     for m in mois:
