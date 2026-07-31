@@ -122,8 +122,13 @@ class OrganismeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # `order_by` explicite : l'annotate ajoute un GROUP BY, qui annule
+        # l'ordre du Meta aux yeux du paginateur. Sans tri, deux pages
+        # successives peuvent répéter ou omettre une ligne — et une école n'a
+        # aucun moyen de s'en apercevoir.
         return (Organisme.objects.filter(tenant=get_tenant(self.request))
-                .annotate(nb_boursiers_sql=Count('prises_en_charge')))
+                .annotate(nb_boursiers_sql=Count('prises_en_charge'))
+                .order_by('nom'))
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
@@ -1261,6 +1266,32 @@ class EleveViewSet(viewsets.ModelViewSet):
                     mo = 1
                     y += 1
 
+        # ── Reliquat : ce qui reste dû sur les périodes DÉJÀ ÉCHUES ──────────
+        # Une famille qui règle 100 000 sur 185 000 d'inscription doit encore
+        # 85 000, et cette somme se réclame au passage suivant — elle fait
+        # partie de ce qu'on demande ce mois-là, pas d'un suivi séparé qu'on
+        # consulte ailleurs. L'écran de saisie ne proposait que l'échéance
+        # courante : le reliquat n'apparaissait nulle part au guichet, et le
+        # caissier devait le retrouver sur la fiche pour penser à le réclamer.
+        #
+        # Échu seulement : réclamer un mois qui n'est pas encore exigible
+        # transformerait l'échéancier de l'école en avance obligatoire.
+        arr_entree = round(ech['hors_mensualite']['reste']
+                           if ech['hors_mensualite'] and ech['hors_mensualite']['echu']
+                           else 0.0, 2)
+        arr_mois = [
+            {'num': l['mois'], 'label': MOIS_FR.get(l['mois'], str(l['mois'])),
+             'annee': l['annee'], 'reste': round(l['reste'], 2)}
+            for l in ech['lignes'] if l['echu'] and l['reste'] > 0
+        ]
+        arrieres = {
+            # Frais d'entrée partiellement réglés : « Inscription » ou le mot
+            # de l'école pour le renouvellement.
+            'entree':  {'libelle': eleve.libelle_frais_entree, 'reste': arr_entree},
+            'mois':    arr_mois,
+            'total':   round(arr_entree + sum(m['reste'] for m in arr_mois), 2),
+        }
+
         return Response({
             'eleve_id':       str(eleve.id),
             'nom_complet':    eleve.nom_complet,
@@ -1272,6 +1303,8 @@ class EleveViewSet(viewsets.ModelViewSet):
             # champ, le bouton de type de paiement et la ligne du reçu.
             'libelle_entree':   eleve.libelle_frais_entree,
             'est_renouvelant':  eleve.renouvellement_du,
+            # Reliquat des périodes échues — à réclamer avec l'échéance en cours.
+            'arrieres':         arrieres,
             # Prise en charge
             'prise_en_charge':        eleve.prise_en_charge or '',
             'type_pec':               eleve.type_pec or '',

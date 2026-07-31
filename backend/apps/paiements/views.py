@@ -222,6 +222,16 @@ class PaiementViewSet(viewsets.ModelViewSet):
         mois_labels    = [_MOIS.get(m, str(m)) for m in mois_regles]
         mois_concernes = ', '.join(mois_labels)
 
+        # Frais d'entrée déjà entamés AVANT ce reçu : ce règlement-ci en solde
+        # donc le reliquat, et la famille doit le lire ainsi. Une école qui
+        # encaisse 100 000 sur 185 000 puis 85 000 le mois suivant remettait
+        # deux reçus portant le même intitulé « Frais d'inscription », sans que
+        # rien ne dise que le second achevait le premier.
+        def _sum_inscription(qs):
+            return float(qs.aggregate(t=_Sum('montant_inscription'))['t'] or 0)
+
+        entree_avant = _sum_inscription(paiements_avant) + _sum_inscription(meme_jour)
+
         # Lignes détail (uniquement les montants > 0)
         lignes = []
         if p.montant_inscription:
@@ -244,6 +254,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
             else:
                 libelle = (p.eleve.libelle_frais_entree if renouvellement
                            else "Frais d'inscription")
+                if entree_avant > 0:
+                    libelle = f"Reliquat {libelle.lower()}"
                 lignes.append((libelle, float(p.montant_inscription)))
         if p.montant_mensualite:
             label_mens = 'Mensualité scolaire'
