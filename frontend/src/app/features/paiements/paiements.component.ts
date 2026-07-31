@@ -501,6 +501,21 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
               </label>
               <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
+            <!-- Reliquat des frais d'entrée. Il est réclamé AVEC la mensualité,
+                 donc il doit se voir et se corriger ici : le porter dans un
+                 champ masqué faisait un total supérieur à la somme des lignes
+                 affichées, sans que le caissier puisse ni le comprendre ni y
+                 toucher. Invisible chez une école dont les inscriptions sont
+                 soldées, faux chez l'autre. -->
+            @if (reliquatEntree() > 0) {
+              <div class="form-group">
+                <label>Reliquat {{ libelleEntree() }}
+                  <span class="fee-hint">Dû : {{ reliquatEntree() | number:'1.0-0' }}</span>
+                </label>
+                <p-inputNumber [(ngModel)]="form.montant_inscription" [min]="0"
+                               [max]="reliquatEntree()" mode="decimal" styleClass="w-full" />
+              </div>
+            }
             <div class="form-group">
               <label>Divers</label>
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />

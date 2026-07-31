@@ -57,6 +57,7 @@ describe('Saisie de paiement — acompte et prise en charge', () => {
       },
     ],
     reliquat: { annee: '', du: 0, paye: 0, restant: 0 },
+    arrieres: { entree: { libelle: 'Inscription', reste: 0 }, mois: [], total: 0 },
     total_annuel_net: 750000, total_paye: 0, total_restant: 750000,
     total_restant_global: 750000, nb_paiements: 0,
   });
@@ -199,6 +200,68 @@ describe('Saisie de paiement — acompte et prise en charge', () => {
 
     expect(c.form.montant_mensualite).toBe(35000);
     expect(c.resteApresVersement()).toBe(30000);
+  });
+
+  // ── Reliquat des frais d'entrée réclamé avec la mensualité ────────────
+  // Il a d'abord été placé dans `montant_inscription`, champ que le mode
+  // MENSUALITÉ n'affiche pas : le total dépassait la somme des lignes visibles
+  // et le caissier ne pouvait ni le comprendre ni le corriger. Invisible chez
+  // une école dont les inscriptions sont soldées, faux chez l'autre — d'où un
+  // bug qui « marche pour une école, pas pour l'autre ».
+
+  /** Ce que l'écran DONNE À VOIR et à corriger en mode mensualité. */
+  const lignesVisibles = (c: PaiementsComponent) =>
+    c.form.montant_mensualite
+    + c.form.montant_divers
+    + (c.reliquatEntree() > 0 ? c.form.montant_inscription : 0)
+    + c.form.services.filter(s => s.inclus).reduce((t, s) => t + s.montant, 0);
+
+  const avecReliquat = () => {
+    const d = donnees();
+    d.arrieres = { entree: { libelle: 'Inscription', reste: 85000 }, mois: [], total: 85000 };
+    return d;
+  };
+
+  it("réclame le reliquat d'entrée avec la mensualité", () => {
+    charger(avecReliquat());
+
+    expect(c.reliquatEntree()).toBe(85000);
+    expect(c.form.montant_inscription).toBe(85000);
+    expect(c.duSaisie().reste).toBe(65000 + 85000);
+  });
+
+  it('le montant versé égale toujours la somme des lignes VISIBLES', () => {
+    charger(avecReliquat());
+
+    for (const verse of [0, 40000, 85000, 120000, 150000]) {
+      c.montantVerse = verse;
+      expect(lignesVisibles(c)).toBe(verse);
+    }
+  });
+
+  it("sans reliquat, aucun montant ne dort dans un champ masqué", () => {
+    charger(donnees());
+
+    c.montantVerse = 35000;
+
+    expect(c.form.montant_inscription).toBe(0);
+    expect(lignesVisibles(c)).toBe(35000);
+  });
+
+  it("solde la dette la plus ancienne avant la mensualité du mois", () => {
+    charger(avecReliquat());
+
+    c.montantVerse = 100000;
+
+    expect(c.form.montant_inscription).toBe(85000);
+    expect(c.form.montant_mensualite).toBe(15000);
+  });
+
+  it('le reliquat est isolé dans le bloc « dû »', () => {
+    charger(avecReliquat());
+
+    expect(c.reliquatSaisie()).toBe(85000);
+    expect(c.libelleReliquat()).toBe('Inscription');
   });
 
   // ── Inscription ───────────────────────────────────────────────────────
