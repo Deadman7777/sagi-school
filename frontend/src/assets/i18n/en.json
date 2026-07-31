@@ -474,6 +474,8 @@
     "renouv_libelle_aide": "This wording appears on receipts and at the payment desk: Renewal, Re-enrolment, Return fee…",
     "renouv_mois": "Claimable from",
     "renouv_mois_aide": "The month your campaign starts. Before it, the amount is owed but counts neither as overdue nor in reminders.",
+    "renouv_anciennete": "Required seniority",
+    "renouv_anciennete_aide": "After how many months of attendance is a pupil considered a returning pupil? Measured on the first day of the school year, so their status does not change mid-year.",
     "renouv_frais": "Renewal",
     "uniforme_frais": "Uniform",
     "fournitures_frais": "Supplies",

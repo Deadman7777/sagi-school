@@ -85,6 +85,14 @@ class Tenant(TimeStampedModel):
     mois_renouvellement = models.PositiveSmallIntegerField(
         null=True, blank=True,
         help_text='Mois (1-12) où le renouvellement devient exigible — vide = dès la rentrée')
+    # Ancienneté à partir de laquelle un élève est un ANCIEN. Chaque chef
+    # d'établissement fixe son seuil : Shoumoul retient 9 mois, une école qui
+    # raisonne en années scolaires pleines en retiendra 12. Mesurée au premier
+    # jour de l'exercice, pour qu'un élève ne change pas de statut en cours
+    # d'année.
+    anciennete_renouvellement_mois = models.PositiveSmallIntegerField(
+        default=12,
+        help_text="Mois de présence à partir desquels l'élève doit un renouvellement")
 
     # ── Rappels de paiement ───────────────────────────────────────────────
     # Fenêtre mensuelle de relance : à partir de quel jour l'école commence à
