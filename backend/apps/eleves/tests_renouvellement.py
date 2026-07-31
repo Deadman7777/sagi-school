@@ -90,7 +90,7 @@ class RenouvellementTest(APITestCase):
 
     def test_son_camarade_de_l_an_dernier_doit_le_renouvellement(self):
         self._activer()
-        ancien = self._eleve(date_entree=datetime.date(2024, 11, 3))
+        ancien = self._eleve(date_entree=datetime.date(2024, 9, 3))
 
         self.assertTrue(ancien.renouvellement_du)
         self.assertEqual(ancien.frais_entree, 15000)
@@ -100,7 +100,7 @@ class RenouvellementTest(APITestCase):
         """Le motif du contournement : sans ça, il fallait 35 000 de fausse
         prise en charge pour que le total tombe juste."""
         self._activer()
-        ancien = self._eleve(date_entree=datetime.date(2024, 11, 3))
+        ancien = self._eleve(date_entree=datetime.date(2024, 9, 3))
 
         self.assertEqual(ancien.total_attendu, 15000 + 20000 * 10)
         self.assertEqual(ancien.montant_pec_annuel, 0)
@@ -118,6 +118,42 @@ class RenouvellementTest(APITestCase):
         janvier = self._eleve(date_entree=datetime.date(2026, 1, 15))
 
         self.assertFalse(janvier.renouvellement_du)
+
+    # ── Une ANNÉE RÉVOLUE, pas « un exercice précédent » ──────────────────
+    def test_moins_d_un_an_dans_l_etablissement_ne_doit_pas_de_renouvellement(self):
+        """Le cas donné par l'école : entré le 20 octobre 2025, il ne doit pas
+        de renouvellement dans l'exercice ouvert le 1er octobre 2025 — ni dans
+        celui qui suit de peu, faute d'avoir fait son année."""
+        self._activer()
+        recent = self._eleve(date_entree=datetime.date(2025, 10, 20))
+
+        self.assertFalse(recent.renouvellement_du)
+        self.assertEqual(recent.frais_entree, 50000)
+
+    def test_une_annee_revolue_ouvre_le_renouvellement(self):
+        """Un jour de plus qu'un an avant le début de l'exercice suffit."""
+        self._activer()
+        ancien = self._eleve(date_entree=datetime.date(2024, 9, 30))
+
+        self.assertTrue(ancien.renouvellement_du)
+
+    def test_pile_un_an_avant_le_debut_compte_comme_une_annee(self):
+        self._activer()
+        pile = self._eleve(date_entree=datetime.date(2024, 10, 1))
+
+        self.assertTrue(pile.renouvellement_du)
+
+    def test_un_jour_de_moins_qu_un_an_ne_suffit_pas(self):
+        self._activer()
+        presque = self._eleve(date_entree=datetime.date(2024, 10, 2))
+
+        self.assertFalse(presque.renouvellement_du)
+
+    def test_un_eleve_entre_pendant_l_exercice_est_toujours_nouveau(self):
+        self._activer()
+        pendant = self._eleve(date_entree=datetime.date(2025, 12, 1))
+
+        self.assertFalse(pendant.renouvellement_du)
 
     # ── On ne retire jamais un dû sur une donnée absente ──────────────────
     def test_une_fiche_sans_historique_est_un_nouvel_entrant(self):

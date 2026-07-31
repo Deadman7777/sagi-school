@@ -1134,7 +1134,11 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         eleve    = self.get_object()
         tenant   = eleve.tenant
-        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        # L'exercice de la FICHE, pas « le dernier ouvert de l'école ». Chez une
+        # école migrée les deux diffèrent, et l'écran additionnait alors le déjà
+        # payé d'un exercice avec l'échéancier d'un autre : le mois réglé
+        # restait dû. Même règle que la création du règlement.
+        exercice = eleve.exercice
 
         section = eleve.section
 
