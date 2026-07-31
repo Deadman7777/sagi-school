@@ -180,3 +180,45 @@ class MarquerAnciensTest(TestCase):
         Eleve.objects.filter(pk=e.pk).update(date_inscription=self.ex.date_debut)
 
         self.assertFalse(self._relire(e).renouvellement_du)
+
+    # ── Le compte-rendu, quand il n'y a rien à rattraper ──────────────────
+    def test_elle_annonce_l_etat_meme_sans_rien_a_ecrire(self):
+        """Le cas de Shoumoul : 68 fiches, toutes datées. « Rien à faire » ne
+        répond pas à la question qu'on se pose en lançant la commande."""
+        self._eleve('Ancien', datetime.date(2024, 10, 5),
+                    date_entree=datetime.date(2024, 10, 5))
+        self._eleve('Nouveau', datetime.date(2026, 7, 6),
+                    date_entree=datetime.date(2026, 7, 6))
+
+        sortie = self._lancer()
+
+        self.assertIn('Rien à rattraper', sortie)
+        self.assertIn('1 ancien(s)', sortie)
+        self.assertIn('1 nouvel(le)s', sortie)
+
+    def test_elle_previent_quand_le_renouvellement_n_est_pas_active(self):
+        self.tenant.renouvellement_actif = False
+        self.tenant.save()
+        self._eleve('Ancien', datetime.date(2024, 10, 5),
+                    date_entree=datetime.date(2024, 10, 5))
+
+        self.assertIn("n'est PAS activé", self._lancer())
+
+    def test_elle_signale_un_niveau_sans_montant_de_renouvellement(self):
+        """Un niveau à 0 est un renouvellement gratuit — rarement voulu quand on
+        vient d'activer le réglage."""
+        self.section.frais_renouvellement = 0
+        self.section.save()
+        self._eleve('Ancien', datetime.date(2024, 10, 5),
+                    date_entree=datetime.date(2024, 10, 5))
+
+        sortie = self._lancer()
+
+        self.assertIn('sans montant de renouvellement', sortie)
+        self.assertIn('Internat', sortie)
+
+    def test_un_niveau_tarife_ne_declenche_aucun_avertissement(self):
+        self._eleve('Ancien', datetime.date(2024, 10, 5),
+                    date_entree=datetime.date(2024, 10, 5))
+
+        self.assertNotIn('sans montant de renouvellement', self._lancer())
