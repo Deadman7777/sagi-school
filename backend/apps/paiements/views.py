@@ -31,6 +31,22 @@ class ExerciceViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=tenant)
 
 
+def _mois_deja_entames(paiement, mois_regles, paiements_avant, meme_jour):
+    """Parmi les mois réglés par ce paiement, ceux qu'un règlement ANTÉRIEUR
+    avait déjà entamés. Ce sont eux dont la ligne du reçu porte « reliquat ».
+
+    Un mois seulement désigné compte : le montant importe peu, ce qui distingue
+    un reliquat d'un premier versement, c'est qu'on y était déjà passé."""
+    if not mois_regles:
+        return set()
+    deja = set()
+    for anterieur in list(paiements_avant) + list(meme_jour):
+        if not anterieur.montant_mensualite:
+            continue
+        deja.update(int(m) for m in (anterieur.mois_regles or []))
+    return deja & set(mois_regles)
+
+
 class PaiementViewSet(viewsets.ModelViewSet):
     serializer_class   = PaiementSerializer
     permission_classes = [IsAuthenticated]
@@ -60,15 +76,33 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant = self.get_tenant()
-        
-        # Exercice actif
-        exercice = Exercice.objects.filter(
-            tenant=tenant, cloture=False
-        ).order_by('-date_debut').first()
-        if not exercice:
-            from rest_framework.exceptions import ValidationError
+        from rest_framework.exceptions import ValidationError
+
+        # L'exercice du règlement est celui de la FICHE, pas « le dernier
+        # exercice ouvert de l'école ».
+        #
+        # Les deux coïncident tant qu'une école n'a qu'un exercice — le cas de
+        # toutes les écoles créées dans l'application. Une école MIGRÉE en a
+        # plusieurs, et ses fiches non réinscrites pointent encore l'exercice
+        # d'origine : le règlement partait alors sur l'exercice actif pendant
+        # que la fiche, son échéancier et ses alertes lisaient l'autre. Le
+        # paiement n'apparaissait nulle part sur l'élève, et le mois réglé
+        # restait dû — « les paiements ne sont pas liés aux fiches ».
+        #
+        # Une seule règle : tout ce qui concerne un élève se lit et s'écrit sur
+        # SON exercice.
+        eleve = serializer.validated_data.get('eleve')
+        if eleve is None:
+            raise ValidationError("Élève requis.")
+        exercice = eleve.exercice
+        if exercice is None:
             raise ValidationError("Aucun exercice actif trouvé.")
-        
+        if exercice.cloture:
+            raise ValidationError(
+                f"La fiche de {eleve.nom_complet} appartient à l'exercice "
+                f"{exercice.annee_scolaire}, qui est clôturé. Réinscrivez "
+                f"l'élève dans l'exercice en cours avant d'encaisser.")
+
         # Numéro de reçu : séquence NUMÉRIQUE de l'école. Un Max() alphabétique
         # rendait « REP-0005 » supérieur à « REC-0100 » — voir numerotation.py.
         from .numerotation import prochain_no_piece
@@ -258,9 +292,18 @@ class PaiementViewSet(viewsets.ModelViewSet):
                     libelle = f"Reliquat {libelle.lower()}"
                 lignes.append((libelle, float(p.montant_inscription)))
         if p.montant_mensualite:
-            label_mens = 'Mensualité scolaire'
+            # Un mois déjà entamé avant ce règlement : la ligne dit « Reliquat »,
+            # comme pour les frais d'entrée. Deux reçus au même intitulé ne
+            # laissaient pas voir que le second achevait le premier.
+            mois_entames = _mois_deja_entames(p, mois_regles, paiements_avant, meme_jour)
+            label_mens = ('Reliquat mensualité'
+                          if mois_entames and len(mois_entames) == len(mois_regles)
+                          else 'Mensualité scolaire')
             if mois_concernes:
                 label_mens += f' ({mois_concernes})'
+            if mois_entames and len(mois_entames) != len(mois_regles):
+                entames = ', '.join(_MOIS.get(m, str(m)) for m in sorted(mois_entames))
+                label_mens += f" — dont reliquat {entames}"
             lignes.append((label_mens, float(p.montant_mensualite)))
         if p.montant_uniforme:    lignes.append(('Uniforme scolaire',     float(p.montant_uniforme)))
         if p.montant_fournitures: lignes.append(('Fournitures scolaires', float(p.montant_fournitures)))

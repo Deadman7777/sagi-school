@@ -248,13 +248,36 @@ describe('Saisie de paiement — acompte et prise en charge', () => {
     expect(lignesVisibles(c)).toBe(35000);
   });
 
-  it("solde la dette la plus ancienne avant la mensualité du mois", () => {
+  it("sert l'échéance du mois AVANT le reliquat", () => {
+    // Le cas Mamy Daya : 123 000 remis pour « le mois + une part d'arriéré ».
+    // Servir l'arriéré en premier écrivait 100 000 dessus et 23 000 sur le
+    // mois — l'inverse de ce que le caissier venait de faire, et le mois
+    // restait dû.
     charger(avecReliquat());
 
-    c.montantVerse = 100000;
+    c.montantVerse = 65000 + 50000;
+
+    expect(c.form.montant_mensualite).toBe(52000);
+    expect(c.form.services.map(s => s.montant)).toEqual([8000, 5000]);
+    expect(c.form.montant_inscription).toBe(50000);
+  });
+
+  it("l'échéance réglée, le surplus va sur le reliquat", () => {
+    charger(avecReliquat());
+
+    c.montantVerse = 65000 + 85000;
 
     expect(c.form.montant_inscription).toBe(85000);
-    expect(c.form.montant_mensualite).toBe(15000);
+    expect(c.resteApresVersement()).toBe(0);
+  });
+
+  it("un versement inférieur à l'échéance ne touche pas au reliquat", () => {
+    charger(avecReliquat());
+
+    c.montantVerse = 40000;
+
+    expect(c.form.montant_inscription).toBe(0);
+    expect(c.form.montant_mensualite).toBe(40000);
   });
 
   it('le reliquat est isolé dans le bloc « dû »', () => {

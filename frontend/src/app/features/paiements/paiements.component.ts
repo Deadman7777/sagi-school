@@ -1637,12 +1637,20 @@ export class PaiementsComponent implements OnInit {
       for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
       this.form.montant_inscription += reste;
     } else {
-      // Le plus ancien d'abord : le reliquat des frais d'entrée se solde avant
-      // la mensualité du mois, sinon un versement partiel laisserait une dette
-      // ancienne derrière une dette récente.
-      this.form.montant_inscription = prendre(this.reliquatEntree());
+      // L'ÉCHÉANCE DU MOIS D'ABORD, le reliquat avec ce qui dépasse.
+      //
+      // C'est ainsi qu'une école encaisse : la famille vient régler le mois, et
+      // ajoute sur l'ancienne dette ce qu'elle peut. Servir le reliquat en
+      // premier — la règle « plus ancien d'abord », comptablement défendable —
+      // donnait l'inverse de ce que le caissier venait de faire : sur 123 000
+      // remis pour « août 73 000 + 50 000 d'arriéré », le système écrivait
+      // 100 000 d'arriéré et 23 000 sur août, et le mois restait dû.
+      //
+      // Le champ reliquat reste modifiable : cette répartition est un point de
+      // départ, pas une décision imposée.
       this.form.montant_mensualite  = prendre(this.duMensualite());
       for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
+      this.form.montant_inscription = prendre(this.reliquatEntree());
       this.form.montant_mensualite += reste;
     }
   }

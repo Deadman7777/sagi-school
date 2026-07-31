@@ -263,7 +263,12 @@ class Eleve(TenantModel):
     # passer une école entière pour prise en charge.
     @property
     def est_renouvelant(self):
-        """L'élève était déjà dans l'établissement avant cet exercice.
+        """L'élève a UNE ANNÉE RÉVOLUE dans l'établissement.
+
+        Ce n'est pas « entré lors d'un exercice précédent » : un élève inscrit
+        le 20 octobre 2025 ne doit pas de renouvellement en 2026, il n'a pas
+        encore fait son année. C'est l'ancienneté qui compte, pas le calendrier
+        de l'école — et elle se mesure à la date d'entrée, figée à vie.
 
         Trois sources, dans cet ordre :
 
@@ -286,8 +291,15 @@ class Eleve(TenantModel):
         reference = self.date_entree or self.date_inscription
         if not reference:
             return False
-        from .matricules import annee_promo
-        return annee_promo(self.exercice, reference) < self.exercice.date_debut.year
+        # Une année révolue au premier jour de l'exercice. Un élève entré
+        # pendant l'exercice en cours en est forcément exclu : sa date d'entrée
+        # est postérieure au début, donc très loin d'un an d'ancienneté.
+        debut = self.exercice.date_debut
+        try:
+            un_an_avant = debut.replace(year=debut.year - 1)
+        except ValueError:                      # 29 février
+            un_an_avant = debut.replace(year=debut.year - 1, day=28)
+        return reference <= un_an_avant
 
     @property
     def renouvellement_du(self):
