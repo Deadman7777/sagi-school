@@ -563,6 +563,14 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
               <div class="du-row"><span>Prise en charge</span>
                 <span class="mono pec-part">− {{ duSaisie().pec | number:'1.0-0' }}</span></div>
             }
+            <!-- Ce qui reste des périodes précédentes. Une famille qui a réglé
+                 100 000 sur 185 000 d'inscription doit encore 85 000, et cette
+                 somme se réclame au passage suivant — pas dans un suivi séparé
+                 qu'il faudrait penser à consulter. -->
+            @if (reliquatSaisie() > 0) {
+              <div class="du-row"><span>dont reliquat — {{ libelleReliquat() }}</span>
+                <span class="mono" style="color:#f97316">{{ reliquatSaisie() | number:'1.0-0' }}</span></div>
+            }
             <div class="du-row"><span>Montant réel à payer</span>
               <span class="mono">{{ duSaisie().net | number:'1.0-0' }}</span></div>
             @if (duSaisie().verse > 0) {
@@ -1353,12 +1361,19 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_cantine      = 0;
       this.form.mois_regles          = [];
     } else {
-      // Le 1er mois qu'il reste à SOLDER — et non le 1er mois « non payé ».
-      // Un mois réglé pour moitié se croyait payé : l'écran sautait par-dessus
-      // et proposait le suivant, laissant l'acompte sans suite.
+      // Tous les mois ÉCHUS non soldés, pas seulement le premier : un reliquat
+      // se réclame au passage suivant, il ne s'oublie pas jusqu'à ce que la
+      // famille repasse. Le caissier peut décocher ce qu'elle ne règle pas.
+      const echus = (data.mois_ecole || [])
+        .filter((m: any) => m.du && m.reste > 0 && m.echu)
+        .map((m: any) => m.num);
+      // À défaut d'arriéré, le prochain mois à solder.
       const ouverts = (data.mois_ecole || []).filter((m: any) => m.du && m.reste > 0);
-      this.form.mois_regles          = ouverts.length ? [ouverts[0].num] : [];
-      this.form.montant_inscription  = 0;
+      this.form.mois_regles = echus.length ? echus
+                            : (ouverts.length ? [ouverts[0].num] : []);
+      // Frais d'entrée partiellement réglés : leur reliquat se réclame avec la
+      // mensualité, sur le même reçu. Il n'apparaissait nulle part au guichet.
+      this.form.montant_inscription  = data.arrieres?.entree?.reste || 0;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
     }
@@ -1492,13 +1507,52 @@ export class PaiementsComponent implements OnInit {
     }
     const mois = this.moisChoisis();
     const cumul = (cle: string) => mois.reduce((a, m) => a + (Number(m[cle]) || 0), 0);
+    // Reliquat des frais d'entrée : il se réclame avec la mensualité, sur le
+    // même reçu. Sans lui ici, le total proposé serait inférieur à ce que
+    // l'école demande réellement à la famille.
+    const entree = this.reliquatEntree();
     return {
-      brut:  Math.round(cumul('du_brut') + svc),
+      brut:  Math.round(cumul('du_brut') + svc + entree),
       pec:   Math.round(cumul('pec')),
-      net:   Math.round(cumul('montant') + svc),
+      net:   Math.round(cumul('montant') + svc + entree),
       verse: Math.round(cumul('verse')),
-      reste: Math.round(cumul('reste') + svc),
+      reste: Math.round(cumul('reste') + svc + entree),
     };
+  }
+
+  /** Reliquat des frais d'entrée (inscription ou renouvellement), échu. */
+  reliquatEntree(): number {
+    return Number(this.saisieDonnees()?.arrieres?.entree?.reste) || 0;
+  }
+
+  /** Part de l'échéance en cours qui vient de périodes ANTÉRIEURES : frais
+   *  d'entrée partiellement réglés et mois échus non soldés. C'est le
+   *  « reliquat » au sens du guichet — celui de l'année en cours, à ne pas
+   *  confondre avec l'ardoise d'un exercice antérieur (form.montant_reliquat),
+   *  qui solde une créance reportée et ne constate aucun produit. */
+  reliquatSaisie(): number {
+    if (this.typePaiement === 'INSCRIPTION') return 0;
+    const arrieres = new Map<number, number>(
+      (this.saisieDonnees()?.arrieres?.mois || [])
+        .map((m: { num: number; reste: number }) => [m.num, m.reste]));
+    const mois = this.moisChoisis()
+      .reduce((t, m) => t + (arrieres.get(m.num) || 0), 0);
+    return Math.round(mois + this.reliquatEntree());
+  }
+
+  /** Les périodes que ce reliquat couvre, en clair, pour le reçu et l'écran. */
+  libelleReliquat(): string {
+    const noms: string[] = [];
+    if (this.reliquatEntree() > 0) {
+      noms.push(this.saisieDonnees()?.arrieres?.entree?.libelle || 'Inscription');
+    }
+    const arrieres = new Set<number>(
+      (this.saisieDonnees()?.arrieres?.mois || [])
+        .map((m: { num: number }) => m.num));
+    for (const m of this.moisChoisis()) {
+      if (arrieres.has(m.num)) noms.push(m.label);
+    }
+    return noms.join(', ');
   }
 
   /** Ce que l'école appelle ses frais d'entrée pour CET élève : « Inscription »
@@ -1568,7 +1622,11 @@ export class PaiementsComponent implements OnInit {
       for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
       this.form.montant_inscription += reste;
     } else {
-      this.form.montant_mensualite = prendre(this.duMensualite());
+      // Le plus ancien d'abord : le reliquat des frais d'entrée se solde avant
+      // la mensualité du mois, sinon un versement partiel laisserait une dette
+      // ancienne derrière une dette récente.
+      this.form.montant_inscription = prendre(this.reliquatEntree());
+      this.form.montant_mensualite  = prendre(this.duMensualite());
       for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
       this.form.montant_mensualite += reste;
     }
