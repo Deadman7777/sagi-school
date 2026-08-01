@@ -123,18 +123,18 @@ class DashboardKPIView(APIView):
         # montant théorique puis sont neutralisées en 890 → le net 70 reste juste.
         # Pour une école normale, chaque paiement crédite 706 → net 70 = somme des
         # paiements (équivalent).
-        produits_agg   = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice, no_compte__startswith='70'
-        ).aggregate(c=Sum('credit'), d=Sum('debit'))
-        total_recettes = max(0.0, float(produits_agg['c'] or 0) - float(produits_agg['d'] or 0))
-        # Charges directes (CHARGE) + budget comptabilisé (BUDGET) + reprises
-        # d'historique migrées (MIGRATION) : mêmes charges au tableau de bord.
-        charges_agg    = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice, source__in=('CHARGE', 'BUDGET', 'MIGRATION'),
-        ).filter(
-            Q(no_compte__startswith='6') | Q(no_compte__startswith='2')
-        ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))
-        total_charges  = max(0.0, float(charges_agg['t_debit'] or 0) - float(charges_agg['t_credit'] or 0))
+        # Produits, charges et résultat : le MÊME calcul que le compte de
+        # résultat (apps/comptabilite/resultat.py). Le tableau de bord ne
+        # retenait ici que les écritures source CHARGE/BUDGET/MIGRATION : la
+        # paie, les dotations aux amortissements et les intérêts d'emprunt
+        # étaient absents du total, et l'école lisait un bénéfice presque
+        # double du vrai. Deux calculs séparés d'une même grandeur divergent
+        # toujours — il n'y en a plus qu'un.
+        from apps.comptabilite.resultat import totaux_resultat
+        _totaux        = totaux_resultat(
+            JournalEntry.objects.filter(tenant=tenant, exercice=exercice))
+        total_recettes = max(0.0, _totaux['total_produits'])
+        total_charges  = max(0.0, _totaux['total_charges'])
         solde_initial  = float(exercice.solde_initial_caisse +
                                exercice.solde_initial_banque +
                                exercice.solde_initial_mobile)
