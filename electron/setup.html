@@ -47,6 +47,9 @@
     input.error { border-color: #e57373; }
     .hint { font-size: 0.72rem; color: #7a8fa8; margin-top: 4px; }
     .hint.bad { color: #e57373; }
+    .check-line { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; cursor: pointer; }
+    .check-line input { width: auto; }
+    .check-line span { font-size: 0.85rem; color: #e0e6ed; }
     .row { display: flex; gap: 12px; }
     .row > div { flex: 1; }
     .actions { display: flex; gap: 10px; margin-top: 22px; }
@@ -109,6 +112,18 @@
           <input id="db-port" type="text" value="5432">
         </div>
       </div>
+
+      <div class="section-title" style="margin-top:18px">🖧 Partage réseau (multi-postes)</div>
+      <label class="check-line">
+        <input id="lan-server" type="checkbox">
+        <span>Rendre ce poste accessible aux autres postes du réseau</span>
+      </label>
+      <div class="hint">
+        Cochez uniquement sur le poste « serveur ». Les autres postes (comptable, secrétariat…)
+        ouvriront simplement l'adresse indiquée à la fin de l'installation dans leur navigateur
+        (Chrome / Edge). Ils partageront la même base de données.
+      </div>
+
       <div class="actions">
         <button id="btn-next">Suivant →</button>
       </div>
@@ -238,6 +253,7 @@
           host:     $('db-host').value.trim() || 'localhost',
           port:     $('db-port').value.trim() || '5432',
         },
+        lan_server: $('lan-server').checked,
         install: {
           ecole_nom:       $('ecole-nom').value.trim(),
           ecole_code:      ($('ecole-code').value.trim() || 'ETB').toUpperCase(),

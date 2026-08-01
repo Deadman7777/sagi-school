@@ -28,6 +28,7 @@
       "main.js",
       "preload.js",
       "licence-check.js",
+      "lan-proxy.js",
       "splash.html",
       "setup.html",
       "setup-preload.js",

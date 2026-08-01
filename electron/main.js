@@ -3,9 +3,12 @@ const { spawn } = require('child_process');
 const path      = require('path');
 const http      = require('http');
 const fs        = require('fs');
+const os        = require('os');
 
 let mainWindow;
-let djangoProcess;
+let djangoProcess;              // processus unique (poste isolé) ou 1er du groupe
+let djangoWorkers   = [];       // processus de travail en mode réseau
+let lanProxy        = null;     // répartiteur devant les processus de travail
 const isDev       = process.env.NODE_ENV === 'development';
 const DJANGO_PORT = 8765;
 
@@ -40,6 +43,174 @@ function getPython() {
   const venvPython = path.join(getBackendDir(), 'venv', 'bin', 'python3');
   if (fs.existsSync(venvPython)) return venvPython;
   return '/usr/bin/python3.10';
+}
+
+// ─── Config applicative persistante (userData, survit aux mises à jour) ──────
+// Contient notamment { lanServer: bool } : ce poste écoute-t-il sur le réseau ?
+function getAppConfigPath() {
+  return path.join(app.getPath('userData'), 'app-config.json');
+}
+
+function readAppConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(getAppConfigPath(), 'utf8')) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writeAppConfig(patch) {
+  const cfg = { ...readAppConfig(), ...patch };
+  try {
+    fs.writeFileSync(getAppConfigPath(), JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Electron] Écriture app-config échouée:', err.message);
+  }
+  return cfg;
+}
+
+// Adresses IPv4 non-loopback de ce poste. Une machine a souvent plusieurs
+// interfaces (Ethernet + Wi-Fi + adaptateurs virtuels VirtualBox, VPN…) : on
+// les rend TOUTES plutôt que de deviner. Un secrétariat qui reçoit la mauvaise
+// adresse ne peut pas se connecter et le diagnostic prend une heure.
+function getLanIps() {
+  const ifaces = os.networkInterfaces();
+  const adresses = [];
+  for (const nom of Object.keys(ifaces)) {
+    for (const iface of ifaces[nom] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        adresses.push({ nom, adresse: iface.address });
+      }
+    }
+  }
+  return adresses;
+}
+
+/** Texte d'aide listant les adresses à ouvrir sur les postes clients. */
+function texteAdressesLan() {
+  const ips = getLanIps();
+  if (!ips.length) {
+    return `Aucune adresse réseau détectée sur ce poste.\n\n`
+      + `Vérifiez qu'il est bien raccordé au réseau de l'établissement, `
+      + `puis relancez SAGI SCHOOL.`;
+  }
+  const liste = ips
+    .map(({ nom, adresse }) => `    http://${adresse}:${DJANGO_PORT}      (${nom})`)
+    .join('\n');
+  return `Sur les autres postes (comptabilité, secrétariat, scolarité…), `
+    + `ouvrez cette adresse dans Chrome ou Edge :\n\n${liste}\n\n`
+    + (ips.length > 1
+        ? `Plusieurs interfaces réseau sont actives : essayez-les dans l'ordre, `
+          + `la bonne est celle du réseau de l'établissement.\n\n`
+        : '')
+    + `À vérifier une fois pour toutes :\n`
+    + `  • ce poste doit garder la MÊME adresse IP (réservation sur la box ou le routeur) ;\n`
+    + `  • le pare-feu Windows doit autoriser le port ${DJANGO_PORT} en entrée.\n\n`
+    + `Commande pare-feu, à lancer une seule fois dans une invite de commandes `
+    + `ouverte en tant qu'administrateur :\n\n`
+    + `    netsh advfirewall firewall add rule name="SAGI SCHOOL" `
+    + `dir=in action=allow protocol=TCP localport=${DJANGO_PORT}`;
+}
+
+/** Fenêtre « où se connecter » — accessible à tout moment par le menu Réseau. */
+function afficherAdresseServeur() {
+  const actif = !!readAppConfig().lanServer;
+  if (!actif) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Partage réseau',
+      message: 'Ce poste ne partage pas sa base avec le réseau.',
+      detail: 'Activez « Partager avec les autres postes » dans le menu Réseau, '
+        + 'puis redémarrez SAGI SCHOOL.',
+    });
+    return;
+  }
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Adresse du poste serveur',
+    message: 'Ce poste partage sa base avec le réseau local.',
+    detail: texteAdressesLan(),
+  });
+}
+
+/**
+ * Menu natif de l'application. Il porte le réglage du partage réseau, seul
+ * endroit où l'on peut l'activer APRÈS l'installation : le réglage n'était
+ * demandé qu'une fois, dans l'assistant, et une école déjà installée n'avait
+ * plus aucun moyen de passer en multiposte sans réinstaller.
+ */
+function installerMenu() {
+  const { Menu } = require('electron');
+  const lanActif = !!readAppConfig().lanServer;
+
+  const modele = [
+    {
+      label: 'Réseau',
+      submenu: [
+        {
+          label: 'Partager avec les autres postes du réseau',
+          type: 'checkbox',
+          checked: lanActif,
+          click: (item) => basculerPartageReseau(item.checked),
+        },
+        { type: 'separator' },
+        {
+          label: "Adresse du poste serveur…",
+          click: () => afficherAdresseServeur(),
+        },
+      ],
+    },
+    {
+      label: 'Aide',
+      submenu: [
+        {
+          label: 'Journal d\'installation…',
+          click: () => shell.showItemInFolder(getSetupLogPath()),
+        },
+        {
+          label: 'À propos de SAGI SCHOOL',
+          click: () => dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'À propos',
+            message: `SAGI SCHOOL ${app.getVersion()}`,
+            detail: 'Système de gestion scolaire édité par HADY GESMAN.\n'
+              + 'Comptabilité conforme au SYSCOHADA Révisé.\n\n'
+              + 'Support : +221 70 328 61 51 · +221 78 429 78 30',
+          }),
+        },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(modele));
+}
+
+/** Active ou coupe le partage réseau, puis propose le redémarrage. */
+async function basculerPartageReseau(actif) {
+  writeAppConfig({ lanServer: actif });
+  installerMenu();   // reconstruit le menu pour refléter le nouvel état
+
+  const detail = actif
+    ? `Le partage sera effectif au prochain démarrage.\n\n${texteAdressesLan()}`
+    : 'Ce poste redeviendra accessible depuis lui seul au prochain démarrage.';
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    buttons: ['Redémarrer maintenant', 'Plus tard'],
+    defaultId: 0,
+    cancelId: 1,
+    title: actif ? 'Partage réseau activé' : 'Partage réseau désactivé',
+    message: actif
+      ? 'Ce poste va partager sa base avec le réseau local.'
+      : 'Le partage réseau est désactivé.',
+    detail,
+  });
+
+  if (response === 0) {
+    arreterServeurs();
+    app.relaunch();
+    app.exit(0);
+  }
 }
 
 function showSetupWindow() {
@@ -248,6 +419,11 @@ async function ensureProductionConfig() {
 
   const { win, payload } = await showSetupWindow();
   const { db: creds, install } = payload;
+  const lanServer = !!payload.lan_server;
+
+  // Mémoriser si ce poste doit être accessible depuis le réseau (lu à chaque
+  // démarrage par startDjango). Persiste dans userData, indépendant de production.py.
+  writeAppConfig({ lanServer });
 
   // Échapper les apostrophes pour les chaînes Python single-quoted
   const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -294,56 +470,132 @@ async function ensureProductionConfig() {
   }
 
   if (!win.isDestroyed()) win.close();
+
+  // Poste serveur : rappeler l'adresse que les autres postes devront ouvrir.
+  // La même information reste accessible à tout moment par le menu Réseau.
+  if (lanServer) {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Mode serveur réseau activé',
+      message: 'Ce poste partage désormais sa base avec le réseau local.',
+      detail: texteAdressesLan()
+        + `\n\nCette adresse reste consultable à tout moment : menu Réseau, `
+        + `« Adresse du poste serveur ».`,
+    });
+  }
 }
 
+/** Environnement d'exécution commun aux processus Django. */
+function envDjango(backendDir) {
+  const env = {
+    ...process.env,
+    DJANGO_SETTINGS_MODULE: isDev
+      ? 'config.settings.local'
+      : 'config.settings.production',
+    PYTHONUNBUFFERED: '1',
+  };
+  if (!isDev && process.platform !== 'win32') {
+    const venvBin = path.join(backendDir, 'venv', 'bin');
+    if (fs.existsSync(venvBin)) {
+      env.PATH        = venvBin + ':' + process.env.PATH;
+      env.VIRTUAL_ENV = path.join(backendDir, 'venv');
+    }
+  }
+  return env;
+}
+
+/** Lance un processus Django sur un port et une interface donnés. */
+function lancerProcessusDjango(backendDir, python, hote, port, etiquette) {
+  const managePy = path.join(backendDir, 'manage.py');
+  // waitress en production (WSGI stable) ; runserver en développement.
+  const cmd = isDev
+    ? [managePy, 'runserver', `${hote}:${port}`, '--noreload']
+    : ['-m', 'waitress', `--host=${hote}`, `--port=${port}`, 'config.wsgi:application'];
+
+  console.log(`[Django${etiquette}] ${python} ${cmd.join(' ')}`);
+  const proc = spawn(python, cmd, { cwd: backendDir, env: envDjango(backendDir) });
+  proc.stdout.on('data', d => console.log(`[Django${etiquette}]`, d.toString().trim()));
+  proc.stderr.on('data', d => console.error(`[Django${etiquette}]`, d.toString().trim()));
+  proc.on('close', code => console.log(`[Django${etiquette}] arrêté, code ${code}`));
+  proc.on('error', err => console.error(`[Django${etiquette}] erreur :`, err.message));
+  return proc;
+}
+
+/**
+ * Démarre le serveur applicatif.
+ *
+ * Poste isolé : UN processus Django sur la boucle locale — comportement
+ * historique, inchangé.
+ *
+ * Mode réseau : PLUSIEURS processus sur des ports internes, derrière un
+ * répartiteur qui occupe seul le port public. Un serveur mono-processus
+ * s'effondre dès qu'une dizaine de postes travaillent en même temps sur un
+ * gros effectif, non pas à cause de la base mais du GIL de Python — voir
+ * l'en-tête de lan-proxy.js pour les mesures.
+ */
 function startDjango() {
   const backendDir = getBackendDir();
-  const managePy   = path.join(backendDir, 'manage.py');
   const python     = getPython();
-
-  console.log('[Electron] Python:', python);
-  console.log('[Electron] manage.py:', managePy);
+  const lan        = !!readAppConfig().lanServer;
 
   http.get(`http://127.0.0.1:${DJANGO_PORT}/`, () => {
-    console.log('[Electron] Django déjà actif');
-  }).on('error', () => {
-    const env = {
-      ...process.env,
-      DJANGO_SETTINGS_MODULE: isDev
-        ? 'config.settings.local'
-        : 'config.settings.production',
-      PYTHONUNBUFFERED: '1',
-    };
-
-    if (!isDev && process.platform !== 'win32') {
-      const venvBin = path.join(backendDir, 'venv', 'bin');
-      if (fs.existsSync(venvBin)) {
-        env.PATH        = venvBin + ':' + process.env.PATH;
-        env.VIRTUAL_ENV = path.join(backendDir, 'venv');
-      }
+    console.log('[Electron] Serveur déjà actif');
+  }).on('error', async () => {
+    if (!lan) {
+      djangoProcess = lancerProcessusDjango(
+        backendDir, python, '127.0.0.1', DJANGO_PORT, '');
+      return;
     }
 
     try {
-      // En production Windows → waitress (WSGI stable).
-      // En dev ou Linux → runserver Django.
-      const cmd = (!isDev && process.platform === 'win32')
-        ? ['-m', 'waitress',
-           `--host=127.0.0.1`, `--port=${DJANGO_PORT}`,
-           'config.wsgi:application']
-        : [managePy, 'runserver', `127.0.0.1:${DJANGO_PORT}`, '--noreload'];
+      const { demarrerRepartiteur, portInterne, nombreDeProcessus, attendrePort } =
+        require('./lan-proxy');
+      const nb = nombreDeProcessus();
 
-      console.log('[Electron] Commande Django:', python, cmd.join(' '));
+      djangoWorkers = [];
+      for (let i = 0; i < nb; i++) {
+        // Les processus de travail n'écoutent QUE la boucle locale : seul le
+        // répartiteur est exposé au réseau de l'établissement.
+        djangoWorkers.push(lancerProcessusDjango(
+          backendDir, python, '127.0.0.1', portInterne(DJANGO_PORT, i), `-${i + 1}`));
+      }
+      djangoProcess = djangoWorkers[0];   // compatibilité avec l'arrêt existant
 
-      djangoProcess = spawn(python, cmd, { cwd: backendDir, env });
+      const prets = await Promise.all(
+        djangoWorkers.map((_, i) => attendrePort(portInterne(DJANGO_PORT, i))));
+      const nbPrets = prets.filter(Boolean).length;
+      if (nbPrets === 0) {
+        throw new Error("aucun processus Django n'a démarré");
+      }
+      if (nbPrets < nb) {
+        console.warn(`[Electron] ${nbPrets}/${nb} processus prêts — on continue`);
+      }
 
-      djangoProcess.stdout.on('data', d => console.log('[Django]', d.toString().trim()));
-      djangoProcess.stderr.on('data', d => console.error('[Django]', d.toString().trim()));
-      djangoProcess.on('close',  code => console.log('[Django] Arrêté, code:', code));
-      djangoProcess.on('error',  err  => console.error('[Django] Erreur:', err.message));
+      lanProxy = await demarrerRepartiteur({
+        portPublic: DJANGO_PORT,
+        hote: '0.0.0.0',
+        nbProcessus: nb,
+      });
     } catch (err) {
-      console.error('[Django] Impossible de démarrer:', err.message);
+      console.error('[Electron] Mode réseau indisponible :', err.message);
+      dialog.showErrorBox(
+        'Partage réseau indisponible',
+        `SAGI SCHOOL n'a pas pu démarrer en mode réseau :\n\n${err.message}\n\n`
+        + `L'application va démarrer pour ce poste seulement. `
+        + `Les autres postes ne pourront pas s'y connecter.`);
+      arreterServeurs();
+      djangoProcess = lancerProcessusDjango(
+        backendDir, python, '127.0.0.1', DJANGO_PORT, '');
     }
   });
+}
+
+/** Arrête le répartiteur et tous les processus Django. */
+function arreterServeurs() {
+  if (lanProxy) { try { lanProxy.close(); } catch (_) {} lanProxy = null; }
+  for (const p of djangoWorkers) { try { p.kill(); } catch (_) {} }
+  djangoWorkers = [];
+  if (djangoProcess) { try { djangoProcess.kill(); } catch (_) {} djangoProcess = null; }
 }
 
 function waitForAngular(retries = 30) {
@@ -406,6 +658,8 @@ async function createWindow() {
       webSecurity:      false,
     }
   });
+
+  installerMenu();
 
   const url = isDev
     ? 'http://localhost:4200'
@@ -483,10 +737,10 @@ if (!gotTheLock) {
 }
 
 app.on('window-all-closed', () => {
-  if (djangoProcess) djangoProcess.kill();
+  arreterServeurs();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-  if (djangoProcess) djangoProcess.kill();
+  arreterServeurs();
 });
