@@ -64,6 +64,30 @@ class CoherenceResultatTest(APITestCase):
         self.assertEqual(kpis.data['kpis']['total_recettes'], cr.data['total_produits'])
         self.assertEqual(kpis.data['kpis']['resultat_net'], cr.data['resultat_net'])
 
+    def test_l_ecran_de_cloture_annonce_le_meme_resultat(self):
+        """L'écran où le directeur valide sa fin d'année doit dire la vérité."""
+        from apps.paiements.cloturer import verifier_avant_cloture
+        self._ecritures_d_une_annee()
+
+        stats = verifier_avant_cloture(self.ex)['stats']
+        cr = self.client.get('/api/comptabilite/compte-resultat/')
+
+        self.assertEqual(stats['total_charges'], cr.data['total_charges'])
+        self.assertEqual(stats['total_recettes'], cr.data['total_produits'])
+        self.assertEqual(stats['resultat_net'], cr.data['resultat_net'])
+
+    def test_la_cloture_ne_compte_pas_les_charges_en_double(self):
+        """Une charge écrit 4 lignes : sommer le débit brut la doublait."""
+        from apps.paiements.cloturer import verifier_avant_cloture
+        # Une charge complète : constatation puis règlement.
+        self._je('622', 1000000, 0, 'CHARGE')      # charge
+        self._je('401', 0, 1000000, 'CHARGE')      # dette fournisseur
+        self._je('401', 1000000, 0, 'CHARGE')      # règlement de la dette
+        self._je('571', 0, 1000000, 'CHARGE')      # sortie de caisse
+
+        stats = verifier_avant_cloture(self.ex)['stats']
+        self.assertEqual(stats['total_charges'], 1000000)
+
     def test_les_charges_du_tableau_de_bord_contiennent_la_paie(self):
         """Le point précis qui faussait le bénéfice affiché à l'école."""
         self._ecritures_d_une_annee()

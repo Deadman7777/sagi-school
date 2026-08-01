@@ -102,3 +102,49 @@ def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1):
             libelle=f"Règlement {lib_compte} — {libelle}",
         ))
     return lignes
+
+
+# ── Soldes de trésorerie à la clôture ────────────────────────────────────────
+# Regroupement des comptes de trésorerie par poste d'exercice. Le mobile money
+# tient sur trois comptes (Wave, Orange Money, Free Money) mais l'exercice n'en
+# porte qu'un seul solde d'ouverture.
+POSTES_TRESORERIE = {
+    'caisse': ('571',),
+    'banque': ('521',),
+    'mobile': ('5521', '5522', '5523'),
+}
+
+
+def soldes_cloture(exercice):
+    """Solde réel de chaque poste de trésorerie à la fin d'un exercice.
+
+    Solde d'ouverture + mouvements nets du journal sur les comptes concernés —
+    le même calcul que le tableau de bord « Trésorerie par canal ». Les
+    annulations sont prises en compte d'office : leurs contre-écritures se
+    compensent au débit et au crédit.
+
+    Retourne {'caisse': …, 'banque': …, 'mobile': …, 'total': …}.
+    """
+    from django.db.models import Sum
+    from .models import JournalEntry
+
+    comptes = [c for postes in POSTES_TRESORERIE.values() for c in postes]
+    mouvements = {
+        b['no_compte']: float(b['d'] or 0) - float(b['c'] or 0)
+        for b in JournalEntry.objects
+        .filter(tenant=exercice.tenant, exercice=exercice, no_compte__in=comptes)
+        .values('no_compte').annotate(d=Sum('debit'), c=Sum('credit'))
+    }
+
+    ouverture = {
+        'caisse': float(exercice.solde_initial_caisse),
+        'banque': float(exercice.solde_initial_banque),
+        'mobile': float(exercice.solde_initial_mobile),
+    }
+
+    soldes = {
+        poste: ouverture[poste] + sum(mouvements.get(c, 0.0) for c in comptes_poste)
+        for poste, comptes_poste in POSTES_TRESORERIE.items()
+    }
+    soldes['total'] = sum(soldes.values())
+    return soldes

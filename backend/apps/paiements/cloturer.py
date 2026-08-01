@@ -49,17 +49,22 @@ def verifier_avant_cloture(exercice):
             f"total: {montant_impaye:,.0f} FCFA"
         )
 
-    # 3. Stats financières
-    paiements      = Paiement.objects.filter(tenant=tenant, exercice=exercice)
-    total_recettes = float(paiements.aggregate(
-        t=Sum('montant_inscription') + Sum('montant_mensualite') +
-          Sum('montant_uniforme')    + Sum('montant_fournitures') +
-          Sum('montant_cantine')     + Sum('montant_divers')
-    )['t'] or 0)
+    # 3. Stats financières — MÊME calcul que le compte de résultat et que le
+    # tableau de bord (apps/comptabilite/resultat.py).
+    #
+    # Ce récapitulatif totalisait le débit brut des seules écritures
+    # source='CHARGE'. Une charge écrit quatre lignes — 6xx débit, 401 crédit,
+    # 401 débit, 5xx crédit — donc le débit brut comptait chaque dépense DEUX
+    # fois ; et la paie, les amortissements et les intérêts d'emprunt, portés
+    # par d'autres sources, en étaient absents. L'écran où le directeur valide
+    # sa fin d'année annonçait ainsi 14 331 300 de charges pour 46 496 494
+    # réelles, et un résultat presque deux fois trop élevé.
+    from apps.comptabilite.resultat import totaux_resultat
 
-    total_charges = float(JournalEntry.objects.filter(
-        tenant=tenant, exercice=exercice, source='CHARGE'
-    ).aggregate(t=Sum('debit'))['t'] or 0)
+    paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
+    totaux         = totaux_resultat(journal)
+    total_recettes = totaux['total_produits']
+    total_charges  = totaux['total_charges']
 
     return {
         'peut_cloturer':   len(problemes) == 0,
@@ -68,7 +73,7 @@ def verifier_avant_cloture(exercice):
         'stats': {
             'total_recettes':  total_recettes,
             'total_charges':   total_charges,
-            'resultat_net':    total_recettes - total_charges,
+            'resultat_net':    totaux['resultat_net'],
             'eleves_total':    eleves.count(),
             'eleves_impayes':  eleves_impayes,
             'montant_impaye':  montant_impaye,
@@ -108,27 +113,26 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
         except Exception:
             nouvelle_annee = f"Exercice {timezone.now().year + 1}"
 
-        # Solde de clôture = trésorerie finale
-        from apps.dashboard.views import sum_paiements
-        paiements      = Paiement.objects.filter(tenant=exercice.tenant, exercice=exercice)
-        total_recettes = sum_paiements(paiements)
-        total_charges  = float(JournalEntry.objects.filter(
-            tenant=exercice.tenant, exercice=exercice, source='CHARGE'
-        ).aggregate(t=Sum('debit'))['t'] or 0)
-
-        solde_final = (float(exercice.solde_initial_caisse +
-                             exercice.solde_initial_banque +
-                             exercice.solde_initial_mobile) +
-                       total_recettes - total_charges)
+        # Trésorerie reportée sur le nouvel exercice : le solde RÉEL de chaque
+        # poste, lu au journal (apps/comptabilite/tresorerie.py) — le même
+        # calcul que « Trésorerie par canal » du tableau de bord.
+        #
+        # Le report se faisait sur « recettes − charges », c'est-à-dire un
+        # RÉSULTAT et non une trésorerie : il ignorait les décaissements de
+        # paie, les investissements et les remboursements d'emprunt, et versait
+        # le tout dans la caisse en remettant banque et mobile money à zéro.
+        # Une école ouvrait donc son année suivante sur des soldes faux.
+        from apps.comptabilite.tresorerie import soldes_cloture
+        soldes = soldes_cloture(exercice)
 
         nouvel_exercice = Exercice.objects.create(
             tenant             = exercice.tenant,
             annee_scolaire     = nouvelle_annee,
             date_debut         = exercice.date_fin + datetime.timedelta(days=1),
             date_fin           = exercice.date_fin + relativedelta(years=1),
-            solde_initial_caisse = max(solde_final, 0),
-            solde_initial_banque = 0,
-            solde_initial_mobile = 0,
+            solde_initial_caisse = max(soldes['caisse'], 0),
+            solde_initial_banque = max(soldes['banque'], 0),
+            solde_initial_mobile = max(soldes['mobile'], 0),
             devise             = exercice.devise,
             cloture            = False,
         )

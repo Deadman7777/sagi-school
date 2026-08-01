@@ -771,7 +771,17 @@ class BilanView(APIView):
             (float(_8agg['c'] or 0) - float(_8agg['d'] or 0)), 2)
         # Provisions réglementées (15x SF_C) — ressources durables / capitaux propres.
         prov_regl_t, prov_regl_d = _sum_sf_side(sfs, 'sf_c', ['15'], plan)
-        total_capitaux = round(capital + resultat_net + prov_regl_t, 2)
+        # Autres capitaux propres portés par le journal : capital appelé (10x),
+        # réserves (11x), report à nouveau (12x) et SUBVENTIONS
+        # D'INVESTISSEMENT (14x). Ils n'étaient ramassés nulle part : une école
+        # ayant reçu une subvention d'investissement voyait son bilan
+        # « déséquilibré » du montant exact de cette subvention, alors que le
+        # grand livre, lui, était juste au franc près.
+        # Le 13x est volontairement exclu : le résultat est déjà calculé
+        # ci-dessus à partir des classes 6, 7 et 8 — l'ajouter le compterait
+        # deux fois.
+        autres_cp_t, autres_cp_d = _sum_sf_side(sfs, 'sf_c', ['10', '11', '12', '14'], plan)
+        total_capitaux = round(capital + resultat_net + prov_regl_t + autres_cp_t, 2)
 
         # ── G — Dettes Financières (16x-19x SF_C) ───────────────────────
         dettes_fin_t, dettes_fin_d = _sum_sf_side(sfs, 'sf_c', ['16', '17', '18', '19'], plan)
@@ -823,6 +833,9 @@ class BilanView(APIView):
                 'capitaux_propres': {
                     'capital':      round(capital, 2),
                     'resultat_net': resultat_net,
+                    'subventions_investissement': _sub(autres_cp_d, ['14']),
+                    'autres':       autres_cp_d,
+                    'provisions_reglementees': prov_regl_t,
                     'total':        total_capitaux,
                 },
                 'dettes_financieres': {
