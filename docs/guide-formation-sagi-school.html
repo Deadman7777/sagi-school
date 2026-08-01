@@ -247,8 +247,10 @@ td.non { color: var(--encre-3); }
   body { font-size: 10.4pt; background: #fff; }
   .corps { padding: 0; }
   section { padding-top: 22px; break-inside: auto; }
-  h2 { break-before: page; break-after: avoid; }
-  .couv + section h2, .couv h1 { break-before: auto; }
+  section { break-before: page; }
+  h2 { break-after: avoid; }
+  .eyebrow { break-after: avoid; }
+  .couv + section, .couv h1 { break-before: auto; }
   h3, h4 { break-after: avoid; }
   figure, .cas, .note, tr { break-inside: avoid; }
   figure.ecran { background: #F0F3F1; border-color: #D5DDD8; }
