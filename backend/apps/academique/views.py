@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
-from django.db.models import Avg, Max, Min, Count
+from django.db.models import Avg, Max, Min, Count, Q
 from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache
 from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
                            TypeEvaluationSerializer, MatiereSerializer,
@@ -250,10 +250,23 @@ class MoteurCalculView(APIView):
         from apps.eleves.models import Eleve
         from apps.paiements.models import Exercice as _Exercice
         exercice_actif = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
-        eleves_qs = Eleve.objects.filter(tenant=tenant, section__nom__iexact=classe.nom)
+        # La classe de l'élève fait foi. Le rapprochement se faisait par nom de
+        # section : il ne tombait juste que pour une école dont une section
+        # porte le nom d'une classe. Dès que les sections sont les niveaux
+        # tarifaires (Maternelle, Élémentaire…) et les classes les vraies
+        # classes (CI, CE2, CM2…), aucun élève ne ressortait — moyennes vides
+        # puis bulletins « Aucune note calculée » malgré des notes en base.
+        # Le repli par nom reste pour les fiches anciennes sans classe posée.
+        eleves_qs = Eleve.objects.filter(tenant=tenant, classe=classe)
         if exercice_actif:
             eleves_qs = eleves_qs.filter(exercice=exercice_actif)
         eleves = list(eleves_qs)
+        if not eleves:
+            secours = Eleve.objects.filter(tenant=tenant, classe__isnull=True,
+                                           section__nom__iexact=classe.nom)
+            if exercice_actif:
+                secours = secours.filter(exercice=exercice_actif)
+            eleves = list(secours)
 
         # ── Prefetch toutes les évaluations en 1 requête ──────────────────
         all_evaluations = list(Evaluation.objects.filter(
@@ -847,7 +860,11 @@ class BulletinsHistoriqueView(APIView):
         if annee:
             qs = qs.filter(annee_scolaire=annee)
         if classe_nom:
-            qs = qs.filter(eleve__section__nom__iexact=classe_nom)
+            # Même règle que partout ailleurs : la classe de l'élève d'abord,
+            # le nom de section en repli pour les fiches sans classe posée.
+            qs = qs.filter(Q(eleve__classe__nom__iexact=classe_nom)
+                           | Q(eleve__classe__isnull=True,
+                               eleve__section__nom__iexact=classe_nom))
         if search:
             qs = qs.filter(eleve__nom_complet__icontains=search)
 

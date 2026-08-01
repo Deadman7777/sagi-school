@@ -640,24 +640,14 @@ class CompteResultatView(APIView):
         # 10. Résultat net de l'exercice
         resultat_net = resultat_avant_impot - impot
 
-        # Totaux COMPLETS : 7x + HAO produits (82,84,86,88) vs 6x + HAO charges (81,83,87,89)
-        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
-        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
-        _haop_agg = entries.filter(
-            Q(no_compte__startswith='82') | Q(no_compte__startswith='84') |
-            Q(no_compte__startswith='86') | Q(no_compte__startswith='88')
-        ).aggregate(d=Sum('debit'), c=Sum('credit'))
-        _haoc_agg = self._hors_resultat(entries.filter(
-            Q(no_compte__startswith='81') | Q(no_compte__startswith='83') |
-            Q(no_compte__startswith='87') | Q(no_compte__startswith='89')
-        )).aggregate(d=Sum('debit'), c=Sum('credit'))
-        total_produits = round(
-            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) +
-            max(float(_haop_agg['c'] or 0) - float(_haop_agg['d'] or 0), 0), 2)
-        total_charges = round(
-            float(_6agg['d'] or 0) - float(_6agg['c'] or 0) +
-            max(float(_haoc_agg['d'] or 0) - float(_haoc_agg['c'] or 0), 0), 2)
-        resultat_net  = round(total_produits - total_charges, 2)
+        # Totaux COMPLETS : 7x + HAO produits (82,84,86,88) vs 6x + HAO charges
+        # (81,83,87,89). Calcul partagé avec le tableau de bord — voir
+        # apps/comptabilite/resultat.py.
+        from .resultat import totaux_resultat
+        _totaux = totaux_resultat(entries)
+        total_produits = _totaux['total_produits']
+        total_charges  = _totaux['total_charges']
+        resultat_net   = _totaux['resultat_net']
 
         return Response({
             'exercice':       exercice.annee_scolaire,
