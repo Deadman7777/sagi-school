@@ -492,7 +492,15 @@ class BulletinView(APIView):
                 'nom_complet':    eleve.nom_complet,
                 'matricule':      eleve.numero,
                 'date_naissance': str(eleve.date_naissance) if eleve.date_naissance else '',
-                'classe':         eleve.section.nom if eleve.section else '',
+                # La CLASSE de l'élève, pas sa section. La section est un niveau
+                # tarifaire : l'imprimer ici affiche « Élémentaire » là où le
+                # bulletin doit dire « CM2 ». Chez un centre de formation dont
+                # les grilles distinguent les auditeurs par nationalité, cela
+                # imprimait « 1re année — Étranger » sur le bulletin d'un
+                # auditeur, à la place de sa filière. La section ne sert plus
+                # que de repli pour les fiches anciennes sans classe posée.
+                'classe':         (eleve.classe.nom if eleve.classe_id
+                                   else (eleve.section.nom if eleve.section else '')),
             },
             'tenant':    {'nom': tenant.nom, 'ville': tenant.ville},
             'trimestre': trimestre,
@@ -697,7 +705,10 @@ class BulletinPDFView(APIView):
                 'nom_complet':    eleve.nom_complet,
                 'matricule':      eleve.numero or '—',
                 'date_naissance': str(eleve.date_naissance) if eleve.date_naissance else '—',
-                'classe':         eleve.section.nom if eleve.section else '—',
+                # La classe de l'élève, pas sa section — voir le commentaire
+                # de la vue bulletin plus haut.
+                'classe':         (eleve.classe.nom if eleve.classe_id
+                                   else (eleve.section.nom if eleve.section else '—')),
                 'rang':           rang_eleve,
             },
             'matieres':            matieres_ctx,
@@ -896,7 +907,8 @@ class BulletinsHistoriqueView(APIView):
             result.append({
                 'eleve_id':      str(g['eleve_id']),
                 'eleve_nom':     e.nom_complet,
-                'classe':        e.section.nom if e.section else '—',
+                'classe':        (e.classe.nom if e.classe_id
+                                  else (e.section.nom if e.section else '—')),
                 'trimestre':     g['trimestre'],
                 'annee_scolaire':g['annee_scolaire'],
                 'moy_generale':  moy,
