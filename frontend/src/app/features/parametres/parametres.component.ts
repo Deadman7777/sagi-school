@@ -5,6 +5,7 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppModeService } from '../../core/services/app-mode.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { ElevesService } from '../../core/services/eleves.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
@@ -513,9 +514,14 @@ import { MessageService } from 'primeng/api';
             <!-- Uniforme / fournitures : désormais des éléments de la composition
                  de l'inscription (repliés par la migration eleves/0015) -->
           </div>
-          <div class="sc-actions" style="display:flex;gap:8px">
+          <div class="sc-actions" style="display:flex;gap:8px;flex-wrap:wrap">
             <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
                       (onClick)="sauvegarderSection(s)" />
+            <!-- Barème mensuel : pour une école dont la mensualité change en
+                 cours d'année, poser la règle sur le GROUPE au lieu d'ouvrir
+                 chaque fiche une par une. -->
+            <p-button label="📅 Barème mensuel" severity="secondary" size="small" [outlined]="true"
+                      (onClick)="ouvrirBareme(s)" />
             <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
                       (onClick)="supprimerSection(s)" />
           </div>
@@ -924,6 +930,47 @@ import { MessageService } from 'primeng/api';
     </p-dialog>
 
     <!-- Dialog nouvelle section -->
+    <!-- ── Barème mensuel d'une section ───────────────────────────────── -->
+    <p-dialog header="📅 Barème mensuel" [(visible)]="baremeDialogVisible"
+              [modal]="true" [style]="{ width: '540px' }">
+      @if (baremeSection()) {
+        <p class="dlg-aide">
+          Montant dû pour chaque mois facturé aux élèves de
+          <b>{{ baremeSection()!.nom }}</b>. Laissez un mois vide pour qu'il
+          garde la mensualité ordinaire de {{ baremeSection()!.frais_mensualite | number }} FCFA.
+        </p>
+        <div class="bareme-grid">
+          @for (m of moisExercice(); track m.numero) {
+            <div class="bareme-mois">
+              <label [attr.for]="'bar-' + m.numero">{{ m.nom }}</label>
+              <p-inputNumber [inputId]="'bar-' + m.numero" [(ngModel)]="bareme[m.numero]"
+                             mode="decimal" [min]="0" styleClass="w-full"
+                             inputStyleClass="text-right" placeholder="tarif" />
+            </div>
+          }
+        </div>
+        @if (baremeRapport()) {
+          <div class="bareme-rapport">
+            <b>{{ baremeRapport()!.appliques }}</b> élève(s) mis à jour.
+            @if (baremeRapport()!.ignores.length) {
+              <div class="bareme-ignores">
+                {{ baremeRapport()!.ignores.length }} fiche(s) laissée(s) intacte(s) :
+                @for (ig of baremeRapport()!.ignores; track ig.eleve) {
+                  <div>· {{ ig.eleve }} — {{ ig.raison }}</div>
+                }
+              </div>
+            }
+          </div>
+        }
+        <div class="dlg-actions">
+          <p-button [label]="'common.annuler' | translate" severity="secondary"
+                    [text]="true" (onClick)="baremeDialogVisible = false" />
+          <p-button label="Appliquer à la section" severity="success"
+                    [loading]="baremeEnCours()" (onClick)="appliquerBareme()" />
+        </div>
+      }
+    </p-dialog>
+
     <p-dialog [header]="'📚 ' + ('parametres.nouvelle_section_titre' | translate)" [(visible)]="sectionDialogVisible"
               [modal]="true" [style]="{width:'400px'}" [draggable]="false">
       <div class="form-group" style="margin-bottom:14px">
@@ -1049,6 +1096,12 @@ import { MessageService } from 'primeng/api';
     .section-header-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 
     .sections-list { display:flex; flex-direction:column; gap:14px; }
+    .bareme-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin:14px 0; }
+    .bareme-mois label { display:block; font-size:11px; color:var(--text-2); margin-bottom:3px; }
+    .bareme-rapport { background:var(--surface-hover); border-radius:8px; padding:10px 12px; font-size:13px; margin-bottom:12px; }
+    .bareme-ignores { margin-top:6px; color:var(--text-2); font-size:12px; line-height:1.6; }
+    .dlg-aide { font-size:13px; color:var(--text-2); line-height:1.55; }
+    .dlg-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
     .section-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
     .sc-name { font-size:15px; font-weight:600; color:#00d4aa; margin-bottom:14px; }
     .sc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
@@ -1126,6 +1179,31 @@ export class ParametresComponent implements OnInit {
 
   userDialogVisible    = false;
   sectionDialogVisible = false;
+
+  // ── Barème mensuel d'une section ──────────────────────────────────────
+  // Le montant propre à chaque mois se posait fiche par fiche. Un barème est
+  // une règle de groupe : on la pose sur le groupe.
+  baremeDialogVisible = false;
+  baremeSection  = signal<any | null>(null);
+  baremeEnCours  = signal(false);
+  baremeRapport  = signal<{ appliques: number;
+                            ignores: { eleve: string; raison: string }[] } | null>(null);
+  bareme: Record<number, number | null> = {};
+
+  /** Les mois réellement facturés par l'exercice, dans l'ordre du calendrier
+   *  scolaire — octobre à juin pour une année qui démarre en octobre. */
+  moisExercice = computed(() => {
+    const ex = this.exercice();
+    if (!ex?.date_debut) return [];
+    const noms = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                  'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    const premier = new Date(ex.date_debut).getMonth();   // 0-indexé
+    const nb = ex.nb_mensualites || 10;
+    return Array.from({ length: nb }, (_, i) => {
+      const idx = (premier + i) % 12;
+      return { numero: idx + 1, nom: noms[idx] };
+    });
+  });
   serviceDialogVisible = false;
   mdpDialogVisible     = false;
   userSelectionne: any = null;
@@ -1184,6 +1262,7 @@ export class ParametresComponent implements OnInit {
 
   rolesDisponibles: any[] = [];
 
+  private eleves = inject(ElevesService);
   private translate = inject(TranslateService);
   private appMode = inject(AppModeService);
   theme = inject(ThemeService);
@@ -1561,6 +1640,49 @@ chargerExercice() {
         this.saving.set(false);
       },
       error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+    });
+  }
+
+  ouvrirBareme(section: any) {
+    this.baremeSection.set(section);
+    this.baremeRapport.set(null);
+    this.bareme = {};
+    this.baremeDialogVisible = true;
+  }
+
+  appliquerBareme() {
+    const section = this.baremeSection();
+    if (!section) return;
+
+    // Un mois laissé vide garde la mensualité ordinaire : on ne l'envoie pas.
+    const montants: Record<string, number> = {};
+    for (const m of this.moisExercice()) {
+      const v = this.bareme[m.numero];
+      if (v !== null && v !== undefined && v !== ('' as unknown as number)) {
+        montants[String(m.numero)] = Number(v);
+      }
+    }
+    if (!Object.keys(montants).length) {
+      this.msg.add({ severity: 'warn', summary: 'Barème vide',
+                     detail: 'Renseignez au moins un mois.' });
+      return;
+    }
+
+    this.baremeEnCours.set(true);
+    this.eleves.appliquerBaremeMensuel({ section: section.id }, montants).subscribe({
+      next: (r) => {
+        this.baremeRapport.set({ appliques: r.appliques, ignores: r.ignores });
+        this.baremeEnCours.set(false);
+        this.msg.add({ severity: r.ignores.length ? 'warn' : 'success',
+                       summary: 'Barème appliqué',
+                       detail: `${r.appliques} élève(s) sur ${r.total}.` });
+      },
+      error: (e) => {
+        this.baremeEnCours.set(false);
+        this.msg.add({ severity: 'error', summary: 'Échec',
+                       detail: e?.error?.error || e?.error?.montants
+                               || 'Le barème n\'a pas pu être appliqué.' });
+      },
     });
   }
 

@@ -872,6 +872,99 @@ class EleveViewSet(viewsets.ModelViewSet):
         eleve.save(update_fields=['montants_mois'])
         return Response(construire_echeancier(eleve))
 
+    @action(detail=False, methods=['post'], url_path='bareme-mensuel')
+    def bareme_mensuel(self, request):
+        """Applique un barème mensuel à TOUS les élèves d'une section ou d'une classe.
+
+        Attend {"section": "<id>", "montants": {"10": 60000, "1": 70000}} —
+        « classe » est accepté à la place de « section ».
+
+        Le montant propre à chaque mois se posait fiche par fiche. Cela convient
+        à une exception — un mois entamé à mi-parcours — mais pas à un barème
+        d'établissement : une école dont la mensualité change en cours d'année
+        (60 000 jusqu'en décembre, 70 000 ensuite) devait ouvrir chaque fiche,
+        une par une, pour une règle qui vaut pour tout le monde.
+
+        Un barème est une règle de groupe : il se pose sur le groupe.
+
+        Ce qui ne peut pas s'appliquer n'interrompt PAS le lot. Deux cas :
+        un élève entré en cours d'année ne se voit poser que les mois qui lui
+        sont réellement facturés ; un élève ayant déjà versé plus que le nouveau
+        montant d'un mois est laissé intact et signalé. L'école voit ce qui est
+        passé et ce qui demande son attention, au lieu d'un échec global.
+        """
+        from .echeancier import construire_echeancier, mois_factures, NOMS_MOIS
+
+        tenant = get_tenant(request)
+        exercice = Exercice.objects.filter(
+            tenant=tenant, cloture=False).order_by('-date_debut').first()
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif.'}, status=400)
+
+        section_id = request.data.get('section')
+        classe_id = request.data.get('classe')
+        if not section_id and not classe_id:
+            return Response({'error': 'Précisez une section ou une classe.'}, status=400)
+
+        brut = request.data.get('montants')
+        if not isinstance(brut, dict) or not brut:
+            return Response({'montants': 'Attendu : un objet {mois: montant} non vide.'},
+                            status=400)
+        bareme = {}
+        for cle, valeur in brut.items():
+            try:
+                mois, montant = int(cle), round(float(valeur or 0), 2)
+            except (TypeError, ValueError):
+                return Response({'montants': 'Mois et montants numériques attendus.'},
+                                status=400)
+            if not 1 <= mois <= 12:
+                return Response({'montants': f"Mois invalide : {cle}."}, status=400)
+            if montant < 0:
+                return Response({'montants': 'Un montant dû ne peut pas être négatif.'},
+                                status=400)
+            bareme[mois] = montant
+
+        eleves = (Eleve.objects.filter(tenant=tenant, exercice=exercice)
+                  .select_related('section', 'exercice', 'tenant')
+                  .prefetch_related('abonnements__service', 'paiements'))
+        eleves = (eleves.filter(classe_id=classe_id) if classe_id
+                  else eleves.filter(section_id=section_id))
+
+        appliques, ignores = 0, []
+        for eleve in eleves:
+            factures = set(mois_factures(eleve))
+            propre = {str(m): v for m, v in bareme.items() if m in factures}
+            if not propre:
+                ignores.append({'eleve': eleve.nom_complet,
+                                'raison': "aucun des mois du barème ne lui est facturé"})
+                continue
+
+            deja = {l['mois']: l['paye'] for l in construire_echeancier(eleve)['lignes']}
+            trop = [m for m in propre if deja.get(int(m), 0) > float(propre[m]) + 0.01]
+            if trop:
+                noms = ', '.join(NOMS_MOIS.get(int(m), m) for m in sorted(trop, key=int))
+                ignores.append({'eleve': eleve.nom_complet,
+                                'raison': f"déjà encaissé plus que le barème pour : {noms}"})
+                continue
+
+            # On complète les montants déjà saisis pour d'autres mois plutôt
+            # que de les écraser : une exception posée sur une fiche reste une
+            # décision de l'école.
+            fusion = dict(eleve.montants_mois or {})
+            fusion.update(propre)
+            eleve.montants_mois = fusion
+            eleve.save(update_fields=['montants_mois'])
+            appliques += 1
+
+        from core.models import log_audit
+        cible = f"classe {classe_id}" if classe_id else f"section {section_id}"
+        log_audit(request, 'UPDATE', 'Eleve', '',
+                  f"Barème mensuel appliqué à {appliques} élève(s) — {cible}")
+
+        return Response({'appliques': appliques,
+                         'ignores': ignores,
+                         'total': appliques + len(ignores)})
+
     @action(detail=True, methods=['post'], url_path='imputation')
     def imputation(self, request, pk=None):
         """Saisit le montant réellement réglé pour chaque mois.

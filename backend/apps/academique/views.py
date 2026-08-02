@@ -64,6 +64,82 @@ class ClasseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
 
+    @action(detail=True, methods=['post'], url_path='copier-matieres')
+    def copier_matieres(self, request, pk=None):
+        """Recopie les matières de cette classe vers d'autres classes.
+
+        Attend {"cibles": ["<id>", ...], "ecraser": false}.
+
+        Un établissement à filières partage presque toujours un tronc commun :
+        les matières se saisissaient classe par classe, soit plusieurs centaines
+        de saisies identiques au paramétrage d'un centre de formation. La même
+        matière recopiée à la main finit d'ailleurs avec des coefficients
+        divergents d'une classe à l'autre.
+
+        Une matière déjà présente dans la cible, reconnue à son NOM, n'est pas
+        dupliquée : soit on la laisse telle quelle, soit on aligne son
+        coefficient et sa note maximale sur la source quand `ecraser` est
+        demandé. Relancer l'opération ne crée donc jamais de doublon.
+        """
+        from django.db import transaction
+
+        tenant = get_tenant(request)
+        try:
+            source = Classe.objects.get(id=pk, tenant=tenant)
+        except Classe.DoesNotExist:
+            return Response({'error': 'Classe source introuvable.'}, status=404)
+
+        cibles_ids = request.data.get('cibles') or []
+        if not isinstance(cibles_ids, list) or not cibles_ids:
+            return Response({'cibles': 'Attendu : une liste de classes cibles.'},
+                            status=400)
+        ecraser = bool(request.data.get('ecraser'))
+
+        cibles = list(Classe.objects.filter(tenant=tenant, id__in=cibles_ids)
+                      .exclude(id=source.id))
+        if not cibles:
+            return Response({'cibles': 'Aucune classe cible valide.'}, status=400)
+
+        matieres = list(Matiere.objects.filter(tenant=tenant, classe=source,
+                                               est_active=True).order_by('ordre', 'nom'))
+        if not matieres:
+            return Response({'error': "Cette classe n'a aucune matière à recopier."},
+                            status=400)
+
+        rapport = []
+        with transaction.atomic():
+            for cible in cibles:
+                existantes = {m.nom.strip().lower(): m for m in
+                              Matiere.objects.filter(tenant=tenant, classe=cible)}
+                creees = alignees = 0
+                for m in matieres:
+                    cle = m.nom.strip().lower()
+                    if cle in existantes:
+                        if ecraser:
+                            deja = existantes[cle]
+                            deja.coefficient, deja.note_max = m.coefficient, m.note_max
+                            deja.ordre, deja.est_active = m.ordre, True
+                            deja.save(update_fields=['coefficient', 'note_max',
+                                                     'ordre', 'est_active'])
+                            alignees += 1
+                        continue
+                    Matiere.objects.create(
+                        tenant=tenant, classe=cible, nom=m.nom, code=m.code,
+                        coefficient=m.coefficient, note_max=m.note_max,
+                        ordre=m.ordre, est_active=True)
+                    creees += 1
+                rapport.append({'classe': cible.nom, 'creees': creees,
+                                'alignees': alignees,
+                                'inchangees': len(matieres) - creees - alignees})
+
+        from core.models import log_audit
+        log_audit(request, 'CREATE', 'Matiere', str(source.id),
+                  f"{len(matieres)} matière(s) de « {source.nom} » recopiées "
+                  f"vers {len(cibles)} classe(s)")
+
+        return Response({'source': source.nom, 'matieres': len(matieres),
+                         'rapport': rapport})
+
     @action(detail=True, methods=['get'])
     def eleves(self, request, pk=None):
         """Retourne les élèves inscrits dans la section dont le nom correspond à cette classe."""

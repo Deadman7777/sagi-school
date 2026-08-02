@@ -22,6 +22,15 @@ export class AcademiqueService {
   bulkSaveNotes(notes: any[]) { return this.api.post<any>('/academique/notes/bulk_save/', { notes }); }
 
   modifierClasse(id: string, data: any)   { return this.api.patch<any>(`/academique/classes/${id}/`, data); }
+
+  /** Recopie les matières d'une classe vers d'autres. Une matière déjà
+   *  présente dans la cible, reconnue à son nom, n'est jamais dupliquée. */
+  copierMatieres(sourceId: string, cibles: string[], ecraser = false) {
+    return this.api.post<{
+      source: string; matieres: number;
+      rapport: { classe: string; creees: number; alignees: number; inchangees: number }[];
+    }>(`/academique/classes/${sourceId}/copier-matieres/`, { cibles, ecraser });
+  }
   supprimerClasse(id: string)             { return this.api.delete<any>(`/academique/classes/${id}/`); }
   modifierMatiere(id: string, data: any)  { return this.api.patch<any>(`/academique/matieres/${id}/`, data); }
   supprimerMatiere(id: string)            { return this.api.delete<any>(`/academique/matieres/${id}/`); }

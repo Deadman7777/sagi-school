@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AcademiqueService } from '../../core/services/academique.service';
@@ -14,6 +14,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { MessageService } from 'primeng/api';
 import { ToastModule } from 'primeng/toast';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,7 +23,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   selector: 'app-academique',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
-            InputTextModule, SelectModule, TagModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule,
+            InputTextModule, SelectModule, TagModule, InputNumberModule, MultiSelectModule, ToastModule, TooltipModule, TranslateModule,
             MemorisationComponent],
   providers: [MessageService],
   template: `
@@ -95,8 +96,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <div class="param-card">
           <div class="pc-header">
             <span>📖 {{ 'academique.matieres' | translate }}</span>
-            <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
-                      severity="success" (onClick)="ouvrirDialogMatiere()" />
+            <span>
+              <!-- Les filières d'un même établissement partagent un tronc
+                   commun : recopier évite des centaines de saisies identiques,
+                   et des coefficients qui divergent d'une classe à l'autre. -->
+              <p-button icon="pi pi-copy" [rounded]="true" [text]="true" severity="secondary"
+                        [disabled]="!classeFiltre || matieres().length === 0"
+                        (onClick)="ouvrirCopieMatieres()"
+                        pTooltip="Copier ces matières vers d'autres classes" tooltipPosition="top" />
+              <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
+                        severity="success" (onClick)="ouvrirDialogMatiere()" />
+            </span>
           </div>
           <div class="pc-filter">
             <p-select [options]="classes()" [(ngModel)]="classeFiltre"
@@ -536,6 +546,41 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog Copie des matières -->
+    <p-dialog header="📑 Copier les matières" [(visible)]="dialogCopieVisible"
+              [modal]="true" [style]="{width:'520px'}">
+      <p class="copie-aide">
+        Les <b>{{ matieres().length }}</b> matières de
+        <b>{{ nomClasseFiltre() }}</b> seront recopiées avec leurs coefficients.
+        Une matière déjà présente dans la classe cible n'est jamais dupliquée.
+      </p>
+      <div class="form-group">
+        <label>Classes destinataires</label>
+        <p-multiSelect [options]="classesCibles()" [(ngModel)]="copieCibles"
+                       optionLabel="nom" optionValue="id" styleClass="w-full"
+                       placeholder="Choisir une ou plusieurs classes"
+                       scrollHeight="280px" [filter]="true" />
+      </div>
+      <label class="copie-ecraser">
+        <input type="checkbox" [(ngModel)]="copieEcraser" />
+        <span>Aligner aussi les matières déjà présentes sur les coefficients de la source</span>
+      </label>
+      @if (copieRapport()) {
+        <div class="copie-rapport">
+          @for (r of copieRapport()!; track r.classe) {
+            <div>· <b>{{ r.classe }}</b> — {{ r.creees }} ajoutée(s),
+              {{ r.alignees }} alignée(s), {{ r.inchangees }} inchangée(s)</div>
+          }
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary"
+                  (onClick)="dialogCopieVisible=false" />
+        <p-button label="Copier" severity="success" [loading]="copieEnCours()"
+                  [disabled]="copieCibles.length === 0" (onClick)="copierMatieres()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Dialog Type Évaluation -->
     <p-dialog [header]="'📋 ' + (formTypeEval.id ? ('common.modifier' | translate) : ('academique.nouveau_type_eval' | translate))" [(visible)]="dialogTypeEvalVisible"
               [modal]="true" [style]="{width:'400px'}">
@@ -624,6 +669,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
     .mono  { font-family:monospace; font-size:12px; }
     .bold  { font-weight:600; color:var(--text); }
+    .copie-aide { font-size:13px; color:var(--text-2); line-height:1.55; margin-bottom:14px; }
+    .copie-ecraser { display:flex; gap:8px; align-items:flex-start; margin-top:12px; font-size:12.5px; color:var(--text-2); cursor:pointer; }
+    .copie-ecraser input { margin-top:2px; }
+    .copie-rapport { background:var(--surface-hover); border-radius:8px; padding:10px 12px; font-size:12.5px; line-height:1.7; margin-top:14px; }
     .empty-msg { text-align:center; padding:20px; color:var(--text-3); font-size:12px; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .form-group { display:flex; flex-direction:column; gap:6px; }
@@ -660,6 +709,21 @@ export class AcademiqueComponent implements OnInit {
   histClasseOptions= signal<any[]>([]);
 
   classeFiltre    = '';
+
+  // ── Copie des matières d'une classe vers d'autres ─────────────────────
+  dialogCopieVisible = false;
+  copieCibles: string[] = [];
+  copieEcraser = false;
+  copieEnCours = signal(false);
+  copieRapport = signal<{ classe: string; creees: number;
+                          alignees: number; inchangees: number }[] | null>(null);
+
+  /** Les classes proposées comme destinataires — toutes sauf la source. */
+  classesCibles = computed(() =>
+    this.classes().filter((c: any) => c.id !== this.classeFiltre));
+
+  nomClasseFiltre = computed(() =>
+    this.classes().find((c: any) => c.id === this.classeFiltre)?.nom || '');
   classeNotes     = '';
   matiereNotes    = '';
   trimestreNotes  = 'T1';
@@ -757,6 +821,35 @@ export class AcademiqueComponent implements OnInit {
     this.acad.getNiveaux().subscribe({ next: r => this.niveaux.set(r.results || []) });
     this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
     this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
+  }
+
+  ouvrirCopieMatieres() {
+    this.copieCibles = [];
+    this.copieEcraser = false;
+    this.copieRapport.set(null);
+    this.dialogCopieVisible = true;
+  }
+
+  copierMatieres() {
+    if (!this.classeFiltre || !this.copieCibles.length) return;
+    this.copieEnCours.set(true);
+    this.acad.copierMatieres(this.classeFiltre, this.copieCibles, this.copieEcraser)
+      .subscribe({
+        next: (r) => {
+          this.copieRapport.set(r.rapport);
+          this.copieEnCours.set(false);
+          const ajoutees = r.rapport.reduce((t, x) => t + x.creees, 0);
+          this.msg.add({ severity: 'success', summary: 'Matières copiées',
+                         detail: `${ajoutees} matière(s) ajoutée(s) dans `
+                                 + `${r.rapport.length} classe(s).` });
+        },
+        error: (e) => {
+          this.copieEnCours.set(false);
+          this.msg.add({ severity: 'error', summary: 'Échec',
+                         detail: e?.error?.error || e?.error?.cibles
+                                 || 'La copie a échoué.' });
+        },
+      });
   }
 
   chargerMatieres() {

@@ -120,6 +120,18 @@ export class ElevesService {
     return this.api.post<Echeancier>(`/eleves/${eleveId}/montants-mois/`, { montants });
   }
 
+  /** Applique un barème mensuel à TOUS les élèves d'une section (ou d'une
+   *  classe) de l'exercice actif. Ce qui ne peut pas s'appliquer — élève déjà
+   *  trop encaissé sur un mois — est signalé sans interrompre le lot. */
+  appliquerBaremeMensuel(cible: { section?: string; classe?: string },
+                         montants: Record<string, number>) {
+    return this.api.post<{
+      appliques: number;
+      ignores: { eleve: string; raison: string }[];
+      total: number;
+    }>('/eleves/bareme-mensuel/', { ...cible, montants });
+  }
+
   /** Corrige la répartition du payé par mois. Le total est verrouillé côté
    *  serveur sur ce qui a réellement été encaissé — on déplace, on ne crée pas. */
   corrigerImputation(eleveId: string, imputation: Record<string, number>) {
