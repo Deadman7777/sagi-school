@@ -4,11 +4,17 @@ import uuid
 
 
 class NiveauScolaire(TenantModel):
+    # Le post-bac manquait : un centre de formation professionnelle qui prépare
+    # un BTS n'avait aucun code juste à poser sur ses promotions, et devait se
+    # déclarer « Lycée ». Le module RH, lui, connaissait déjà le niveau
+    # Supérieur pour ses enseignants (apps/rh/models.py) — c'était un oubli, pas
+    # une décision.
     NIVEAU_CHOICES = [
         ('PRESCOLAIRE',  'Préscolaire'),
         ('ELEMENTAIRE',  'Élémentaire'),
         ('COLLEGE',      'Collège'),
         ('LYCEE',        'Lycée'),
+        ('SUPERIEUR',    'Supérieur / BTS'),
     ]
     nom        = models.CharField(max_length=50)
     code       = models.CharField(max_length=20, choices=NIVEAU_CHOICES)
