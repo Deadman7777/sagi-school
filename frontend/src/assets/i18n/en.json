@@ -585,7 +585,19 @@
     "sms_echecs": "Failures",
     "sms_ignores": "Skipped (already notified or no number)",
     "ordre_affichage": "Order",
-    "ordre_affichage_aide": "This order decides where each section appears in PDF lists: put 1 on the one that must come first (the Tahfiiz boarding school, for instance), 2 on the next, and so on. Within a section, students stay arranged by registration number."
+    "ordre_affichage_aide": "This order decides where each section appears in PDF lists: put 1 on the one that must come first (the Tahfiiz boarding school, for instance), 2 on the next, and so on. Within a section, students stay arranged by registration number.",
+    "bareme_titre": "📅 Monthly fee schedule",
+    "bareme_btn": "📅 Monthly schedule",
+    "bareme_aide": "Amount due for each month billed to students in {{section}}. Leave a month empty to keep the standard fee of {{montant}} FCFA.",
+    "bareme_tarif": "standard",
+    "bareme_appliquer": "Apply to the whole group",
+    "bareme_maj": "{{n}} student(s) updated.",
+    "bareme_intactes": "{{n}} record(s) left untouched:",
+    "bareme_vide": "Empty schedule",
+    "bareme_vide_aide": "Fill in at least one month.",
+    "bareme_applique": "Schedule applied",
+    "bareme_resume": "{{n}} of {{total}} student(s).",
+    "bareme_echec": "The schedule could not be applied."
   },
   "cloture": {
     "title": "Year Closing",
@@ -627,7 +639,8 @@
     "requis": "Required",
     "champ_requis": "Required field",
     "exporter": "Export",
-    "modifier": "Edit"
+    "modifier": "Edit",
+    "echec": "Failed"
   },
   "auth": {
     "email": "Email",
@@ -705,7 +718,18 @@
     "appr_bien": "✅ Good",
     "appr_assez_bien": "🆗 Fair",
     "appr_passable": "⚠️ Pass",
-    "appr_insuffisant": "❌ Fail"
+    "appr_insuffisant": "❌ Fail",
+    "copie_titre": "📑 Copy subjects",
+    "copie_tooltip": "Copy these subjects to other classes",
+    "copie_aide": "The {{n}} subjects of {{classe}} will be copied with their weightings. A subject already present in the target class is never duplicated.",
+    "copie_cibles": "Target classes",
+    "copie_choisir": "Select one or more classes",
+    "copie_ecraser": "Also align existing subjects with the source weightings",
+    "copie_btn": "Copy",
+    "copie_rapport": "{{n}} added, {{alignees}} aligned, {{inchangees}} unchanged",
+    "copie_faite": "Subjects copied",
+    "copie_resume": "{{n}} subject(s) added across {{classes}} class(es).",
+    "copie_echec": "The copy failed."
   },
   "comptabilite": {
     "title": "SYSCOHADA Accounting",

@@ -103,7 +103,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <p-button icon="pi pi-copy" [rounded]="true" [text]="true" severity="secondary"
                         [disabled]="!classeFiltre || matieres().length === 0"
                         (onClick)="ouvrirCopieMatieres()"
-                        pTooltip="Copier ces matières vers d'autres classes" tooltipPosition="top" />
+                        [pTooltip]="'academique.copie_tooltip' | translate" tooltipPosition="top" />
               <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
                         severity="success" (onClick)="ouvrirDialogMatiere()" />
             </span>
@@ -547,36 +547,33 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     </p-dialog>
 
     <!-- Dialog Copie des matières -->
-    <p-dialog header="📑 Copier les matières" [(visible)]="dialogCopieVisible"
+    <p-dialog [header]="'academique.copie_titre' | translate" [(visible)]="dialogCopieVisible"
               [modal]="true" [style]="{width:'520px'}">
-      <p class="copie-aide">
-        Les <b>{{ matieres().length }}</b> matières de
-        <b>{{ nomClasseFiltre() }}</b> seront recopiées avec leurs coefficients.
-        Une matière déjà présente dans la classe cible n'est jamais dupliquée.
-      </p>
+      <p class="copie-aide">{{ 'academique.copie_aide' | translate: {
+        n: matieres().length, classe: nomClasseFiltre() } }}</p>
       <div class="form-group">
-        <label>Classes destinataires</label>
+        <label>{{ 'academique.copie_cibles' | translate }}</label>
         <p-multiSelect [options]="classesCibles()" [(ngModel)]="copieCibles"
                        optionLabel="nom" optionValue="id" styleClass="w-full"
-                       placeholder="Choisir une ou plusieurs classes"
+                       [placeholder]="'academique.copie_choisir' | translate"
                        scrollHeight="280px" [filter]="true" />
       </div>
       <label class="copie-ecraser">
         <input type="checkbox" [(ngModel)]="copieEcraser" />
-        <span>Aligner aussi les matières déjà présentes sur les coefficients de la source</span>
+        <span>{{ 'academique.copie_ecraser' | translate }}</span>
       </label>
       @if (copieRapport()) {
         <div class="copie-rapport">
           @for (r of copieRapport()!; track r.classe) {
-            <div>· <b>{{ r.classe }}</b> — {{ r.creees }} ajoutée(s),
-              {{ r.alignees }} alignée(s), {{ r.inchangees }} inchangée(s)</div>
+            <div>· <b>{{ r.classe }}</b> — {{ 'academique.copie_rapport' | translate: {
+              n: r.creees, alignees: r.alignees, inchangees: r.inchangees } }}</div>
           }
         </div>
       }
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary"
                   (onClick)="dialogCopieVisible=false" />
-        <p-button label="Copier" severity="success" [loading]="copieEnCours()"
+        <p-button [label]="'academique.copie_btn' | translate" severity="success" [loading]="copieEnCours()"
                   [disabled]="copieCibles.length === 0" (onClick)="copierMatieres()" />
       </ng-template>
     </p-dialog>
@@ -839,15 +836,17 @@ export class AcademiqueComponent implements OnInit {
           this.copieRapport.set(r.rapport);
           this.copieEnCours.set(false);
           const ajoutees = r.rapport.reduce((t, x) => t + x.creees, 0);
-          this.msg.add({ severity: 'success', summary: 'Matières copiées',
-                         detail: `${ajoutees} matière(s) ajoutée(s) dans `
-                                 + `${r.rapport.length} classe(s).` });
+          this.msg.add({ severity: 'success',
+                         summary: this.translate.instant('academique.copie_faite'),
+                         detail: this.translate.instant('academique.copie_resume',
+                                   { n: ajoutees, classes: r.rapport.length }) });
         },
         error: (e) => {
           this.copieEnCours.set(false);
-          this.msg.add({ severity: 'error', summary: 'Échec',
+          this.msg.add({ severity: 'error',
+                         summary: this.translate.instant('common.echec'),
                          detail: e?.error?.error || e?.error?.cibles
-                                 || 'La copie a échoué.' });
+                                 || this.translate.instant('academique.copie_echec') });
         },
       });
   }

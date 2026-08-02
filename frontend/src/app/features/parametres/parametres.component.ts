@@ -520,8 +520,8 @@ import { MessageService } from 'primeng/api';
             <!-- Barème mensuel : pour une école dont la mensualité change en
                  cours d'année, poser la règle sur le GROUPE au lieu d'ouvrir
                  chaque fiche une par une. -->
-            <p-button label="📅 Barème mensuel" severity="secondary" size="small" [outlined]="true"
-                      (onClick)="ouvrirBareme(s)" />
+            <p-button [label]="'parametres.bareme_btn' | translate" severity="secondary"
+                      size="small" [outlined]="true" (onClick)="ouvrirBareme(s)" />
             <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
                       (onClick)="supprimerSection(s)" />
           </div>
@@ -931,30 +931,29 @@ import { MessageService } from 'primeng/api';
 
     <!-- Dialog nouvelle section -->
     <!-- ── Barème mensuel d'une section ───────────────────────────────── -->
-    <p-dialog header="📅 Barème mensuel" [(visible)]="baremeDialogVisible"
+    <p-dialog [header]="'parametres.bareme_titre' | translate" [(visible)]="baremeDialogVisible"
               [modal]="true" [style]="{ width: '540px' }">
       @if (baremeSection()) {
-        <p class="dlg-aide">
-          Montant dû pour chaque mois facturé aux élèves de
-          <b>{{ baremeSection()!.nom }}</b>. Laissez un mois vide pour qu'il
-          garde la mensualité ordinaire de {{ baremeSection()!.frais_mensualite | number }} FCFA.
-        </p>
+        <p class="dlg-aide">{{ 'parametres.bareme_aide' | translate: {
+          section: baremeSection()!.nom,
+          montant: (baremeSection()!.frais_mensualite | number) } }}</p>
         <div class="bareme-grid">
           @for (m of moisExercice(); track m.numero) {
             <div class="bareme-mois">
               <label [attr.for]="'bar-' + m.numero">{{ m.nom }}</label>
               <p-inputNumber [inputId]="'bar-' + m.numero" [(ngModel)]="bareme[m.numero]"
                              mode="decimal" [min]="0" styleClass="w-full"
-                             inputStyleClass="text-right" placeholder="tarif" />
+                             inputStyleClass="text-right"
+                             [placeholder]="'parametres.bareme_tarif' | translate" />
             </div>
           }
         </div>
         @if (baremeRapport()) {
           <div class="bareme-rapport">
-            <b>{{ baremeRapport()!.appliques }}</b> élève(s) mis à jour.
+            {{ 'parametres.bareme_maj' | translate: { n: baremeRapport()!.appliques } }}
             @if (baremeRapport()!.ignores.length) {
               <div class="bareme-ignores">
-                {{ baremeRapport()!.ignores.length }} fiche(s) laissée(s) intacte(s) :
+                {{ 'parametres.bareme_intactes' | translate: { n: baremeRapport()!.ignores.length } }}
                 @for (ig of baremeRapport()!.ignores; track ig.eleve) {
                   <div>· {{ ig.eleve }} — {{ ig.raison }}</div>
                 }
@@ -965,7 +964,7 @@ import { MessageService } from 'primeng/api';
         <div class="dlg-actions">
           <p-button [label]="'common.annuler' | translate" severity="secondary"
                     [text]="true" (onClick)="baremeDialogVisible = false" />
-          <p-button label="Appliquer à la section" severity="success"
+          <p-button [label]="'parametres.bareme_appliquer' | translate" severity="success"
                     [loading]="baremeEnCours()" (onClick)="appliquerBareme()" />
         </div>
       }
@@ -1663,8 +1662,9 @@ chargerExercice() {
       }
     }
     if (!Object.keys(montants).length) {
-      this.msg.add({ severity: 'warn', summary: 'Barème vide',
-                     detail: 'Renseignez au moins un mois.' });
+      this.msg.add({ severity: 'warn',
+                     summary: this.translate.instant('parametres.bareme_vide'),
+                     detail: this.translate.instant('parametres.bareme_vide_aide') });
       return;
     }
 
@@ -1674,14 +1674,16 @@ chargerExercice() {
         this.baremeRapport.set({ appliques: r.appliques, ignores: r.ignores });
         this.baremeEnCours.set(false);
         this.msg.add({ severity: r.ignores.length ? 'warn' : 'success',
-                       summary: 'Barème appliqué',
-                       detail: `${r.appliques} élève(s) sur ${r.total}.` });
+                       summary: this.translate.instant('parametres.bareme_applique'),
+                       detail: this.translate.instant('parametres.bareme_resume',
+                                                      { n: r.appliques, total: r.total }) });
       },
       error: (e) => {
         this.baremeEnCours.set(false);
-        this.msg.add({ severity: 'error', summary: 'Échec',
+        this.msg.add({ severity: 'error',
+                       summary: this.translate.instant('common.echec'),
                        detail: e?.error?.error || e?.error?.montants
-                               || 'Le barème n\'a pas pu être appliqué.' });
+                               || this.translate.instant('parametres.bareme_echec') });
       },
     });
   }

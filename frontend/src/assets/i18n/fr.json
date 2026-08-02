@@ -585,7 +585,19 @@
     "sms_echecs": "Échecs",
     "sms_ignores": "Ignorés (déjà prévenus ou sans numéro)",
     "ordre_affichage": "Ordre",
-    "ordre_affichage_aide": "L'ordre décide de la place de chaque section dans les listes PDF : mettez 1 sur celle qui doit venir en premier (l'internat Tahfiiz, par exemple), 2 sur la suivante, et ainsi de suite. À l'intérieur d'une section, les élèves restent rangés par matricule."
+    "ordre_affichage_aide": "L'ordre décide de la place de chaque section dans les listes PDF : mettez 1 sur celle qui doit venir en premier (l'internat Tahfiiz, par exemple), 2 sur la suivante, et ainsi de suite. À l'intérieur d'une section, les élèves restent rangés par matricule.",
+    "bareme_titre": "📅 Barème mensuel",
+    "bareme_btn": "📅 Barème mensuel",
+    "bareme_aide": "Montant dû pour chaque mois facturé aux élèves de {{section}}. Laissez un mois vide pour qu'il garde la mensualité ordinaire de {{montant}} FCFA.",
+    "bareme_tarif": "tarif",
+    "bareme_appliquer": "Appliquer à la section",
+    "bareme_maj": "{{n}} élève(s) mis à jour.",
+    "bareme_intactes": "{{n}} fiche(s) laissée(s) intacte(s) :",
+    "bareme_vide": "Barème vide",
+    "bareme_vide_aide": "Renseignez au moins un mois.",
+    "bareme_applique": "Barème appliqué",
+    "bareme_resume": "{{n}} élève(s) sur {{total}}.",
+    "bareme_echec": "Le barème n'a pas pu être appliqué."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -627,7 +639,8 @@
     "requis": "Requis",
     "champ_requis": "Champ requis",
     "exporter": "Exporter",
-    "modifier": "Modifier"
+    "modifier": "Modifier",
+    "echec": "Échec"
   },
   "auth": {
     "email": "Email",
@@ -705,7 +718,18 @@
     "appr_bien": "✅ Bien",
     "appr_assez_bien": "🆗 Assez Bien",
     "appr_passable": "⚠️ Passable",
-    "appr_insuffisant": "❌ Insuffisant"
+    "appr_insuffisant": "❌ Insuffisant",
+    "copie_titre": "📑 Copier les matières",
+    "copie_tooltip": "Copier ces matières vers d'autres classes",
+    "copie_aide": "Les {{n}} matières de {{classe}} seront recopiées avec leurs coefficients. Une matière déjà présente dans la classe cible n'est jamais dupliquée.",
+    "copie_cibles": "Classes destinataires",
+    "copie_choisir": "Choisir une ou plusieurs classes",
+    "copie_ecraser": "Aligner aussi les matières déjà présentes sur les coefficients de la source",
+    "copie_btn": "Copier",
+    "copie_rapport": "{{n}} ajoutée(s), {{alignees}} alignée(s), {{inchangees}} inchangée(s)",
+    "copie_faite": "Matières copiées",
+    "copie_resume": "{{n}} matière(s) ajoutée(s) dans {{classes}} classe(s).",
+    "copie_echec": "La copie a échoué."
   },
   "comptabilite": {
     "title": "Comptabilité SYSCOHADA",
