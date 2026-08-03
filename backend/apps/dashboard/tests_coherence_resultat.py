@@ -88,6 +88,43 @@ class CoherenceResultatTest(APITestCase):
         stats = verifier_avant_cloture(self.ex)['stats']
         self.assertEqual(stats['total_charges'], 1000000)
 
+    def test_tous_les_ecrans_concordent_malgre_les_annulations(self):
+        """Le cas qui distingue un calcul NET d'un calcul BRUT.
+
+        Une annulation écrit sa contre-écriture dans l'autre sens. Un écran qui
+        somme le seul débit des comptes 6 et le seul crédit des comptes 7 la
+        rate, et gonfle produits comme charges. C'est ce que faisait l'écran de
+        pilotage de la Gouvernance — celui qu'on ouvre devant un bailleur.
+        """
+        from apps.paiements.cloturer import verifier_avant_cloture
+
+        # Un produit et une charge, chacun suivi de son annulation.
+        self._je('571', 500000, 0, 'PAIEMENT')
+        self._je('706', 0, 500000, 'PAIEMENT')
+        self._je('706', 200000, 0, 'ANNUL_PAIEMENT')      # annulation partielle
+        self._je('571', 0, 200000, 'ANNUL_PAIEMENT')
+        self._je('622', 300000, 0, 'CHARGE')
+        self._je('571', 0, 300000, 'CHARGE')
+        self._je('622', 0, 120000, 'CHARGE')              # charge extournée
+        self._je('571', 120000, 0, 'CHARGE')
+
+        attendu = {'produits': 300000, 'charges': 180000, 'resultat': 120000}
+
+        cr = self.client.get('/api/comptabilite/compte-resultat/').data
+        kpis = self.client.get('/api/dashboard/kpis/').data['kpis']
+        gouv = self.client.get('/api/gouvernance/dashboard/').data['pilotage']['indicateurs']
+        stats = verifier_avant_cloture(self.ex)['stats']
+
+        for nom, produits, charges, resultat in [
+            ('compte de résultat', cr['total_produits'], cr['total_charges'], cr['resultat_net']),
+            ('tableau de bord', kpis['total_recettes'], kpis['total_charges'], kpis['resultat_net']),
+            ('gouvernance', gouv['produits'], gouv['charges'], gouv['resultat']),
+            ('clôture', stats['total_recettes'], stats['total_charges'], stats['resultat_net']),
+        ]:
+            self.assertEqual(produits, attendu['produits'], f"produits — {nom}")
+            self.assertEqual(charges, attendu['charges'], f"charges — {nom}")
+            self.assertEqual(resultat, attendu['resultat'], f"résultat — {nom}")
+
     def test_les_charges_du_tableau_de_bord_contiennent_la_paie(self):
         """Le point précis qui faussait le bénéfice affiché à l'école."""
         self._ecritures_d_une_annee()

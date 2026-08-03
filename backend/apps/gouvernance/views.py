@@ -1262,8 +1262,20 @@ class DashboardGouvernanceView(APIView):
             usages_map[cat] = usages_map.get(cat, Decimal('0')) + (row['d'] or 0) - (row['c'] or 0)
         usages = sorted([{'nature': k, 'montant': float(v)} for k, v in usages_map.items() if v],
                         key=lambda x: -x['montant'])
-        charges = float(entries.filter(no_compte__startswith='6', debit__gt=0).aggregate(t=Sum('debit'))['t'] or 0)
-        produits = float(entries.filter(no_compte__startswith='7', credit__gt=0).aggregate(t=Sum('credit'))['t'] or 0)
+        # Produits, charges et résultat : le MÊME calcul que le compte de
+        # résultat et le tableau de bord (apps/comptabilite/resultat.py).
+        #
+        # Ces deux lignes sommaient le débit BRUT des comptes 6 et le crédit
+        # BRUT des comptes 7. Une annulation de règlement ou une neutralisation
+        # de migration écrit sa contre-écriture dans l'autre sens : elle était
+        # donc ignorée, et l'écran de pilotage — celui qu'on ouvre devant un
+        # conseil d'administration ou un bailleur — gonflait produits comme
+        # charges. Trois lignes plus haut, le graphique des emplois nettait
+        # déjà correctement : le même écran se contredisait lui-même.
+        from apps.comptabilite.resultat import totaux_resultat
+        _tot = totaux_resultat(entries)
+        charges = _tot['total_charges']
+        produits = _tot['total_produits']
         taux_global = float(round(total_conso / total_obtenu * 100, 1)) if total_obtenu else 0.0
 
         # Alertes
@@ -1363,8 +1375,9 @@ class TracabiliteGlobaleView(APIView):
         # ── Quel impact ──
         immos = Immobilisation.objects.filter(tenant=tenant, est_cede=False)
         vnc_totale = sum(i.valeur_nette_comptable for i in immos)
-        charges_totales = entries.filter(no_compte__startswith='6', debit__gt=0).aggregate(
-            t=Sum('debit'))['t'] or Decimal('0')
+        # Net, pour la même raison que le pilotage ci-dessus.
+        from apps.comptabilite.resultat import totaux_resultat
+        charges_totales = Decimal(str(totaux_resultat(entries)['total_charges']))
         impact = {
             'nb_immobilisations': immos.count(),
             'valeur_nette_immobilisations': float(vnc_totale),
