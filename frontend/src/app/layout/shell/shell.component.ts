@@ -1,4 +1,5 @@
 import { Component, inject, signal, computed } from '@angular/core';
+import { SamaPanneauComponent } from '../../features/sama/sama-panneau.component';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
@@ -22,6 +23,7 @@ interface NavItem {
   selector: 'app-shell',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule,
+            SamaPanneauComponent,
             AvatarModule, ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
@@ -111,6 +113,10 @@ interface NavItem {
         <main class="content">
           <router-outlet />
         </main>
+
+        <!-- SAMA suit l'utilisateur d'un écran à l'autre : demander de l'aide
+             ne doit jamais lui faire perdre ce qu'il était en train de faire. -->
+        <app-sama-panneau />
       </div>
     </div>
   `,

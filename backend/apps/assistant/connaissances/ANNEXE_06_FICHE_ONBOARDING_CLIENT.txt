@@ -1,0 +1,444 @@
+       ANNEXE 06 · DOCUMENT OPÉRATIONNEL
+
+
+
+      Fiche Onboarding Client
+      Déploiement et intégration SAGI SCHOOL
+
+
+      RÉFÉRENCE           PROCESSUS                                  RESPONSABLE             CONFIDENTIALITÉ
+
+      HG-OPS-001-         Gestion de projet et accompagnement        Chef de projet HADY     Interne + informations
+      V01                 client                                     GESMAN                  client
+
+
+
+
+ 1   IDENTIFICATION DU PROJET CLIENT
+
+Informations générales
+
+ Élément                                          Informations
+
+
+ Nom établissement
+
+
+ Type établissement                               ☐ Daara ☐ École ☐ Franco-arabe ☐ PME ☐ Autre
+
+
+ Ville / Région
+
+
+ Responsable client
+
+
+ Téléphone
+
+
+ Email
+
+
+ Date signature contrat
+
+
+ Date démarrage projet
+
+
+ Date prévue mise en service
+
+
+
+
+ 2   INFORMATIONS COMMERCIALES
+
+
+ Élément                                              Informations
+
+
+ Référence devis
+
+
+ Référence contrat
+
+
+ Offre souscrite
+
+
+ Commercial responsable                               Direction Commerciale HADY GESMAN
+
+
+ Chef projet affecté
+
+
+
+
+ 3   VALIDATION AVANT DÉMARRAGE
+Documents reçus
+
+ Document                                     Statut
+
+
+ Devis accepté                                ☐ Oui ☐ Non
+
+
+ Contrat signé                                ☐ Oui ☐ Non
+
+ Bon de commande                              ☐ Oui ☐ Non
+
+
+ Justificatif paiement                        ☐ Oui ☐ Non
+
+
+ Informations établissement                   ☐ Oui ☐ Non
+
+
+
+
+ 4 RÉUNION DE LANCEMENT PROJET
+
+
+
+Date réunion :
+
+………………………………………………………………
+
+Participants
+
+
+HADY GESMAN
+
+
+ Nom                               Fonction
+
+
+
+
+Client
+
+ Nom                               Fonction
+
+
+
+
+Objectifs validés
+
+ Présentation du planning
+
+ Identification des responsables
+
+ Collecte des données
+
+ Présentation des étapes
+
+ Validation des attentes
+
+
+
+ 5 COLLECTE DES INFORMATIONS CLIENT
+
+
+Informations établissement
+
+ Nom officiel
+
+ Logo établissement
+
+ Adresse
+
+ Contacts
+  Année scolaire/période gestion
+
+  Classes/niveaux
+
+  Organisation interne
+
+
+
+ 6   COLLECTE DES DONNÉES UTILISATEURS
+
+Direction
+
+  Information                                 Donnée
+
+
+  Nom
+
+
+  Email
+
+
+  Téléphone
+
+
+
+Administrateurs
+
+  Nom                              Fonction            Accès prévu
+
+
+
+
+Enseignants / utilisateurs
+
+Nombre :
+
+………………………………………………………………
+
+Liste fournie :
+
+  Oui
+
+  Non
+
+
+
+ 7   IMPORTATION DES DONNÉES
+
+Données élèves
+
+Statut :
+
+  Reçues
+
+  Vérifiées
+
+  Importées
+
+
+Données financières
+
+Statut :
+
+  Reçues
+
+  Vérifiées
+
+  Importées
+
+
+Données personnel
+
+Statut :
+
+  Reçues
+   Vérifiées
+
+   Importées
+
+
+
+  8    CONFIGURATION SAGI SCHOOL
+
+Paramétrage général
+
+   Élément                                  Statut
+
+
+   Création établissement                   ☐
+
+
+   Année scolaire                           ☐
+
+
+   Classes/niveaux                          ☐
+
+
+   Utilisateurs                             ☐
+
+
+   Permissions                              ☐
+
+
+
+
+  9    MODULES ACTIVÉS
+
+Modules inclus dans l’offre
+
+   Module                               Activé
+
+
+   Tableau de bord                      ☐
+
+
+   Gestion élèves                       ☐
+
+
+   Paiements                            ☐
+
+
+   Comptabilité                         ☐
+
+
+   Académique                           ☐
+
+
+   Ressources humaines                  ☐
+
+
+   Automatisation                       ☐
+
+
+
+
+ 10 CONFIGURATION FINANCIÈRE
+
+
+Paramètres :
+
+Frais d’inscription
+
+................................ FCFA
+
+Mensualités
+
+................................ FCFA
+
+Autres frais
+
+................................ FCFA
+Modes de paiement acceptés par le client
+
+ Espèces
+
+ Wave
+
+ Orange Money
+
+ Yas
+
+ Banque
+
+ Autre
+
+
+
+ 11 FORMATION UTILISATEURS
+
+
+
+Planning formation
+
+  Date                                      Groupe     Formateur
+
+
+
+
+Participants formés
+
+  Nom                                       Fonction      Validation
+
+
+
+
+ 12 TEST AVANT MISE EN SERVICE
+
+
+
+Contrôles effectués
+
+ Connexion utilisateurs
+
+ Création élève test
+
+ Enregistrement paiement test
+
+ Génération reçu
+
+ Consultation tableau de bord
+
+ Vérification droits accès
+
+ Test sauvegarde données
+
+
+
+ 13 VALIDATION DE MISE EN PRODUCTION
+
+
+Date de lancement officiel :
+
+………………………………………………………………
+
+Le client confirme :
+
+ La solution est opérationnelle
+
+ Les utilisateurs ont été formés
+
+ Les informations fournies sont correctes
+
+ Le service peut démarrer
+14 PLAN DE SUIVI APRÈS INSTALLATION
+
+
+Première semaine
+
+Objectifs :
+
+  Vérification utilisation
+
+  Correction difficultés initiales
+
+  Assistance utilisateurs
+
+Premier mois
+
+Objectifs :
+
+  Évaluation adoption
+
+  Collecte feedback
+
+  Ajustements nécessaires
+
+
+
+ 15 SYNTHÈSE PROJET
+
+
+Points forts
+
+………………………………………………………………
+
+Difficultés rencontrées
+
+………………………………………………………………
+
+Actions à prévoir
+
+………………………………………………………………
+
+
+
+VALIDATION FINALE
+
+Chef projet HADY GESMAN
+
+Nom :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature :
+
+Responsable établissement client
+
+Nom :
+
+………………………………………………………………
+
+Fonction :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature et cachet :
+

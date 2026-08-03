@@ -1,0 +1,515 @@
+       ANNEXE 02 · DOCUMENT COMMERCIAL
+
+
+
+      Fiche Diagnostic Client
+      Analyse organisationnelle avant déploiement HADY GESMAN & SAGI
+      SCHOOL
+
+
+      RÉFÉRENCE           PROCESSUS                               RESPONSABLE                      CONFIDENTIALITÉ
+
+      HG-COM-002-V01      Gestion commerciale / Analyse besoins   Consultant HADY GESMAN / CEO     Confidentiel client
+
+
+
+
+ 1   IDENTIFICATION DU CLIENT
+
+Informations générales
+
+ Champ                                       Informations
+
+
+ Nom établissement / organisation
+
+
+ Type d’établissement                        ☐ Daara ☐ École privée ☐ Franco-arabe ☐ Préscolaire ☐ Collège/Lycée ☐ Centre
+                                             formation ☐ PME
+
+
+ Adresse complète
+
+
+ Région / Ville
+
+
+ Téléphone
+
+
+ Email professionnel
+
+
+ Site internet / Réseaux sociaux
+
+
+
+
+ 2   INFORMATIONS SUR LE RESPONSABLE
+
+
+ Élément                                     Informations
+
+
+ Nom et prénom
+
+
+ Fonction
+
+
+ Téléphone
+
+
+ Email
+
+
+ Rôle dans la décision                       ☐ Décideur ☐ Responsable administratif ☐ Responsable financier
+
+
+
+
+ 3   CONTEXTE ET HISTORIQUE DE L’ORGANISATION
+
+Présentation générale
+Décrire brièvement l’établissement :
+
+………………………………………………………………
+
+………………………………………………………………
+
+Ancienneté
+
+ Moins d’un an         1 à 5 ans   5 à 10 ans   Plus de 10 ans
+
+Organisation actuelle
+
+Nombre :
+
+  Élément                                                        Quantité
+
+
+  Élèves / bénéficiaires
+
+
+  Classes / niveaux
+
+
+  Enseignants / employés
+
+
+  Administrateurs
+
+
+  Sites / antennes
+
+
+
+
+ 4 DIAGNOSTIC ADMINISTRATIF
+
+
+
+4.1 — Gestion des inscriptions
+
+Processus actuel
+
+ Papier
+
+ Excel
+
+ Logiciel existant
+
+ Autre
+
+Informations collectées :
+
+ Identité élève/client
+
+ Contacts parents
+
+ Documents administratifs
+
+ Historique inscription
+
+ Autres
+
+Difficultés constatées :
+
+ Perte documents
+
+ Recherche difficile
+
+ Absence d’historique
+
+ Erreurs de saisie
+
+ Autres :
+
+………………………………………………………………
+
+4.2 — Gestion des dossiers
+Classement actuel :
+
+  Classeurs physiques
+
+  Fichiers numériques
+
+  Système mixte
+
+  Aucun système structuré
+
+Évaluation :
+
+  Critère                           Niveau
+
+
+  Organisation                      ☐ Faible ☐ Moyen ☐ Bon
+
+
+  Accessibilité                     ☐ Faible ☐ Moyen ☐ Bon
+
+
+  Sécurité                          ☐ Faible ☐ Moyen ☐ Bon
+
+
+
+
+ 5 DIAGNOSTIC FINANCIER ET COMPTABLE
+
+
+
+5.1 — Gestion des paiements
+
+Méthode actuelle :
+
+  Cahier
+
+  Excel
+
+  Logiciel
+
+  Autre
+
+Informations suivies :
+
+  Frais inscription
+
+  Mensualités
+
+  Retards paiement
+
+  Historique règlements
+
+  Reçus
+
+
+Difficultés principales
+
+  Retards difficiles à suivre
+
+  Manque de visibilité financière
+
+  Difficulté de relance
+
+  Absence de rapports
+
+  Erreurs de calcul
+
+5.2 — Comptabilité
+
+Organisation comptable actuelle :
+
+  Interne
+
+  Prestataire externe
+
+  Non organisée
+
+Outils utilisés :
+………………………………………………………………
+
+Besoins identifiés :
+
+  Suivi recettes/dépenses
+
+  États financiers
+
+  Comptabilité SYSCOHADA
+
+  Budget prévisionnel
+
+  Analyse financière
+
+
+
+ 6   DIAGNOSTIC PÉDAGOGIQUE
+
+(Pour établissements scolaires)
+
+Gestion des élèves
+
+Suivi actuel :
+
+  Manuel
+
+  Excel
+
+  Logiciel
+
+Gestion des notes
+
+Méthode :
+
+  Cahier
+
+  Excel
+
+  Plateforme numérique
+
+Éléments gérés :
+
+  Notes devoirs
+
+  Compositions
+
+  Moyennes
+
+  Classements
+
+  Bulletins
+
+
+Difficultés rencontrées
+
+  Calcul manuel
+
+  Retards publication résultats
+
+  Erreurs moyennes
+
+  Difficulté archivage
+
+
+
+ 7   DIAGNOSTIC RESSOURCES HUMAINES
+
+Personnel
+
+  Élément                             Nombre
+
+
+  Enseignants permanents
+  Enseignants vacataires
+
+
+  Administratifs
+
+
+Gestion actuelle :
+
+Contrats :
+
+  Oui        Non
+
+Présences :
+
+  Oui        Non
+
+Salaires :
+
+  Oui        Non
+
+Évaluations :
+
+  Oui        Non
+
+Besoins :
+
+  Gestion employés
+
+  Suivi absences
+
+  Gestion paie
+
+  Documents RH
+
+
+
+ 8   DIAGNOSTIC TECHNOLOGIQUE
+
+Équipement disponible
+
+  Matériel                              Quantité
+
+
+  Ordinateurs
+
+
+  Imprimantes
+
+
+  Smartphones professionnels
+
+
+  Connexion internet
+
+
+
+Niveau numérique
+
+  Débutant
+
+  Intermédiaire
+
+  Avancé
+
+Contraintes techniques
+
+  Faible connexion internet
+
+  Manque équipements
+
+  Faible maîtrise numérique
+
+  Autres
+
+
+
+ 9   ANALYSE DES BESOINS PRIORITAIRES
+Classer les besoins :
+
+ Priorité                           Besoin
+
+
+ 1
+
+
+ 2
+
+
+ 3
+
+
+ 4
+
+
+
+
+10 RECOMMANDATION HADY GESMAN
+
+
+
+Solution recommandée
+
+ SAGI SCHOOL BASIC
+
+ SAGI SCHOOL PRO
+
+ SAGI SCHOOL AVANCÉE
+
+ TAXAWU DAARA
+
+ Solution personnalisée
+
+Modules recommandés
+
+ Élèves
+
+ Paiements
+
+ Dashboard
+
+ Comptabilité
+
+ Académique
+
+ Ressources Humaines
+
+ Automatisation
+
+
+
+ 11 PLAN D’ACCOMPAGNEMENT PROPOSÉ
+
+
+
+Phase 1 : Installation
+
+Durée estimée :
+
+………………………………………………………………
+
+Phase 2 : Formation
+
+Utilisateurs concernés :
+
+………………………………………………………………
+
+Phase 3 : Suivi
+
+Fréquence :
+
+ Hebdomadaire
+
+ Mensuelle
+ Trimestrielle
+
+
+
+ 12 SYNTHÈSE DU DIAGNOSTIC
+
+
+
+Forces actuelles du client
+
+………………………………………………………………
+
+Difficultés principales
+
+………………………………………………………………
+
+Opportunités d’amélioration
+
+………………………………………………………………
+
+Risques identifiés
+
+………………………………………………………………
+
+
+
+ 13 VALIDATION DU DIAGNOSTIC
+
+
+Consultant HADY GESMAN
+
+Nom :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature :
+
+………………………………………………………………
+
+Responsable établissement
+
+Nom :
+
+………………………………………………………………
+
+Fonction :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature :
+
+………………………………………………………………
+

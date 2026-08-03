@@ -1,0 +1,474 @@
+          ANNEXE 04 · CONTRAT CLIENT
+
+
+
+       Contrat de Prestation de Services
+       Solution digitale SAGI SCHOOL — Entre HADY GESMAN et
+       l’établissement client
+
+
+       RÉFÉRENCE                PROCESSUS                                NATURE           PARTIES
+
+       HG-COM-004-V01           Gestion commerciale et relation client   Contrat client   HADY GESMAN & le Client
+
+
+
+
+ 1    HADY GESMAN
+
+Entreprise Individuelle spécialisée dans :
+
+     la gestion administrative ;
+
+     la gestion comptable et financière ;
+
+     l’automatisation des processus ;
+
+     la transformation digitale des organisations.
+
+Représentée par :
+
+Monsieur Mouhamed GUEYE
+En qualité de :
+
+CEO & Fondateur
+
+Adresse administrative :
+
+Colobane 1, Rufisque – Sénégal
+
+NINEA :
+
+012673986
+
+RCCM :
+
+SN.DKR.2025.A.48268
+
+Email :
+
+hadygesman@gmail.com
+
+Téléphones :
+
++221 78 429 78 30
++221 70 328 61 51
+
+Ci-après désignée :
+
+
+
+« HADY GESMAN »
+
+ET
+
+
+ 2    L’ÉTABLISSEMENT CLIENT
+Nom établissement :
+
+………………………………………………………………
+
+Forme juridique/statut :
+
+………………………………………………………………
+
+Adresse :
+
+………………………………………………………………
+
+Téléphone :
+
+………………………………………………………………
+
+Email :
+
+………………………………………………………………
+
+Représenté par :
+
+………………………………………………………………
+
+Fonction :
+
+………………………………………………………………
+
+Ci-après désigné :
+
+« Le Client »
+
+Les parties conviennent ce qui suit :
+
+
+
+ 1    OBJET DU CONTRAT
+
+Le présent contrat a pour objet de définir les conditions dans lesquelles HADY GESMAN fournit au Client :
+
+     l’accès à la solution numérique SAGI SCHOOL ;
+
+     les prestations d’installation ;
+
+     le paramétrage ;
+
+     la formation des utilisateurs ;
+
+     l’assistance ;
+
+     l’accompagnement dans l’utilisation de la plateforme.
+
+SAGI SCHOOL est une solution destinée à faciliter la gestion :
+
+     administrative ;
+
+     financière ;
+
+     pédagogique ;
+
+     organisationnelle.
+
+
+
+ 2    DESCRIPTION DE LA SOLUTION SAGI SCHOOL
+
+Selon l’offre choisie par le Client, SAGI SCHOOL peut inclure notamment :
+
+Module Administration
+
+     gestion des élèves ;
+
+     dossiers utilisateurs ;
+     inscriptions ;
+
+     informations établissement.
+
+Module Finance
+
+     suivi paiements ;
+
+     historique transactions ;
+
+     suivi impayés ;
+
+     tableaux de bord financiers.
+
+Module Académique
+
+(selon formule)
+
+     gestion classes ;
+
+     notes ;
+
+     moyennes ;
+
+     bulletins ;
+
+     suivi pédagogique.
+
+Module Ressources Humaines
+
+(selon formule)
+
+     gestion enseignants ;
+
+     suivi personnel ;
+
+     informations administratives.
+
+Les fonctionnalités accessibles dépendent de la licence souscrite.
+
+
+
+ 3    DURÉE DU CONTRAT
+
+Le présent contrat prend effet à compter de :
+
+Date :
+
+…… / …… / ……
+
+Durée :
+
+  Mensuelle renouvelable
+
+  Annuelle
+
+  Autre :
+
+………………………………………………………………
+
+Le renouvellement est effectué selon les conditions commerciales en vigueur.
+
+
+
+ 4 OBLIGATIONS DE HADY GESMAN
+
+
+HADY GESMAN s’engage à :
+
+4.1 — Fournir l’accès à la solution
+
+Mettre à disposition le service conformément à l’offre choisie.
+4.2 — Assurer l’installation
+
+Effectuer :
+
+     configuration initiale ;
+
+     création comptes ;
+
+     paramétrage nécessaire.
+
+4.3 — Former les utilisateurs
+
+Organiser une formation adaptée aux profils utilisateurs.
+
+4.4 — Assurer l’assistance
+
+Répondre aux demandes relatives :
+
+     à l’utilisation ;
+
+     au fonctionnement ;
+
+     aux difficultés techniques.
+
+4.5 — Améliorer continuellement la solution
+
+Prendre en compte :
+
+     retours clients ;
+
+     évolutions techniques ;
+
+     améliorations fonctionnelles.
+
+
+
+ 5 OBLIGATIONS DU CLIENT
+
+
+Le Client s’engage à :
+
+5.1 — Fournir des informations exactes
+
+Les données transmises doivent être :
+
+     complètes ;
+
+     exactes ;
+
+     conformes à la réalité.
+
+5.2 — Respecter les conditions d’utilisation
+
+Le Client ne doit pas :
+
+     partager abusivement ses accès ;
+
+     tenter de modifier la plateforme ;
+
+     utiliser la solution à des fins frauduleuses.
+
+5.3 — Former ses utilisateurs internes
+
+Le Client doit garantir que les utilisateurs utilisent correctement la solution.
+
+5.4 — Régler les sommes dues
+
+Respecter les échéances prévues.
+
+
+
+ 6    CONDITIONS FINANCIÈRES
+ 6    CONDITIONS FINANCIÈRES
+
+Les conditions financières sont définies dans le devis accepté par le Client.
+
+Elles peuvent comprendre :
+
+     frais d’installation ;
+
+     frais de configuration ;
+
+     abonnement mensuel ;
+
+     abonnement annuel ;
+
+     prestations complémentaires.
+
+
+
+ 7    CONDITIONS DE PAIEMENT
+
+Le paiement doit intervenir dans un délai maximum de :
+
+5 jours après émission de facture
+
+Modes de paiement acceptés :
+
+     Wave ;
+
+     Orange Money ;
+
+     Yas Money ;
+
+     virement bancaire ;
+
+     chèque ;
+
+     espèces.
+
+
+
+ 8    RETARD DE PAIEMENT
+
+En cas de retard :
+
+HADY GESMAN pourra :
+
+1. effectuer une relance amiable ;
+
+2. demander la régularisation ;
+
+3. suspendre temporairement certains services selon la situation ;
+
+4. appliquer les dispositions prévues contractuellement.
+
+
+
+ 9    PROTECTION DES DONNÉES
+
+Chaque partie s’engage à respecter la confidentialité des informations échangées.
+
+Le Client demeure responsable :
+
+     de la conformité des données fournies ;
+
+     des informations concernant ses élèves, employés ou bénéficiaires.
+
+HADY GESMAN s’engage à :
+
+     protéger les données confiées ;
+
+     limiter les accès ;
+
+     appliquer des mesures raisonnables de sécurité.
+ 10 CONFIDENTIALITÉ
+
+
+Les parties s’engagent à ne pas divulguer les informations confidentielles obtenues dans le cadre du partenariat.
+
+Cette obligation concerne notamment :
+
+   données financières ;
+
+   informations organisationnelles ;
+
+   données utilisateurs ;
+
+   informations techniques.
+
+
+
+ 11 PROPRIÉTÉ INTELLECTUELLE
+
+
+La solution SAGI SCHOOL, ses composants, fonctionnalités, éléments graphiques et documents associés restent la
+propriété de HADY GESMAN ou de ses partenaires autorisés.
+
+Le présent contrat accorde uniquement un droit d’utilisation au Client.
+
+
+
+ 12 SUPPORT ET ASSISTANCE
+
+
+Le support est assuré via :
+
+Email :
+
+hadygesman@gmail.com
+
+Téléphones :
+
++221 78 429 78 30
++221 70 328 61 51
+
+Les demandes sont traitées selon leur niveau de priorité.
+
+
+
+ 13 ÉVOLUTION DE LA SOLUTION
+
+
+HADY GESMAN peut faire évoluer SAGI SCHOOL afin d’améliorer :
+
+   performance ;
+
+   sécurité ;
+
+   fonctionnalités.
+
+Les évolutions majeures pourront être communiquées au Client.
+
+
+
+ 14 RÉSILIATION
+
+
+Le contrat peut être résilié :
+
+   par accord des parties ;
+
+   en cas de non-respect grave des obligations ;
+
+   en cas d’impayés persistants.
+
+Toute résiliation doit faire l’objet d’une notification officielle.
+
+
+
+ 15 RÈGLEMENT DES LITIGES
+Les parties privilégient une résolution amiable de tout différend.
+
+En cas d’échec, les parties pourront saisir les juridictions compétentes conformément aux règles applicables au Sénégal.
+
+
+
+16 ACCEPTATION DU CONTRAT
+
+
+Les parties reconnaissent avoir pris connaissance des clauses du présent contrat et les acceptent.
+
+
+
+SIGNATURES
+
+Pour HADY GESMAN
+
+Mouhamed GUEYE
+CEO & Fondateur
+
+Date :
+
+………………………………………………………………
+
+Signature et cachet :
+
+Pour le Client
+
+Nom :
+
+………………………………………………………………
+
+Fonction :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature et cachet :
+

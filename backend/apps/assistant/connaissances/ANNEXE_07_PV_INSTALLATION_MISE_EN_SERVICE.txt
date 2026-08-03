@@ -1,0 +1,364 @@
+         ANNEXE 07 · DOCUMENT CLIENT OFFICIEL
+
+
+
+       Procès-Verbal d’Installation et de Mise en Service
+       Solution SAGI SCHOOL
+
+
+       RÉFÉRENCE          PROCESSUS                                   RESPONSABLE                       CONFIDENTIALITÉ
+
+       HG-OPS-002-        Déploiement client et accompagnement        Chef de projet / Direction des    Confidentiel
+       V01                opérationnel                                Opérations                        Client
+
+
+
+
+ 1    OBJET DU DOCUMENT
+
+Le présent procès-verbal a pour objectif de formaliser officiellement la réalisation des opérations suivantes :
+
+     installation de la solution SAGI SCHOOL ;
+
+     configuration initiale de l’environnement client ;
+
+     paramétrage des modules souscrits ;
+
+     intégration des informations nécessaires ;
+
+     formation initiale des utilisateurs ;
+
+     validation de la mise en service.
+
+Ce document constitue la preuve de livraison opérationnelle de la solution auprès du client.
+
+
+
+ 2    IDENTIFICATION DU CLIENT
+
+Informations établissement
+
+ Champ                                           Informations
+
+
+ Nom établissement
+
+
+ Type d’établissement                            ☐ Daara ☐ École privée ☐ Franco-arabe ☐ Préscolaire ☐ Collège/Lycée ☐ Centre
+                                                 formation ☐ PME ☐ Autre
+
+
+ Adresse
+
+ Ville / Région
+
+
+ Téléphone
+
+
+ Email
+
+
+
+Responsable établissement
+
+ Champ                                                                     Informations
+
+
+ Nom et prénom
+
+
+ Fonction
+ Téléphone
+
+
+ Email
+
+
+
+
+ 3   INFORMATIONS DU PROJET
+
+
+ Élément                           Informations
+
+
+ Référence devis
+
+
+ Référence contrat
+
+
+ Date commande
+
+
+ Date installation
+
+
+ Date mise en service
+
+
+ Chef projet HADY GESMAN
+
+ Responsable client
+
+
+
+
+ 4 SOLUTION DÉPLOYÉE
+
+
+Offre souscrite
+
+ SAGI SCHOOL Essai
+
+ SAGI SCHOOL BASIC
+
+ SAGI SCHOOL PRO
+
+ SAGI SCHOOL AVANCÉE
+
+ TAXAWU DAARA
+
+ Solution personnalisée
+
+
+
+ 5 MODULES ACTIVÉS
+
+
+
+ Module                       Activé
+
+
+ Tableau de bord              ☐ Oui ☐ Non
+
+
+ Gestion des élèves           ☐ Oui ☐ Non
+
+
+ Gestion des paiements        ☐ Oui ☐ Non
+
+
+ Comptabilité                 ☐ Oui ☐ Non
+
+
+ Gestion académique           ☐ Oui ☐ Non
+
+
+ Ressources humaines          ☐ Oui ☐ Non
+
+
+ Automatisation               ☐ Oui ☐ Non
+ 6   OPÉRATIONS D’INSTALLATION RÉALISÉES
+
+Configuration générale
+
+Les opérations suivantes ont été effectuées :
+
+ Opération                                                           Statut
+
+
+ Création espace établissement                                       ☐ Réalisé
+
+
+ Paramétrage informations générales                                  ☐ Réalisé
+
+
+ Création utilisateurs                                               ☐ Réalisé
+
+
+ Attribution droits d’accès                                          ☐ Réalisé
+
+
+ Configuration paramètres système                                    ☐ Réalisé
+
+
+
+
+ 7   INTÉGRATION DES DONNÉES CLIENT
+
+Les données suivantes ont été traitées :
+
+ Données                                                         Statut
+
+
+ Informations établissement                                      ☐ Intégrées
+
+
+ Liste élèves                                                    ☐ Intégrée
+
+
+ Classes/niveaux                                                 ☐ Intégrés
+
+
+ Personnel administratif et pédagogique                          ☐ Intégré
+
+
+ Paramètres financiers                                           ☐ Intégrés
+
+ Autres données                                                  ☐
+
+
+Observations :
+
+………………………………………………………………
+
+
+
+ 8   INSTALLATION DES ÉQUIPEMENTS
+
+(Selon l’offre souscrite)
+
+Applicable notamment dans le cadre de TAXAWU DAARA.
+
+ Équipement                                           Quantité                État
+
+
+ Ordinateur
+
+
+ Imprimante
+
+
+ Onduleur
+
+
+ Accessoires
+
+
+ Autres
+ 9   FORMATION INITIALE DES UTILISATEURS
+
+La formation a porté sur :
+
+ Présentation générale SAGI SCHOOL
+
+ Connexion et gestion des comptes utilisateurs
+
+ Gestion des élèves
+
+ Gestion des paiements
+
+ Consultation du tableau de bord
+
+ Utilisation des modules spécifiques
+
+ Bonnes pratiques d’utilisation
+
+
+Participants formés
+
+ Nom et prénom                                            Fonction        Signature
+
+
+
+
+10 TESTS DE VALIDATION AVANT MISE EN SERVICE
+
+
+
+ Vérification effectuée                                                 Résultat
+
+
+ Connexion utilisateurs                                                 ☐ Conforme
+
+
+ Accès aux modules autorisés                                            ☐ Conforme
+
+
+ Création fiche utilisateur test                                        ☐ Conforme
+
+
+ Enregistrement opération test                                          ☐ Conforme
+
+
+ Génération documents                                                   ☐ Conforme
+
+
+ Consultation tableaux de bord                                          ☐ Conforme
+
+
+
+
+ 11 RÉSERVES ET OBSERVATIONS CLIENT
+
+
+Réserves éventuelles :
+
+ Aucune réserve
+
+ Réserves formulées :
+
+………………………………………………………………
+
+………………………………………………………………
+
+
+
+ 12 VALIDATION DE LA MISE EN SERVICE
+
+
+Par la signature du présent document, les parties reconnaissent que :
+  l’installation de SAGI SCHOOL a été réalisée ;
+
+  les fonctionnalités prévues ont été configurées ;
+
+  les utilisateurs concernés ont reçu une formation initiale ;
+
+  la solution est prête à être utilisée dans le cadre défini.
+
+
+
+ 13 SUIVI APRÈS MISE EN SERVICE
+
+
+Après validation, le client entre dans la phase :
+
+Exploitation → Assistance → Suivi client → Amélioration continue
+
+Le support est assuré par :
+
+Support HADY GESMAN
+
+Email :
+
+hadygesman@gmail.com
+
+Téléphones :
+
++221 78 429 78 30
++221 70 328 61 51
+
+
+
+VALIDATION FINALE
+
+Chef de projet HADY GESMAN
+
+Nom :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature :
+
+Responsable établissement client
+
+Nom :
+
+………………………………………………………………
+
+Fonction :
+
+………………………………………………………………
+
+Date :
+
+………………………………………………………………
+
+Signature et cachet :
+

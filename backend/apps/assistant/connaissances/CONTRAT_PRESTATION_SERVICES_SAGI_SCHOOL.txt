@@ -1,0 +1,282 @@
+         CONTRAT CADRE · SAGI SCHOOL
+
+
+
+       Contrat de Prestation de Services et de Mise à Disposition
+       de la Plateforme
+       SAGI SCHOOL — Entre HADY GESMAN (le Prestataire) et
+       l’établissement client
+
+
+       RÉFÉRENCE                       PRODUIT          NATURE                                DROIT APPLICABLE
+
+       HG-COM-008-V01                  SAGI SCHOOL      Contrat cadre de prestation           Sénégal
+
+
+
+
+ENTRE LES SOUSSIGNÉS
+
+HADY GESMAN, Entreprise Individuelle spécialisée dans la gestion administrative, comptable, financière et l'automatisation
+des organisations, éditrice de la solution SAGI SCHOOL,
+
+Représentée par son Fondateur et Directeur Général, Monsieur Mouhamed GUEYE,
+
+Ci-après dénommée « le Prestataire »,
+
+D'une part,
+
+ET
+
+[Nom de l'établissement], établissement d'enseignement situé à [adresse complète], représenté par [Nom et fonction du
+représentant légal],
+
+NINEA : [Numéro]
+RC : [Numéro le cas échéant]
+Téléphone : [Numéro]
+Email : [Adresse email]
+
+Ci-après dénommé « le Client »,
+
+D'autre part,
+
+Il a été convenu ce qui suit :
+
+
+
+ 1    Objet du contrat
+
+Le présent contrat a pour objet la mise à disposition, l'installation, le paramétrage, la maintenance et l'assistance
+technique de la plateforme SAGI SCHOOL destinée à la gestion des établissements d'enseignement.
+
+
+
+ 2    Nature des prestations
+
+Le Prestataire s'engage à fournir selon la licence souscrite :
+
+     l'accès à la plateforme SAGI SCHOOL ;
+
+     le paramétrage initial ;
+
+     la création des comptes utilisateurs ;
+
+     l'assistance technique ;
+
+     les mises à jour applicatives ;
+     la maintenance corrective ;
+
+     les sauvegardes des données ;
+
+     les formations initiales des utilisateurs ;
+
+     l'accompagnement au démarrage.
+
+
+
+ 3    Modules disponibles selon la licence
+
+Les fonctionnalités accessibles sont définies dans l'Annexe A du présent contrat.
+
+
+
+ 4 Obligations du Prestataire
+
+
+Le Prestataire s'engage à :
+
+     fournir les services conformément aux règles de l'art ;
+
+     assurer la confidentialité des données ;
+
+     mettre en œuvre les mesures raisonnables de sécurité informatique ;
+
+     assurer les sauvegardes techniques nécessaires ;
+
+     maintenir la disponibilité du service sauf cas de maintenance ou de force majeure ;
+
+     informer le Client des opérations majeures de maintenance.
+
+
+
+ 5 Obligations du Client
+
+
+Le Client s'engage à :
+
+     fournir des informations exactes ;
+
+     désigner un référent principal ;
+
+     respecter les modalités d'utilisation de la plateforme ;
+
+     préserver la confidentialité des identifiants d'accès ;
+
+     effectuer les paiements aux échéances prévues ;
+
+     utiliser le logiciel conformément aux lois et règlements en vigueur.
+
+
+
+ 6    Propriété intellectuelle
+
+La plateforme SAGI SCHOOL demeure la propriété exclusive de HADY GESMAN.
+
+Le présent contrat constitue uniquement une licence d'utilisation non exclusive, non cessible et non transférable.
+
+Le Client ne peut :
+
+     reproduire le logiciel ;
+
+     le revendre ;
+
+     le modifier ;
+
+     le décompiler ;
+
+     le distribuer à des tiers.
+
+
+
+ 7    Protection des données et confidentialité
+Les parties s'engagent à préserver la confidentialité des informations échangées.
+
+Le Prestataire s'engage à :
+
+     ne pas divulguer les données du Client ;
+
+     mettre en œuvre des mécanismes de sécurité adaptés ;
+
+     restituer les données du Client à l'expiration du contrat selon les modalités prévues.
+
+
+
+ 8    Hébergement et sauvegardes
+
+Les données peuvent être hébergées sur des infrastructures cloud sécurisées ou sur des serveurs locaux selon l'offre
+souscrite.
+
+Des sauvegardes périodiques sont effectuées afin de limiter les risques de perte de données.
+
+
+
+ 9    Conditions financières
+
+Le Client s'engage à payer les montants prévus dans l'Annexe A.
+
+Tout retard supérieur à quinze (15) jours pourra entraîner :
+
+     la suspension temporaire des services ;
+
+     la limitation de certaines fonctionnalités ;
+
+     la résiliation du contrat après mise en demeure restée sans effet pendant trente (30) jours.
+
+Des pénalités de retard pourront être appliquées conformément à la réglementation en vigueur.
+
+
+
+10 Facturation et fiscalité
+
+
+Le Prestataire émettra les factures conformément à la législation fiscale sénégalaise.
+
+Les montants indiqués s'entendent :
+
+     hors taxes lorsque la TVA est applicable ;
+
+     toutes taxes comprises lorsque le régime fiscal du Prestataire le prévoit.
+
+Le Client demeure responsable de ses obligations fiscales propres.
+
+
+
+ 11 Support technique
+
+
+Le support est assuré :
+
+     par téléphone ;
+
+     par WhatsApp Business ;
+
+     par courrier électronique ;
+
+     à distance via des outils de prise en main sécurisés.
+
+Les horaires de support sont définis dans l'annexe commerciale.
+
+
+
+ 12 Durée
+
+
+Le présent contrat est conclu pour une durée initiale de douze (12) mois renouvelable par tacite reconduction sauf
+dénonciation par l'une des parties au moins trente (30) jours avant son échéance.
+ 13 Résiliation
+
+
+Le contrat peut être résilié :
+
+   d'un commun accord ;
+
+   pour inexécution contractuelle ;
+
+   en cas de cessation d'activité d'une partie ;
+
+   en cas de force majeure prolongée.
+
+Les sommes déjà facturées restent dues.
+
+
+
+14 Responsabilité
+
+
+Le Prestataire est tenu à une obligation de moyens et non de résultat.
+
+Sa responsabilité ne pourra être engagée en cas :
+
+   de mauvaise utilisation du logiciel ;
+
+   d'accès non autorisés liés à une négligence du Client ;
+
+   de défaillance des réseaux internet ou électriques ;
+
+   de force majeure.
+
+
+
+ 15 Force majeure
+
+
+Aucune partie ne pourra être tenue responsable d'un retard ou d'une inexécution résultant d'un événement de force
+majeure au sens des textes applicables.
+
+
+
+ 16 Règlement des différends
+
+
+Les parties privilégieront une résolution amiable.
+
+À défaut d'accord dans un délai de trente (30) jours, les juridictions compétentes du Sénégal seront seules compétentes.
+
+Le présent contrat est régi par le droit sénégalais ainsi que les actes uniformes OHADA applicables.
+
+Fait à __________________
+
+Le _______________________
+
+Pour HADY GESMAN
+
+Nom : Mouhamed GUEYE
+Fonction : Fondateur & CEO
+Signature et cachet :
+
+Pour le Client
+
+Nom : __________________
+Fonction : ______________
+Signature et cachet :
+

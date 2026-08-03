@@ -59,6 +59,7 @@ LOCAL_APPS = [
     'apps.gmrf',
     'apps.gouvernance',
     'apps.sauvegarde',
+    'apps.assistant',
 ]
 
 # Sauvegarde cloud des installations locales (apps.sauvegarde)
@@ -160,3 +161,8 @@ CACHES = {
         'TIMEOUT': 300,  # 5 minutes
     }
 }
+
+# ── SAMA ASSISTANT ────────────────────────────────────────────────────────
+# Clé lue dans l'environnement. Absente, l'assistant se désactive proprement
+# et le dit à l'utilisateur — il ne plante pas.
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
