@@ -172,9 +172,27 @@ class PaieCalculateur:
         autres_retenues_ext = _d(kwargs.get('autres_retenues', 0))
         mode_pmt            = kwargs.get('mode_paiement_effectif', employe.mode_paiement)
 
-        # Allocation salaire unique
+        # Régime de paie de l'établissement : SIMPLIFIE (non affilié) → aucune
+        # cotisation, et aucune prestation. Lu ICI et non plus bas : l'allocation
+        # ci-dessous en dépend.
+        regime    = getattr(employe.tenant, 'regime_paie', 'COMPLET')
+        simplifie = (regime == 'SIMPLIFIE')
+
+        # Allocation salaire unique.
+        #
+        # C'est une PRESTATION FAMILIALE, financée par la cotisation CSS de
+        # l'employeur. Un établissement en régime simplifié n'est pas affilié :
+        # il ne verse pas la cotisation, ne perçoit donc rien de la Caisse, et
+        # n'a aucune allocation à servir. Elle était pourtant ajoutée au brut
+        # quel que soit le régime — un salarié marié d'une structure non
+        # affiliée touchait plus que le montant convenu avec lui, et
+        # l'établissement payait de sa poche une prestation qui ne lui revenait
+        # pas. Constaté à l'installation de Shoumoul.
+        #
+        # En régime simplifié, le bulletin ne porte donc QUE ce qui a été
+        # explicitement saisi : salaire de base, primes et indemnités.
         est_marie = employe.situation_matrimoniale in ('MARIE', 'VEUF', 'DIVORCE')
-        if est_marie or employe.nb_enfants >= 1:
+        if not simplifie and (est_marie or employe.nb_enfants >= 1):
             alloc = params.allocation_salaire_unique_base
             alloc += _d(employe.nb_enfants) * params.allocation_par_enfant
             alloc = min(alloc, params.plafond_allocation)
@@ -188,10 +206,6 @@ class PaieCalculateur:
             base + heures_sup + indemnite_sujetion + indemnite_logement
             + alloc + prime_transport + primes_diverses + avantages_nature
         )
-
-        # Régime de paie de l'établissement : SIMPLIFIE (non affilié) → aucune cotisation
-        regime    = getattr(employe.tenant, 'regime_paie', 'COMPLET')
-        simplifie = (regime == 'SIMPLIFIE')
 
         ipres_g_sal = ipres_g_pat = ipres_c_sal = ipres_c_pat = Decimal('0')
         ir = css = atmp = cfce = Decimal('0')
