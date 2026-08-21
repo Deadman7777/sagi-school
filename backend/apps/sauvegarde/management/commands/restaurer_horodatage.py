@@ -34,7 +34,7 @@ c'est la seule façon de poser une valeur sur un champ `auto_now` — un `save()
 la remplacerait par l'heure courante, reproduisant exactement le bug.
 """
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import DatabaseError, connections, transaction
 
 from apps.tenants.models import Tenant
 
@@ -77,12 +77,28 @@ class Command(BaseCommand):
         if self._colonnes(Tenant):
             modeles = [Tenant] + modeles
 
-        plan, total = [], 0
+        plan, total, absents = [], 0, []
         for modele in modeles:
-            ecarts = self._ecarts(modele, tenant_source)
+            try:
+                ecarts = self._ecarts(modele, tenant_source)
+            except DatabaseError as exc:
+                # Le dump est plus ancien que la base cible : ses tables
+                # d'alors ne couvrent pas les modèles ajoutés depuis. Ce n'est
+                # pas une anomalie — les lignes de ces tables ont été créées
+                # APRÈS la bascule, leur horodatage est déjà le bon. On le dit
+                # et on continue, plutôt que d'abandonner toute la réparation.
+                connections[SOURCE].close()   # repartir sur une connexion saine
+                absents.append((modele._meta.label, str(exc).strip().splitlines()[0]))
+                continue
             if ecarts:
                 plan.append((modele, ecarts))
                 total += len(ecarts)
+
+        for label, raison in absents:
+            self.stdout.write(self.style.WARNING(
+                f"   ⚠ {label} illisible dans la source, ignoré — {raison}"))
+        if absents:
+            self.stdout.write("")
 
         if not plan:
             self.stdout.write(self.style.SUCCESS(
