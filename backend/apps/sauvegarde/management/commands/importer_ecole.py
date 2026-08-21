@@ -21,6 +21,8 @@ provoquer de collision d'identifiants — aucun remappage n'est nécessaire.
 
 Sans --appliquer : inventaire seul, rien n'est écrit.
 """
+from contextlib import contextmanager
+
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -45,36 +47,77 @@ CLES_NATURELLES = {
 }
 
 
+@contextmanager
+def horloge_neutralisee():
+    """Suspend `auto_now_add` / `auto_now` le temps de l'import.
+
+    Django applique ces champs jusque dans `bulk_create` : il appelle
+    `pre_save()` sur chaque colonne avant l'INSERT. Sans cette neutralisation,
+    l'import réécrit donc `created_at`/`updated_at` de TOUTES les lignes
+    copiées — et, tant que `Paiement.date_paiement` était en `auto_now_add`,
+    la date de chaque règlement — avec la date du jour de la bascule.
+
+    C'est arrivé au Complexe Shoumoul Excellence le 19/08/2026 : les 62
+    règlements de l'année se sont retrouvés au même jour, et le tableau de
+    bord empilait toutes les recettes sur ce mois-là. Copier une école, c'est
+    transporter son passé tel quel ; l'horloge du serveur n'a pas voix au
+    chapitre. (Réparation de l'existant : `manage.py reparer_dates_paiement`.)
+    """
+    initial = []
+    for modele in django_apps.get_models():
+        for champ in modele._meta.fields:
+            if getattr(champ, 'auto_now_add', False) or getattr(champ, 'auto_now', False):
+                initial.append((champ, champ.auto_now_add, champ.auto_now))
+                champ.auto_now_add = False
+                champ.auto_now = False
+    try:
+        yield
+    finally:
+        for champ, ajout, maj in initial:
+            champ.auto_now_add, champ.auto_now = ajout, maj
+
+
+def arguments_source(parser):
+    """Options de connexion à la base temporaire, communes aux commandes de
+    bascule (`importer_ecole`, `restaurer_horodatage`)."""
+    parser.add_argument('--source-db', required=True,
+                        help='Nom de la base temporaire restaurée')
+    parser.add_argument('--source-host', default=None)
+    parser.add_argument('--source-port', default=None)
+    parser.add_argument('--source-user', default=None)
+    parser.add_argument('--source-password', default=None)
+    parser.add_argument('--tenant', required=True,
+                        help="Nom ou code de l'école dans la base source")
+    parser.add_argument('--appliquer', action='store_true',
+                        help='Écrire réellement (sinon inventaire seul)')
+
+
+def brancher_source(opts):
+    """Déclare l'alias `import_source` et vérifie qu'on peut s'y connecter."""
+    defaut = settings.DATABASES['default']
+    settings.DATABASES[SOURCE] = {
+        **defaut,
+        'NAME':     opts['source_db'],
+        'HOST':     opts['source_host']     or defaut.get('HOST'),
+        'PORT':     opts['source_port']     or defaut.get('PORT'),
+        'USER':     opts['source_user']     or defaut.get('USER'),
+        'PASSWORD': opts['source_password'] or defaut.get('PASSWORD'),
+    }
+    try:
+        connections[SOURCE].ensure_connection()
+    except Exception as exc:
+        raise CommandError(f"Base source inaccessible : {exc}")
+
+
 class Command(BaseCommand):
     help = "Copie une école depuis une base restaurée vers la base courante"
 
     def add_arguments(self, parser):
-        parser.add_argument('--source-db', required=True,
-                            help='Nom de la base temporaire restaurée')
-        parser.add_argument('--source-host', default=None)
-        parser.add_argument('--source-port', default=None)
-        parser.add_argument('--source-user', default=None)
-        parser.add_argument('--source-password', default=None)
-        parser.add_argument('--tenant', required=True,
-                            help="Nom ou code de l'école dans la base source")
-        parser.add_argument('--appliquer', action='store_true',
-                            help='Écrire réellement (sinon inventaire seul)')
+        arguments_source(parser)
 
     # ── Connexion à la base source ────────────────────────────────────────
     def _brancher_source(self, opts):
-        defaut = settings.DATABASES['default']
-        settings.DATABASES[SOURCE] = {
-            **defaut,
-            'NAME':     opts['source_db'],
-            'HOST':     opts['source_host']     or defaut.get('HOST'),
-            'PORT':     opts['source_port']     or defaut.get('PORT'),
-            'USER':     opts['source_user']     or defaut.get('USER'),
-            'PASSWORD': opts['source_password'] or defaut.get('PASSWORD'),
-        }
-        try:
-            connections[SOURCE].ensure_connection()
-        except Exception as exc:
-            raise CommandError(f"Base source inaccessible : {exc}")
+        brancher_source(opts)
 
     # ── Garde-fou de version ──────────────────────────────────────────────
     def _verifier_migrations(self):
@@ -204,17 +247,18 @@ class Command(BaseCommand):
                 "\nInventaire seul — relancez avec --appliquer pour importer."))
             return
 
-        correspondances = self._aligner_globaux()
+        with horloge_neutralisee():
+            correspondances = self._aligner_globaux()
 
-        with transaction.atomic():
-            Tenant.objects.bulk_create([tenant])
-            for modele, _ in plan:
-                lignes = list(modele.objects.using(SOURCE).filter(tenant=tenant))
-                for ligne in lignes:
-                    ligne._state.db = None
-                    self._realigner(ligne, correspondances)
-                modele.objects.bulk_create(lignes, batch_size=500)
-            self._copier_m2m(tenant)
+            with transaction.atomic():
+                Tenant.objects.bulk_create([tenant])
+                for modele, _ in plan:
+                    lignes = list(modele.objects.using(SOURCE).filter(tenant=tenant))
+                    for ligne in lignes:
+                        ligne._state.db = None
+                        self._realigner(ligne, correspondances)
+                    modele.objects.bulk_create(lignes, batch_size=500)
+                self._copier_m2m(tenant)
 
         self.stdout.write(self.style.SUCCESS(
             f"\n✅ {total} ligne(s) importée(s) pour « {tenant.nom} »."))
