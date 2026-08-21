@@ -103,6 +103,20 @@ class PaiementViewSet(viewsets.ModelViewSet):
                 f"{exercice.annee_scolaire}, qui est clôturé. Réinscrivez "
                 f"l'élève dans l'exercice en cours avant d'encaisser.")
 
+        # La date du règlement est saisissable depuis qu'elle n'est plus
+        # `auto_now_add` : on peut enfin enregistrer le lendemain un
+        # encaissement de la veille. Elle date aussi l'écriture, donc une pièce
+        # hors des bornes de l'exercice y ferait apparaître un produit qui
+        # n'appartient pas à l'année. Le contrôle ne se déclenche que si le
+        # client a EXPLICITEMENT envoyé une date : sans elle, le modèle pose
+        # « aujourd'hui » et la saisie courante reste exactement ce qu'elle était.
+        date_saisie = serializer.validated_data.get('date_paiement')
+        if date_saisie and not (exercice.date_debut <= date_saisie <= exercice.date_fin):
+            raise ValidationError(
+                f"Le {date_saisie:%d/%m/%Y} est hors de l'exercice "
+                f"{exercice.annee_scolaire} "
+                f"({exercice.date_debut:%d/%m/%Y} — {exercice.date_fin:%d/%m/%Y}).")
+
         # Numéro de reçu : séquence NUMÉRIQUE de l'école. Un Max() alphabétique
         # rendait « REP-0005 » supérieur à « REC-0100 » — voir numerotation.py.
         from .numerotation import prochain_no_piece

@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from core.models import TenantModel
 
 
@@ -45,7 +46,15 @@ class Paiement(TenantModel):
     eleve               = models.ForeignKey('eleves.Eleve', on_delete=models.CASCADE, related_name='paiements')
     exercice            = models.ForeignKey(Exercice, on_delete=models.CASCADE, related_name='paiements')
     no_piece            = models.CharField(max_length=30)
-    date_paiement       = models.DateField(auto_now_add=True)
+    # Date du RÈGLEMENT, pas de la saisie. Longtemps déclarée `auto_now_add`,
+    # elle était de ce fait impossible à corriger : un encaissement noté le
+    # lendemain portait la date du lendemain, la rectification d'une vieille
+    # pièce la ramenait à aujourd'hui (le `date_paiement=` passé à
+    # `Paiement.objects.create` était silencieusement ignoré), et un import
+    # d'école réécrivait l'année entière à la date de la bascule — `bulk_create`
+    # applique `auto_now_add` comme n'importe quel INSERT. Le défaut reste
+    # « aujourd'hui » : la saisie courante ne change pas.
+    date_paiement       = models.DateField(default=timezone.localdate)
     statut              = models.CharField(max_length=10, choices=STATUT_CHOICES, default='ACTIF')
     montant_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     montant_mensualite  = models.DecimalField(max_digits=12, decimal_places=2, default=0)

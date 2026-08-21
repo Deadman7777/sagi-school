@@ -15,6 +15,7 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { CheckboxModule } from 'primeng/checkbox';
+import { DatePickerModule } from 'primeng/datepicker';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -26,7 +27,7 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, CheckboxModule, TooltipModule, PiecesJustificativesComponent,
+            InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, PiecesJustificativesComponent,
             ImportChargesDialogComponent],
   providers: [MessageService],
   template: `
@@ -639,6 +640,21 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
             </small>
           </div>
 
+          <!-- Date du règlement. Volontairement VIDE par défaut : le serveur
+               pose alors « aujourd'hui », exactement comme avant. La remplir
+               sert au cas qu'on ne savait pas traiter — enregistrer le
+               lendemain un encaissement de la veille. Préremplir la ferait
+               refuser sur une école dont l'exercice est déjà terminé. -->
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Date du règlement</label>
+            <p-datepicker [(ngModel)]="form.date_paiement" dateFormat="dd/mm/yy"
+                          appendTo="body" [showIcon]="true" [showClear]="true"
+                          placeholder="Aujourd'hui" styleClass="w-full" />
+            <small class="payeur-aide">
+              Laissez vide pour aujourd'hui. La date doit tomber dans l'exercice de la fiche.
+            </small>
+          </div>
+
           <div style="display:flex;align-items:center;justify-content:space-between">
             <label style="margin:0">Mode de paiement *</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
@@ -1232,6 +1248,9 @@ export class PaiementsComponent implements OnInit {
     observations:        '',
     // Qui règle : null = la famille, sinon l'organisme qui verse sa part.
     organisme:           null as string | null,
+    // Date du règlement. null = non saisie : le champ n'est alors pas envoyé
+    // et le serveur date la pièce d'aujourd'hui.
+    date_paiement:       null as Date | null,
   };
 
   private translate = inject(TranslateService);
@@ -1655,6 +1674,29 @@ export class PaiementsComponent implements OnInit {
     }
   }
 
+  /** Date locale au format ISO, sans repasser par UTC : `toISOString()`
+   *  recule d'un jour tout ce qui est saisi en fin de journée à l'ouest de
+   *  Greenwich, et un reçu daté de la veille est un reçu faux. */
+  private dateIso(d: Date): string {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  /** Le premier message lisible d'une erreur DRF, quelle que soit sa forme :
+   *  chaîne, liste de chaînes, ou dictionnaire {champ: [messages]}. */
+  private messageErreur(err: any): string {
+    const corps = err?.error;
+    const premier = (v: any): string | null => {
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.length ? premier(v[0]) : null;
+      if (v && typeof v === 'object') {
+        for (const val of Object.values(v)) { const m = premier(val); if (m) return m; }
+      }
+      return null;
+    };
+    return premier(corps) || this.translate.instant('paiements.erreur_save');
+  }
+
   private resetForm() {
     this.form = {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
@@ -1666,6 +1708,10 @@ export class PaiementsComponent implements OnInit {
       // mode : enchaîner deux reçus et attribuer le second à l'organisme par
       // inadvertance fausserait le suivi des deux côtés.
       organisme: null,
+      // Comme le payeur, la date repart à vide : reporter la date antidatée
+      // d'un reçu sur le suivant daterait un encaissement d'un jour où il
+      // n'a pas eu lieu.
+      date_paiement: null,
     };
   }
 
@@ -1759,6 +1805,11 @@ export class PaiementsComponent implements OnInit {
         : [],
       observations:        this.form.observations,
       organisme:           this.form.organisme || null,
+      // Absent du corps quand l'utilisateur n'a rien saisi : c'est le défaut
+      // du modèle (aujourd'hui) qui s'applique, et le contrôle d'exercice
+      // côté serveur ne se déclenche pas.
+      ...(this.form.date_paiement
+        ? { date_paiement: this.dateIso(this.form.date_paiement) } : {}),
       eleve:    this.eleveSelectionne.id,
       exercice: this.exerciceId,
     }).subscribe({
@@ -1771,7 +1822,11 @@ export class PaiementsComponent implements OnInit {
         if (avecRecu) this.imprimerRecu(res);
       },
       error: (err) => {
-        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('paiements.erreur_save') });
+        // Le serveur explique POURQUOI il refuse (date hors exercice, fiche
+        // sur un exercice clôturé, reliquat non reporté…). Un « erreur à
+        // l'enregistrement » générique laissait l'utilisateur sans recours.
+        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'),
+                       detail: this.messageErreur(err) });
         console.error(err);
         this.saving.set(false);
       }
