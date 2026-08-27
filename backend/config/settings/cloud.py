@@ -46,10 +46,15 @@ STATIC_ROOT      = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = []
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# ─── CORS : seul le front cloud est autorisé ───────────────────────
+# ─── CORS ──────────────────────────────────────────────────────────
+# Deux origines, et deux seulement : l'application cloud, et le site
+# vitrine — qui appelle /api/public/ (demande de démo, compteurs) et
+# /api/assistant/ (SAMA). Sans le site vitrine ici, le navigateur bloque
+# ces appels avant même qu'ils n'atteignent le serveur, et l'assistant
+# reste muet sans qu'aucun journal côté serveur ne le montre.
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='https://app.sagi-school.com',
+    default='https://app.sagi-school.com,https://sagi-school.com,https://www.sagi-school.com',
     cast=Csv()
 )
 # (on garde CORS_ALLOW_CREDENTIALS et CORS_ALLOW_HEADERS hérités de base.py)

@@ -1,127 +1,140 @@
-"""L'API de SAMA : lister, ouvrir, écrire.
+"""L'API publique de SAMA, pour le site vitrine sagi-school.com.
 
-L'envoi d'un message répond en **flux** (Server-Sent Events) : le texte
-s'affiche au fur et à mesure. Une réponse comptable détaillée met plusieurs
-secondes à s'écrire, et un écran figé pendant ce temps passe pour une panne.
+**Aucune authentification.** C'est la nature du service : un visiteur qui
+découvre SAGI SCHOOL n'a pas de compte, et lui en demander un reviendrait à ne
+parler qu'à ceux qui sont déjà clients. Ce que l'ouverture retire en contrôle
+d'accès, `garde_fous` le rend en bornes de dépense — c'est le vrai sujet ici,
+pas la confidentialité : le corpus remis au modèle est public par construction
+(voir `connaissance.py`).
+
+**Le visiteur ne choisit pas sa conversation.** L'identifiant rendu au début du
+flux permet de poursuivre le fil ; il ne permet pas de lire celui d'un autre —
+`retrieve` et `list` n'existent pas sur cette API. Un identifiant deviné ne
+donne accès à rien, seulement à la possibilité d'écrire à la suite, ce que les
+mêmes bornes encadrent.
+
+**Deux points d'entrée seulement** : l'état du service, et l'envoi d'un message.
+Tout le reste — historique, suppression, titres — appartenait à la version
+interne et n'a pas de sens pour un visiteur de passage.
 """
 import json
+import logging
 
 from django.db import transaction
 from django.http import StreamingHttpResponse
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
-from core.tenant import get_tenant
-
-from .client import AssistantIndisponible, contexte_utilisateur, repondre
+from .client import AssistantIndisponible, cout_fcfa, repondre
+from .garde_fous import (LimiteAtteinte, cle_visiteur, conversation_est_au_bout,
+                         enregistrer_consommation, etat_budget, origine,
+                         verifier_avant_message)
 from .models import Conversation, Message
 from .prompt import prompt_systeme
 
-# Au-delà, la conversation est repliée sur ses derniers tours. Une école qui
-# discute une heure durant ne doit pas voir sa facture enfler à chaque message,
-# ni buter sur la fenêtre de contexte.
-MAX_TOURS = 40
+logger = logging.getLogger(__name__)
+
+# Longueur d'une question posée dans une fenêtre de discussion. L'ancienne
+# limite — 20 000 caractères — venait de l'application, où un comptable pouvait
+# coller un extrait de grand livre. Ici, un message démesuré n'est pas un
+# usage, c'est une façon de faire grossir la facture.
+MAX_CARACTERES = 2000
 
 
-class ConversationViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+class MessageThrottle(AnonRateThrottle):
+    """Première barrière, en amont des plafonds de dépense.
 
-    def _mes_conversations(self, request):
-        return Conversation.objects.filter(
-            tenant=get_tenant(request), utilisateur=request.user)
+    Elle ne protège pas le budget — c'est le rôle de `garde_fous` — mais le
+    serveur : sans elle, un client automatisé ouvre autant de flux simultanés
+    qu'il veut, et chacun mobilise un processus pendant plusieurs secondes.
 
-    def list(self, request):
-        return Response([{
-            'id':      str(c.id),
-            'titre':   c.titre,
-            'maj':     c.updated_at,
-        } for c in self._mes_conversations(request)[:50]])
+    Elle s'appuie sur le cache de Django, qui est ici local à chaque processus :
+    avec quatre `gunicorn`, un même visiteur dispose en pratique de quatre fois
+    ce quota. C'est assumé — la borne qui compte est en base, dans
+    `garde_fous`, et celle-là est exacte.
+    """
+    scope = 'sama'
+    rate = '20/hour'
 
-    def retrieve(self, request, pk=None):
-        conv = self._mes_conversations(request).filter(pk=pk).first()
-        if not conv:
-            return Response({'error': 'Conversation introuvable.'}, status=404)
-        return Response({
-            'id':    str(conv.id),
-            'titre': conv.titre,
-            'messages': [{
-                'role':    m.role,
-                'contenu': m.contenu,
-                'date':    m.created_at,
-            } for m in conv.messages.all()],
-        })
 
-    def destroy(self, request, pk=None):
-        conv = self._mes_conversations(request).filter(pk=pk).first()
-        if not conv:
-            return Response({'error': 'Conversation introuvable.'}, status=404)
-        conv.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+class EtatView(APIView):
+    """GET /api/assistant/etat/ — le site doit-il afficher l'assistant ?
 
-    @action(detail=False, methods=['get'], url_path='etat')
-    def etat(self, request):
-        """L'assistant est-il utilisable sur cette installation ?
+    Une installation sans clé, ou un service suspendu par le coupe-circuit, ne
+    doit pas montrer une fenêtre de discussion qui ne répondra jamais. Mieux
+    vaut aucun bouton qu'un bouton mort.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
-        Une école en local sans accès Internet, ou une installation sans clé,
-        ne doit pas voir un bouton qui ne répondra jamais. Mieux vaut aucune
-        commande qu'une commande morte.
-        """
+    def get(self, request):
         from django.conf import settings
+        budget = etat_budget()
         return Response({
-            'disponible': bool(getattr(settings, 'ANTHROPIC_API_KEY', '')),
+            'disponible': bool(getattr(settings, 'ANTHROPIC_API_KEY', ''))
+                          and not budget['suspendu'],
         })
 
-    @action(detail=False, methods=['post'], url_path='message')
-    def message(self, request):
-        """Envoie un message et diffuse la réponse au fil de l'eau.
 
-        Attend {"contenu": "...", "conversation": "<id>"} — sans identifiant,
-        une conversation est ouverte.
-        """
-        tenant = get_tenant(request)
+class MessageView(APIView):
+    """POST /api/assistant/message/ — envoie un message, diffuse la réponse.
+
+    Attend {"contenu": "...", "conversation": "<id>"} — sans identifiant, une
+    conversation est ouverte. Répond en **flux** (Server-Sent Events) : le texte
+    s'affiche à mesure qu'il s'écrit.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MessageThrottle]
+
+    def post(self, request):
         contenu = (request.data.get('contenu') or '').strip()
         if not contenu:
             return Response({'error': 'Message vide.'}, status=400)
-        if len(contenu) > 20000:
-            return Response({'error': 'Message trop long.'}, status=400)
+        if len(contenu) > MAX_CARACTERES:
+            return Response(
+                {'error': "Votre message est trop long. Résumez votre question "
+                          "en quelques phrases."}, status=400)
 
         conv = None
         if cid := request.data.get('conversation'):
-            conv = self._mes_conversations(request).filter(pk=cid).first()
-        if conv is None:
+            # Restreint au visiteur : un identifiant récupéré ailleurs ne
+            # permet pas d'écrire dans le fil de quelqu'un d'autre.
+            conv = Conversation.objects.filter(
+                pk=cid, cle_visiteur=cle_visiteur(request)).first()
+
+        try:
+            verifier_avant_message(request, conv)
+        except LimiteAtteinte as e:
+            logger.info('SAMA — refus : %s', e.raison)
+            return Response({'error': str(e), 'raison': e.raison}, status=429)
+
+        nouvelle = conv is None
+        if nouvelle:
             conv = Conversation.objects.create(
-                tenant=tenant, utilisateur=request.user,
+                cle_visiteur=cle_visiteur(request), origine=origine(request),
                 # Le titre par défaut est la question elle-même : c'est ce qui
-                # permet de retrouver un échange dans la liste.
+                # rend un échange reconnaissable dans le suivi commercial.
                 titre=contenu[:80] + ('…' if len(contenu) > 80 else ''))
 
-        Message.objects.create(tenant=tenant, conversation=conv,
-                               role='user', contenu=contenu)
+        Message.objects.create(conversation=conv, role='user', contenu=contenu)
 
-        # Le contexte de l'école ouvre la conversation, jamais le prompt
-        # système : le système est mis en cache et doit rester identique pour
-        # toutes les écoles (voir client.py).
-        from apps.licences.models import Licence
-        licence = Licence.objects.filter(tenant=tenant).first()
-        entete = contexte_utilisateur(request.user, tenant, licence)
-
-        tours = list(conv.messages.all())[-MAX_TOURS:]
-        messages = [{'role': m.role, 'content': m.contenu} for m in tours]
-        messages[0]['content'] = f"{entete}\n\n---\n\n{messages[0]['content']}"
+        messages = [{'role': m.role, 'content': m.contenu}
+                    for m in conv.messages.all()]
 
         return StreamingHttpResponse(
-            self._diffuser(tenant, conv, messages),
+            self._diffuser(conv, messages, nouvelle),
             content_type='text/event-stream',
             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
         )
 
-    def _diffuser(self, tenant, conv, messages):
+    def _diffuser(self, conv, messages, nouvelle):
         def evenement(type_, donnees):
             return f'data: {json.dumps({"type": type_, **donnees}, ensure_ascii=False)}\n\n'
 
-        yield evenement('debut', {'conversation': str(conv.id), 'titre': conv.titre})
+        yield evenement('debut', {'conversation': str(conv.id)})
 
         morceaux, usage = [], {}
         try:
@@ -135,21 +148,35 @@ class ConversationViewSet(viewsets.ViewSet):
             yield evenement('erreur', {'message': str(e)})
             return
         except Exception:                     # ne jamais rompre le flux nu
+            logger.exception('SAMA — erreur inattendue pendant la diffusion')
             yield evenement('erreur', {'message':
-                            "Une erreur inattendue est survenue. Réessayez."})
+                            "Une erreur est survenue. Réessayez dans un instant."})
             return
 
         # La réponse n'est enregistrée qu'une fois complète : un flux
         # interrompu ne doit pas laisser un demi-message dans l'historique.
         reponse = ''.join(morceaux)
         if reponse:
+            cout = cout_fcfa(usage)
             with transaction.atomic():
                 Message.objects.create(
-                    tenant=tenant, conversation=conv, role='assistant',
-                    contenu=reponse,
+                    conversation=conv, role='assistant', contenu=reponse,
                     jetons_entree=usage.get('jetons_entree', 0),
                     jetons_sortie=usage.get('jetons_sortie', 0),
-                    jetons_cache=usage.get('jetons_cache', 0))
+                    jetons_cache_lecture=usage.get('jetons_cache_lecture', 0),
+                    jetons_cache_ecriture=usage.get('jetons_cache_ecriture', 0),
+                    cout_fcfa=cout)
                 conv.save(update_fields=['updated_at'])
+            # Hors de la transaction du message : le compteur du jour est
+            # partagé par tous les visiteurs, et le tenir verrouillé pendant
+            # l'écriture d'un message sérialiserait toutes les conversations.
+            enregistrer_consommation(usage, cout, nouvelle_conversation=nouvelle)
+
+            # La borne atteinte est inscrite sur la conversation : le prochain
+            # message est refusé sans avoir à recompter, et le suivi commercial
+            # voit qu'un visiteur est allé au bout de ce qui lui était offert.
+            if conversation_est_au_bout(conv):
+                conv.close = True
+                conv.save(update_fields=['close', 'updated_at'])
 
         yield evenement('fin', {'tronque': usage.get('tronque', False)})

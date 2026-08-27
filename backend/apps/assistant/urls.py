@@ -1,9 +1,8 @@
-from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 
-from .views import ConversationViewSet
+from .views import EtatView, MessageView
 
-router = DefaultRouter()
-router.register('conversations', ConversationViewSet, basename='sama-conversation')
-
-urlpatterns = [path('', include(router.urls))]
+urlpatterns = [
+    path('etat/',    EtatView.as_view()),
+    path('message/', MessageView.as_view()),
+]

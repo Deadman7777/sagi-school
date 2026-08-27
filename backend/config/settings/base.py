@@ -163,7 +163,30 @@ CACHES = {
     }
 }
 
-# ── SAMA ASSISTANT ────────────────────────────────────────────────────────
+# ── SAMA ASSISTANT (site vitrine sagi-school.com) ─────────────────────────
 # Clé lue dans l'environnement. Absente, l'assistant se désactive proprement
-# et le dit à l'utilisateur — il ne plante pas.
+# et le dit au visiteur — il ne plante pas. Sur une installation locale
+# (Electron), elle n'a aucune raison d'être renseignée : SAMA est un service
+# du site public, pas une fonction du logiciel installé chez le client.
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+
+# Les bornes de dépense. Un site public n'a pas de payeur en face de chaque
+# conversation : sans ces plafonds, une nuit d'activité anormale consomme un
+# budget mensuel. Voir `apps/assistant/garde_fous.py`.
+#
+# Les valeurs par défaut correspondent au budget proposé à la direction :
+# 10 000 F/mois, soit environ 330 conversations à ~30 F pièce sur Haiku 4.5.
+# Le coupe-circuit journalier est délibérément plus haut que la moyenne
+# (10 000/30 ≈ 333 F) : une bonne journée ne doit pas être coupée, seul un
+# emballement doit l'être.
+SAMA_PLAFOND_MOIS_FCFA = config('SAMA_PLAFOND_MOIS_FCFA', default=10000, cast=int)
+SAMA_PLAFOND_JOUR_FCFA = config('SAMA_PLAFOND_JOUR_FCFA', default=1000, cast=int)
+SAMA_MAX_CONVERSATIONS_VISITEUR_JOUR = config(
+    'SAMA_MAX_CONVERSATIONS_VISITEUR_JOUR', default=5, cast=int)
+# Messages, les deux rôles confondus : vingt autorisent dix aller-retours.
+SAMA_MAX_MESSAGES_CONVERSATION = config(
+    'SAMA_MAX_MESSAGES_CONVERSATION', default=20, cast=int)
+# Les tarifs Anthropic sont en dollars ; les plafonds ci-dessus, en francs.
+# À réviser si le change s'écarte durablement — le franc CFA est arrimé à
+# l'euro, pas au dollar.
+SAMA_TAUX_USD_FCFA = config('SAMA_TAUX_USD_FCFA', default=610, cast=int)
