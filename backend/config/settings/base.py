@@ -163,6 +163,25 @@ CACHES = {
     }
 }
 
+# ── COMMERCIAL : catalogue et devis ───────────────────────────────────────
+# Remise appliquée au paiement annuel. Pratiquée par l'écran Licences depuis
+# toujours, mais ABSENTE des deux documents officiels — voir l'en-tête de
+# `apps/licences/catalogue.py`. Mettre à 0 pour s'en tenir aux tarifs publiés.
+REMISE_ANNUELLE = config('REMISE_ANNUELLE', default='0.10')
+
+# Premier rang de la séquence des devis. Démarre à 2 : HG-DEV-2026-0001 a été
+# établi à la main avant ce module, et deux pièces ne peuvent pas porter la
+# même référence.
+DEVIS_NUMERO_MIN = config('DEVIS_NUMERO_MIN', default=2, cast=int)
+
+# L'émetteur tel qu'il figure en tête des devis. Dans les documents officiels
+# et non déduit d'ailleurs : un NINEA erroné sur une pièce commerciale est une
+# erreur qu'un client relève.
+EDITEUR_TELEPHONE = config('EDITEUR_TELEPHONE',
+                           default='+221 70 328 61 51 · +221 78 429 78 30')
+EDITEUR_SITE  = config('EDITEUR_SITE',  default='sagi-school.com')
+EDITEUR_NINEA = config('EDITEUR_NINEA', default='012673986')
+
 # ── SAMA ASSISTANT (site vitrine sagi-school.com) ─────────────────────────
 # Clé lue dans l'environnement. Absente, l'assistant se désactive proprement
 # et le dit au visiteur — il ne plante pas. Sur une installation locale

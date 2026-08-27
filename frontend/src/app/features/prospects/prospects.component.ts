@@ -15,7 +15,8 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { Prospect, ProspectsService, StatsProspects } from '../../core/services/prospects.service';
+import { Catalogue, Devis, Prospect, ProspectsService, StatsProspects }
+  from '../../core/services/prospects.service';
 
 /**
  * Le fichier prospects de HADY GESMAN.
@@ -27,7 +28,6 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
  */
 @Component({
   selector: 'app-prospects',
-  standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
             DatePickerModule, ToastModule, TooltipModule, ConfirmDialogModule,
@@ -46,7 +46,8 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
                 icon="pi pi-plus" (onClick)="ouvrirCreation()" />
     </div>
 
-    <div class="kpi-grid" *ngIf="stats() as s">
+    @if (stats(); as s) {
+    <div class="kpi-grid">
       <div class="kpi-card" style="--acc:#f59e0b">
         <div class="kpi-icon">🔔</div>
         <div class="kpi-label">{{ 'prospects.kpi_a_relancer' | translate }}</div>
@@ -78,9 +79,11 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
         <div class="kpi-value" style="color:#94a3b8">{{ s.recus_30j }}</div>
       </div>
     </div>
+    }
 
     <!-- Le seul vrai échec de ce fichier : une demande reçue et jamais rappelée. -->
-    <div class="alerte-oubli" *ngIf="stats()?.jamais_contactes">
+    @if (stats()?.jamais_contactes) {
+    <div class="alerte-oubli">
       <span class="ao-icon">⚠️</span>
       <span class="ao-texte">
         {{ 'prospects.alerte_oubli' | translate:{ nombre: stats()!.jamais_contactes } }}
@@ -88,6 +91,7 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
       <p-button [label]="'prospects.voir_ces_demandes' | translate" size="small"
                 severity="warn" [text]="true" (onClick)="filtrerNonTraites()" />
     </div>
+    }
 
     <div class="filtres">
       <input pInputText [(ngModel)]="recherche" (keyup.enter)="charger()"
@@ -123,7 +127,7 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
           <tr (dblclick)="ouvrirFiche(p)">
             <td>
               <div class="bold">{{ p.etablissement }}</div>
-              <div class="sous">{{ p.ville || '—' }}<span *ngIf="p.type_organisation"> · {{ p.type_organisation }}</span></div>
+              <div class="sous">{{ p.ville || '—' }}@if (p.type_organisation) {<span> · {{ p.type_organisation }}</span>}</div>
             </td>
             <td>
               <div>{{ p.contact_nom || '—' }}</div>
@@ -135,14 +139,16 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
             <td><span class="source" [class.source-sama]="p.source === 'ASSISTANT'">{{ sourceLibelle(p.source) }}</span></td>
             <td class="mono sous">
               {{ p.cree_le | date:'dd/MM/yy' }}
-              <span *ngIf="p.statut === 'NOUVEAU' && p.anciennete_jours > 2"
-                    class="retard">· {{ p.anciennete_jours }}j</span>
+              @if (p.statut === 'NOUVEAU' && p.anciennete_jours > 2) {
+                <span class="retard">· {{ p.anciennete_jours }}j</span>
+              }
             </td>
             <td class="mono">
-              <span *ngIf="p.relance_le" [class.retard]="p.relance_en_retard">
-                {{ p.relance_le | date:'dd/MM/yy' }}
-              </span>
-              <span *ngIf="!p.relance_le" class="sous">—</span>
+              @if (p.relance_le) {
+                <span [class.retard]="p.relance_en_retard">{{ p.relance_le | date:'dd/MM/yy' }}</span>
+              } @else {
+                <span class="sous">—</span>
+              }
             </td>
             <td class="ta-r">
               <p-button icon="pi pi-eye" [text]="true" size="small"
@@ -160,7 +166,7 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
     <!-- ── Fiche ────────────────────────────────────────────────────── -->
     <p-dialog [(visible)]="ficheVisible" [modal]="true" [style]="{width:'860px'}"
               [header]="fiche()?.etablissement || ''" [draggable]="false">
-      <ng-container *ngIf="fiche() as f">
+      @if (fiche(); as f) {
         <div class="fiche-entete">
           <p-tag [value]="f.statut_libelle" [severity]="statutSeverity(f.statut)" />
           <span class="sous">{{ 'prospects.recu_le' | translate }} {{ f.cree_le | date:'dd/MM/yyyy' }}
@@ -180,10 +186,12 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
             <p-datepicker [(ngModel)]="editRelance" dateFormat="dd/mm/yy"
                           [showButtonBar]="true" appendTo="body" />
           </div>
-          <div class="form-group full" *ngIf="editStatut === 'PERDU'">
+          @if (editStatut === 'PERDU') {
+          <div class="form-group full">
             <label>{{ 'prospects.motif_perdu' | translate }}</label>
             <input pInputText [(ngModel)]="editMotif" />
           </div>
+          }
           <div class="form-group full">
             <label>{{ 'prospects.notes' | translate }}</label>
             <textarea pTextarea rows="2" [(ngModel)]="editNotes"></textarea>
@@ -216,24 +224,81 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
           <div class="lig"><span>{{ 'prospects.employes' | translate }}</span><b class="mono">{{ f['nb_employes'] ?? '—' }}</b></div>
           <div class="lig"><span>{{ 'prospects.classes' | translate }}</span><b class="mono">{{ f['nb_classes'] ?? '—' }}</b></div>
           <div class="lig"><span>{{ 'prospects.sites' | translate }}</span><b class="mono">{{ f['nb_sites'] ?? '—' }}</b></div>
-          <div class="lig full" *ngIf="f['disponibilites']">
+          @if (f['disponibilites']) {
+          <div class="lig full">
             <span>{{ 'prospects.disponibilites' | translate }}</span><b>{{ f['disponibilites'] }}</b>
           </div>
-          <div class="bloc-message full" *ngIf="f['message']">{{ f['message'] }}</div>
+          }
+          @if (f['message']) {
+          <div class="bloc-message full">{{ f['message'] }}</div>
+          }
+        </div>
+
+        <!-- ── Les propositions chiffrées ──────────────────────────── -->
+        <div class="separator sep-hist">{{ 'prospects.sec_devis' | translate }}</div>
+        <p class="aide">{{ 'prospects.aide_devis' | translate }}</p>
+
+        @if (!f.devis?.length) {
+        <div class="devis-vide">
+          {{ 'prospects.aucun_devis' | translate }}
+        </div>
+        }
+
+        @for (d of f.devis; track d.id) {
+        <div class="devis-ligne">
+          <div class="dv-gauche">
+            <span class="dv-numero mono">{{ d.numero }}</span>
+            <span class="dv-offre">{{ d.type_licence }} · {{ d.mois }} {{ 'prospects.mois' | translate }}</span>
+          </div>
+          <span class="dv-montant mono">{{ d.montant_total | number:'1.0-0' }} {{ 'common.fcfa' | translate }}</span>
+          <p-tag [value]="d.expire ? ('prospects.devis_expire' | translate) : d.statut_libelle"
+                 [severity]="d.expire ? 'danger' : devisSeverity(d.statut)" />
+          <span class="dv-actions">
+            <p-button icon="pi pi-file-pdf" [text]="true" size="small"
+                      (onClick)="voirPdf(d)" [pTooltip]="'prospects.voir_pdf' | translate" />
+            @if (d.statut === 'BROUILLON') {
+              <p-button [label]="'prospects.valider' | translate"
+                        size="small" severity="success" (onClick)="validerDevis(d)" />
+            }
+            @if (d.statut === 'VALIDE' && !d.expire) {
+              <p-button [label]="'prospects.marquer_envoye' | translate"
+                        size="small" [outlined]="true" (onClick)="envoyerDevis(d)" />
+            }
+            @if (d.statut === 'ENVOYE') {
+              <p-button [label]="'prospects.accepte' | translate"
+                        size="small" severity="success" [text]="true" (onClick)="trancherDevis(d, 'ACCEPTE')" />
+              <p-button [label]="'prospects.refuse' | translate"
+                        size="small" severity="danger" [text]="true" (onClick)="trancherDevis(d, 'REFUSE')" />
+            }
+            @if (d.statut === 'BROUILLON') {
+              <p-button icon="pi pi-trash" [text]="true"
+                        size="small" severity="danger" (onClick)="supprimerDevis(d)" />
+            }
+          </span>
+        </div>
+        }
+
+        <div class="ta-r" style="margin-top:8px">
+          <p-button [label]="'prospects.etablir_devis' | translate" icon="pi pi-plus"
+                    size="small" [outlined]="true" (onClick)="ouvrirDevis()" />
         </div>
 
         <!-- ── Ce que le visiteur a dit à SAMA ─────────────────────── -->
-        <ng-container *ngIf="f.conversations?.length">
+        @if (f.conversations?.length) {
           <div class="separator sep-hist">{{ 'prospects.sec_conversation' | translate }}</div>
           <p class="aide">{{ 'prospects.aide_conversation' | translate }}</p>
-          <div class="conversation" *ngFor="let c of f.conversations">
+          @for (c of f.conversations; track c.id) {
+          <div class="conversation">
             <div class="conv-date mono">{{ c.date | date:'dd/MM/yyyy HH:mm' }}</div>
-            <div class="bulle" *ngFor="let m of c.messages" [class.bulle-sama]="m.role === 'assistant'">
+            @for (m of c.messages; track $index) {
+            <div class="bulle" [class.bulle-sama]="m.role === 'assistant'">
               <span class="bulle-qui">{{ (m.role === 'assistant' ? 'prospects.sama' : 'prospects.visiteur') | translate }}</span>
               <span class="bulle-texte">{{ m.contenu }}</span>
             </div>
+            }
           </div>
-        </ng-container>
+          }
+        }
 
         <!-- ── L'historique de la relation ─────────────────────────── -->
         <div class="separator sep-hist">{{ 'prospects.sec_echanges' | translate }}</div>
@@ -250,22 +315,86 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
         </div>
 
         <div class="timeline">
-          <div class="tl-item" *ngFor="let e of f.interactions">
+          @for (e of f.interactions; track e.id) {
+          <div class="tl-item">
             <div class="tl-tete">
               <span class="tl-canal">{{ e.canal_libelle }}</span>
               <span class="tl-date mono">{{ e.date | date:'dd/MM/yyyy' }}</span>
-              <span class="tl-auteur" *ngIf="e.auteur">· {{ e.auteur }}</span>
+              @if (e.auteur) {<span class="tl-auteur">· {{ e.auteur }}</span>}
             </div>
             <div class="tl-resume">{{ e.resume }}</div>
           </div>
+          }
         </div>
-      </ng-container>
+      }
 
       <ng-template pTemplate="footer">
         <p-button [label]="'common.supprimer' | translate" severity="danger"
                   [text]="true" (onClick)="confirmerSuppression()" />
         <p-button [label]="'common.fermer' | translate" [text]="true"
                   (onClick)="ficheVisible = false" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- ── Établir un devis ─────────────────────────────────────────── -->
+    <p-dialog [(visible)]="devisVisible" [modal]="true" [style]="{width:'620px'}"
+              [header]="'prospects.etablir_devis' | translate" [draggable]="false">
+      <p class="aide">{{ 'prospects.aide_chiffrage' | translate }}</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>{{ 'prospects.licence' | translate }}</label>
+          <p-select [(ngModel)]="nouveauDevis.type_licence" [options]="licencesCatalogue()"
+                    optionLabel="libelle" optionValue="code" (onChange)="rechiffrer()"
+                    [overlayOptions]="overlayNoHideOnScroll" appendTo="body" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'prospects.cycle' | translate }}</label>
+          <p-select [(ngModel)]="nouveauDevis.cycle" [options]="cyclesCatalogue()"
+                    optionLabel="libelle" optionValue="code" (onChange)="surCycle()"
+                    [overlayOptions]="overlayNoHideOnScroll" appendTo="body" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'prospects.duree_mois' | translate }}</label>
+          <input pInputText type="number" [(ngModel)]="nouveauDevis.mois" (input)="rechiffrer()" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'prospects.frais_installation' | translate }}</label>
+          <input pInputText type="number" [(ngModel)]="nouveauDevis.frais_installation" />
+        </div>
+        <div class="form-group full">
+          <label>{{ 'prospects.prestations' | translate }}</label>
+          <textarea pTextarea rows="2" [(ngModel)]="nouveauDevis.prestations"></textarea>
+        </div>
+        <div class="form-group">
+          <label>{{ 'prospects.montant_prestations' | translate }}</label>
+          <input pInputText type="number" [(ngModel)]="nouveauDevis.montant_prestations" />
+        </div>
+        <div class="form-group full">
+          <label>{{ 'prospects.observations' | translate }}</label>
+          <textarea pTextarea rows="2" [(ngModel)]="nouveauDevis.observations"></textarea>
+        </div>
+      </div>
+
+      <!-- Le chiffrage affiché vient du catalogue servi par le serveur : c'est
+           lui qui produira le devis, l'écran ne fait que le montrer. -->
+      @if (chiffrage(); as c) {
+      <div class="chiffrage">
+        <div class="ch-ligne"><span>{{ 'prospects.licence' | translate }}</span>
+          <b class="mono">{{ c.brut | number:'1.0-0' }}</b></div>
+        @if (c.remise) {
+        <div class="ch-ligne"><span>{{ 'prospects.remise' | translate }} ({{ c.taux }} %)</span>
+          <b class="mono vert">− {{ c.remise | number:'1.0-0' }}</b></div>
+        }
+        <div class="ch-ligne ch-total"><span>{{ 'prospects.net_a_payer' | translate }}</span>
+          <b class="mono">{{ c.total | number:'1.0-0' }} {{ 'common.fcfa' | translate }}</b></div>
+      </div>
+      }
+
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" [text]="true"
+                  (onClick)="devisVisible = false" />
+        <p-button [label]="'prospects.etablir' | translate" [loading]="saving()"
+                  (onClick)="etablirDevis()" />
       </ng-template>
     </p-dialog>
 
@@ -381,6 +510,21 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
     .ne-resume { flex:1; }
     ::ng-deep .ne-canal { min-width:170px; }
 
+    .devis-vide { font-size:12px; color:var(--text-3); padding:6px 0; }
+    .devis-ligne { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--surface-2); }
+    .dv-gauche { flex:1; display:flex; flex-direction:column; }
+    .dv-numero { font-size:12px; font-weight:600; color:var(--text); }
+    .dv-offre  { font-size:11px; color:var(--text-3); }
+    .dv-montant { font-size:13px; font-weight:700; color:var(--text); }
+    .dv-actions { display:flex; align-items:center; gap:4px; }
+
+    .chiffrage { background:var(--bg); border-radius:8px; padding:10px 14px; margin-top:14px; }
+    .ch-ligne { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
+    .ch-ligne span { color:var(--text-3); }
+    .ch-total { border-top:1px solid var(--border); margin-top:4px; padding-top:8px; font-size:15px; }
+    .ch-total b { color:#00d4aa; }
+    .vert { color:#10b981; }
+
     .conversation { background:var(--bg); border-radius:8px; padding:10px 12px; margin-bottom:10px; max-height:260px; overflow-y:auto; }
     .conv-date { font-size:11px; color:var(--text-3); margin-bottom:8px; }
     .bulle { display:block; font-size:13px; line-height:1.5; margin-bottom:8px; white-space:pre-wrap; }
@@ -447,8 +591,42 @@ export class ProspectsComponent implements OnInit {
   nouveau: any = {};
   nouvelleOrigine = '';
 
+  // ── Devis ──────────────────────────────────────────────────────────
+  catalogue = signal<Catalogue | null>(null);
+  devisVisible = false;
+  nouveauDevis: any = { type_licence: 'PRO', cycle: 'ANNUEL', mois: 12,
+                        frais_installation: 0, prestations: '',
+                        montant_prestations: 0, observations: '' };
+
+  licencesCatalogue = computed(() =>
+    (this.catalogue()?.licences || []).filter(l => l.code !== 'ESSAI'));
+  cyclesCatalogue = computed(() => this.catalogue()?.cycles || []);
+
+  /**
+   * Le chiffrage montré pendant la saisie. Il reproduit celui du serveur, qui
+   * reste seul à produire la pièce : l'écran n'affiche jamais un montant qu'il
+   * a décidé, il montre à l'avance celui qui sera établi. Le devis renvoyé
+   * après l'établissement fait foi.
+   */
+  chiffrage = computed(() => {
+    const grille = this.catalogue();
+    if (!grille) return null;
+    const ligne = grille.licences.find(l => l.code === this.nouveauDevis.type_licence);
+    if (!ligne) return null;
+
+    const mois = Math.max(Number(this.nouveauDevis.mois) || 0, 0);
+    const brut = ligne.prix_mensuel * mois;
+    const taux = this.nouveauDevis.cycle === 'ANNUEL' ? grille.taux_remise_annuelle : 0;
+    const remise = Math.round(brut * taux);
+    const extras = (Number(this.nouveauDevis.frais_installation) || 0)
+                 + (Number(this.nouveauDevis.montant_prestations) || 0);
+    return { brut, remise, taux: Math.round(taux * 100),
+             total: brut - remise + extras };
+  });
+
   ngOnInit() {
     this.service.referentiels().subscribe({ next: r => this.refs.set(r) });
+    this.service.catalogue().subscribe({ next: c => this.catalogue.set(c) });
     this.charger();
   }
 
@@ -580,6 +758,115 @@ export class ProspectsComponent implements OnInit {
         next: () => { this.ficheVisible = false; this.charger(); },
       }),
     });
+  }
+
+  // ── Devis ──────────────────────────────────────────────────────────
+  ouvrirDevis() {
+    // Pré-rempli avec ce que le diagnostic a laissé entendre, quand SAMA a
+    // proposé une orientation. Ce n'est qu'un point de départ : c'est le
+    // commercial qui décide de l'offre.
+    const pressentie = this.fiche()?.['donnees_brutes']?.['licence_pressentie'];
+    this.nouveauDevis = {
+      type_licence: pressentie || 'PRO', cycle: 'ANNUEL', mois: 12,
+      frais_installation: 0, prestations: '', montant_prestations: 0,
+      observations: '',
+    };
+    this.devisVisible = true;
+  }
+
+  /** Le cycle commande la durée par défaut, sans l'imposer. */
+  surCycle() {
+    this.nouveauDevis.mois = this.nouveauDevis.cycle === 'ANNUEL' ? 12 : 1;
+    this.rechiffrer();
+  }
+
+  /** Force le recalcul du signal : `nouveauDevis` est un objet mutable. */
+  rechiffrer() { this.nouveauDevis = { ...this.nouveauDevis }; }
+
+  etablirDevis() {
+    const f = this.fiche();
+    if (!f) return;
+    this.saving.set(true);
+    this.service.etablirDevis({ prospect: f.id, ...this.nouveauDevis }).subscribe({
+      next: d => {
+        this.saving.set(false);
+        this.devisVisible = false;
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('prospects.devis_etabli'),
+                       detail: d.numero });
+        this.rafraichirFiche();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error',
+                       summary: err?.error?.error || this.translate.instant('common.erreur') });
+      },
+    });
+  }
+
+  validerDevis(d: Devis) {
+    this.confirm.confirm({
+      message: this.translate.instant('prospects.confirmer_validation',
+                                      { numero: d.numero }),
+      accept: () => this.service.validerDevis(d.id).subscribe({
+        next: () => this.rafraichirFiche(),
+      }),
+    });
+  }
+
+  envoyerDevis(d: Devis) {
+    // Aucun courriel n'est expédié : le commercial l'envoie lui-même, avec son
+    // mot d'accompagnement. On enregistre seulement qu'il l'a fait.
+    this.confirm.confirm({
+      message: this.translate.instant('prospects.confirmer_envoi', { numero: d.numero }),
+      accept: () => this.service.envoyerDevis(d.id).subscribe({
+        next: () => this.rafraichirFiche(),
+        error: err => this.msg.add({ severity: 'error',
+                                     summary: err?.error?.error }),
+      }),
+    });
+  }
+
+  trancherDevis(d: Devis, reponse: 'ACCEPTE' | 'REFUSE') {
+    this.service.trancherDevis(d.id, reponse).subscribe({
+      next: () => this.rafraichirFiche(),
+    });
+  }
+
+  supprimerDevis(d: Devis) {
+    this.confirm.confirm({
+      message: this.translate.instant('prospects.confirmer_suppression_devis',
+                                      { numero: d.numero }),
+      accept: () => this.service.supprimerDevis(d.id).subscribe({
+        next: () => this.rafraichirFiche(),
+      }),
+    });
+  }
+
+  voirPdf(d: Devis) {
+    // L'API demande un jeton : un simple lien ouvrirait une page d'erreur.
+    this.service.pdfDevis(d.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        // Libéré après ouverture : l'onglet a déjà chargé le document.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+    });
+  }
+
+  devisSeverity(statut: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
+    const map: Record<string, 'success' | 'warn' | 'danger' | 'info' | 'secondary'> = {
+      BROUILLON: 'warn', VALIDE: 'info', ENVOYE: 'secondary',
+      ACCEPTE: 'success', REFUSE: 'danger',
+    };
+    return map[statut] || 'secondary';
+  }
+
+  private rafraichirFiche() {
+    const f = this.fiche();
+    if (f) this.service.fiche(f.id).subscribe({ next: maj => this.fiche.set(maj) });
+    this.charger();
   }
 
   statutSeverity(statut: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' | 'contrast' {

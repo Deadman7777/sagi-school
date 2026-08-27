@@ -23,6 +23,7 @@ export interface Prospect {
   /** Présents uniquement sur la fiche détaillée (GET /prospects/{id}/). */
   interactions?: Interaction[];
   conversations?: ConversationSama[];
+  devis?: Devis[];
   donnees_brutes?: Record<string, string>;
   [autre: string]: any;
 }
@@ -43,6 +44,42 @@ export interface ConversationSama {
   id: string;
   date: string;
   messages: { role: 'user' | 'assistant'; contenu: string }[];
+}
+
+/** Une proposition chiffrée. Les montants viennent du catalogue serveur :
+ *  l'écran les affiche, il ne les calcule jamais. */
+export interface Devis {
+  id: string;
+  numero: string;
+  etablissement: string;
+  type_licence: string;
+  cycle: string;
+  mois: number;
+  montant_net: number;
+  montant_total: number;
+  statut: 'BROUILLON' | 'VALIDE' | 'ENVOYE' | 'ACCEPTE' | 'REFUSE';
+  statut_libelle: string;
+  date_emission: string;
+  date_validite: string;
+  expire: boolean;
+  modifiable: boolean;
+  [autre: string]: any;
+}
+
+export interface LigneCatalogue {
+  code: string;
+  libelle: string;
+  prix_mensuel: number;
+  modules: { nom: string; detail: string }[];
+}
+
+export interface Catalogue {
+  reference: string;
+  validite_devis_jours: number;
+  taux_remise_annuelle: number;
+  moyens_paiement: string[];
+  licences: LigneCatalogue[];
+  cycles: { code: string; libelle: string }[];
 }
 
 export interface StatsProspects {
@@ -75,4 +112,29 @@ export class ProspectsService {
                                    relance_le?: string | null }) {
     return this.api.post<Prospect>(`/prospects/${id}/interaction/`, echange);
   }
+
+  // ── Devis ────────────────────────────────────────────────────────────
+  // La grille tarifaire est servie par le serveur, jamais recopiée ici :
+  // c'est elle qui chiffre les devis, et deux sources divergeraient sur une
+  // pièce signée.
+  catalogue() { return this.api.get<Catalogue>('/licences/catalogue/'); }
+
+  etablirDevis(data: {
+    prospect: string; type_licence: string; cycle: string; mois: number;
+    frais_installation?: number; prestations?: string;
+    montant_prestations?: number; observations?: string;
+  }) {
+    return this.api.post<Devis>('/devis/', data);
+  }
+
+  modifierDevis(id: string, data: any) { return this.api.patch<Devis>(`/devis/${id}/`, data); }
+  supprimerDevis(id: string)           { return this.api.delete<void>(`/devis/${id}/`); }
+  validerDevis(id: string)             { return this.api.post<Devis>(`/devis/${id}/valider/`, {}); }
+  envoyerDevis(id: string)             { return this.api.post<Devis>(`/devis/${id}/envoyer/`, {}); }
+
+  trancherDevis(id: string, reponse: 'ACCEPTE' | 'REFUSE', motif = '') {
+    return this.api.post<Devis>(`/devis/${id}/trancher/`, { reponse, motif });
+  }
+
+  pdfDevis(id: string) { return this.api.getBlob(`/devis/${id}/pdf/`); }
 }

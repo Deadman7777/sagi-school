@@ -184,3 +184,106 @@ class InteractionProspect(TimeStampedModel):
 
     def __str__(self):
         return f"{self.date:%d/%m/%Y} — {self.get_canal_display()}"
+
+
+class Devis(TimeStampedModel):
+    """Une proposition chiffrée, produite par le serveur à partir d'une fiche.
+
+    **L'assistant ne rédige pas ce document.** Il conduit l'entretien et
+    transmet la situation ; le devis est établi ici, avec les montants de
+    `apps.licences.catalogue`. Un devis rédigé de mémoire est un devis où un
+    montant dérive — sur une pièce que le client signe et qui nous engage.
+
+    **Les montants sont figés à l'établissement.** Ils sont recopiés du
+    catalogue dans les colonnes ci-dessous plutôt que recalculés à l'affichage :
+    une révision tarifaire ne doit pas changer rétroactivement un devis déjà
+    remis. Le catalogue dit le prix d'aujourd'hui ; le devis dit le prix
+    proposé ce jour-là.
+
+    **Rien ne part sans un humain.** C'est l'arbitrage de la direction : le
+    statut naît à BROUILLON, et le PDF d'un brouillon porte un bandeau qui
+    l'annonce. Un brouillon qui fuit ressemble à un brouillon.
+    """
+
+    STATUT_CHOICES = [
+        ('BROUILLON', 'Brouillon — à valider'),
+        ('VALIDE',    'Validé — prêt à envoyer'),
+        ('ENVOYE',    'Envoyé au prospect'),
+        ('ACCEPTE',   'Accepté'),
+        ('REFUSE',    'Refusé'),
+    ]
+
+    # Un devis reste lisible même si la fiche disparaît : c'est une pièce
+    # commerciale, pas une vue sur le prospect.
+    prospect = models.ForeignKey(Prospect, on_delete=models.SET_NULL, null=True,
+                                related_name='devis')
+    numero   = models.CharField(max_length=30, unique=True)
+
+    # L'établissement tel qu'il figure SUR le devis. Recopié de la fiche à
+    # l'établissement : le client corrige parfois son nom après coup, et le
+    # document déjà remis ne doit pas se réécrire tout seul.
+    etablissement = models.CharField(max_length=200)
+    ville         = models.CharField(max_length=120, blank=True)
+    contact_nom   = models.CharField(max_length=200, blank=True)
+    contact_fonction = models.CharField(max_length=150, blank=True)
+    telephone     = models.CharField(max_length=60, blank=True)
+    email         = models.CharField(max_length=254, blank=True)
+
+    # ── L'offre, chiffrée depuis le catalogue ────────────────────────────
+    type_licence = models.CharField(max_length=20)
+    cycle        = models.CharField(max_length=10, default='ANNUEL')
+    mois         = models.PositiveIntegerField(default=12)
+
+    prix_mensuel   = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    montant_brut   = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    taux_remise    = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    montant_remise = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    montant_net    = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+
+    # ── Ce qu'un humain ajoute ───────────────────────────────────────────
+    # Le catalogue annonce les services de déploiement « à partir de 50 000 F » :
+    # c'est un plancher, pas un prix. Ces montants sont donc saisis, jamais
+    # déduits — le serveur ne chiffre que ce dont il connaît le tarif.
+    frais_installation   = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    prestations          = models.TextField(blank=True)
+    montant_prestations  = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    observations         = models.TextField(blank=True)
+
+    date_emission = models.DateField(default=date.today)
+    date_validite = models.DateField()
+
+    statut     = models.CharField(max_length=15, choices=STATUT_CHOICES,
+                                  default='BROUILLON', db_index=True)
+    etabli_par = models.CharField(max_length=150, blank=True)
+    valide_par = models.CharField(max_length=150, blank=True)
+    valide_le  = models.DateTimeField(null=True, blank=True)
+    envoye_le  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'prospects_devis'
+        ordering = ['-date_emission', '-created_at']
+        indexes = [models.Index(fields=['statut', '-date_emission'])]
+        verbose_name = 'Devis'
+        verbose_name_plural = 'Devis'
+
+    def __str__(self):
+        return f'{self.numero} — {self.etablissement}'
+
+    @property
+    def montant_total(self):
+        return self.montant_net + self.frais_installation + self.montant_prestations
+
+    @property
+    def expire(self):
+        """Passé sa validité sans avoir été tranché, un devis ne vaut plus.
+
+        Le catalogue annonce trente jours : les afficher comme encore valables
+        exposerait à devoir honorer un prix révisé depuis.
+        """
+        return (self.statut in ('BROUILLON', 'VALIDE', 'ENVOYE')
+                and self.date_validite < date.today())
+
+    @property
+    def modifiable(self):
+        """Un devis validé ne se réécrit plus : il a été relu pour être envoyé."""
+        return self.statut == 'BROUILLON'

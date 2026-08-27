@@ -87,8 +87,27 @@ def _prospect_dict(p, complet=False):
         'date_conversion': p.date_conversion,
         'interactions':   [_interaction_dict(i) for i in p.interactions.all()],
         'conversations':  _conversations_sama(p),
+        'devis':          [_devis_resume(d) for d in p.devis.all()],
     })
     return base
+
+
+def _devis_resume(d):
+    """Le devis vu depuis la fiche : de quoi savoir où en est la proposition,
+    sans recharger la pièce entière."""
+    return {
+        'id':            str(d.id),
+        'numero':        d.numero,
+        'type_licence':  d.type_licence,
+        'mois':          d.mois,
+        'montant_total': int(d.montant_total),
+        'statut':        d.statut,
+        'statut_libelle': d.get_statut_display(),
+        'date_emission': d.date_emission,
+        'date_validite': d.date_validite,
+        'expire':        d.expire,
+        'modifiable':    d.modifiable,
+    }
 
 
 # Ce qu'un diagnostic conduit par SAMA laisse derrière lui : le résumé rédigé
@@ -144,7 +163,7 @@ class ProspectViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         prospect = Prospect.objects.filter(pk=pk).prefetch_related(
-            'interactions').select_related('tenant_converti').first()
+            'interactions', 'devis').select_related('tenant_converti').first()
         if not prospect:
             return Response({'error': 'Prospect introuvable.'}, status=404)
         return Response(_prospect_dict(prospect, complet=True))
