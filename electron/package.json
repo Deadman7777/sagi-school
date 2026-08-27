@@ -43,7 +43,9 @@
           "!venv/**",
           "!**/__pycache__/**",
           "!**/*.pyc",
-          "!.env"
+          "!.env",
+          "!apps/assistant/connaissances/**",
+          "!deploy/**"
         ]
       },
       {

@@ -133,6 +133,21 @@ class CorpusPublicTest(APITestCase):
         confidentiels = {nom for nom, _ in CONFIDENTIELS}
         self.assertEqual(publics & confidentiels, set())
 
+    def test_le_corpus_survit_a_l_absence_du_dossier(self):
+        """Le dossier `connaissances/` est exclu de l'installeur Windows : sur
+        une installation locale, il n'existe pas. Rien ne doit s'effondrer —
+        et le périmètre, lui, vient du code, donc il reste."""
+        import apps.assistant.connaissance as connaissance
+
+        connaissance.corpus.cache_clear()
+        try:
+            with patch.object(connaissance, 'DOSSIER',
+                              connaissance.DOSSIER / 'absent'):
+                texte = connaissance.corpus()
+            self.assertIn('Périmètre réel des licences', texte)
+        finally:
+            connaissance.corpus.cache_clear()
+
     def test_tous_les_documents_sont_classes(self):
         """Un fichier déposé dans `connaissances/` sans être classé serait
         soit oublié, soit — pire — publié sans décision."""

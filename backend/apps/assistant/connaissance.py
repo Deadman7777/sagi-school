@@ -20,6 +20,13 @@ viendra plus tard, quand l'assistant conduira le diagnostic et laissera nos
 serveurs produire le devis — avec les montants du catalogue plutôt que ceux
 d'une mémoire.
 
+**Ces fichiers ne partent pas dans l'installeur Windows.** Le dossier
+`connaissances/` est exclu du paquet Electron (`electron/package.json`,
+`extraResources`) : il était jusqu'ici recopié sur le disque de chaque école
+cliente, documents confidentiels compris. Aucune installation locale ne les lit
+— l'assistant qui s'en sert vit sur le site vitrine, côté serveur. Un document
+déposé ici est donc lisible par nos serveurs, jamais par un client.
+
 Le corpus public tient en 12 000 jetons environ. C'est assez petit pour être
 remis EN ENTIER au modèle à chaque conversation, et c'est une décision
 d'architecture, pas un raccourci. L'alternative habituelle est la recherche
