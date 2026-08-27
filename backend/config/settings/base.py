@@ -60,6 +60,7 @@ LOCAL_APPS = [
     'apps.gouvernance',
     'apps.sauvegarde',
     'apps.assistant',
+    'apps.prospects',
 ]
 
 # Sauvegarde cloud des installations locales (apps.sauvegarde)

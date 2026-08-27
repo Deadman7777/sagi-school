@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/gouvernance/', include('apps.gouvernance.urls')),
     path('api/assistant/', include('apps.assistant.urls')),
     path('api/sauvegarde/', include('apps.sauvegarde.urls')),
+    path('api/prospects/', include('apps.prospects.urls')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):

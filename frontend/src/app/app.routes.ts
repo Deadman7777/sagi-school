@@ -24,6 +24,7 @@ export const routes: Routes = [
       { path: 'gmrf',         loadComponent: () => import('./features/gmrf/gmrf.component').then(m => m.GmrfComponent) },
       { path: 'gouvernance',  loadComponent: () => import('./features/gouvernance/gouvernance.component').then(m => m.GouvernanceComponent) },
       { path: 'licences',     loadComponent: () => import('./features/licences/licences.component').then(m => m.LicencesComponent) },
+      { path: 'prospects',    loadComponent: () => import('./features/prospects/prospects.component').then(m => m.ProspectsComponent) },
       { path: 'ma-licence',   loadComponent: () => import('./features/ma-licence/ma-licence.component').then(m => m.MaLicenceComponent) },
       { path: 'parametres',   loadComponent: () => import('./features/parametres/parametres.component').then(m => m.ParametresComponent) },
       {

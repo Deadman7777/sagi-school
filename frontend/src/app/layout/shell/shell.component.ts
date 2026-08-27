@@ -176,6 +176,7 @@ export class ShellComponent {
     { labelKey: 'nav.principal', items: [
       { labelKey: 'nav.dashboard', icon: '📊', route: '/dashboard' },
       { labelKey: 'nav.licences', icon: '🔐', route: '/licences' },
+      { labelKey: 'nav.prospects', icon: '🎯', route: '/prospects' },
     ]}
   ];
 
