@@ -26,6 +26,11 @@ urlpatterns = [
     path('api/gouvernance/', include('apps.gouvernance.urls')),
     path('api/assistant/', include('apps.assistant.urls')),
     path('api/sauvegarde/', include('apps.sauvegarde.urls')),
+    path('api/prospects/', include('apps.prospects.urls')),
+    # Monté à part, et non sous /api/prospects/ : le routeur des
+    # prospects est enregistré sur le préfixe vide et capterait
+    # « devis » comme un identifiant de fiche.
+    path('api/devis/', include('apps.prospects.urls_devis')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):

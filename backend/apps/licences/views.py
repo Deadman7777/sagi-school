@@ -34,6 +34,18 @@ class LicenceViewSet(viewsets.ModelViewSet):
             return Licence.objects.filter(tenant=tenant).select_related('tenant')
         return Licence.objects.none()
 
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def catalogue(self, request):
+        """La grille tarifaire officielle, servie par le serveur.
+
+        Les tarifs vivaient jusqu'ici en dur dans l'écran Licences, alors que
+        les devis les lisent désormais dans `apps.licences.catalogue`. Deux
+        sources finissent toujours par diverger — et ici la divergence se
+        verrait sur une pièce signée.
+        """
+        from .catalogue import catalogue_public
+        return Response(catalogue_public())
+
     @action(detail=False, methods=['post'], permission_classes=[])
     def verifier(self, request):
         cle = request.data.get('cle_licence')

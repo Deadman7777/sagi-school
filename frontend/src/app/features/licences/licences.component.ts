@@ -475,11 +475,19 @@ export class LicencesComponent implements OnInit {
     { label: '24 mois', value: 24 },
   ];
 
-  // Tarifs MENSUELS par type (l'annuel = 12 mois − 10%)
-  TARIFS_MENSUEL: Record<string, number> = {
-    ESSAI: 0, BASIC: 25000, PRO: 50000, AVANCE: 90000, TAXAWU_DAARA: 20000
-  };
-  REMISE_ANNUELLE = 0.10;   // 10% sur le paiement annuel
+  /**
+   * Tarifs MENSUELS et remise annuelle, LUS SUR LE SERVEUR
+   * (`GET /licences/catalogue/`, cf. `apps/licences/catalogue.py`).
+   *
+   * Ils étaient écrits en dur ici. Depuis que nos serveurs produisent les
+   * devis, ils chiffrent avec cette même grille : deux copies finiraient par
+   * diverger, et la divergence se verrait sur une pièce que le client signe.
+   *
+   * Vides tant que le catalogue n'est pas chargé — un tarif de repli serait
+   * un troisième exemplaire de la même information, donc le même problème.
+   */
+  TARIFS_MENSUEL: Record<string, number> = {};
+  REMISE_ANNUELLE = 0;
   cyclesOptions = [
     { label: 'Mensuel (1 mois)',        value: 'MENSUEL' },
     { label: 'Annuel (12 mois, −10%)',  value: 'ANNUEL'  },
@@ -513,6 +521,13 @@ export class LicencesComponent implements OnInit {
       { label: '🟣 Avancé',               value: 'AVANCE' },
       { label: '🌟 Taxawu Daara',          value: 'TAXAWU_DAARA' },
     ];
+    this.licencesService.getCatalogue().subscribe({
+      next: c => {
+        this.TARIFS_MENSUEL = Object.fromEntries(
+          c.licences.map((l: any) => [l.code, l.prix_mensuel]));
+        this.REMISE_ANNUELLE = c.taux_remise_annuelle;
+      },
+    });
     this.charger();
   }
 

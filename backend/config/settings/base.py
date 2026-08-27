@@ -60,6 +60,7 @@ LOCAL_APPS = [
     'apps.gouvernance',
     'apps.sauvegarde',
     'apps.assistant',
+    'apps.prospects',
 ]
 
 # Sauvegarde cloud des installations locales (apps.sauvegarde)
@@ -162,7 +163,49 @@ CACHES = {
     }
 }
 
-# ── SAMA ASSISTANT ────────────────────────────────────────────────────────
+# ── COMMERCIAL : catalogue et devis ───────────────────────────────────────
+# Remise appliquée au paiement annuel. Pratiquée par l'écran Licences depuis
+# toujours, mais ABSENTE des deux documents officiels — voir l'en-tête de
+# `apps/licences/catalogue.py`. Mettre à 0 pour s'en tenir aux tarifs publiés.
+REMISE_ANNUELLE = config('REMISE_ANNUELLE', default='0.10')
+
+# Premier rang de la séquence des devis. Démarre à 2 : HG-DEV-2026-0001 a été
+# établi à la main avant ce module, et deux pièces ne peuvent pas porter la
+# même référence.
+DEVIS_NUMERO_MIN = config('DEVIS_NUMERO_MIN', default=2, cast=int)
+
+# L'émetteur tel qu'il figure en tête des devis. Dans les documents officiels
+# et non déduit d'ailleurs : un NINEA erroné sur une pièce commerciale est une
+# erreur qu'un client relève.
+EDITEUR_TELEPHONE = config('EDITEUR_TELEPHONE',
+                           default='+221 70 328 61 51 · +221 78 429 78 30')
+EDITEUR_SITE  = config('EDITEUR_SITE',  default='sagi-school.com')
+EDITEUR_NINEA = config('EDITEUR_NINEA', default='012673986')
+
+# ── SAMA ASSISTANT (site vitrine sagi-school.com) ─────────────────────────
 # Clé lue dans l'environnement. Absente, l'assistant se désactive proprement
-# et le dit à l'utilisateur — il ne plante pas.
+# et le dit au visiteur — il ne plante pas. Sur une installation locale
+# (Electron), elle n'a aucune raison d'être renseignée : SAMA est un service
+# du site public, pas une fonction du logiciel installé chez le client.
 ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+
+# Les bornes de dépense. Un site public n'a pas de payeur en face de chaque
+# conversation : sans ces plafonds, une nuit d'activité anormale consomme un
+# budget mensuel. Voir `apps/assistant/garde_fous.py`.
+#
+# Les valeurs par défaut correspondent au budget proposé à la direction :
+# 10 000 F/mois, soit environ 330 conversations à ~30 F pièce sur Haiku 4.5.
+# Le coupe-circuit journalier est délibérément plus haut que la moyenne
+# (10 000/30 ≈ 333 F) : une bonne journée ne doit pas être coupée, seul un
+# emballement doit l'être.
+SAMA_PLAFOND_MOIS_FCFA = config('SAMA_PLAFOND_MOIS_FCFA', default=10000, cast=int)
+SAMA_PLAFOND_JOUR_FCFA = config('SAMA_PLAFOND_JOUR_FCFA', default=1000, cast=int)
+SAMA_MAX_CONVERSATIONS_VISITEUR_JOUR = config(
+    'SAMA_MAX_CONVERSATIONS_VISITEUR_JOUR', default=5, cast=int)
+# Messages, les deux rôles confondus : vingt autorisent dix aller-retours.
+SAMA_MAX_MESSAGES_CONVERSATION = config(
+    'SAMA_MAX_MESSAGES_CONVERSATION', default=20, cast=int)
+# Les tarifs Anthropic sont en dollars ; les plafonds ci-dessus, en francs.
+# À réviser si le change s'écarte durablement — le franc CFA est arrimé à
+# l'euro, pas au dollar.
+SAMA_TAUX_USD_FCFA = config('SAMA_TAUX_USD_FCFA', default=610, cast=int)

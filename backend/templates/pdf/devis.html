@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* Ce devis n'étend PAS templates/pdf/base.html : celui-ci est écrit du point
+     de vue d'une école cliente — son logo, son exercice, la mention SYSCOHADA.
+     Ici l'émetteur est HADY GESMAN et le destinataire un prospect. Les mêmes
+     conventions typographiques sont reprises, pas la même structure.
+
+     Deux pièges xhtml2pdf gouvernent la mise en forme ci-dessous :
+     - un style posé sur <tr> est écrasé par le style des <td> : toute couleur
+       de ligne est donc déclarée sur les cellules ;
+     - le remplissage s'AJOUTE aux largeurs en pourcentage au lieu d'y être
+       inclus ; les largeurs somment donc à moins de 100. */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; font-size:12px; color:#111827; }
+
+  .header-table { width:100%; border-bottom:2px solid #00745a;
+                  padding-bottom:6px; margin-bottom:10px; }
+  .header-table td { vertical-align:top; }
+  .emetteur   { font-size:17px; font-weight:bold; color:#00745a; }
+  .sub        { font-size:9px; color:#374151; text-transform:uppercase; letter-spacing:.6px; }
+  .coord      { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .doc-title  { font-size:19px; font-weight:bold; color:#111827; text-align:right; }
+  .doc-numero { font-size:13px; font-weight:bold; color:#00745a; text-align:right; margin-top:2px; }
+  .doc-meta   { font-size:9.5px; color:#374151; margin-top:3px; text-align:right; }
+
+  /* Le bandeau qui dit qu'une pièce n'a pas encore été relue. Un brouillon qui
+     fuit doit ressembler à un brouillon — c'est la validation humaine rendue
+     visible sur le document lui-même. */
+  .brouillon { border:2px solid #b45309; background:#fffbeb; padding:6px 10px;
+               margin-bottom:9px; }
+  .brouillon-titre { font-size:12px; font-weight:bold; color:#b45309; }
+  .brouillon-texte { font-size:10px; color:#78350f; margin-top:2px; }
+  .expire { border-color:#b91c1c; background:#fef2f2; }
+  .expire .brouillon-titre { color:#b91c1c; }
+  .expire .brouillon-texte { color:#7f1d1d; }
+
+  .destinataire { width:100%; margin-bottom:10px; }
+  .destinataire td { padding:6px 9px; border:1px solid #e5e7eb; font-size:10.5px; }
+  .dest-label { font-size:9px; color:#374151; text-transform:uppercase;
+                letter-spacing:.4px; }
+  .dest-nom { font-size:12.5px; font-weight:bold; color:#111827; margin-top:1px; }
+
+  .section-title { font-size:11.5px; font-weight:bold; color:#111827;
+                   border-left:3px solid #00745a; padding-left:6px;
+                   margin:9px 0 4px; }
+
+  table.lignes { width:100%; border-collapse:collapse; margin-bottom:7px; }
+  table.lignes thead th { background:#1a1a2e; color:#ffffff; padding:6px 8px;
+                          font-size:10.5px; text-align:left; }
+  table.lignes tbody td { padding:4px 8px; border-bottom:1px solid #e8e8e8;
+                          font-size:11px; color:#111827; vertical-align:top; }
+  .ligne-detail { font-size:9.5px; color:#374151; line-height:1.3; }
+  .num { text-align:right; }
+
+  /* Les totaux : couleur et graisse sur les CELLULES, jamais sur la ligne. */
+  .tot-label { padding:4px 8px; font-size:11px; text-align:right; color:#111827; }
+  .tot-val   { padding:4px 8px; font-size:11px; text-align:right; color:#111827;
+               font-weight:bold; }
+  .tot-remise-label { padding:4px 8px; font-size:11px; text-align:right; color:#047857; }
+  .tot-remise-val   { padding:4px 8px; font-size:11px; text-align:right;
+                      color:#047857; font-weight:bold; }
+  .net-label { padding:7px 8px; font-size:13px; font-weight:bold;
+               background:#00745a; color:#ffffff; text-align:right; }
+  .net-val   { padding:7px 8px; font-size:15px; font-weight:bold;
+               background:#00745a; color:#ffffff; text-align:right; }
+
+  .inclus { width:100%; margin-bottom:6px; }
+  .inclus td { padding:2px 8px 2px 0; font-size:9.2px; color:#111827;
+               vertical-align:top; width:50%; line-height:1.32; }
+  .inclus .puce { color:#00745a; font-weight:bold; }
+
+  .conditions { font-size:9.4px; color:#374151; line-height:1.45; }
+  .conditions strong { color:#111827; }
+
+  .signatures { width:100%; margin-top:10px; }
+  .signatures td { padding:7px; border:1px solid #e5e7eb; font-size:9.6px;
+                   color:#374151; height:52px; vertical-align:top; }
+
+  .footer-table { width:100%; border-top:1px solid #e0e0e0; }
+  .footer-table td { padding:4px 0; font-size:9px; color:#374151; }
+
+  @page {
+    size: A4;
+    @frame contenu { left: 28pt; top: 28pt; width: 539pt; height: 762pt; }
+    @frame pied {
+      -pdf-frame-content: pied-de-page;
+      left: 28pt; top: 800pt; width: 539pt; height: 30pt;
+    }
+  }
+</style>
+</head>
+<body>
+
+<table class="header-table">
+  <tr>
+    <td>
+      <div class="emetteur">HADY GESMAN</div>
+      <div class="sub">SAGI SCHOOL &middot; Système de gestion scolaire</div>
+      <div class="coord">
+        {{ editeur.telephone }}<br>
+        {{ editeur.email }} &middot; {{ editeur.site }}
+        {% if editeur.ninea %}<br>NINEA {{ editeur.ninea }}{% endif %}
+      </div>
+    </td>
+    <td style="width:42%">
+      <div class="doc-title">DEVIS</div>
+      <div class="doc-numero">{{ devis.numero }}</div>
+      <div class="doc-meta">
+        Émis le {{ devis.date_emission|date:"d/m/Y" }}<br>
+        Valable jusqu'au <strong>{{ devis.date_validite|date:"d/m/Y" }}</strong>
+      </div>
+    </td>
+  </tr>
+</table>
+
+{% if devis.statut == 'BROUILLON' %}
+<div class="brouillon">
+  <div class="brouillon-titre">BROUILLON — NE PAS TRANSMETTRE AU CLIENT</div>
+  <div class="brouillon-texte">
+    Ce document n'a pas encore été validé par HADY GESMAN. Il ne constitue
+    aucun engagement et ses montants peuvent être modifiés.
+  </div>
+</div>
+{% elif devis.expire %}
+<div class="brouillon expire">
+  <div class="brouillon-titre">DEVIS EXPIRÉ</div>
+  <div class="brouillon-texte">
+    La durée de validité de trente jours est dépassée. Un nouveau devis doit
+    être établi avant toute signature.
+  </div>
+</div>
+{% endif %}
+
+<table class="destinataire">
+  <tr>
+    <td>
+      <div class="dest-label">Devis établi à l'attention de</div>
+      <div class="dest-nom">{{ devis.etablissement }}</div>
+      {% if devis.contact_nom %}
+      <div style="margin-top:3px">
+        {{ devis.contact_nom }}{% if devis.contact_fonction %} — {{ devis.contact_fonction }}{% endif %}
+      </div>
+      {% endif %}
+      {% if devis.ville %}<div>{{ devis.ville }}</div>{% endif %}
+      {% if devis.telephone %}<div>{{ devis.telephone }}</div>{% endif %}
+      {% if devis.email %}<div>{{ devis.email }}</div>{% endif %}
+    </td>
+  </tr>
+</table>
+
+<div class="section-title">Objet de la proposition</div>
+
+<table class="lignes">
+  <thead>
+    <tr>
+      <th style="width:44%">Désignation</th>
+      <th style="width:16%" class="num">Prix mensuel</th>
+      <th style="width:10%" class="num">Durée</th>
+      <th style="width:20%" class="num">Montant</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <strong>Licence {{ libelle_licence }}</strong>
+        <div class="ligne-detail">
+          Abonnement {{ libelle_cycle|lower }} à la plateforme SAGI SCHOOL,
+          installation et paramétrage initial inclus.
+        </div>
+      </td>
+      <td class="num">{{ montants.prix_mensuel }}</td>
+      <td class="num">{{ devis.mois }} mois</td>
+      <td class="num">{{ montants.brut }}</td>
+    </tr>
+    {% if devis.frais_installation %}
+    <tr>
+      <td>
+        <strong>Déploiement et intégration</strong>
+        <div class="ligne-detail">Installation sur site, reprise des données,
+          formation des utilisateurs.</div>
+      </td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td class="num">{{ montants.installation }}</td>
+    </tr>
+    {% endif %}
+    {% if devis.montant_prestations or devis.prestations %}
+    <tr>
+      <td>
+        <strong>Prestations complémentaires</strong>
+        <div class="ligne-detail">{{ devis.prestations }}</div>
+      </td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td class="num">{{ montants.prestations }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<table class="lignes">
+  <tr>
+    <td class="tot-label" style="width:80%">Total avant remise</td>
+    <td class="tot-val" style="width:20%">{{ montants.avant_remise }}</td>
+  </tr>
+  {% if devis.montant_remise %}
+  <tr>
+    <td class="tot-remise-label">Remise paiement annuel ({{ pourcentage_remise }} %)</td>
+    <td class="tot-remise-val">− {{ montants.remise }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td class="net-label">NET À PAYER</td>
+    <td class="net-val">{{ montants.total }}</td>
+  </tr>
+</table>
+
+<div class="section-title">Ce que la licence {{ libelle_licence }} ouvre</div>
+
+<table class="inclus">
+  <tr>
+    <td>
+      {% for module in modules_gauche %}
+      <div><span class="puce">&#9679;</span> <strong>{{ module.0 }}</strong> — {{ module.1 }}</div>
+      {% endfor %}
+    </td>
+    <td>
+      {% for module in modules_droite %}
+      <div><span class="puce">&#9679;</span> <strong>{{ module.0 }}</strong> — {{ module.1 }}</div>
+      {% endfor %}
+    </td>
+  </tr>
+</table>
+
+{% if devis.observations %}
+<div class="section-title">Observations</div>
+<div class="conditions">{{ devis.observations|linebreaksbr }}</div>
+{% endif %}
+
+<div class="section-title">Conditions</div>
+<div class="conditions">
+  <strong>Validité.</strong> Ce devis est valable trente (30) jours à compter de
+  sa date d'émission, soit jusqu'au {{ devis.date_validite|date:"d/m/Y" }}.<br>
+  <strong>Moyens de paiement acceptés.</strong> {{ moyens_paiement }}.<br>
+  <strong>Exigibilité.</strong> Les paiements sont exigibles à réception de facture.<br>
+  <strong>Révision.</strong> Les tarifs peuvent faire l'objet d'une révision
+  annuelle après information préalable du client.<br>
+  <strong>Référence tarifaire.</strong> {{ reference_catalogue }} — Conditions
+  commerciales des licences SAGI SCHOOL.
+</div>
+
+<table class="signatures">
+  <tr>
+    <td style="width:50%">
+      <strong>Pour HADY GESMAN</strong><br>
+      Nom, date et signature
+    </td>
+    <td style="width:50%">
+      <strong>Bon pour accord — {{ devis.etablissement }}</strong><br>
+      Nom, qualité, date, cachet et signature
+    </td>
+  </tr>
+</table>
+
+<div id="pied-de-page">
+  <table class="footer-table">
+    <tr>
+      <td>HADY GESMAN &middot; SAGI SCHOOL &middot; {{ devis.numero }}</td>
+      <td style="text-align:right">
+        {{ devis.date_emission|date:"d/m/Y" }} &middot; page <pdf:pagenumber>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

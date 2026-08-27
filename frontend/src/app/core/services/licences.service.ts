@@ -22,6 +22,8 @@ export class LicencesService {
   constructor(private api: ApiService) {}
 
   getLicences()      { return this.api.get<any>('/licences/'); }
+  /** La grille tarifaire officielle — voir apps/licences/catalogue.py. */
+  getCatalogue()     { return this.api.get<any>('/licences/catalogue/'); }
   getStatsGlobales() { return this.api.get<any>('/licences/stats_globales/'); }
 
   creerEcole(data: NouvelleEcole) {

@@ -2,12 +2,24 @@
 Demande de démonstration depuis le site vitrine sagi-school.com.
 
 Endpoint PUBLIC (AllowAny) : le prospect remplit la fiche (sections 1-4 de la
-Fiche Prospect Commercial HG-COM-001) et l'équipe la reçoit par email avec
-reply-to sur l'adresse du prospect pour proposer un rendez-vous directement.
+Fiche Prospect Commercial HG-COM-001).
+
+**La demande est d'abord enregistrée au fichier prospects, ensuite seulement
+notifiée par courriel.** L'ordre n'est pas un détail : dans la version
+précédente le courriel était le seul dépôt, et tout ce qu'il n'atteignait pas —
+SMTP non configuré, boîte pleine, message classé en indésirable — était perdu
+sans que personne ne le sache. La base est désormais la source de vérité et le
+courriel une commodité ; `reply_to` reste posé sur l'adresse du prospect pour
+qu'un simple « Répondre » propose un rendez-vous.
+
+Le champ `envoye` de la réponse dit donc maintenant « votre demande est bien
+arrivée chez nous » — ce qui est vrai dès l'enregistrement. `notifie` dit si le
+courriel est parti, et n'intéresse que le diagnostic.
 
 Origine autorisée côté CORS : ajouter https://sagi-school.com (+ www) à
 CORS_ALLOWED_ORIGINS dans le .env du cloud.
 """
+import logging
 from django.conf import settings
 from django.core.mail import EmailMessage
 from rest_framework.views import APIView
@@ -15,15 +27,19 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.throttling import AnonRateThrottle
 
+from apps.prospects.enregistrement import enregistrer_demande
+
+# Les libellés proposés au visiteur (types d'organisation, origines du contact)
+# vivaient ici ; ils vivent maintenant avec le modèle qui les stocke —
+# `apps.prospects.models` — et sont servis au site vitrine par
+# GET /api/prospects/referentiels/. Deux listes séparées finissent toujours par
+# diverger.
+
+logger = logging.getLogger(__name__)
+
 
 class DemandeDemoThrottle(AnonRateThrottle):
     rate = '5/hour'
-
-
-TYPES_ORGANISATION = ('Daara', 'École privée', 'Franco-arabe',
-                      'Centre de formation', 'PME', 'Autre')
-ORIGINES = ('Site internet', 'WhatsApp', 'Facebook / Instagram', 'LinkedIn',
-            'Recommandation client', 'Partenaire', 'Prospection terrain', 'Autre')
 
 
 class DemandeDemoView(APIView):
@@ -47,6 +63,15 @@ class DemandeDemoView(APIView):
             return Response(
                 {'error': "Nom de l'établissement, nom du contact et téléphone sont obligatoires."},
                 status=400)
+
+        # ── L'enregistrement d'abord. Tout ce qui suit peut échouer sans que
+        # la demande soit perdue.
+        try:
+            prospect, cree = enregistrer_demande(request.data, source='SITE',
+                                                 canal='SITE')
+        except Exception:
+            logger.exception('Demande de démo : enregistrement du prospect en échec')
+            prospect, cree = None, True
 
         origines = d.get('origines') or []
         if not isinstance(origines, list):
@@ -91,7 +116,13 @@ class DemandeDemoView(APIView):
             lignes += ["", "Message :", message]
         corps = "\n".join(lignes)
 
-        sujet = f"🎯 Demande de démo — {etablissement}" + \
+        if prospect is not None:
+            corps += (f"\n\nFiche prospect : {prospect.id}"
+                      + ("" if cree else "\n(Cet établissement avait déjà une fiche"
+                                         " — la demande y a été rattachée.)"))
+
+        marque = "🎯" if cree else "🔁"
+        sujet = f"{marque} Demande de démo — {etablissement}" + \
                 (f" ({champ('ville')})" if champ('ville') else "")
 
         destinataire = getattr(settings, 'LICENCE_SUPPORT_EMAIL', 'hadygesman@gmail.com')
@@ -99,6 +130,7 @@ class DemandeDemoView(APIView):
 
         smtp_configure = ('smtp' in settings.EMAIL_BACKEND
                           and getattr(settings, 'EMAIL_HOST', '') not in ('', 'localhost'))
+        notifie = False
         if smtp_configure:
             try:
                 EmailMessage(
@@ -106,10 +138,18 @@ class DemandeDemoView(APIView):
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sagi-school.com'),
                     to=[destinataire], reply_to=reply_to or None,
                 ).send()
-                return Response({'envoye': True})
+                notifie = True
             except Exception:
-                pass
-        return Response({'envoye': False})
+                logger.exception('Demande de démo : notification par courriel en échec')
+
+        if prospect is not None and notifie:
+            prospect.courriel_envoye = True
+            prospect.save(update_fields=['courriel_envoye', 'updated_at'])
+
+        # `envoye` reflète l'enregistrement, pas le courriel : le visiteur doit
+        # être remercié dès lors que sa demande est chez nous. Il ne redevient
+        # False que si même la base n'a pas voulu d'elle.
+        return Response({'envoye': prospect is not None, 'notifie': notifie})
 
 
 class PublicStatsView(APIView):
