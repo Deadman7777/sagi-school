@@ -86,8 +86,29 @@ def _prospect_dict(p, complet=False):
         'tenant_converti_nom': p.tenant_converti.nom if p.tenant_converti_id else '',
         'date_conversion': p.date_conversion,
         'interactions':   [_interaction_dict(i) for i in p.interactions.all()],
+        'conversations':  _conversations_sama(p),
     })
     return base
+
+
+# Ce qu'un diagnostic conduit par SAMA laisse derrière lui : le résumé rédigé
+# par le serveur est déjà dans les échanges, mais un commercial qui rappelle a
+# besoin de lire ce que le visiteur a DIT — pas seulement ce qu'un assistant en
+# a retenu. C'est aussi le seul moyen de constater qu'une fiche est fausse.
+MAX_CONVERSATIONS_AFFICHEES = 3
+
+
+def _conversations_sama(prospect):
+    from apps.assistant.models import Conversation
+
+    fils = (Conversation.objects.filter(prospect=prospect)
+            .prefetch_related('messages')[:MAX_CONVERSATIONS_AFFICHEES])
+    return [{
+        'id':   str(c.id),
+        'date': c.created_at,
+        'messages': [{'role': m.role, 'contenu': m.contenu}
+                     for m in c.messages.all()],
+    } for c in fils]
 
 
 class ProspectViewSet(viewsets.ViewSet):

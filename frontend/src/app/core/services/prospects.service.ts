@@ -22,6 +22,7 @@ export interface Prospect {
   cree_le: string;
   /** Présents uniquement sur la fiche détaillée (GET /prospects/{id}/). */
   interactions?: Interaction[];
+  conversations?: ConversationSama[];
   donnees_brutes?: Record<string, string>;
   [autre: string]: any;
 }
@@ -33,6 +34,15 @@ export interface Interaction {
   canal_libelle: string;
   resume: string;
   auteur: string;
+}
+
+/** Un échange avec l'assistant SAMA, tel qu'il s'est déroulé sur le site.
+ *  Le résumé du diagnostic est rédigé par le serveur d'après ce que SAMA a
+ *  retenu ; ceci est ce que le visiteur a réellement écrit. */
+export interface ConversationSama {
+  id: string;
+  date: string;
+  messages: { role: 'user' | 'assistant'; contenu: string }[];
 }
 
 export interface StatsProspects {

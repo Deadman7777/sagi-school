@@ -1239,6 +1239,10 @@
     "rattache_existant": "Rattaché à une fiche existante",
     "cree": "Prospect créé",
     "etablissement_requis": "Le nom de l'établissement est obligatoire.",
-    "confirmer_suppression": "Supprimer définitivement la fiche « {{nom}} » et tout son historique ?"
+    "confirmer_suppression": "Supprimer définitivement la fiche « {{nom}} » et tout son historique ?",
+    "sec_conversation": "Conversation avec SAMA",
+    "aide_conversation": "Ce que le visiteur a écrit sur le site. Le diagnostic ci-dessous en est le résumé rédigé par nos serveurs — en cas de doute, c'est ceci qui fait foi.",
+    "sama": "SAMA",
+    "visiteur": "Visiteur"
   }
 }

@@ -26,6 +26,12 @@ class Conversation(TimeStampedModel):
     # essai local. Jamais l'URL complète : elle n'apprendrait rien de plus.
     origine = models.CharField(max_length=120, blank=True)
     titre   = models.CharField(max_length=200, blank=True)
+    # La fiche que cette conversation a produite, s'il y en a une. C'est le
+    # seul lien entre ce que dit l'assistant et ce que fait le commercial :
+    # sans lui, on saurait combien SAMA coûte, jamais ce qu'il rapporte.
+    prospect = models.ForeignKey(
+        'prospects.Prospect', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='conversations')
     # Une conversation atteint sa borne et ne repart pas : sans cela, un
     # visiteur peut faire durer un seul fil indéfiniment, et chaque tour
     # renvoie tout l'historique au modèle — la note croît en carré.

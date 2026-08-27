@@ -222,6 +222,19 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
           <div class="bloc-message full" *ngIf="f['message']">{{ f['message'] }}</div>
         </div>
 
+        <!-- ── Ce que le visiteur a dit à SAMA ─────────────────────── -->
+        <ng-container *ngIf="f.conversations?.length">
+          <div class="separator sep-hist">{{ 'prospects.sec_conversation' | translate }}</div>
+          <p class="aide">{{ 'prospects.aide_conversation' | translate }}</p>
+          <div class="conversation" *ngFor="let c of f.conversations">
+            <div class="conv-date mono">{{ c.date | date:'dd/MM/yyyy HH:mm' }}</div>
+            <div class="bulle" *ngFor="let m of c.messages" [class.bulle-sama]="m.role === 'assistant'">
+              <span class="bulle-qui">{{ (m.role === 'assistant' ? 'prospects.sama' : 'prospects.visiteur') | translate }}</span>
+              <span class="bulle-texte">{{ m.contenu }}</span>
+            </div>
+          </div>
+        </ng-container>
+
         <!-- ── L'historique de la relation ─────────────────────────── -->
         <div class="separator sep-hist">{{ 'prospects.sec_echanges' | translate }}</div>
 
@@ -367,6 +380,13 @@ import { Prospect, ProspectsService, StatsProspects } from '../../core/services/
     .nouvel-echange { display:flex; gap:8px; align-items:center; margin:10px 0 14px; }
     .ne-resume { flex:1; }
     ::ng-deep .ne-canal { min-width:170px; }
+
+    .conversation { background:var(--bg); border-radius:8px; padding:10px 12px; margin-bottom:10px; max-height:260px; overflow-y:auto; }
+    .conv-date { font-size:11px; color:var(--text-3); margin-bottom:8px; }
+    .bulle { display:block; font-size:13px; line-height:1.5; margin-bottom:8px; white-space:pre-wrap; }
+    .bulle-qui { display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-3); margin-bottom:2px; }
+    .bulle-texte { color:var(--text-2); }
+    .bulle-sama .bulle-qui { color:#a855f7; }
 
     .timeline { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; }
     .tl-item { border-left:2px solid var(--border); padding:2px 0 2px 12px; }

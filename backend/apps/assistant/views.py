@@ -32,6 +32,7 @@ from .garde_fous import (LimiteAtteinte, cle_visiteur, conversation_est_au_bout,
                          enregistrer_consommation, etat_budget, origine,
                          verifier_avant_message)
 from .models import Conversation, Message
+from .outils import MAX_APPELS_PAR_TOUR, OUTILS, definition_outil
 from .prompt import prompt_systeme
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,19 @@ class MessageView(APIView):
         messages = [{'role': m.role, 'content': m.contenu}
                     for m in conv.messages.all()]
 
+        # Les blocs d'appel d'outil ne sont pas conservés d'un tour à l'autre :
+        # l'historique remis au modèle reste du texte, donc court. Sans rappel,
+        # SAMA rouvrirait une fiche déjà transmise à chaque message. La note est
+        # jointe au dernier message du visiteur — après le point de cache, elle
+        # ne coûte rien au préfixe.
+        if conv.prospect_id:
+            messages[-1]['content'] = (
+                "[Note du serveur : la situation de cet établissement a déjà "
+                "été transmise à l'équipe commerciale. N'appelle "
+                f"{definition_outil()['name']} que pour signaler une "
+                "information NOUVELLE, jamais pour retransmettre la même.]\n\n"
+                f"{messages[-1]['content']}")
+
         return StreamingHttpResponse(
             self._diffuser(conv, messages, nouvelle),
             content_type='text/event-stream',
@@ -136,12 +150,28 @@ class MessageView(APIView):
 
         yield evenement('debut', {'conversation': str(conv.id)})
 
+        def executer_outil(nom, donnees):
+            fonction = OUTILS.get(nom)
+            if fonction is None:                 # outil inconnu : ne pas mentir
+                return "Cet outil n'existe pas. Réponds sans l'utiliser."
+            texte, _ = fonction(donnees, conversation=conv)
+            return texte
+
         morceaux, usage = [], {}
         try:
-            for genre, charge in repondre(messages, prompt_systeme()):
+            for genre, charge in repondre(
+                    messages, prompt_systeme(),
+                    outils=[definition_outil()],
+                    executer_outil=executer_outil,
+                    max_tours_outil=MAX_APPELS_PAR_TOUR):
                 if genre == 'texte':
                     morceaux.append(charge)
                     yield evenement('texte', {'texte': charge})
+                elif genre == 'outil':
+                    # Le site peut afficher « transmission à l'équipe… » : un
+                    # silence de plusieurs secondes pendant l'enregistrement
+                    # passerait pour une panne.
+                    yield evenement('outil', {'nom': charge})
                 else:
                     usage = charge
         except AssistantIndisponible as e:

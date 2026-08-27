@@ -255,6 +255,31 @@ class ApiProspectsTest(APITestCase):
         self.assertFalse(reponse.data['cree'])
         self.assertEqual(Prospect.objects.count(), 1)
 
+    def test_la_fiche_donne_a_lire_la_conversation_avec_sama(self):
+        """Le résumé est rédigé par le serveur d'après ce qu'un assistant a
+        retenu : le commercial doit pouvoir vérifier ce qui a été dit."""
+        from apps.assistant.models import Conversation, Message
+
+        conv = Conversation.objects.create(titre='Daara à Rufisque',
+                                           prospect=self.prospect)
+        Message.objects.create(conversation=conv, role='user',
+                               contenu='Nous sommes 180 ndongos.')
+        Message.objects.create(conversation=conv, role='assistant',
+                               contenu='Très bien. Comment gérez-vous ?')
+
+        self.client.force_authenticate(self.super_admin)
+        fiche = self.client.get(f'/api/prospects/{self.prospect.id}/').data
+        self.assertEqual(len(fiche['conversations']), 1)
+        self.assertEqual([m['role'] for m in fiche['conversations'][0]['messages']],
+                         ['user', 'assistant'])
+        self.assertIn('180 ndongos',
+                      fiche['conversations'][0]['messages'][0]['contenu'])
+
+    def test_une_fiche_sans_conversation_ne_montre_rien(self):
+        self.client.force_authenticate(self.super_admin)
+        fiche = self.client.get(f'/api/prospects/{self.prospect.id}/').data
+        self.assertEqual(fiche['conversations'], [])
+
     def test_les_statistiques_comptent_les_demandes_jamais_rappelees(self):
         self.client.force_authenticate(self.super_admin)
         Prospect.objects.filter(pk=self.prospect.pk).update(

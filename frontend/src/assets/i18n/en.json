@@ -1239,6 +1239,10 @@
     "rattache_existant": "Attached to an existing record",
     "cree": "Prospect created",
     "etablissement_requis": "The institution name is required.",
-    "confirmer_suppression": "Permanently delete the record “{{nom}}” and its entire history?"
+    "confirmer_suppression": "Permanently delete the record “{{nom}}” and its entire history?",
+    "sec_conversation": "Conversation with SAMA",
+    "aide_conversation": "What the visitor wrote on the website. The diagnosis below is our servers' summary of it — when in doubt, this is what counts.",
+    "sama": "SAMA",
+    "visiteur": "Visitor"
   }
 }

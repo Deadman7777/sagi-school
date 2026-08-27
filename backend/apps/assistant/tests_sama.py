@@ -25,10 +25,13 @@ from apps.assistant.connaissance import CONFIDENTIELS, DOSSIER, PUBLICS, corpus
 from apps.assistant.garde_fous import cle_visiteur, etat_budget
 from apps.assistant.models import (ConsommationJournaliere, Conversation,
                                    Message)
+from apps.assistant.outils import (MAX_APPELS_PAR_TOUR, NOM_OUTIL,
+                                   definition_outil, executer)
 from apps.assistant.perimetre import modules_de, texte_perimetre
 from apps.assistant.prompt import prompt_systeme
 from apps.assistant.views import MessageThrottle
 from apps.licences.models import Licence
+from apps.prospects.models import InteractionProspect, Prospect
 
 URL_MESSAGE = '/api/assistant/message/'
 URL_ETAT    = '/api/assistant/etat/'
@@ -40,7 +43,7 @@ def flux_simule(texte='Bonjour, je suis SAMA.', **usage):
                     'jetons_cache_lecture': 15000, 'jetons_cache_ecriture': 0,
                     'tronque': False, **usage}
 
-    def faux(messages, systeme):
+    def faux(messages, systeme, **_):
         yield ('texte', texte)
         yield ('fin', consommation)
     return faux
@@ -283,7 +286,7 @@ class ApiPubliqueTest(APITestCase):
     def test_une_panne_du_modele_est_dite_au_visiteur(self):
         from apps.assistant.client import AssistantIndisponible
 
-        def tombe(messages, systeme):
+        def tombe(messages, systeme, **_):
             raise AssistantIndisponible("L'assistant n'est pas joignable.")
             yield  # noqa — générateur
 
@@ -410,3 +413,338 @@ class GardeFousTest(APITestCase):
             self.assertEqual(self._envoyer().status_code, 200)
             self.assertEqual(self._envoyer().status_code, 200)
             self.assertEqual(self._envoyer().status_code, 429)
+
+
+# ─── Étape 3 : le diagnostic conduit ────────────────────────────────────────
+
+class FauxUsage:
+    def __init__(self, entree=100, sortie=50, lecture=15000, ecriture=0):
+        self.input_tokens = entree
+        self.output_tokens = sortie
+        self.cache_read_input_tokens = lecture
+        self.cache_creation_input_tokens = ecriture
+
+
+class FauxBloc:
+    """Un bloc de contenu tel que le SDK le rendrait."""
+
+    def __init__(self, type, texte='', nom='', identifiant='', entree=None):
+        self.type = type
+        self.text = texte
+        self.name = nom
+        self.id = identifiant
+        self.input = entree or {}
+
+
+class FauxTour:
+    """Un tour de réponse scénarisé : du texte, éventuellement un appel d'outil."""
+
+    def __init__(self, texte='', appel=None, usage=None):
+        self.texte = texte
+        blocs = [FauxBloc('text', texte=texte)] if texte else []
+        if appel:
+            blocs.append(FauxBloc('tool_use', nom=appel[0],
+                                  identifiant=appel[1], entree=appel[2]))
+        self.content = blocs
+        self.stop_reason = 'tool_use' if appel else 'end_turn'
+        self.usage = usage or FauxUsage()
+
+
+class FauxClientAnthropic:
+    """Rejoue une liste de tours et retient les paramètres de chaque appel.
+
+    Ce que ces tests vérifient tient à ces paramètres : que les outils sont
+    bien transmis, identiques d'un tour à l'autre (sans quoi le cache tombe),
+    et que les résultats d'outils repartent dans UN seul message.
+    """
+
+    def __init__(self, tours):
+        self.tours = list(tours)
+        self.appels = []
+        self.messages = self
+
+    def stream(self, **parametres):
+        self.appels.append(parametres)
+        tour = self.tours.pop(0) if self.tours else FauxTour('Fin.')
+        client = self
+
+        class Flux:
+            def __enter__(self_):
+                return self_
+
+            def __exit__(self_, *_):
+                return False
+
+            @property
+            def text_stream(self_):
+                return iter([tour.texte] if tour.texte else [])
+
+            def get_final_message(self_):
+                return tour
+
+        return Flux()
+
+
+DIAGNOSTIC = {
+    'etablissement': 'Daara Serigne Fallou',
+    'type_organisation': 'Daara',
+    'ville': 'Rufisque',
+    'telephone': '77 123 45 67',
+    'contact_nom': 'Moussa Diop',
+    'contact_fonction': 'Directeur',
+    'nb_eleves': 180,
+    'situation_actuelle': 'Tout est tenu sur des cahiers.',
+    'besoins': "Savoir qui a payé et qui n'a pas payé, sans tout relire.",
+    'licence_pressentie': 'TAXAWU_DAARA',
+    'accord_rappel': True,
+}
+
+
+class OutilDiagnosticTest(APITestCase):
+    """L'assistant recueille, le serveur rédige."""
+
+    def test_le_schema_ne_reclame_que_le_nom_de_l_etablissement(self):
+        """Tout exiger reviendrait à ne jamais rien enregistrer : un visiteur
+        donne son numéro à la fin d'un échange, ou pas du tout."""
+        schema = definition_outil()['input_schema']
+        self.assertEqual(schema['required'], ['etablissement'])
+
+    def test_le_schema_est_stable_entre_deux_appels(self):
+        """Il est rendu AVANT le prompt système : s'il varie, le cache tombe."""
+        self.assertEqual(definition_outil(), definition_outil())
+
+    def test_le_schema_couvre_ce_que_le_prompt_fait_demander(self):
+        """Les deux se relisent ensemble — une question posée sans champ pour
+        la ranger est une question posée pour rien."""
+        champs = definition_outil()['input_schema']['properties']
+        for attendu in ('etablissement', 'ville', 'telephone', 'nb_eleves',
+                        'situation_actuelle', 'besoins', 'accord_rappel'):
+            self.assertIn(attendu, champs)
+
+    def test_le_diagnostic_devient_une_fiche_prospect(self):
+        texte, prospect = executer(DIAGNOSTIC)
+        self.assertIsNotNone(prospect)
+        self.assertEqual(prospect.source, 'ASSISTANT')
+        self.assertEqual(prospect.etablissement, 'Daara Serigne Fallou')
+        self.assertEqual(prospect.nb_eleves, 180)
+        self.assertEqual(prospect.telephone_cle, '771234567')
+        self.assertIn('transmise', texte)
+
+    def test_le_resume_est_redige_par_le_serveur_pas_par_le_modele(self):
+        """Le modèle fournit des champs ; la mise en forme reste chez nous."""
+        _, prospect = executer(DIAGNOSTIC)
+        echange = prospect.interactions.get()
+        self.assertEqual(echange.canal, 'ASSISTANT')
+        self.assertEqual(echange.auteur, 'SAMA')
+        self.assertIn('Situation actuelle : Tout est tenu sur des cahiers.',
+                      echange.resume)
+        self.assertIn('Licence pressentie : Taxawu Daara', echange.resume)
+
+    def test_ce_que_le_modele_de_donnees_ignore_est_conserve_quand_meme(self):
+        _, prospect = executer(DIAGNOSTIC)
+        self.assertEqual(prospect.donnees_brutes['licence_pressentie'],
+                         'TAXAWU_DAARA')
+        self.assertIn('cahiers', prospect.donnees_brutes['situation_actuelle'])
+
+    def test_un_accord_de_rappel_place_la_fiche_dans_la_pile_a_relancer(self):
+        """C'est ce qui transforme une conversation en rendez-vous."""
+        _, prospect = executer(DIAGNOSTIC)
+        self.assertEqual(prospect.relance_le, date.today() + timedelta(days=1))
+
+    def test_sans_accord_aucune_relance_n_est_programmee(self):
+        _, prospect = executer({**DIAGNOSTIC, 'accord_rappel': False})
+        self.assertIsNone(prospect.relance_le)
+        self.assertIn("n'a pas explicitement accepté",
+                      prospect.interactions.get().resume)
+
+    def test_le_diagnostic_rejoint_une_fiche_venue_du_formulaire(self):
+        """Le même établissement écrit par le formulaire puis parle à SAMA :
+        une seule fiche, un historique continu."""
+        from apps.prospects.enregistrement import enregistrer_demande
+        enregistrer_demande({'etablissement': 'Daara Serigne Fallou',
+                             'telephone': '+221 77 123 45 67',
+                             'contact_nom': 'Moussa Diop'})
+        _, prospect = executer(DIAGNOSTIC)
+        self.assertEqual(Prospect.objects.count(), 1)
+        self.assertEqual(prospect.source, 'SITE')      # l'origine d'abord connue
+        self.assertEqual(InteractionProspect.objects.count(), 2)
+
+    def test_un_diagnostic_sans_etablissement_ne_cree_rien(self):
+        texte, prospect = executer({**DIAGNOSTIC, 'etablissement': '  '})
+        self.assertIsNone(prospect)
+        self.assertFalse(Prospect.objects.exists())
+        self.assertIn("nom de l'établissement", texte)
+
+    def test_une_panne_d_enregistrement_ne_parle_pas_technique_au_visiteur(self):
+        """Le texte repart vers le modèle, qui le répétera : il doit être
+        présentable."""
+        with patch('apps.prospects.enregistrement.enregistrer_demande',
+                   side_effect=RuntimeError('base indisponible')):
+            texte, prospect = executer(DIAGNOSTIC)
+        self.assertIsNone(prospect)
+        self.assertNotIn('base indisponible', texte)
+        self.assertIn('70 328 61 51', texte)
+
+    def test_la_conversation_garde_le_lien_vers_la_fiche(self):
+        """Sans ce lien, on saurait ce que SAMA coûte, jamais ce qu'il rapporte."""
+        conv = Conversation.objects.create(titre='Essai')
+        _, prospect = executer(DIAGNOSTIC, conversation=conv)
+        conv.refresh_from_db()
+        self.assertEqual(conv.prospect_id, prospect.id)
+
+
+class BoucleOutilTest(APITestCase):
+    """La boucle d'outils de `client.repondre`, avec un faux SDK."""
+
+    def _repondre(self, tours, **kwargs):
+        from apps.assistant.client import repondre
+        faux = FauxClientAnthropic(tours)
+        with patch('apps.assistant.client._client', return_value=faux):
+            evenements = list(repondre(
+                [{'role': 'user', 'content': 'Bonjour'}], 'SYSTÈME',
+                outils=[definition_outil()], **kwargs))
+        return evenements, faux
+
+    def test_le_texte_avant_et_apres_l_appel_est_diffuse(self):
+        evenements, _ = self._repondre(
+            [FauxTour('Je transmets votre situation.',
+                      appel=(NOM_OUTIL, 'tu_1', DIAGNOSTIC)),
+             FauxTour("C'est fait, l'équipe vous rappellera.")],
+            executer_outil=lambda nom, donnees: 'ok')
+        textes = [c for genre, c in evenements if genre == 'texte']
+        self.assertEqual(textes, ['Je transmets votre situation.',
+                                  "C'est fait, l'équipe vous rappellera."])
+        self.assertIn(('outil', NOM_OUTIL), evenements)
+
+    def test_la_consommation_de_TOUS_les_tours_est_additionnee(self):
+        """N'en compter qu'un sous-estimerait la dépense — dans le sens qui
+        désarme le coupe-circuit."""
+        evenements, _ = self._repondre(
+            [FauxTour('a', appel=(NOM_OUTIL, 'tu_1', DIAGNOSTIC),
+                      usage=FauxUsage(entree=100, sortie=50)),
+             FauxTour('b', usage=FauxUsage(entree=300, sortie=70))],
+            executer_outil=lambda nom, donnees: 'ok')
+        usage = dict(evenements)['fin']
+        self.assertEqual(usage['jetons_entree'], 400)
+        self.assertEqual(usage['jetons_sortie'], 120)
+
+    def test_les_resultats_repartent_dans_un_seul_message(self):
+        """Les séparer apprend au modèle à ne plus appeler ses outils en
+        parallèle."""
+        _, faux = self._repondre(
+            [FauxTour('a', appel=(NOM_OUTIL, 'tu_1', DIAGNOSTIC)),
+             FauxTour('b')],
+            executer_outil=lambda nom, donnees: 'transmis')
+        second_fil = faux.appels[1]['messages']
+        self.assertEqual(second_fil[-1]['role'], 'user')
+        self.assertEqual([b['type'] for b in second_fil[-1]['content']],
+                         ['tool_result'])
+        self.assertEqual(second_fil[-1]['content'][0]['tool_use_id'], 'tu_1')
+        self.assertEqual(second_fil[-1]['content'][0]['content'], 'transmis')
+
+    def test_les_outils_sont_identiques_a_chaque_tour(self):
+        """Ils précèdent le bloc système dans le préfixe mis en cache."""
+        _, faux = self._repondre(
+            [FauxTour('a', appel=(NOM_OUTIL, 'tu_1', DIAGNOSTIC)),
+             FauxTour('b')],
+            executer_outil=lambda nom, donnees: 'ok')
+        self.assertEqual(faux.appels[0]['tools'], faux.appels[1]['tools'])
+        self.assertEqual(faux.appels[0]['system'], faux.appels[1]['system'])
+
+    def test_un_modele_qui_boucle_est_arrete(self):
+        """Chaque tour renvoie tout le contexte : sans borne, une seule
+        conversation peut coûter le budget d'une journée."""
+        bouclant = [FauxTour('encore', appel=(NOM_OUTIL, f'tu_{n}', DIAGNOSTIC))
+                    for n in range(20)]
+        _, faux = self._repondre(bouclant,
+                                 executer_outil=lambda nom, donnees: 'ok',
+                                 max_tours_outil=2)
+        self.assertEqual(len(faux.appels), 3)   # 2 tours d'outil + le dernier
+
+    def test_sans_executeur_l_appel_d_outil_est_ignore(self):
+        evenements, faux = self._repondre(
+            [FauxTour('a', appel=(NOM_OUTIL, 'tu_1', DIAGNOSTIC))])
+        self.assertEqual(len(faux.appels), 1)
+        self.assertIn('fin', dict(evenements))
+
+
+@override_settings(ANTHROPIC_API_KEY='sk-test')
+class DiagnosticParLApiTest(APITestCase):
+    """Le chemin complet, vu du site vitrine."""
+
+    def setUp(self):
+        cache.clear()
+
+    def _envoyer(self, contenu='Nous sommes un daara à Rufisque.', faux=None,
+                 conversation=None):
+        charge = {'contenu': contenu}
+        if conversation:
+            charge['conversation'] = str(conversation)
+        with patch('apps.assistant.views.repondre', faux or flux_simule()):
+            r = self.client.post(URL_MESSAGE, charge, format='json',
+                                 REMOTE_ADDR='41.82.13.7')
+            if r.status_code == 200:
+                r.corps = b''.join(r.streaming_content).decode()
+        return r
+
+    def _faux_avec_outil(self, donnees=None):
+        """Un `repondre` qui exécute réellement l'outil qu'on lui confie."""
+        def faux(messages, systeme, outils=None, executer_outil=None, **_):
+            faux.fil = messages
+            faux.outils = outils
+            yield ('texte', 'Je transmets votre situation. ')
+            resultat = executer_outil(NOM_OUTIL, donnees or DIAGNOSTIC)
+            faux.resultat = resultat
+            yield ('outil', NOM_OUTIL)
+            yield ('texte', "L'équipe vous rappellera.")
+            yield ('fin', {'jetons_entree': 400, 'jetons_sortie': 120,
+                           'jetons_cache_lecture': 15000,
+                           'jetons_cache_ecriture': 0, 'tronque': False})
+        return faux
+
+    def test_une_conversation_produit_une_fiche_et_le_dit_au_site(self):
+        faux = self._faux_avec_outil()
+        r = self._envoyer(faux=faux)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('"type": "outil"', r.corps)
+
+        prospect = Prospect.objects.get()
+        self.assertEqual(prospect.source, 'ASSISTANT')
+        self.assertEqual(prospect.etablissement, 'Daara Serigne Fallou')
+        self.assertEqual(Conversation.objects.get().prospect_id, prospect.id)
+
+    def test_l_outil_est_bien_propose_au_modele(self):
+        faux = self._faux_avec_outil()
+        self._envoyer(faux=faux)
+        self.assertEqual([o['name'] for o in faux.outils], [NOM_OUTIL])
+
+    def test_une_fiche_deja_transmise_est_signalee_au_modele(self):
+        """Sans ce rappel, SAMA rouvrirait une fiche à chaque message : les
+        blocs d'appel d'outil ne sont pas conservés d'un tour à l'autre."""
+        self._envoyer(faux=self._faux_avec_outil())
+        conv = Conversation.objects.get()
+
+        suite = self._faux_avec_outil()
+        self._envoyer(contenu='Une dernière question.', faux=suite,
+                      conversation=conv.id)
+        self.assertIn('déjà été transmise', suite.fil[-1]['content'])
+        self.assertIn('Une dernière question.', suite.fil[-1]['content'])
+
+    def test_la_note_du_serveur_n_apparait_pas_tant_qu_il_n_y_a_pas_de_fiche(self):
+        premier = self._faux_avec_outil()
+        self._envoyer(faux=premier)
+        self.assertNotIn('déjà été transmise', premier.fil[-1]['content'])
+
+    def test_un_outil_inconnu_ne_fait_pas_tomber_la_conversation(self):
+        def faux(messages, systeme, outils=None, executer_outil=None, **_):
+            faux.resultat = executer_outil('outil_qui_n_existe_pas', {})
+            yield ('texte', 'Réponse malgré tout.')
+            yield ('fin', {'jetons_entree': 10, 'jetons_sortie': 5,
+                           'jetons_cache_lecture': 0, 'jetons_cache_ecriture': 0,
+                           'tronque': False})
+
+        r = self._envoyer(faux=faux)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('Réponse malgré tout.', r.corps)
+        self.assertIn("n'existe pas", faux.resultat)
+        self.assertFalse(Prospect.objects.exists())
