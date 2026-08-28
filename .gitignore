@@ -31,3 +31,7 @@ backend/logs/
 # Sauvegardes (dumps locaux + réception serveur)
 backend/backups/
 backend/backups_clients/
+
+# Base de la démonstration (config/settings/demo.py) — jetable, reconstruite
+# par backend/scripts/seed_demo.py
+backend/demo.sqlite3
