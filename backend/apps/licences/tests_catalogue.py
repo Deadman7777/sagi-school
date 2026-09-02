@@ -90,7 +90,9 @@ class CorpusDeSama(SimpleTestCase):
         self.corpus = DESTINATION_TEXTE.read_text(encoding='utf-8')
 
     def test_le_corpus_ne_promet_pas_d_emploi_du_temps(self):
-        self.assertNotIn('emploi du temps', self.corpus.lower())
+        # Singulier ET pluriel : « emplois du temps » ne contient pas la
+        # sous-chaîne « emploi du temps », et passait donc au travers.
+        self.assertIsNone(re.search(r'emplois? du temps', self.corpus, re.I))
 
     def test_le_corpus_annonce_les_memes_modules_que_le_code(self):
         for code, libelle in Licence.TYPE_CHOICES:
