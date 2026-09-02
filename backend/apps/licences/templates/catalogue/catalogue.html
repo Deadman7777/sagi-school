@@ -1,0 +1,299 @@
+{% load humanize_fcfa %}<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Catalogue Officiel des Offres et Tarifs — HADY GESMAN</title>
+<style>
+  /* Reprise de la charte des documents institutionnels : bleu #0D243F,
+     or #E3C05C, filets fins, grands blancs. Le rendu se fait par Chrome
+     (--print-to-pdf), qui gère @page et les ruptures de page. */
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.55; color: #24313f;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1, h2, h3, h4 { margin: 0; line-height: 1.25; color: #0D243F; }
+
+  /* ---------- Couverture ---------- */
+  .couverture {
+    position: relative; overflow: hidden;
+    background: linear-gradient(150deg, #0D243F 0%, #14395f 100%);
+    color: #dce6f2; border-radius: 10px; padding: 26px 28px 30px; margin-bottom: 26px;
+  }
+  .couverture::after {
+    content: ""; position: absolute; top: -70px; right: -60px;
+    width: 230px; height: 230px; border-radius: 50%;
+    background: rgba(227, 192, 92, .10);
+  }
+  .badge {
+    display: inline-block; background: #E3C05C; color: #2A1F05;
+    font-size: 7.5pt; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 3px; margin-bottom: 14px;
+  }
+  .couverture h1 { color: #fff; font-size: 21pt; letter-spacing: -0.4px; }
+  .couverture .sous { margin-top: 8px; font-size: 10pt; color: #b9cbe0; max-width: 118mm; }
+  .reperes {
+    display: flex; flex-wrap: wrap; gap: 0 26px; margin-top: 20px;
+    padding-top: 14px; border-top: 1px solid rgba(220, 230, 242, .22);
+  }
+  .reperes dt {
+    font-size: 6.8pt; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #E3C05C; margin-bottom: 3px;
+  }
+  .reperes dd { margin: 0; font-size: 9pt; font-weight: 600; color: #fff; }
+
+  /* ---------- Sections ---------- */
+  h2.section {
+    font-size: 11pt; letter-spacing: 1.4px; text-transform: uppercase;
+    padding-bottom: 6px; border-bottom: 2px solid #0D243F;
+    margin: 26px 0 14px;
+  }
+  h3.rubrique {
+    font-size: 11pt; margin: 18px 0 8px;
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  .pastille {
+    display: inline-block; width: 17px; height: 17px; border-radius: 50%;
+    background: #E3C05C; color: #2A1F05; font-size: 8pt; font-weight: 700;
+    text-align: center; line-height: 17px; flex: none;
+  }
+  p { margin: 8px 0 0; }
+  ul { margin: 8px 0 0; padding-left: 16px; }
+  li { margin-bottom: 3px; }
+  li::marker { color: #b08c2c; }
+  .discret { color: #5c6e85; }
+
+  /* ---------- Licences ---------- */
+  .licence {
+    border: 1px solid #dce3eb; border-top: 3px solid #E3C05C; border-radius: 8px;
+    padding: 16px 18px; margin-top: 14px; page-break-inside: avoid;
+  }
+  .licence-tete {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 8px;
+    padding-bottom: 8px; border-bottom: 1px solid #eef2f6;
+  }
+  .licence-nom { font-size: 13pt; font-weight: 700; }
+  .licence-prix { font-size: 12pt; font-weight: 700; color: #0D243F; white-space: nowrap; }
+  .licence-prix span { font-size: 8.5pt; font-weight: 400; color: #5c6e85; }
+  .accroche { font-weight: 600; color: #0D243F; margin-top: 9px; }
+
+  .modules { margin-top: 12px; }
+  .modules-titre {
+    font-size: 7.2pt; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #86611A; margin-bottom: 6px;
+  }
+  table.modules-liste { width: 100%; border-collapse: collapse; }
+  table.modules-liste td {
+    padding: 5px 0; border-bottom: 1px solid #f0f3f7; vertical-align: top;
+    font-size: 9.5pt;
+  }
+  table.modules-liste td.nom { width: 62mm; font-weight: 600; color: #0D243F; }
+  table.modules-liste tr:last-child td { border-bottom: 0; }
+
+  .remarque {
+    margin-top: 11px; padding: 8px 11px; background: #fbf7ec;
+    border-left: 3px solid #E3C05C; font-size: 9pt; color: #4e617a;
+  }
+
+  /* ---------- Prestations ---------- */
+  .prestation {
+    border: 1px solid #dce3eb; border-radius: 8px; padding: 13px 15px;
+    margin-top: 10px; page-break-inside: avoid;
+  }
+  .prestation-tete {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 8px;
+  }
+  .prestation-nom { font-size: 10.5pt; font-weight: 700; color: #0D243F; }
+  .prestation-prix { font-size: 9.5pt; font-weight: 700; color: #86611A; white-space: nowrap; }
+
+  table.combinees { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.combinees th {
+    text-align: left; font-size: 7.2pt; letter-spacing: 1.3px; text-transform: uppercase;
+    color: #5c6e85; font-weight: 600; padding: 7px 10px; background: #f4f7fa;
+    border-bottom: 1px solid #dce3eb;
+  }
+  table.combinees td {
+    padding: 9px 10px; border-bottom: 1px solid #eef2f6; font-size: 9.5pt; vertical-align: top;
+  }
+  table.combinees td.prix { font-weight: 700; color: #0D243F; white-space: nowrap; }
+
+  .colonnes { display: flex; gap: 22px; }
+  .colonnes > div { flex: 1; }
+
+  .pied {
+    margin-top: 30px; padding-top: 14px; border-top: 2px solid #0D243F;
+    font-size: 8.5pt; color: #5c6e85; page-break-inside: avoid;
+  }
+  .pied strong { color: #0D243F; }
+  /* Un titre seul en bas de page annonce une section qui commence ailleurs :
+     on l'attache à ce qui le suit plutôt que de forcer des sauts, qui
+     laissaient des pages à moitié vides. */
+  h2.section, h3.rubrique { page-break-after: avoid; break-after: avoid; }
+  .licence, .prestation { break-inside: avoid; }
+  table.combinees { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<header class="couverture">
+  <span class="badge">Catalogue officiel · version {{ version }}</span>
+  <h1>Catalogue Officiel des Offres et Tarifs</h1>
+  <p class="sous">
+    HADY GESMAN &amp; SAGI SCHOOL — Gestion, comptabilité, fiscalité,
+    automatisation, transformation numérique.
+  </p>
+  <dl class="reperes">
+    <div><dt>Version</dt><dd>{{ version }}</dd></div>
+    <div><dt>Référence</dt><dd>{{ reference }}</dd></div>
+    <div><dt>Produit</dt><dd>SAGI SCHOOL</dd></div>
+    <div><dt>Marché</dt><dd>Sénégal / Espace OHADA</dd></div>
+    <div><dt>Devise</dt><dd>FCFA</dd></div>
+    <div><dt>Établi le</dt><dd>{{ etabli_le }}</dd></div>
+  </dl>
+</header>
+
+<h2 class="section">Présentation</h2>
+<p>
+  <strong>HADY GESMAN</strong> est une agence sénégalaise spécialisée dans la gestion
+  administrative, comptable, financière, fiscale et l'automatisation des organisations.
+</p>
+<p>
+  À travers sa plateforme <strong>SAGI SCHOOL</strong>, elle accompagne les établissements
+  éducatifs dans leur transformation numérique en proposant une solution intégrée adaptée
+  aux réalités du Sénégal, de l'espace OHADA et plus largement du marché africain.
+</p>
+<p>
+  Notre ambition est de permettre aux dirigeants d'établissements de se concentrer sur leur
+  mission éducative pendant que les aspects administratifs, financiers et réglementaires
+  sont simplifiés, sécurisés et automatisés.
+</p>
+
+<h2 class="section">Nos domaines d'intervention</h2>
+{% for titre, points in domaines %}
+  <h3 class="rubrique"><span class="pastille">{{ forloop.counter }}</span>{{ titre }}</h3>
+  <ul>{% for p in points %}<li>{{ p }}</li>{% endfor %}</ul>
+{% endfor %}
+
+<h2 class="section">SAGI SCHOOL</h2>
+<p><strong>La plateforme de gestion scolaire conçue pour l'Afrique.</strong></p>
+<p>SAGI SCHOOL est une plateforme de gestion intégrée destinée :</p>
+<ul>{% for c in cibles %}<li>{{ c }}</li>{% endfor %}</ul>
+<p>
+  Elle fonctionne installée sur le poste de l'établissement comme en ligne, selon ce que
+  permet la connexion, et couvre les dimensions académique, administrative, comptable,
+  financière, fiscale et ressources humaines.
+</p>
+
+<h2 class="section">Nos licences SAGI SCHOOL</h2>
+<p class="discret">
+  Le périmètre de chaque licence ci-dessous est <strong>produit automatiquement à partir du
+  logiciel</strong> : c'est exactement ce que le contrôle d'accès ouvre à l'établissement.
+  Aucune fonctionnalité n'y figure qui ne soit livrée.
+</p>
+
+{% for l in licences %}
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence {{ l.libelle }}</span>
+    <span class="licence-prix">
+      {% if l.prix_mensuel %}{{ l.prix_mensuel|fcfa }} FCFA <span>/ mois</span>
+      {% else %}Gratuit <span>30 jours</span>{% endif %}
+    </span>
+  </div>
+
+  <p class="accroche">{{ l.accroche }}</p>
+  <p>{{ l.positionnement }}</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — {{ l.modules|length }}</p>
+    <table class="modules-liste">
+      {% for m in l.modules %}
+      <tr><td class="nom">{{ m.nom }}</td><td class="discret">{{ m.detail }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  {% if l.remarque %}<p class="remarque">{{ l.remarque }}</p>{% endif %}
+</div>
+{% endfor %}
+
+<h2 class="section">Services de déploiement et d'intégration</h2>
+{% for nom, prix, points in deploiement %}
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">{{ nom }}</span>
+    <span class="prestation-prix">{{ prix }}</span>
+  </div>
+  <ul>{% for p in points %}<li>{{ p }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+
+<h2 class="section">Services d'accompagnement externalisé</h2>
+<p class="discret">
+  Ces prestations sont assurées par les équipes de HADY GESMAN. Elles ne dépendent d'aucune
+  licence et s'adressent aussi bien à un établissement qu'à une PME.
+</p>
+{% for nom, prix, points in accompagnement %}
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">{{ nom }}</span>
+    <span class="prestation-prix">{{ prix }}</span>
+  </div>
+  <ul>{% for p in points %}<li>{{ p }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+
+<h2 class="section">Offres combinées recommandées</h2>
+<table class="combinees">
+  <tr><th>Offre</th><th>Composition</th><th>Tarif</th></tr>
+  {% for nom, composition, prix in combinees %}
+  <tr><td><strong>{{ nom }}</strong></td><td class="discret">{{ composition }}</td>
+      <td class="prix">{{ prix }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2 class="section">Conditions commerciales</h2>
+<div class="colonnes">
+  <div>
+    <h3 class="rubrique">Modalités de paiement</h3>
+    <ul>{% for m in modalites %}<li>{{ m }}</li>{% endfor %}</ul>
+  </div>
+  <div>
+    <h3 class="rubrique">Moyens de paiement acceptés</h3>
+    <ul>{% for m in moyens_paiement %}<li>{{ m }}</li>{% endfor %}</ul>
+  </div>
+</div>
+
+<h3 class="rubrique">Validité des devis</h3>
+<p>
+  Les devis sont valables {{ validite_devis_jours }} jours à compter de leur date d'émission.
+</p>
+
+<h3 class="rubrique">Révision tarifaire</h3>
+<p>Les tarifs peuvent faire l'objet d'une révision annuelle après information préalable du client.</p>
+
+<h2 class="section">Engagements de qualité</h2>
+<p>HADY GESMAN s'engage à :</p>
+<ul>{% for e in engagements %}<li>{{ e }}</li>{% endfor %}</ul>
+
+<div class="pied">
+  <p>
+    <strong>HADY GESMAN</strong> — Agence de Gestion Administrative, Comptable,
+    Financière et Automatisation.<br>
+    {{ entreprise.adresse }} · {{ entreprise.email }} · {{ entreprise.telephones }}<br>
+    NINEA {{ entreprise.ninea }} · RCCM {{ entreprise.rccm }}
+  </p>
+  <p>
+    Document {{ reference }}, établi le {{ etabli_le }}. Le périmètre des licences y est
+    produit à partir du logiciel en production ; en cas d'écart avec un autre document
+    commercial, c'est celui-ci qui fait foi.
+  </p>
+</div>
+
+</body>
+</html>

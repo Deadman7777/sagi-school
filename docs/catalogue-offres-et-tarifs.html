@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Catalogue Officiel des Offres et Tarifs — HADY GESMAN</title>
+<style>
+  /* Reprise de la charte des documents institutionnels : bleu #0D243F,
+     or #E3C05C, filets fins, grands blancs. Le rendu se fait par Chrome
+     (--print-to-pdf), qui gère @page et les ruptures de page. */
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.55; color: #24313f;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1, h2, h3, h4 { margin: 0; line-height: 1.25; color: #0D243F; }
+
+  /* ---------- Couverture ---------- */
+  .couverture {
+    position: relative; overflow: hidden;
+    background: linear-gradient(150deg, #0D243F 0%, #14395f 100%);
+    color: #dce6f2; border-radius: 10px; padding: 26px 28px 30px; margin-bottom: 26px;
+  }
+  .couverture::after {
+    content: ""; position: absolute; top: -70px; right: -60px;
+    width: 230px; height: 230px; border-radius: 50%;
+    background: rgba(227, 192, 92, .10);
+  }
+  .badge {
+    display: inline-block; background: #E3C05C; color: #2A1F05;
+    font-size: 7.5pt; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 3px; margin-bottom: 14px;
+  }
+  .couverture h1 { color: #fff; font-size: 21pt; letter-spacing: -0.4px; }
+  .couverture .sous { margin-top: 8px; font-size: 10pt; color: #b9cbe0; max-width: 118mm; }
+  .reperes {
+    display: flex; flex-wrap: wrap; gap: 0 26px; margin-top: 20px;
+    padding-top: 14px; border-top: 1px solid rgba(220, 230, 242, .22);
+  }
+  .reperes dt {
+    font-size: 6.8pt; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #E3C05C; margin-bottom: 3px;
+  }
+  .reperes dd { margin: 0; font-size: 9pt; font-weight: 600; color: #fff; }
+
+  /* ---------- Sections ---------- */
+  h2.section {
+    font-size: 11pt; letter-spacing: 1.4px; text-transform: uppercase;
+    padding-bottom: 6px; border-bottom: 2px solid #0D243F;
+    margin: 26px 0 14px;
+  }
+  h3.rubrique {
+    font-size: 11pt; margin: 18px 0 8px;
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  .pastille {
+    display: inline-block; width: 17px; height: 17px; border-radius: 50%;
+    background: #E3C05C; color: #2A1F05; font-size: 8pt; font-weight: 700;
+    text-align: center; line-height: 17px; flex: none;
+  }
+  p { margin: 8px 0 0; }
+  ul { margin: 8px 0 0; padding-left: 16px; }
+  li { margin-bottom: 3px; }
+  li::marker { color: #b08c2c; }
+  .discret { color: #5c6e85; }
+
+  /* ---------- Licences ---------- */
+  .licence {
+    border: 1px solid #dce3eb; border-top: 3px solid #E3C05C; border-radius: 8px;
+    padding: 16px 18px; margin-top: 14px; page-break-inside: avoid;
+  }
+  .licence-tete {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 8px;
+    padding-bottom: 8px; border-bottom: 1px solid #eef2f6;
+  }
+  .licence-nom { font-size: 13pt; font-weight: 700; }
+  .licence-prix { font-size: 12pt; font-weight: 700; color: #0D243F; white-space: nowrap; }
+  .licence-prix span { font-size: 8.5pt; font-weight: 400; color: #5c6e85; }
+  .accroche { font-weight: 600; color: #0D243F; margin-top: 9px; }
+
+  .modules { margin-top: 12px; }
+  .modules-titre {
+    font-size: 7.2pt; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #86611A; margin-bottom: 6px;
+  }
+  table.modules-liste { width: 100%; border-collapse: collapse; }
+  table.modules-liste td {
+    padding: 5px 0; border-bottom: 1px solid #f0f3f7; vertical-align: top;
+    font-size: 9.5pt;
+  }
+  table.modules-liste td.nom { width: 62mm; font-weight: 600; color: #0D243F; }
+  table.modules-liste tr:last-child td { border-bottom: 0; }
+
+  .remarque {
+    margin-top: 11px; padding: 8px 11px; background: #fbf7ec;
+    border-left: 3px solid #E3C05C; font-size: 9pt; color: #4e617a;
+  }
+
+  /* ---------- Prestations ---------- */
+  .prestation {
+    border: 1px solid #dce3eb; border-radius: 8px; padding: 13px 15px;
+    margin-top: 10px; page-break-inside: avoid;
+  }
+  .prestation-tete {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: space-between; gap: 8px;
+  }
+  .prestation-nom { font-size: 10.5pt; font-weight: 700; color: #0D243F; }
+  .prestation-prix { font-size: 9.5pt; font-weight: 700; color: #86611A; white-space: nowrap; }
+
+  table.combinees { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.combinees th {
+    text-align: left; font-size: 7.2pt; letter-spacing: 1.3px; text-transform: uppercase;
+    color: #5c6e85; font-weight: 600; padding: 7px 10px; background: #f4f7fa;
+    border-bottom: 1px solid #dce3eb;
+  }
+  table.combinees td {
+    padding: 9px 10px; border-bottom: 1px solid #eef2f6; font-size: 9.5pt; vertical-align: top;
+  }
+  table.combinees td.prix { font-weight: 700; color: #0D243F; white-space: nowrap; }
+
+  .colonnes { display: flex; gap: 22px; }
+  .colonnes > div { flex: 1; }
+
+  .pied {
+    margin-top: 30px; padding-top: 14px; border-top: 2px solid #0D243F;
+    font-size: 8.5pt; color: #5c6e85; page-break-inside: avoid;
+  }
+  .pied strong { color: #0D243F; }
+  /* Un titre seul en bas de page annonce une section qui commence ailleurs :
+     on l'attache à ce qui le suit plutôt que de forcer des sauts, qui
+     laissaient des pages à moitié vides. */
+  h2.section, h3.rubrique { page-break-after: avoid; break-after: avoid; }
+  .licence, .prestation { break-inside: avoid; }
+  table.combinees { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<header class="couverture">
+  <span class="badge">Catalogue officiel · version 2026 – 2027</span>
+  <h1>Catalogue Officiel des Offres et Tarifs</h1>
+  <p class="sous">
+    HADY GESMAN &amp; SAGI SCHOOL — Gestion, comptabilité, fiscalité,
+    automatisation, transformation numérique.
+  </p>
+  <dl class="reperes">
+    <div><dt>Version</dt><dd>2026 – 2027</dd></div>
+    <div><dt>Référence</dt><dd>HG-COM-006-V01</dd></div>
+    <div><dt>Produit</dt><dd>SAGI SCHOOL</dd></div>
+    <div><dt>Marché</dt><dd>Sénégal / Espace OHADA</dd></div>
+    <div><dt>Devise</dt><dd>FCFA</dd></div>
+    <div><dt>Établi le</dt><dd>2 septembre 2026</dd></div>
+  </dl>
+</header>
+
+<h2 class="section">Présentation</h2>
+<p>
+  <strong>HADY GESMAN</strong> est une agence sénégalaise spécialisée dans la gestion
+  administrative, comptable, financière, fiscale et l'automatisation des organisations.
+</p>
+<p>
+  À travers sa plateforme <strong>SAGI SCHOOL</strong>, elle accompagne les établissements
+  éducatifs dans leur transformation numérique en proposant une solution intégrée adaptée
+  aux réalités du Sénégal, de l'espace OHADA et plus largement du marché africain.
+</p>
+<p>
+  Notre ambition est de permettre aux dirigeants d'établissements de se concentrer sur leur
+  mission éducative pendant que les aspects administratifs, financiers et réglementaires
+  sont simplifiés, sécurisés et automatisés.
+</p>
+
+<h2 class="section">Nos domaines d'intervention</h2>
+
+  <h3 class="rubrique"><span class="pastille">1</span>Transformation numérique des établissements éducatifs</h3>
+  <ul><li>Digitalisation des processus administratifs</li><li>Automatisation des opérations récurrentes</li><li>Centralisation des données</li><li>Production de rapports décisionnels</li></ul>
+
+  <h3 class="rubrique"><span class="pastille">2</span>Gestion administrative externalisée</h3>
+  <ul><li>Organisation documentaire</li><li>Gestion des procédures internes</li><li>Suivi administratif</li><li>Archivage physique et numérique</li></ul>
+
+  <h3 class="rubrique"><span class="pastille">3</span>Gestion comptable et financière</h3>
+  <ul><li>Comptabilité conforme au SYSCOHADA Révisé</li><li>Suivi de trésorerie</li><li>Tableaux de bord financiers</li><li>Pilotage budgétaire</li></ul>
+
+  <h3 class="rubrique"><span class="pastille">4</span>Gestion fiscale</h3>
+  <ul><li>Préparation des déclarations fiscales</li><li>Conformité fiscale</li><li>Veille réglementaire</li><li>Assistance lors des contrôles fiscaux</li></ul>
+
+  <h3 class="rubrique"><span class="pastille">5</span>Accompagnement stratégique</h3>
+  <ul><li>Analyse financière</li><li>Aide à la décision</li><li>Préparation des dossiers investisseurs</li><li>Recherche de financement</li></ul>
+
+
+<h2 class="section">SAGI SCHOOL</h2>
+<p><strong>La plateforme de gestion scolaire conçue pour l'Afrique.</strong></p>
+<p>SAGI SCHOOL est une plateforme de gestion intégrée destinée :</p>
+<ul><li>Écoles privées</li><li>Établissements franco-arabes</li><li>Daaras modernes</li><li>Centres de formation</li><li>Instituts professionnels</li><li>Groupes scolaires multisites</li></ul>
+<p>
+  Elle fonctionne installée sur le poste de l'établissement comme en ligne, selon ce que
+  permet la connexion, et couvre les dimensions académique, administrative, comptable,
+  financière, fiscale et ressources humaines.
+</p>
+
+<h2 class="section">Nos licences SAGI SCHOOL</h2>
+<p class="discret">
+  Le périmètre de chaque licence ci-dessous est <strong>produit automatiquement à partir du
+  logiciel</strong> : c'est exactement ce que le contrôle d'accès ouvre à l'établissement.
+  Aucune fonctionnalité n'y figure qui ne soit livrée.
+</p>
+
+
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence Essai 30 jours</span>
+    <span class="licence-prix">
+      Gratuit <span>30 jours</span>
+    </span>
+  </div>
+
+  <p class="accroche">Découvrir la plateforme avant toute souscription.</p>
+  <p>Trente jours d&#x27;accès complet aux modules ci-dessous, avec le paramétrage initial, une formation de prise en main et l&#x27;assistance standard.</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — 5</p>
+    <table class="modules-liste">
+      
+      <tr><td class="nom">Tableau de bord</td><td class="discret">vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes</td></tr>
+      
+      <tr><td class="nom">Élèves</td><td class="discret">inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité</td></tr>
+      
+      <tr><td class="nom">Paiements</td><td class="discret">encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice</td></tr>
+      
+      <tr><td class="nom">Comptabilité</td><td class="discret">SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations</td></tr>
+      
+      <tr><td class="nom">Suivi mensuel</td><td class="discret">recettes et dépenses mois par mois, marge, comparaison au budget</td></tr>
+      
+    </table>
+  </div>
+
+  <p class="remarque">L&#x27;essai ne couvre pas l&#x27;ensemble des modules du logiciel : il ouvre ceux qui permettent d&#x27;évaluer la gestion courante.</p>
+</div>
+
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence Basic</span>
+    <span class="licence-prix">
+      25 000 FCFA <span>/ mois</span>
+      
+    </span>
+  </div>
+
+  <p class="accroche">Pour une structure qui veut d’abord remettre de l’ordre.</p>
+  <p>Destinée aux petites écoles, centres de formation et établissements en phase de structuration.</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — 4</p>
+    <table class="modules-liste">
+      
+      <tr><td class="nom">Tableau de bord</td><td class="discret">vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes</td></tr>
+      
+      <tr><td class="nom">Élèves</td><td class="discret">inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité</td></tr>
+      
+      <tr><td class="nom">Paiements</td><td class="discret">encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice</td></tr>
+      
+      <tr><td class="nom">Suivi mensuel</td><td class="discret">recettes et dépenses mois par mois, marge, comparaison au budget</td></tr>
+      
+    </table>
+  </div>
+
+  <p class="remarque">La comptabilité SYSCOHADA n&#x27;est pas comprise : elle s&#x27;ouvre à partir de la licence Pro.</p>
+</div>
+
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence Pro</span>
+    <span class="licence-prix">
+      50 000 FCFA <span>/ mois</span>
+      
+    </span>
+  </div>
+
+  <p class="accroche">Pour professionnaliser la gestion administrative et financière.</p>
+  <p>Reprend la licence Basic et y ajoute la comptabilité conforme au SYSCOHADA Révisé : journal, grand livre, balance, bilan et compte de résultat.</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — 5</p>
+    <table class="modules-liste">
+      
+      <tr><td class="nom">Tableau de bord</td><td class="discret">vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes</td></tr>
+      
+      <tr><td class="nom">Élèves</td><td class="discret">inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité</td></tr>
+      
+      <tr><td class="nom">Paiements</td><td class="discret">encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice</td></tr>
+      
+      <tr><td class="nom">Comptabilité</td><td class="discret">SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations</td></tr>
+      
+      <tr><td class="nom">Suivi mensuel</td><td class="discret">recettes et dépenses mois par mois, marge, comparaison au budget</td></tr>
+      
+    </table>
+  </div>
+
+  <p class="remarque">Le module fiscal et la gestion académique ne sont pas compris ; ils relèvent de la licence Avancée.</p>
+</div>
+
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence Avancé</span>
+    <span class="licence-prix">
+      90 000 FCFA <span>/ mois</span>
+      
+    </span>
+  </div>
+
+  <p class="accroche">Pour un établissement structuré ou un groupe scolaire.</p>
+  <p>La totalité des modules du logiciel : à la gestion administrative et comptable s’ajoutent l’académique, les ressources humaines, le fiscal, la mobilisation des ressources et la gouvernance.</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — 10</p>
+    <table class="modules-liste">
+      
+      <tr><td class="nom">Tableau de bord</td><td class="discret">vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes</td></tr>
+      
+      <tr><td class="nom">Élèves</td><td class="discret">inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité</td></tr>
+      
+      <tr><td class="nom">Paiements</td><td class="discret">encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice</td></tr>
+      
+      <tr><td class="nom">Comptabilité</td><td class="discret">SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations</td></tr>
+      
+      <tr><td class="nom">Suivi mensuel</td><td class="discret">recettes et dépenses mois par mois, marge, comparaison au budget</td></tr>
+      
+      <tr><td class="nom">Gestion académique</td><td class="discret">classes, matières, coefficients, notes, moyennes, rangs, bulletins PDF, analyse des résultats</td></tr>
+      
+      <tr><td class="nom">Ressources humaines</td><td class="discret">personnel, contrats, paie, bulletins, avances, déclarations sociales</td></tr>
+      
+      <tr><td class="nom">Fiscal</td><td class="discret">obligations IS, IMF, CFCE, TVA, CEL, échéancier fiscal et conseils</td></tr>
+      
+      <tr><td class="nom">Mobilisation des ressources financières</td><td class="discret">subventions, dons, prêts, échéanciers de remboursement, tableaux de bord bailleurs</td></tr>
+      
+      <tr><td class="nom">Gouvernance</td><td class="discret">projets, gestion électronique des documents, budget analytique, traçabilité des ressources</td></tr>
+      
+    </table>
+  </div>
+
+  
+</div>
+
+<div class="licence">
+  <div class="licence-tete">
+    <span class="licence-nom">Licence Taxawu Daara</span>
+    <span class="licence-prix">
+      20 000 FCFA <span>/ mois</span>
+      
+    </span>
+  </div>
+
+  <p class="accroche">Le tarif social du programme TAXAWU DAARA 2030.</p>
+  <p>Conçue pour les daaras modernes et les établissements franco-arabes. Elle ouvre les mêmes modules que la licence Avancée : ce qui la distingue n’est pas le périmètre, c’est le tarif et les établissements qui y ont droit.</p>
+
+  <div class="modules">
+    <p class="modules-titre">Modules ouverts — 10</p>
+    <table class="modules-liste">
+      
+      <tr><td class="nom">Tableau de bord</td><td class="discret">vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes</td></tr>
+      
+      <tr><td class="nom">Élèves</td><td class="discret">inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité</td></tr>
+      
+      <tr><td class="nom">Paiements</td><td class="discret">encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice</td></tr>
+      
+      <tr><td class="nom">Comptabilité</td><td class="discret">SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations</td></tr>
+      
+      <tr><td class="nom">Gestion académique</td><td class="discret">classes, matières, coefficients, notes, moyennes, rangs, bulletins PDF, analyse des résultats</td></tr>
+      
+      <tr><td class="nom">Suivi mensuel</td><td class="discret">recettes et dépenses mois par mois, marge, comparaison au budget</td></tr>
+      
+      <tr><td class="nom">Ressources humaines</td><td class="discret">personnel, contrats, paie, bulletins, avances, déclarations sociales</td></tr>
+      
+      <tr><td class="nom">Fiscal</td><td class="discret">obligations IS, IMF, CFCE, TVA, CEL, échéancier fiscal et conseils</td></tr>
+      
+      <tr><td class="nom">Mobilisation des ressources financières</td><td class="discret">subventions, dons, prêts, échéanciers de remboursement, tableaux de bord bailleurs</td></tr>
+      
+      <tr><td class="nom">Gouvernance</td><td class="discret">projets, gestion électronique des documents, budget analytique, traçabilité des ressources</td></tr>
+      
+    </table>
+  </div>
+
+  <p class="remarque">Éligibilité réservée aux daaras et établissements franco-arabes, dans le cadre du programme TAXAWU DAARA 2030.</p>
+</div>
+
+
+<h2 class="section">Services de déploiement et d'intégration</h2>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Audit et diagnostic initial</span>
+    <span class="prestation-prix">Gratuit</span>
+  </div>
+  <ul><li>Analyse des besoins</li><li>Diagnostic organisationnel</li><li>Identification des processus à digitaliser</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Installation et paramétrage</span>
+    <span class="prestation-prix">100 000 FCFA</span>
+  </div>
+  <ul><li>Paramétrage complet de l&#x27;établissement</li><li>Création des comptes utilisateurs</li><li>Configuration des classes et niveaux</li><li>Configuration comptable et fiscale</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Formation des équipes</span>
+    <span class="prestation-prix">Comprise dans le déploiement</span>
+  </div>
+  <ul><li>Formation des administrateurs</li><li>Formation des utilisateurs</li><li>Documentation d&#x27;utilisation</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Migration des données</span>
+    <span class="prestation-prix">À partir de 50 000 FCFA</span>
+  </div>
+  <ul><li>Import des élèves</li><li>Import des historiques de paiements</li><li>Reprise des données existantes</li></ul>
+</div>
+
+
+<h2 class="section">Services d'accompagnement externalisé</h2>
+<p class="discret">
+  Ces prestations sont assurées par les équipes de HADY GESMAN. Elles ne dépendent d'aucune
+  licence et s'adressent aussi bien à un établissement qu'à une PME.
+</p>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Pack Gestion Essentielle</span>
+    <span class="prestation-prix">À partir de 75 000 FCFA / mois</span>
+  </div>
+  <ul><li>Organisation administrative</li><li>Classement documentaire</li><li>Suivi administratif</li><li>Tableaux de bord simplifiés</li><li>Assistance administrative</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Pack Comptabilité et Fiscalité</span>
+    <span class="prestation-prix">À partir de 150 000 FCFA / mois</span>
+  </div>
+  <ul><li>Saisie comptable SYSCOHADA</li><li>Rapprochements bancaires</li><li>Suivi des comptes clients et fournisseurs</li><li>Préparation des déclarations fiscales</li><li>Veille réglementaire</li><li>Reporting mensuel</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Pack Pilotage Financier</span>
+    <span class="prestation-prix">À partir de 250 000 FCFA / mois</span>
+  </div>
+  <ul><li>Analyse financière</li><li>Prévisions de trésorerie</li><li>Suivi budgétaire</li><li>Tableaux de bord stratégiques</li><li>Accompagnement du dirigeant</li></ul>
+</div>
+
+<div class="prestation">
+  <div class="prestation-tete">
+    <span class="prestation-nom">Direction Administrative et Financière externalisée</span>
+    <span class="prestation-prix">À partir de 400 000 FCFA / mois</span>
+  </div>
+  <ul><li>Supervision administrative</li><li>Supervision comptable</li><li>Pilotage financier</li><li>Relations avec les partenaires financiers</li><li>Préparation des dossiers d&#x27;investissement</li><li>Reporting de direction</li></ul>
+</div>
+
+
+<h2 class="section">Offres combinées recommandées</h2>
+<table class="combinees">
+  <tr><th>Offre</th><th>Composition</th><th>Tarif</th></tr>
+  
+  <tr><td><strong>Pack Daara Numérique</strong></td><td class="discret">Licence Taxawu Daara + accompagnement administratif simplifié</td>
+      <td class="prix">À partir de 75 000 FCFA / mois</td></tr>
+  
+  <tr><td><strong>Pack École Performante</strong></td><td class="discret">Licence Pro + accompagnement comptable et fiscal</td>
+      <td class="prix">À partir de 200 000 FCFA / mois</td></tr>
+  
+  <tr><td><strong>Pack Groupe Scolaire Premium</strong></td><td class="discret">Licence Avancée + direction administrative et financière externalisée</td>
+      <td class="prix">À partir de 350 000 FCFA / mois</td></tr>
+  
+</table>
+
+<h2 class="section">Conditions commerciales</h2>
+<div class="colonnes">
+  <div>
+    <h3 class="rubrique">Modalités de paiement</h3>
+    <ul><li>Paiement mensuel</li><li>Paiement trimestriel</li><li>Paiement semestriel</li><li>Paiement annuel</li></ul>
+  </div>
+  <div>
+    <h3 class="rubrique">Moyens de paiement acceptés</h3>
+    <ul><li>Virement bancaire</li><li>Chèque</li><li>Wave</li><li>Orange Money</li><li>Espèces dans les limites prévues par la réglementation</li></ul>
+  </div>
+</div>
+
+<h3 class="rubrique">Validité des devis</h3>
+<p>
+  Les devis sont valables 30 jours à compter de leur date d'émission.
+</p>
+
+<h3 class="rubrique">Révision tarifaire</h3>
+<p>Les tarifs peuvent faire l'objet d'une révision annuelle après information préalable du client.</p>
+
+<h2 class="section">Engagements de qualité</h2>
+<p>HADY GESMAN s'engage à :</p>
+<ul><li>Respecter les normes du SYSCOHADA Révisé</li><li>Assurer la conformité avec la réglementation fiscale sénégalaise</li><li>Garantir la confidentialité des données</li><li>Fournir un accompagnement adapté aux réalités locales</li><li>Développer des solutions durables et évolutives</li></ul>
+
+<div class="pied">
+  <p>
+    <strong>HADY GESMAN</strong> — Agence de Gestion Administrative, Comptable,
+    Financière et Automatisation.<br>
+    Colobane 1, Rufisque — Sénégal · hadygesman@gmail.com · +221 78 429 78 30 / +221 70 328 61 51<br>
+    NINEA 012673986 · RCCM SN.DKR.2025.A.48268
+  </p>
+  <p>
+    Document HG-COM-006-V01, établi le 2 septembre 2026. Le périmètre des licences y est
+    produit à partir du logiciel en production ; en cas d'écart avec un autre document
+    commercial, c'est celui-ci qui fait foi.
+  </p>
+</div>
+
+</body>
+</html>

@@ -1,444 +1,241 @@
-         CATALOGUE OFFICIEL · VERSION 2026-2027
+CATALOGUE OFFICIEL DES OFFRES ET TARIFS
+HADY GESMAN & SAGI SCHOOL — Gestion, comptabilité, fiscalité, automatisation, transformation numérique
 
+Version : 2026 – 2027 · Référence : HG-COM-006-V01 · Marché : Sénégal / Espace OHADA · Devise : FCFA
+Établi le 2 septembre 2026.
 
-
-        Catalogue Officiel des Offres et Tarifs
-        HADY GESMAN & SAGI SCHOOL — Gestion, Comptabilité, Fiscalité,
-        Automatisation, Transformation Numérique
-
-
-        VERSION                  PRODUIT               MARCHÉ                                     DEVISE
-
-        2026 – 2027              SAGI SCHOOL           Sénégal / Espace OHADA                     FCFA
-
-
-
+Le périmètre des licences décrit ci-dessous est produit automatiquement à partir du logiciel
+en production. Il prime sur tout autre document commercial.
 
 PRÉSENTATION
 
-HADY GESMAN est une agence sénégalaise spécialisée dans la gestion administrative, comptable, financière, fiscale et
-l'automatisation des organisations.
+HADY GESMAN est une agence sénégalaise spécialisée dans la gestion administrative, comptable,
+financière, fiscale et l'automatisation des organisations.
 
-À travers sa plateforme SAGI SCHOOL, HADY GESMAN accompagne les établissements éducatifs dans leur transformation
-numérique en proposant une solution intégrée adaptée aux réalités du Sénégal, de l'espace OHADA et plus largement du
-marché africain.
-
-Notre ambition est de permettre aux dirigeants d'établissements de se concentrer sur leur mission éducative pendant que
-les aspects administratifs, financiers et réglementaires sont simplifiés, sécurisés et automatisés.
-
-
+À travers sa plateforme SAGI SCHOOL, HADY GESMAN accompagne les établissements éducatifs dans
+leur transformation numérique en proposant une solution intégrée adaptée aux réalités du
+Sénégal, de l'espace OHADA et plus largement du marché africain.
 
 NOS DOMAINES D'INTERVENTION
 
+1. Transformation numérique des établissements éducatifs
+   - Digitalisation des processus administratifs
+   - Automatisation des opérations récurrentes
+   - Centralisation des données
+   - Production de rapports décisionnels
 
- 1    Transformation numérique des établissements éducatifs
+2. Gestion administrative externalisée
+   - Organisation documentaire
+   - Gestion des procédures internes
+   - Suivi administratif
+   - Archivage physique et numérique
 
-     Digitalisation des processus administratifs ;
+3. Gestion comptable et financière
+   - Comptabilité conforme au SYSCOHADA Révisé
+   - Suivi de trésorerie
+   - Tableaux de bord financiers
+   - Pilotage budgétaire
 
-     Automatisation des opérations récurrentes ;
+4. Gestion fiscale
+   - Préparation des déclarations fiscales
+   - Conformité fiscale
+   - Veille réglementaire
+   - Assistance lors des contrôles fiscaux
 
-     Centralisation des données ;
+5. Accompagnement stratégique
+   - Analyse financière
+   - Aide à la décision
+   - Préparation des dossiers investisseurs
+   - Recherche de financement
 
-     Production de rapports décisionnels.
+SAGI SCHOOL — LA PLATEFORME DE GESTION SCOLAIRE CONÇUE POUR L'AFRIQUE
 
+Destinée aux :
+   - Écoles privées
+   - Établissements franco-arabes
+   - Daaras modernes
+   - Centres de formation
+   - Instituts professionnels
+   - Groupes scolaires multisites
 
-
- 2    Gestion administrative externalisée
-
-     Organisation documentaire ;
-
-     Gestion des procédures internes ;
-
-     Suivi administratif ;
-
-     Archivage physique et numérique.
-
-
-
- 3    Gestion comptable et financière
-
-     Comptabilité conforme au SYSCOHADA Révisé ;
-
-     Suivi de trésorerie ;
-
-     Tableaux de bord financiers ;
-
-     Pilotage budgétaire.
- 4 Gestion fiscale
-
-
-  Préparation des déclarations fiscales ;
-
-  Conformité fiscale ;
-
-  Veille réglementaire ;
-
-  Assistance lors des contrôles fiscaux.
-
-
-
- 5 Accompagnement stratégique
-
-
-  Analyse financière ;
-
-  Aide à la décision ;
-
-  Préparation des dossiers investisseurs ;
-
-  Recherche de financement.
-
-
-
-SAGI SCHOOL
-
-La plateforme de gestion scolaire conçue pour l'Afrique
-
-SAGI SCHOOL est une plateforme de gestion intégrée destinée :
-
-  aux écoles privées ;
-
-  aux établissements franco-arabes ;
-
-  aux daaras modernes ;
-
-  aux centres de formation ;
-
-  aux instituts professionnels ;
-
-  aux groupes scolaires multisites.
-
-La plateforme intègre les dimensions :
-
-  Académiques ;
-
-  Administratives ;
-
-  Comptables ;
-
-  Financières ;
-
-  Fiscales ;
-
-  Ressources humaines.
-
-
+Elle fonctionne installée sur le poste de l'établissement comme en ligne, selon ce que permet
+la connexion, et couvre les dimensions académique, administrative, comptable, financière,
+fiscale et ressources humaines.
 
 NOS LICENCES SAGI SCHOOL
 
-Licence ESSAI
+--- Licence Essai 30 jours — gratuite pendant 30 jours
 
-Gratuit pendant 30 jours
+Découvrir la plateforme avant toute souscription.
+Trente jours d&#x27;accès complet aux modules ci-dessous, avec le paramétrage initial, une formation de prise en main et l&#x27;assistance standard.
 
-Cette licence permet aux établissements de découvrir la plateforme avant toute souscription.
+Modules ouverts (5) :
+   - Tableau de bord : vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes
+   - Élèves : inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité
+   - Paiements : encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice
+   - Comptabilité : SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations
+   - Suivi mensuel : recettes et dépenses mois par mois, marge, comparaison au budget
 
-Inclus :
+À noter : L&#x27;essai ne couvre pas l&#x27;ensemble des modules du logiciel : il ouvre ceux qui permettent d&#x27;évaluer la gestion courante.
 
-  Accès temporaire à la plateforme ;
+--- Licence Basic — 25 000 FCFA / mois
 
-  Paramétrage initial ;
-  Formation de prise en main ;
-
-  Support d'assistance standard.
-
-Licence BASIC
-
-25 000 FCFA / mois
-
+Pour une structure qui veut d’abord remettre de l’ordre.
 Destinée aux petites écoles, centres de formation et établissements en phase de structuration.
 
-Fonctionnalités :
+Modules ouverts (4) :
+   - Tableau de bord : vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes
+   - Élèves : inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité
+   - Paiements : encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice
+   - Suivi mensuel : recettes et dépenses mois par mois, marge, comparaison au budget
 
-  Tableau de bord ;
+À noter : La comptabilité SYSCOHADA n&#x27;est pas comprise : elle s&#x27;ouvre à partir de la licence Pro.
 
-  Gestion des élèves ;
+--- Licence Pro — 50 000 FCFA / mois
 
-  Gestion des inscriptions ;
+Pour professionnaliser la gestion administrative et financière.
+Reprend la licence Basic et y ajoute la comptabilité conforme au SYSCOHADA Révisé : journal, grand livre, balance, bilan et compte de résultat.
 
-  Gestion des paiements ;
+Modules ouverts (5) :
+   - Tableau de bord : vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes
+   - Élèves : inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité
+   - Paiements : encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice
+   - Comptabilité : SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations
+   - Suivi mensuel : recettes et dépenses mois par mois, marge, comparaison au budget
 
-  Émission des reçus ;
+À noter : Le module fiscal et la gestion académique ne sont pas compris ; ils relèvent de la licence Avancée.
 
-  Suivi des créances ;
+--- Licence Avancé — 90 000 FCFA / mois
 
-  Rapports de gestion essentiels.
+Pour un établissement structuré ou un groupe scolaire.
+La totalité des modules du logiciel : à la gestion administrative et comptable s’ajoutent l’académique, les ressources humaines, le fiscal, la mobilisation des ressources et la gouvernance.
 
-Licence PRO
+Modules ouverts (10) :
+   - Tableau de bord : vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes
+   - Élèves : inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité
+   - Paiements : encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice
+   - Comptabilité : SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations
+   - Suivi mensuel : recettes et dépenses mois par mois, marge, comparaison au budget
+   - Gestion académique : classes, matières, coefficients, notes, moyennes, rangs, bulletins PDF, analyse des résultats
+   - Ressources humaines : personnel, contrats, paie, bulletins, avances, déclarations sociales
+   - Fiscal : obligations IS, IMF, CFCE, TVA, CEL, échéancier fiscal et conseils
+   - Mobilisation des ressources financières : subventions, dons, prêts, échéanciers de remboursement, tableaux de bord bailleurs
+   - Gouvernance : projets, gestion électronique des documents, budget analytique, traçabilité des ressources
 
-50 000 FCFA / mois
+--- Licence Taxawu Daara — 20 000 FCFA / mois
 
-Destinée aux établissements souhaitant professionnaliser leur gestion administrative et financière.
+Le tarif social du programme TAXAWU DAARA 2030.
+Conçue pour les daaras modernes et les établissements franco-arabes. Elle ouvre les mêmes modules que la licence Avancée : ce qui la distingue n’est pas le périmètre, c’est le tarif et les établissements qui y ont droit.
 
-Inclut toutes les fonctionnalités BASIC ainsi que :
+Modules ouverts (10) :
+   - Tableau de bord : vue d&#x27;ensemble : effectifs, encaissements du mois, impayés, résultat, alertes
+   - Élèves : inscriptions, fiches, tuteurs, échéanciers, import Excel, certificats de scolarité
+   - Paiements : encaissements, reçus PDF, suivi des créances, relances, clôture d&#x27;exercice
+   - Comptabilité : SYSCOHADA Révisé : journal, grand livre, balance, bilan, compte de résultat, charges, immobilisations
+   - Gestion académique : classes, matières, coefficients, notes, moyennes, rangs, bulletins PDF, analyse des résultats
+   - Suivi mensuel : recettes et dépenses mois par mois, marge, comparaison au budget
+   - Ressources humaines : personnel, contrats, paie, bulletins, avances, déclarations sociales
+   - Fiscal : obligations IS, IMF, CFCE, TVA, CEL, échéancier fiscal et conseils
+   - Mobilisation des ressources financières : subventions, dons, prêts, échéanciers de remboursement, tableaux de bord bailleurs
+   - Gouvernance : projets, gestion électronique des documents, budget analytique, traçabilité des ressources
 
-  Comptabilité conforme au SYSCOHADA Révisé ;
-
-  Gestion financière ;
-
-  Gestion des dépenses ;
-
-  Gestion des recettes ;
-
-  États financiers intermédiaires ;
-
-  Suivi budgétaire ;
-
-  Gestion fiscale conforme à la législation sénégalaise ;
-
-  Rapports financiers avancés.
-
-Licence AVANCÉE
-
-90 000 FCFA / mois
-
-Destinée aux établissements structurés et aux groupes scolaires.
-
-Inclut toutes les fonctionnalités PRO ainsi que :
-
-  Gestion académique complète ;
-
-  Gestion des notes ;
-
-  Calcul automatique des moyennes ;
-
-  Bulletins automatiques ;
-
-  Gestion des emplois du temps ;
-
-  Gestion des ressources humaines ;
-  Gestion du personnel ;
-
-  Gestion de la paie ;
-
-  Tableaux de bord décisionnels avancés.
-
-Licence TAXAWU DAARA
-
-20 000 FCFA / mois
-
-Conçue spécifiquement pour les daaras modernes et établissements franco-arabes.
-
-Fonctionnalités :
-
-  Gestion des pensionnaires ;
-
-  Gestion des contributions ;
-
-  Gestion des paiements ;
-
-  Comptabilité simplifiée ;
-
-  Gestion fiscale adaptée ;
-
-  Suivi des dons et contributions ;
-
-  Rapports financiers essentiels.
-
-
+À noter : Éligibilité réservée aux daaras et établissements franco-arabes, dans le cadre du programme TAXAWU DAARA 2030.
 
 SERVICES DE DÉPLOIEMENT ET D'INTÉGRATION
 
-Audit et diagnostic initial
+Audit et diagnostic initial — Gratuit
+   - Analyse des besoins
+   - Diagnostic organisationnel
+   - Identification des processus à digitaliser
 
-Gratuit
+Installation et paramétrage — 100 000 FCFA
+   - Paramétrage complet de l&#x27;établissement
+   - Création des comptes utilisateurs
+   - Configuration des classes et niveaux
+   - Configuration comptable et fiscale
 
-Comprend :
+Formation des équipes — Comprise dans le déploiement
+   - Formation des administrateurs
+   - Formation des utilisateurs
+   - Documentation d&#x27;utilisation
 
-  Analyse des besoins ;
-
-  Diagnostic organisationnel ;
-
-  Identification des processus à digitaliser.
-
-Installation et paramétrage
-
-
-100 000 FCFA
-
-Comprend :
-
-  Paramétrage complet de l'établissement ;
-
-  Création des comptes utilisateurs ;
-
-  Configuration des classes et niveaux ;
-
-  Configuration comptable et fiscale.
-
-Formation des équipes
-
-Inclus lors du déploiement
-
-Comprend :
-
-  Formation des administrateurs ;
-
-  Formation des utilisateurs ;
-  Documentation d'utilisation.
-
-Migration des données
-
-À partir de 50 000 FCFA
-
-Comprend :
-
-  Import des élèves ;
-
-  Import des historiques de paiements ;
-
-  Reprise des données existantes.
-
-
+Migration des données — À partir de 50 000 FCFA
+   - Import des élèves
+   - Import des historiques de paiements
+   - Reprise des données existantes
 
 SERVICES D'ACCOMPAGNEMENT EXTERNALISÉ
 
-Pack Gestion Essentielle
+Assurés par HADY GESMAN, indépendamment de toute licence.
 
-À partir de 75 000 FCFA / mois
+Pack Gestion Essentielle — À partir de 75 000 FCFA / mois
+   - Organisation administrative
+   - Classement documentaire
+   - Suivi administratif
+   - Tableaux de bord simplifiés
+   - Assistance administrative
 
-Prestations :
+Pack Comptabilité et Fiscalité — À partir de 150 000 FCFA / mois
+   - Saisie comptable SYSCOHADA
+   - Rapprochements bancaires
+   - Suivi des comptes clients et fournisseurs
+   - Préparation des déclarations fiscales
+   - Veille réglementaire
+   - Reporting mensuel
 
-  Organisation administrative ;
+Pack Pilotage Financier — À partir de 250 000 FCFA / mois
+   - Analyse financière
+   - Prévisions de trésorerie
+   - Suivi budgétaire
+   - Tableaux de bord stratégiques
+   - Accompagnement du dirigeant
 
-  Classement documentaire ;
-
-  Suivi administratif ;
-
-  Tableaux de bord simplifiés ;
-
-  Assistance administrative.
-
-Pack Comptabilité & Fiscalité
-
-À partir de 150 000 FCFA / mois
-
-Prestations :
-
-  Saisie comptable SYSCOHADA ;
-
-  Rapprochements bancaires ;
-
-  Suivi des comptes clients et fournisseurs ;
-
-  Préparation des déclarations fiscales ;
-
-  Veille réglementaire ;
-
-  Reporting mensuel.
-
-Pack Pilotage Financier
-
-À partir de 250 000 FCFA / mois
-
-Prestations :
-
-  Analyse financière ;
-
-  Prévisions de trésorerie ;
-
-  Suivi budgétaire ;
-
-  Tableaux de bord stratégiques ;
-
-  Accompagnement du dirigeant.
-
-Direction Administrative et Financière Externalisée
-À partir de 400 000 FCFA / mois
-
-Prestations :
-
-  Supervision administrative ;
-
-  Supervision comptable ;
-
-  Pilotage financier ;
-
-  Relations avec partenaires financiers ;
-
-  Préparation des dossiers d'investissement ;
-
-  Reporting de direction.
-
-
+Direction Administrative et Financière externalisée — À partir de 400 000 FCFA / mois
+   - Supervision administrative
+   - Supervision comptable
+   - Pilotage financier
+   - Relations avec les partenaires financiers
+   - Préparation des dossiers d&#x27;investissement
+   - Reporting de direction
 
 OFFRES COMBINÉES RECOMMANDÉES
 
-Pack Daara Numérique
+Pack Daara Numérique — Licence Taxawu Daara + accompagnement administratif simplifié — À partir de 75 000 FCFA / mois
 
-Licence TAXAWU DAARA + accompagnement administratif simplifié
+Pack École Performante — Licence Pro + accompagnement comptable et fiscal — À partir de 200 000 FCFA / mois
 
-À partir de 75 000 FCFA / mois
-
-Pack École Performante
-
-Licence PRO + accompagnement comptable et fiscal
-
-À partir de 200 000 FCFA / mois
-
-Pack Groupe Scolaire Premium
-
-Licence AVANCÉE + DAF externalisée
-
-À partir de 350 000 FCFA / mois
-
+Pack Groupe Scolaire Premium — Licence Avancée + direction administrative et financière externalisée — À partir de 350 000 FCFA / mois
 
 CONDITIONS COMMERCIALES
 
-Modalités de paiement
+Modalités de paiement :
+   - Paiement mensuel
+   - Paiement trimestriel
+   - Paiement semestriel
+   - Paiement annuel
 
-  Paiement mensuel ;
+Moyens de paiement acceptés :
+   - Virement bancaire
+   - Chèque
+   - Wave
+   - Orange Money
+   - Espèces dans les limites prévues par la réglementation
 
-  Paiement trimestriel ;
-
-  Paiement semestriel ;
-
-  Paiement annuel.
-
-Moyens de paiement acceptés
-
-  Virement bancaire ;
-
-  Chèque ;
-
-  Wave ;
-
-  Orange Money ;
-
-  Espèces dans les limites prévues par la réglementation.
-
-Validité des devis
-
-Les devis sont valables trente (30) jours à compter de leur date d'émission.
-Révision tarifaire
-
-Les tarifs peuvent faire l'objet d'une révision annuelle après information préalable du client.
-
-
+Validité des devis : 30 jours à compter de leur date d'émission.
+Révision tarifaire : les tarifs peuvent faire l'objet d'une révision annuelle après
+information préalable du client.
 
 ENGAGEMENTS DE QUALITÉ
 
 HADY GESMAN s'engage à :
+   - Respecter les normes du SYSCOHADA Révisé
+   - Assurer la conformité avec la réglementation fiscale sénégalaise
+   - Garantir la confidentialité des données
+   - Fournir un accompagnement adapté aux réalités locales
+   - Développer des solutions durables et évolutives
 
-  Respecter les normes du SYSCOHADA Révisé ;
+CONTACT
 
-  Assurer la conformité avec la réglementation fiscale sénégalaise ;
-
-  Garantir la confidentialité des données ;
-
-  Fournir un accompagnement adapté aux réalités locales ;
-
-  Développer des solutions durables et évolutives.
-
-
-
-NOTRE VISION
-
-Construire la référence africaine de la gestion intelligente des établissements éducatifs en mettant la technologie, la
-conformité réglementaire et l'accompagnement stratégique au service de la performance des organisations.
-
-HADY GESMAN
-Agence de Gestion Administrative, Comptable, Financière et Automatisation
-
-SAGI SCHOOL
-La plateforme intelligente de gestion scolaire conçue pour l'Afrique.
-
+HADY GESMAN — Agence de Gestion Administrative, Comptable, Financière et Automatisation
+Colobane 1, Rufisque — Sénégal · hadygesman@gmail.com · +221 78 429 78 30 / +221 70 328 61 51
+NINEA 012673986 · RCCM SN.DKR.2025.A.48268

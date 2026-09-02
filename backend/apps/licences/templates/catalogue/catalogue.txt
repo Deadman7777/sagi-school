@@ -1,0 +1,82 @@
+{% load humanize_fcfa %}CATALOGUE OFFICIEL DES OFFRES ET TARIFS
+HADY GESMAN & SAGI SCHOOL — Gestion, comptabilité, fiscalité, automatisation, transformation numérique
+
+Version : {{ version }} · Référence : {{ reference }} · Marché : Sénégal / Espace OHADA · Devise : FCFA
+Établi le {{ etabli_le }}.
+
+Le périmètre des licences décrit ci-dessous est produit automatiquement à partir du logiciel
+en production. Il prime sur tout autre document commercial.
+
+PRÉSENTATION
+
+HADY GESMAN est une agence sénégalaise spécialisée dans la gestion administrative, comptable,
+financière, fiscale et l'automatisation des organisations.
+
+À travers sa plateforme SAGI SCHOOL, HADY GESMAN accompagne les établissements éducatifs dans
+leur transformation numérique en proposant une solution intégrée adaptée aux réalités du
+Sénégal, de l'espace OHADA et plus largement du marché africain.
+
+NOS DOMAINES D'INTERVENTION
+{% for titre, points in domaines %}
+{{ forloop.counter }}. {{ titre }}
+{% for p in points %}   - {{ p }}
+{% endfor %}{% endfor %}
+SAGI SCHOOL — LA PLATEFORME DE GESTION SCOLAIRE CONÇUE POUR L'AFRIQUE
+
+Destinée aux :
+{% for c in cibles %}   - {{ c }}
+{% endfor %}
+Elle fonctionne installée sur le poste de l'établissement comme en ligne, selon ce que permet
+la connexion, et couvre les dimensions académique, administrative, comptable, financière,
+fiscale et ressources humaines.
+
+NOS LICENCES SAGI SCHOOL
+{% for l in licences %}
+--- Licence {{ l.libelle }} — {% if l.prix_mensuel %}{{ l.prix_mensuel|fcfa }} FCFA / mois{% else %}gratuite pendant 30 jours{% endif %}
+
+{{ l.accroche }}
+{{ l.positionnement }}
+
+Modules ouverts ({{ l.modules|length }}) :
+{% for m in l.modules %}   - {{ m.nom }} : {{ m.detail }}
+{% endfor %}{% if l.remarque %}
+À noter : {{ l.remarque }}
+{% endif %}{% endfor %}
+SERVICES DE DÉPLOIEMENT ET D'INTÉGRATION
+{% for nom, prix, points in deploiement %}
+{{ nom }} — {{ prix }}
+{% for p in points %}   - {{ p }}
+{% endfor %}{% endfor %}
+SERVICES D'ACCOMPAGNEMENT EXTERNALISÉ
+
+Assurés par HADY GESMAN, indépendamment de toute licence.
+{% for nom, prix, points in accompagnement %}
+{{ nom }} — {{ prix }}
+{% for p in points %}   - {{ p }}
+{% endfor %}{% endfor %}
+OFFRES COMBINÉES RECOMMANDÉES
+{% for nom, composition, prix in combinees %}
+{{ nom }} — {{ composition }} — {{ prix }}
+{% endfor %}
+CONDITIONS COMMERCIALES
+
+Modalités de paiement :
+{% for m in modalites %}   - {{ m }}
+{% endfor %}
+Moyens de paiement acceptés :
+{% for m in moyens_paiement %}   - {{ m }}
+{% endfor %}
+Validité des devis : {{ validite_devis_jours }} jours à compter de leur date d'émission.
+Révision tarifaire : les tarifs peuvent faire l'objet d'une révision annuelle après
+information préalable du client.
+
+ENGAGEMENTS DE QUALITÉ
+
+HADY GESMAN s'engage à :
+{% for e in engagements %}   - {{ e }}
+{% endfor %}
+CONTACT
+
+HADY GESMAN — Agence de Gestion Administrative, Comptable, Financière et Automatisation
+{{ entreprise.adresse }} · {{ entreprise.email }} · {{ entreprise.telephones }}
+NINEA {{ entreprise.ninea }} · RCCM {{ entreprise.rccm }}
