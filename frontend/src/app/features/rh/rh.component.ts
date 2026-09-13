@@ -762,19 +762,23 @@ const MOIS_OPTIONS = [
           <p-select [options]="modesPaiement" [(ngModel)]="formBulletin.mode_paiement_effectif"
                     optionLabel="label" optionValue="value" styleClass="w-full" />
         </div>
-        <div class="form-group full" *ngIf="ressourcesGouv().length">
+        @if (ressourcesGouv().length) {
+        <div class="form-group full">
           <label>Financé par (ressource)</label>
           <p-select [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
                     [(ngModel)]="formBulletin.ressource_id" styleClass="w-full" [showClear]="true"
                     placeholder="— Trésorerie générale —" [filter]="true" />
           <small style="color:var(--text-3);font-size:10px">Contrôle du disponible sur le coût employeur (661 + 6641)</small>
         </div>
-        <div class="form-group full" *ngIf="projetsGouv().length">
+        }
+        @if (projetsGouv().length) {
+        <div class="form-group full">
           <label>Projet (analytique)</label>
           <p-select [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
                     [(ngModel)]="formBulletin.projet_id" styleClass="w-full" [showClear]="true"
                     placeholder="— Aucun —" [filter]="true" />
         </div>
+        }
         <div class="form-group full" style="font-size:11px;color:var(--text-3)">
           ℹ️ {{ 'rh.avances_auto_info' | translate }}
         </div>
@@ -884,18 +888,22 @@ const MOIS_OPTIONS = [
           Multi-mode
         </label>
       </div>
-      <p-select *ngIf="!formAvance.multi_mode" [options]="modesPaiement" optionLabel="label" optionValue="value"
+      @if (!formAvance.multi_mode) {
+      <p-select [options]="modesPaiement" optionLabel="label" optionValue="value"
                 [(ngModel)]="formAvance.mode_paiement" styleClass="w-full" />
+      }
     </div>
-    <div class="form-group full" *ngIf="formAvance.multi_mode">
-      <div *ngFor="let m of formAvance.modes_reglement; let i = index"
-           style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+    @if (formAvance.multi_mode) {
+    <div class="form-group full">
+      @for (m of formAvance.modes_reglement; track $index; let i = $index) {
+      <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
         <p-select [options]="modesTresorerie" [(ngModel)]="m.mode" optionLabel="label" optionValue="value"
                   placeholder="Mode..." styleClass="w-full" [style]="{flex:'1'}" />
         <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant" style="width:120px;text-align:right" />
         <button type="button" (click)="retirerModeRH(formAvance, i)" [disabled]="formAvance.modes_reglement.length <= 1"
                 style="background:#3a1e2d;border:1px solid #5f2a3f;color:#f87171;border-radius:6px;width:30px;height:34px;cursor:pointer">✕</button>
       </div>
+      }
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <button type="button" (click)="ajouterModeRH(formAvance)"
                 style="background:transparent;border:1px dashed var(--border);color:#4fc3f7;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">+ Ajouter un mode</button>
@@ -904,18 +912,23 @@ const MOIS_OPTIONS = [
         </span>
       </div>
     </div>
-    <div class="form-group full" *ngIf="ressourcesGouv().length">
+    }
+    @if (ressourcesGouv().length) {
+    <div class="form-group full">
       <label>Financé par (ressource)</label>
       <p-select [options]="ressourcesGouv()" optionLabel="libelle" optionValue="id"
                 [(ngModel)]="formAvance.ressource_id" styleClass="w-full" [showClear]="true"
                 placeholder="— Trésorerie générale —" [filter]="true" />
     </div>
-    <div class="form-group full" *ngIf="projetsGouv().length">
+    }
+    @if (projetsGouv().length) {
+    <div class="form-group full">
       <label>Projet (analytique)</label>
       <p-select [options]="projetsGouv()" optionLabel="libelle" optionValue="id"
                 [(ngModel)]="formAvance.projet_id" styleClass="w-full" [showClear]="true"
                 placeholder="— Aucun —" [filter]="true" />
     </div>
+    }
     <div class="form-group full">
       <label>{{ 'rh.obs_avance' | translate }}</label>
       <input pInputText [(ngModel)]="formAvance.observations" class="w-full" />
