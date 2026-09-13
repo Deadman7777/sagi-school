@@ -90,20 +90,61 @@ def precharger(qs):
     )
 
 
-def mois_factures(eleve):
+def mois_factures(eleve, jusqu_a_la_sortie=True):
     """Les numéros de mois réellement facturés à cet élève, dans l'ordre.
 
     Mois saisis par l'école s'il y en a ; sinon on déroule le prorata, qui ne
     donne qu'un NOMBRE, en calendrier à partir de la fin de l'exercice.
+
+    Élève SORTI (abandon, transfert, diplôme) : on ne garde que les mois déjà
+    exigibles le jour du départ. Décision de la direction (septembre 2026) :
+    un enfant parti en mars doit ce qui était dû en mars, pas avril, mai et
+    juin — ni sur sa fiche, ni dans « Anciens élèves », ni dans le reliquat
+    reporté sur l'exercice suivant. Tous ces montants lisent ce calendrier.
+
+    `jusqu_a_la_sortie=False` rend le calendrier complet : la réintégration en
+    a besoin pour rétablir les mois qui suivent le retour.
     """
     if eleve.mois_dus:
-        return sorted(int(m) for m in eleve.mois_dus)
-    if not eleve.exercice_id:
+        mois = sorted(int(m) for m in eleve.mois_dus)
+    elif not eleve.exercice_id:
         return []
-    nb = eleve.nb_mensualites_dues
-    debut = eleve.exercice.date_debut.month
-    premier = eleve.exercice.nb_mensualites - nb
-    return [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
+    else:
+        nb = eleve.nb_mensualites_dues
+        debut = eleve.exercice.date_debut.month
+        premier = eleve.exercice.nb_mensualites - nb
+        mois = [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
+    if jusqu_a_la_sortie:
+        mois = _tronquer_a_la_sortie(eleve, mois)
+    return mois
+
+
+def _tronquer_a_la_sortie(eleve, mois):
+    """Retire les mois devenus exigibles APRÈS la sortie de l'élève.
+
+    Sans date de sortie (fiche ancienne, antérieure à la datation automatique),
+    on ne devine rien : tout reste dû. Retirer une dette sur une absence
+    d'information serait pire que de la laisser.
+    """
+    from .parcours import STATUTS_SORTIE
+
+    if eleve.statut not in STATUTS_SORTIE or not eleve.date_sortie or not mois \
+            or not eleve.exercice_id:
+        return mois
+    tenant = eleve.tenant
+    entree = eleve.date_entree or eleve.date_inscription or eleve.exercice.date_debut
+    a_inscription = set()
+    if getattr(tenant, 'premier_mois_a_inscription', False):
+        a_inscription.add(mois[0])
+    if getattr(tenant, 'dernier_mois_a_inscription', False):
+        a_inscription.add(mois[-1])
+    garde = []
+    for m in mois:
+        exigible = (entree if m in a_inscription
+                    else date_exigibilite(tenant, _annee_du_mois(eleve.exercice, m), m))
+        if exigible <= eleve.date_sortie:
+            garde.append(m)
+    return garde
 
 
 def _annee_du_mois(exercice, num):

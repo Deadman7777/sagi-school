@@ -87,8 +87,17 @@ def _mois_d_absence(fiche, date_sortie, date_retour, today):
     if not date_sortie:
         return []
     payes = {l['mois']: l['paye'] for l in construire_echeancier(fiche, today=today)['lignes']}
+    # L'échéancier d'un sortant s'arrête au départ : un mois prépayé APRÈS la
+    # sortie n'y figure plus. On relit donc les mois désignés par les paiements
+    # et par la répartition manuelle — un mois réglé n'est jamais retiré.
+    for p in fiche.paiements.filter(statut='ACTIF').only('mois_regles'):
+        for m in (p.mois_regles or []):
+            payes[int(m)] = max(payes.get(int(m), 0), SEUIL_ALERTE)
+    for m, v in (fiche.imputation_mois or {}).items():
+        if float(v or 0) >= SEUIL_ALERTE:
+            payes[int(m)] = max(payes.get(int(m), 0), float(v))
     retires = []
-    for m in mois_factures(fiche):
+    for m in mois_factures(fiche, jusqu_a_la_sortie=False):
         annee = _annee_du_mois(fiche.exercice, m)
         premier = datetime.date(annee, m, 1)
         dernier = datetime.date(annee, m, calendar.monthrange(annee, m)[1])
@@ -186,7 +195,8 @@ def reintegrer(eleve, date_retour, motif, *, dette_reconnue=False, utilisateur='
         if a['cas'] == 'MEME_EXERCICE':
             fiche = source
             if a['mois_retires']:
-                fiche.mois_dus = [m for m in mois_factures(fiche) if m not in a['mois_retires']]
+                fiche.mois_dus = [m for m in mois_factures(fiche, jusqu_a_la_sortie=False)
+                                  if m not in a['mois_retires']]
             fiche.statut = 'INSCRIT'
             fiche.date_sortie = None
         else:
