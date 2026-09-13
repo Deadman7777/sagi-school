@@ -1,7 +1,19 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from './api.service';
 
+export interface PilotageMois {
+  libelle_mois: string; annee: number; mois: number;
+  periode: 'PASSE' | 'EN_COURS' | 'A_VENIR'; jours_restants: number;
+  attendu: number; encaisse: number; reste_a_encaisser: number;
+  charges_prevues: number; charges_payees: number; charges_a_payer: number;
+  solde_previsionnel: number; solde_constate: number; taux: number;
+  nb_payes: number; nb_partiels: number; nb_impayes: number;
+  nb_charges_non_payees: number; nb_depassements: number; entrees_caisse: number;
+}
+
 export interface DashboardKPI {
+  mis_a_jour?: string;
+  pilotage?: PilotageMois;
   exercice: { annee_scolaire: string; date_debut: string; date_fin: string; } | null;
   kpis: { 
   total_recettes: number; 
@@ -11,6 +23,8 @@ export interface DashboardKPI {
   total_attendu: number;
   total_impayes: number;
   taux_recouvrement: number;
+  impayes_sortants: number;
+  nb_sortants_debiteurs: number;
 };
   eleves: {
     total: number; critique: number; urgent: number; attention: number; ok: number; a_jour: number;

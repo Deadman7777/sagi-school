@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, OnInit, computed, inject, signal
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessageService } from 'primeng/api';
 import { ButtonModule }      from 'primeng/button';
@@ -36,7 +36,7 @@ const MOIS_OPTIONS = [
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DecimalPipe,
+    DecimalPipe, DatePipe,
     FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, SelectModule, TagModule, InputNumberModule,
     ToastModule, TooltipModule, TranslateModule,
@@ -108,10 +108,29 @@ const MOIS_OPTIONS = [
 @if (onglet() === 'employes') {
   <div class="table-card">
     <div class="table-toolbar">
-      <span class="tbl-count">{{ employes().length }} {{ 'rh.nb_employes' | translate }}</span>
+      <span class="tbl-count">{{ employesFiltres().length }} {{ 'rh.nb_employes' | translate }}</span>
       <p-button [label]="'rh.nouvel_employe' | translate" severity="success" (onClick)="ouvrirDialogEmploye()" />
     </div>
-    <p-table [value]="employes()" [loading]="loading()" styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
+    <!-- Recherche instantanée + périmètre. Par défaut on ne montre que le
+         personnel présent : un employé parti n'a plus rien à faire dans la
+         liste de tous les jours, mais son dossier reste à un clic. -->
+    <div class="filter-bar">
+      <span class="search-wrap">
+        <i class="pi pi-search"></i>
+        <input pInputText class="search-input" [ngModel]="rechercheEmploye()"
+               (ngModelChange)="rechercheEmploye.set($event)"
+               placeholder="Rechercher : nom, matricule, poste, téléphone…" />
+      </span>
+      <div class="seg">
+        @for (p of perimetresEmploye; track p.value) {
+          <button type="button" class="seg-btn" [class.active]="perimetreEmploye() === p.value"
+                  (click)="perimetreEmploye.set(p.value)">
+            {{ p.label }} <span class="seg-nb">{{ compteurPerimetre(p.value) }}</span>
+          </button>
+        }
+      </div>
+    </div>
+    <p-table [value]="employesFiltres()" [loading]="loading()" styleClass="p-datatable-sm" [paginator]="true" [rows]="15">
       <ng-template pTemplate="header">
         <tr>
           <th>{{ 'rh.matricule'    | translate }}</th>
@@ -138,14 +157,22 @@ const MOIS_OPTIONS = [
           <td class="mono">{{ e.salaire_base | number:'1.0-0' }} <span class="fcfa">FCFA</span></td>
           <td class="small-txt">{{ e.niveau_enseignement || '—' }}</td>
           <td>
-            <p-tag [value]="e.statut"
-                   [severity]="e.statut === 'ACTIF' ? 'success' : e.statut === 'CONGE' ? 'warn' : 'danger'" />
+            <p-tag [value]="statutEmployeLabel(e.statut)"
+                   [severity]="e.statut === 'ACTIF' ? 'success' : e.statut === 'CONGE' ? 'warn' : e.statut === 'QUITTE' ? 'secondary' : 'danger'" />
+            @if (e.statut === 'QUITTE' && e.date_depart) {
+              <div class="small-txt">le {{ e.date_depart | date:'dd/MM/yyyy' }}</div>
+            }
           </td>
           <td>
             <div class="btn-row">
               <p-button icon="pi pi-pencil"     [rounded]="true" [text]="true" severity="info"    (onClick)="ouvrirDialogEmploye(e)" pTooltip="Modifier l'employé" tooltipPosition="top" />
               <p-button icon="pi pi-file-edit"  [rounded]="true" [text]="true" severity="success" (onClick)="ouvrirDialogBulletin(e)" pTooltip="Générer un bulletin de paie" tooltipPosition="top" />
-              <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" tooltipPosition="top" />
+              @if (e.statut !== 'QUITTE') {
+                <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" tooltipPosition="top" />
+                <p-button icon="pi pi-sign-out" [rounded]="true" [text]="true" severity="danger" (onClick)="ouvrirDepart(e)" pTooltip="Départ / supprimer" tooltipPosition="top" />
+              } @else {
+                <p-button icon="pi pi-replay" [rounded]="true" [text]="true" severity="secondary" (onClick)="reintegrerEmploye(e)" pTooltip="Annuler le départ (réintégrer)" tooltipPosition="top" />
+              }
             </div>
           </td>
         </tr>
@@ -156,6 +183,64 @@ const MOIS_OPTIONS = [
     </p-table>
   </div>
 }
+
+<!-- Départ / suppression d'un employé.
+     Règle : une fiche SANS histoire comptable (saisie par erreur) se supprime ;
+     un employé déjà payé ou ayant reçu une avance PART — ses pièces au grand
+     livre le désignent, son dossier reste consultable. -->
+<p-dialog header="Départ de l'employé" [(visible)]="departVisible" [modal]="true"
+          [style]="{width:'480px'}" [draggable]="false">
+  @if (employeDepart(); as e) {
+    <div class="employe-banner">
+      <div class="eb-name">{{ e.nom_complet }}</div>
+      <div class="eb-sub">{{ e.matricule }} · {{ e.poste }}</div>
+    </div>
+    @if (bilanDepart(); as b) {
+      @if (b.peut_supprimer) {
+        <div class="confirm-detail" style="margin:10px 0">
+          Aucun bulletin ni avance comptabilisé : cette fiche peut être <strong>supprimée</strong>
+          définitivement (cas d'une saisie par erreur).
+          <div style="margin-top:8px">
+            <p-button label="Supprimer la fiche" icon="pi pi-trash" severity="danger" size="small"
+                      [loading]="saving()" (onClick)="supprimerEmploye(e)" />
+          </div>
+        </div>
+      } @else {
+        <div class="confirm-detail" style="margin:10px 0">
+          {{ b.nb_bulletins_comptabilises }} bulletin(s) comptabilisé(s) : la fiche ne peut pas être
+          supprimée. Enregistrez le départ — l'employé sortira des listes et de la paie.
+        </div>
+      }
+      @if (b.avances_restantes > 0) {
+        <div class="alerte-depart">⚠️ Avance non soldée : <strong>{{ b.avances_restantes | number:'1.0-0' }} FCFA</strong>
+          — à retenir sur le dernier bulletin ou à récupérer.</div>
+      }
+      @if (b.nb_bulletins_non_payes > 0) {
+        <div class="alerte-depart">⚠️ {{ b.nb_bulletins_non_payes }} bulletin(s) validé(s) non payé(s) :
+          <strong>{{ b.net_non_paye | number:'1.0-0' }} FCFA</strong> restent dus à l'employé.</div>
+      }
+    }
+    <div class="form-grid" style="margin-top:12px">
+      <div class="form-group">
+        <label>Date de départ *</label>
+        <input pInputText type="date" [(ngModel)]="formDepart.date_depart" class="w-full" />
+      </div>
+      <div class="form-group">
+        <label>Motif *</label>
+        <p-select [options]="motifsDepart" [(ngModel)]="formDepart.motif" [editable]="true"
+                  placeholder="Choisir ou saisir" styleClass="w-full" appendTo="body" />
+      </div>
+    </div>
+    <div class="small-txt" style="margin-top:8px">
+      Le mois du départ reste payable (dernier salaire) ; aucun bulletin ne pourra être établi au-delà.
+    </div>
+  }
+  <ng-template pTemplate="footer">
+    <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="departVisible=false" />
+    <p-button label="Enregistrer le départ" icon="pi pi-sign-out" severity="danger"
+              [loading]="saving()" (onClick)="confirmerDepart()" />
+  </ng-template>
+</p-dialog>
 
 <!-- ══════════════════════ BULLETINS ══════════════════════ -->
 @if (onglet() === 'bulletins') {
@@ -210,6 +295,8 @@ const MOIS_OPTIONS = [
               @if (b.statut === 'BROUILLON') {
                 <p-button icon="pi pi-check" [rounded]="true" [text]="true" severity="success"
                           (onClick)="demanderValidation(b)" pTooltip="Valider le bulletin" tooltipPosition="top" />
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                          (onClick)="supprimerBrouillon(b)" pTooltip="Supprimer ce brouillon (aucune écriture)" tooltipPosition="top" />
               }
               @if (b.statut === 'VALIDE') {
                 <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="warn"
@@ -618,7 +705,7 @@ const MOIS_OPTIONS = [
       } @else {
         <div class="form-group full">
           <label>Employé *</label>
-          <p-select [options]="employes()" optionLabel="nom_complet" optionValue="id"
+          <p-select [options]="employes()" [filter]="true" filterBy="nom_complet" optionLabel="nom_complet" optionValue="id"
                     [(ngModel)]="formBulletin.employe_id"
                     (onChange)="onEmployeChange($event)"
                     placeholder="Sélectionner un employé" styleClass="w-full" />
@@ -776,7 +863,7 @@ const MOIS_OPTIONS = [
   } @else {
     <div class="form-group" style="margin-bottom:14px">
       <label>Employé *</label>
-      <p-select [options]="employes()" optionLabel="nom_complet" optionValue="id"
+      <p-select [options]="employesPresents()" [filter]="true" filterBy="nom_complet" optionLabel="nom_complet" optionValue="id"
                 [(ngModel)]="formAvance.employe_id" styleClass="w-full" />
     </div>
   }
@@ -956,6 +1043,15 @@ const MOIS_OPTIONS = [
     .tbl-count     { color:var(--text); font-weight:600; font-size:13px; }
     .filter-bar    { display:flex; gap:10px; padding:8px 16px 12px; background:var(--surface-2); }
     .filter-sel    { width:200px; }
+    .filter-bar    { flex-wrap:wrap; align-items:center; }
+    .search-wrap   { position:relative; flex:1 1 260px; max-width:420px; }
+    .search-wrap .pi-search { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-3); font-size:12px; }
+    .search-input  { width:100%; padding-left:30px !important; }
+    .seg           { display:flex; gap:2px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:2px; }
+    .seg-btn       { border:none; background:transparent; color:var(--text-3); font-size:12px; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    .seg-btn.active { background:var(--surface-2); color:#00d4aa; font-weight:600; }
+    .seg-nb        { font-size:10px; opacity:.8; margin-left:3px; }
+    .alerte-depart { background:rgba(245,158,11,.1); border-left:3px solid #f59e0b; padding:8px 10px; font-size:12px; color:var(--text-2); margin-top:6px; border-radius:4px; }
     .filter-input  { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 10px; font-size:12px; width:100px; }
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr  { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
@@ -1117,6 +1213,36 @@ export class RhComponent implements OnInit {
   dialogDetailVisible     = false;
   dialogConfirmValidation = false;
   dialogConfirmPaiement   = false;
+
+  // — Recherche et périmètre de la liste des employés —
+  rechercheEmploye = signal('');
+  perimetreEmploye = signal<'PRESENTS' | 'PARTIS' | 'TOUS'>('PRESENTS');
+  perimetresEmploye: { label: string; value: 'PRESENTS' | 'PARTIS' | 'TOUS' }[] = [
+    { label: 'Présents', value: 'PRESENTS' },
+    { label: 'Partis',   value: 'PARTIS' },
+    { label: 'Tous',     value: 'TOUS' },
+  ];
+  employesFiltres = computed(() => {
+    const perim = this.perimetreEmploye();
+    const q = this.normaliser(this.rechercheEmploye());
+    return this.employes().filter(e => {
+      if (perim === 'PRESENTS' && e.statut === 'QUITTE') return false;
+      if (perim === 'PARTIS' && e.statut !== 'QUITTE') return false;
+      if (!q) return true;
+      return this.normaliser(
+        [e.nom_complet, e.matricule, e.poste, e.telephone, e.type_employe].join(' ')
+      ).includes(q);
+    });
+  });
+  employesPresents = computed(() => this.employes().filter(e => e.statut !== 'QUITTE'));
+
+  // — Départ —
+  departVisible = false;
+  employeDepart = signal<Employe | null>(null);
+  bilanDepart   = signal<any | null>(null);
+  formDepart    = { date_depart: '', motif: '' };
+  motifsDepart  = ['Démission', 'Fin de contrat', 'Licenciement', 'Abandon de poste',
+                   'Retraite', 'Décès', 'Mutation'];
 
   // — Filtres —
   filtreEmployeId = '';
@@ -1489,6 +1615,86 @@ export class RhComponent implements OnInit {
         this.msg.add({ severity: 'info', summary: 'Annulé', detail: 'Avance annulée' });
         this.chargerAvances();
       },
+    });
+  }
+
+  // ── Employés : recherche, départ, suppression ─────────────────────────
+  private normaliser(v: string): string {
+    return (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  compteurPerimetre(p: string): number {
+    const liste = this.employes();
+    if (p === 'PRESENTS') return liste.filter(e => e.statut !== 'QUITTE').length;
+    if (p === 'PARTIS')   return liste.filter(e => e.statut === 'QUITTE').length;
+    return liste.length;
+  }
+
+  statutEmployeLabel(s: string): string {
+    return ({ ACTIF: 'Actif', CONGE: 'En congé', SUSPENDU: 'Suspendu', QUITTE: 'Parti' } as any)[s] || s;
+  }
+
+  ouvrirDepart(e: Employe) {
+    this.employeDepart.set(e);
+    this.bilanDepart.set(null);
+    this.formDepart = { date_depart: new Date().toISOString().slice(0, 10), motif: '' };
+    this.departVisible = true;
+    this.rh.bilanDepart(e.id).subscribe({
+      next: b => this.bilanDepart.set(b),
+      error: err => this.erreurToast(err),
+    });
+  }
+
+  confirmerDepart() {
+    const e = this.employeDepart();
+    if (!e) return;
+    if (!this.formDepart.date_depart || !(this.formDepart.motif || '').trim()) {
+      this.msg.add({ severity: 'warn', summary: 'Départ', detail: 'La date et le motif sont obligatoires.' });
+      return;
+    }
+    this.saving.set(true);
+    this.rh.enregistrerDepart(e.id, this.formDepart.date_depart, this.formDepart.motif.trim()).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.departVisible = false;
+        this.msg.add({ severity: 'success', summary: 'Départ enregistré',
+                       detail: `${e.nom_complet} ne figure plus parmi le personnel présent.` });
+        this.chargerDonnees();
+      },
+      error: err => { this.saving.set(false); this.erreurToast(err); },
+    });
+  }
+
+  supprimerEmploye(e: Employe) {
+    this.saving.set(true);
+    this.rh.supprimerEmploye(e.id).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.departVisible = false;
+        this.msg.add({ severity: 'success', summary: 'Fiche supprimée', detail: e.nom_complet });
+        this.chargerDonnees();
+      },
+      error: err => { this.saving.set(false); this.erreurToast(err); },
+    });
+  }
+
+  reintegrerEmploye(e: Employe) {
+    this.rh.reintegrerEmploye(e.id).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success', summary: 'Départ annulé', detail: `${e.nom_complet} est de nouveau actif.` });
+        this.chargerDonnees();
+      },
+      error: err => this.erreurToast(err),
+    });
+  }
+
+  supprimerBrouillon(b: BulletinPaie) {
+    this.rh.supprimerBulletin(b.id).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'info', summary: 'Brouillon supprimé', detail: `${b.employe_nom} — ${b.periode}` });
+        this.chargerBulletins();
+      },
+      error: err => this.erreurToast(err),
     });
   }
 

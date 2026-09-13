@@ -98,11 +98,10 @@ class DashboardKPIView(APIView):
                 'modes_paiement': [], 'recettes_mensuelles': [],
             })
 
-        cache_key = f'dashboard_kpis_{tenant.id}'
-        cached    = cache.get(cache_key)
-        if cached:
-            return Response(cached)
-
+        # PAS de cache : le tableau de bord doit refléter l'instant présent. Il
+        # était mis en cache cinq minutes, jamais invalidé — un élève passé en
+        # abandon restait compté dans l'effectif pendant que le module Élèves,
+        # lui, l'avait déjà retiré.
         exercice = Exercice.objects.filter(
             tenant=tenant, cloture=False
         ).order_by('-date_debut').first()
@@ -141,10 +140,16 @@ class DashboardKPIView(APIView):
 
         today = timezone.now().date()
 
+        from apps.eleves.echeancier import precharger, construire_echeancier
+        from apps.eleves.parcours import STATUTS_SORTIE, eleves_presents
+
+        # UN périmètre, celui du module Élèves : ni les sortis (abandons,
+        # transferts, diplômés), ni les fiches de créance. L'effectif, le
+        # recouvrement et les impayés se lisent sur les élèves PRÉSENTS.
         _pf = Q(paiements__statut='ACTIF')
-        eleves = Eleve.objects.filter(
+        eleves = eleves_presents(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
-        ).annotate(
+        )).annotate(
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription', filter=_pf) +
                 Sum('paiements__montant_mensualite',  filter=_pf) +
@@ -163,13 +168,8 @@ class DashboardKPIView(APIView):
         # exclus. Un compteur annonçant « 3 CRITIQUE » au-dessus d'une liste
         # qui n'en montre qu'un donne exactement l'impression d'un logiciel
         # qui se trompe.
-        from apps.eleves.echeancier import precharger
-        from apps.eleves.parcours import STATUTS_SORTIE
-
-        relancables = precharger(
-            Eleve.objects.filter(tenant=tenant, exercice=exercice,
-                                 fiche_creance=False)
-            .exclude(statut__in=STATUTS_SORTIE))
+        relancables = precharger(eleves_presents(
+            Eleve.objects.filter(tenant=tenant, exercice=exercice)))
 
         critique = urgent = attention = ok = a_jour = 0
         compteur = {'CRITIQUE': 0, 'URGENT': 0, 'ATTENTION': 0, 'OK': 0, 'A_JOUR': 0}
@@ -203,15 +203,29 @@ class DashboardKPIView(APIView):
         # Statuts élèves — queryset PROPRE (sans la jointure paiements de `eleves`,
         # sinon Count('id') compte chaque élève autant de fois qu'il a de paiements)
         statuts_qs = Eleve.objects.filter(
-            tenant=tenant, exercice=exercice
+            tenant=tenant, exercice=exercice, fiche_creance=False
         ).values('statut').annotate(nb=Count('id'))
         statuts    = {s['statut']: s['nb'] for s in statuts_qs}
 
+        # Ce que les élèves partis devaient encore le jour de leur départ : une
+        # vraie créance, qui ne doit ni disparaître ni gonfler les impayés des
+        # présents. L'horloge de leur échéancier s'arrête à la date de sortie.
+        sortants = precharger(Eleve.objects.filter(
+            tenant=tenant, exercice=exercice, fiche_creance=False,
+            statut__in=STATUTS_SORTIE))
+        impayes_sortants = 0.0
+        nb_sortants_debiteurs = 0
+        for e in sortants:
+            du = construire_echeancier(e, today=today)['synthese']['retards']
+            if du >= 1:
+                impayes_sortants += du
+                nb_sortants_debiteurs += 1
+
         # Prises en charge — queryset PROPRE (sans la jointure paiements de `eleves`,
         # sinon Count('id') compte chaque élève autant de fois qu'il a de paiements)
-        pec_qs = Eleve.objects.filter(
+        pec_qs = eleves_presents(Eleve.objects.filter(
             tenant=tenant, exercice=exercice, prise_en_charge__isnull=False
-        ).exclude(prise_en_charge='')
+        )).exclude(prise_en_charge='')
         pec_nb = pec_qs.count()
         pec_categories = list(pec_qs.values('prise_en_charge').annotate(nb=Count('id')))
 
@@ -226,7 +240,29 @@ class DashboardKPIView(APIView):
             2
         )
 
+        # Pilotage du mois en cours : la synthèse du cahier mensuel, telle
+        # quelle. Le tableau de bord n'en recalcule pas une seconde.
+        from apps.paiements.cahier_mensuel import cahier_mensuel, mois_par_defaut
+        annee_m, mois_m = mois_par_defaut(exercice, today)
+        cahier = cahier_mensuel(tenant, exercice, annee_m, mois_m, today)
+
         result = {
+            'mis_a_jour': timezone.localtime().isoformat(),
+            'pilotage': {
+                'libelle_mois':   cahier['libelle_mois'],
+                'annee':          cahier['annee'],
+                'mois':           cahier['mois'],
+                'periode':        cahier['periode'],
+                'jours_restants': cahier['jours_restants'],
+                **cahier['synthese'],
+                'taux':           cahier['scolarite']['totaux']['taux'],
+                'nb_payes':       cahier['scolarite']['totaux']['nb_payes'],
+                'nb_partiels':    cahier['scolarite']['totaux']['nb_partiels'],
+                'nb_impayes':     cahier['scolarite']['totaux']['nb_impayes'],
+                'nb_charges_non_payees': cahier['charges']['totaux']['nb_non_payees'],
+                'nb_depassements': cahier['charges']['totaux']['nb_depassements'],
+                'entrees_caisse': cahier['caisse']['entrees'],
+            },
             'exercice': {
                 'annee_scolaire': exercice.annee_scolaire,
                 'date_debut':     str(exercice.date_debut),
@@ -240,6 +276,8 @@ class DashboardKPIView(APIView):
                 'total_attendu':       round(total_attendu, 2),
                 'total_impayes':       round(total_impayes, 2),
                 'taux_recouvrement':   taux_recouvrement,
+                'impayes_sortants':    round(impayes_sortants, 2),
+                'nb_sortants_debiteurs': nb_sortants_debiteurs,
             },
             'eleves': {
                 'total':      eleves.count(),
@@ -266,7 +304,6 @@ class DashboardKPIView(APIView):
                                       'total': float(m['total'] or 0)}
                                      for m in mensuel_raw if m['mois']],
         }
-        cache.set(cache_key, result, 300)
         return Response(result)
 
 

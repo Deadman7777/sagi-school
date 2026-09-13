@@ -2,6 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
+import { LicenceCompteurService } from '../../core/services/licence-compteur.service';
 import { LangueService } from '../../core/services/langue.service';
 import { AvatarModule } from 'primeng/avatar';
 import { ToastModule } from 'primeng/toast';
@@ -91,6 +92,19 @@ interface NavItem {
                 {{ l.flag }}
               </button>
             </div>
+            <!-- Compte à rebours de la licence, visible sur tous les écrans. -->
+            @if (afficherCompteurLicence() && compteur.joursRestants() !== null) {
+              <a routerLink="/ma-licence" class="licence-chip" [class]="'licence-chip lc-' + compteur.niveau()"
+                 [attr.aria-label]="libelleCompteur()" [title]="libelleCompteur()">
+                <span aria-hidden="true">🔑</span>
+                @if (compteur.niveau() === 'expiree') {
+                  <span>Licence expirée</span>
+                } @else {
+                  <span>Licence : <strong>{{ compteur.joursRestants() }} j</strong></span>
+                }
+                @if (compteur.niveau() !== 'ok') { <span class="lc-cta">Renouveler</span> }
+              </a>
+            }
             <span class="badge-gold" *ngIf="isSuperAdmin()">👑 Super Admin</span>
             <span class="badge-blue" *ngIf="!isSuperAdmin()">📅 2025-2026</span>
           </div>
@@ -115,6 +129,14 @@ interface NavItem {
     </div>
   `,
   styles: [`
+    .licence-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:14px; font-size:12px; text-decoration:none; border:1px solid; white-space:nowrap; }
+    .licence-chip:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; }
+    .lc-ok        { background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.4); color:#059669; }
+    .lc-attention { background:rgba(234,179,8,.15); border-color:#ca8a04; color:var(--text); }
+    .lc-urgent    { background:rgba(234,88,12,.15); border-color:#ea580c; color:var(--text); }
+    .lc-critique, .lc-expiree { background:#dc2626; border-color:#dc2626; color:#fff; animation:lc-pulse 2s infinite; }
+    .lc-cta { font-weight:700; text-decoration:underline; }
+    @keyframes lc-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(220,38,38,.5); } 50% { box-shadow:0 0 0 6px rgba(220,38,38,0); } }
     .shell { display:flex; height:100vh; overflow:hidden; background:var(--bg); }
     .sidebar { width:240px; min-width:240px; background:var(--surface-2); border-right:1px solid var(--surface); display:flex; flex-direction:column; transition:width 0.2s, min-width 0.2s; overflow:hidden; }
     .sidebar.collapsed { width:60px; min-width:60px; }
@@ -198,7 +220,23 @@ export class ShellComponent {
   private translate = inject(TranslateService);
   private router    = inject(Router);
 
-  constructor(public auth: AuthService, public langue: LangueService) {}
+  compteur = inject(LicenceCompteurService);
+
+  constructor(public auth: AuthService, public langue: LangueService) {
+    if (this.afficherCompteurLicence()) this.compteur.demarrer();
+  }
+
+  /** Les écoles (et HADY GESMAN quand il gère une école) voient leur échéance. */
+  afficherCompteurLicence(): boolean {
+    return !this.isSuperAdmin() || !!this.auth.impersonatedTenantId();
+  }
+
+  libelleCompteur(): string {
+    const j = this.compteur.joursRestants();
+    const fin = this.compteur.licence()?.date_fin;
+    if (j === null) return '';
+    return j < 0 ? `Licence expirée depuis le ${fin}` : `Licence : ${j} jour(s) restant(s) — expire le ${fin}`;
+  }
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
 

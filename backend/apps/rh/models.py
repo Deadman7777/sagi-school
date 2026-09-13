@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import models
+from django.db.models import Q
 from core.models import TenantModel
 import uuid
 
@@ -66,6 +67,13 @@ class Employe(TenantModel):
     telephone              = models.CharField(max_length=20, blank=True)
     email                  = models.EmailField(blank=True)
     statut                 = models.CharField(max_length=20, choices=STATUT_CHOICES, default='ACTIF')
+    # Départ de l'établissement. Un employé payé au moins une fois ne se
+    # supprime pas : ses bulletins et leurs écritures (661, 422, IPRES…) le
+    # désignent, et l'effacer laisserait au grand livre des pièces sans
+    # titulaire. Il QUITTE l'école : il sort des listes et de la paie, son
+    # dossier reste consultable.
+    date_depart            = models.DateField(null=True, blank=True)
+    motif_depart           = models.CharField(max_length=200, blank=True, default='')
     # Champs paie
     niveau_enseignement    = models.CharField(max_length=15, choices=NIVEAU_CHOICES, blank=True, default='')
     nb_enfants             = models.IntegerField(default=0)
@@ -274,7 +282,17 @@ class BulletinPaie(TenantModel):
     class Meta:
         db_table = 'bulletins_paie'
         ordering = ['-annee', '-mois']
-        unique_together = ['tenant', 'employe', 'mois', 'annee']
+        # Un seul bulletin VIVANT par employé et par mois. Un bulletin annulé
+        # reste en base — ses écritures et leur extourne en dépendent — mais il
+        # ne doit plus occuper la période : l'ancienne contrainte globale
+        # empêchait de refaire le bulletin d'un mois annulé par erreur.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'employe', 'mois', 'annee'],
+                condition=~Q(statut='ANNULE'),
+                name='uniq_bulletin_actif_par_mois',
+            ),
+        ]
 
     def __str__(self):
         return f"Bulletin {self.employe.nom_complet} — {self.mois:02d}/{self.annee}"

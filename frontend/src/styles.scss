@@ -145,3 +145,14 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
 [dir="rtl"] .text-left  { text-align: right; }
 [dir="rtl"] * { font-family: 'Amiri', 'Scheherazade New', 'NotoColorEmoji', 'Segoe UI', sans-serif; }
 [dir="ltr"] * { font-family: 'Outfit', 'NotoColorEmoji', 'Segoe UI', sans-serif; }
+
+/* ── Niveaux d'alerte de paiement — une seule palette pour toute l'application.
+   Rouge = CRITIQUE, orange = URGENT, jaune = ATTENTION (demande Shoumoul,
+   septembre 2026). Contrastes vérifiés AA sur le texte des pastilles. */
+.tag-alerte { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.3px;
+              padding:2px 9px; border-radius:10px; white-space:nowrap; line-height:1.5; }
+.tag-alerte-CRITIQUE  { background:#dc2626; color:#fff; }
+.tag-alerte-URGENT    { background:#c2410c; color:#fff; }
+.tag-alerte-ATTENTION { background:#facc15; color:#422006; }
+.tag-alerte-OK        { background:rgba(0,153,255,.15); color:#0369a1; }
+.tag-alerte-A_JOUR    { background:rgba(5,150,105,.15); color:#047857; }

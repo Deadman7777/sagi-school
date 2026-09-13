@@ -131,6 +131,18 @@ class EleveSerializer(serializers.ModelSerializer):
         if 'statut' not in attrs:
             return
         sort = attrs['statut'] in STATUTS_SORTIE
+        # Revenir d'une sortie n'est pas un simple changement de statut : c'est
+        # une RÉINTÉGRATION, avec ses règles (motif, dette reconnue, mois
+        # d'absence non facturés — voir reintegration.py). Seule la correction
+        # d'une sortie posée par erreur LE JOUR MÊME passe encore par ici.
+        instance = self.instance
+        if (instance is not None and not sort
+                and instance.statut in STATUTS_SORTIE
+                and instance.date_sortie and instance.date_sortie < timezone.now().date()):
+            raise serializers.ValidationError({'statut': (
+                f"{instance.nom_complet} est sorti le {instance.date_sortie:%d/%m/%Y}. "
+                "Pour le faire revenir, utilisez « Réintégrer » : la date de retour, "
+                "le motif et la dette du départ y sont vérifiés.")})
         deja = attrs.get('date_sortie') or getattr(self.instance, 'date_sortie', None)
         if sort:
             attrs['date_sortie'] = attrs.get('date_sortie') or deja or timezone.now().date()

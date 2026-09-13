@@ -1,4 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { MessageService } from 'primeng/api';
@@ -75,7 +76,7 @@ describe('Saisie de paiement — acompte et prise en charge', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot()],
-      providers: [MessageService, provideHttpClient(), provideHttpClientTesting()],
+      providers: [MessageService, provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     // Pas de detectChanges : ngOnInit déclencherait les appels de la page.
     c = TestBed.createComponent(PaiementsComponent).componentInstance;

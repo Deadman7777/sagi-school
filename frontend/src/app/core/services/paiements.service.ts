@@ -48,6 +48,11 @@ export class PaiementsService {
     return this.api.get<any>('/paiements/stats/');
   }
 
+  /** « Mon cahier de notes mensuel » ; sans paramètre, le mois en cours. */
+  getCahierMensuel(annee?: number, mois?: number) {
+    return this.api.get<any>('/paiements/cahier-mensuel/', annee && mois ? { annee, mois } : {});
+  }
+
   getRecu(id: string) {
     return this.api.get<any>(`/paiements/paiements/${id}/recu/`);
   }

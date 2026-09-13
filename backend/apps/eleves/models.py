@@ -714,6 +714,42 @@ class RappelEnvoye(TenantModel):
         return f"{self.eleve} — {self.periode} ({self.statut})"
 
 
+class MouvementEleve(TenantModel):
+    """Sorties et retours d'un élève — la mémoire des allers-retours.
+
+    Réintégrer un enfant efface la date de sortie de sa fiche (elle redevient
+    celle d'un élève présent). Sans cette table, l'abandon de mars et le retour
+    de juin ne laisseraient aucune trace : ni pour la direction qui doit juger
+    une deuxième demande, ni pour expliquer pourquoi avril et mai ne sont pas
+    facturés.
+    """
+    TYPE_CHOICES = [
+        ('SORTIE',        'Sortie'),
+        ('REINTEGRATION', 'Réintégration'),
+    ]
+    eleve         = models.ForeignKey(Eleve, on_delete=models.CASCADE,
+                                      related_name='mouvements')
+    type_mouvement = models.CharField(max_length=15, choices=TYPE_CHOICES)
+    date_mouvement = models.DateField()
+    statut_avant  = models.CharField(max_length=20, blank=True, default='')
+    statut_apres  = models.CharField(max_length=20, blank=True, default='')
+    motif         = models.CharField(max_length=300, blank=True, default='')
+    # Réintégration : mois d'absence retirés de la facturation, dette
+    # reconnue au retour, fiche d'origine quand le retour change d'exercice.
+    mois_retires  = models.JSONField(default=list, blank=True)
+    dette_reconnue = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    fiche_origine = models.ForeignKey(Eleve, null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+')
+    utilisateur   = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        db_table = 'mouvements_eleves'
+        ordering = ['-date_mouvement', '-created_at']
+
+    def __str__(self):
+        return f"{self.eleve} — {self.type_mouvement} {self.date_mouvement}"
+
+
 class Organisme(TenantModel):
     """Tiers qui prend en charge la scolarité d'élèves : État, collectivité,
     ONG, fondation, entreprise.

@@ -76,6 +76,48 @@ def _ventiler_reglement(modes_reglement, total):
     return lignes
 
 
+def bilan_depart(employe):
+    """Ce qu'il faut savoir avant de faire partir ou de supprimer un employé.
+
+    Règle : un employé qui a une HISTOIRE comptable (bulletin validé, payé ou
+    annulé, avance accordée) ne se supprime pas — ses pièces au grand livre le
+    désignent. Il part (statut QUITTE). Seul un employé saisi sans suite
+    (erreur de saisie, recrutement avorté) peut être effacé.
+    """
+    from .models import BulletinPaie
+
+    bulletins = BulletinPaie.objects.filter(employe=employe)
+    nb_comptabilises = bulletins.exclude(statut='BROUILLON').count()
+    nb_brouillons = bulletins.filter(statut='BROUILLON').count()
+    avances = list(employe.avances.all())
+    avances_restantes = sum(
+        (a.montant_restant for a in avances if a.statut == 'EN_ATTENTE'), Decimal('0'))
+    non_payes = bulletins.filter(statut='VALIDE')
+    return {
+        'nb_bulletins_comptabilises': nb_comptabilises,
+        'nb_brouillons':              nb_brouillons,
+        'nb_avances':                 len(avances),
+        'avances_restantes':          float(avances_restantes),
+        'nb_bulletins_non_payes':     non_payes.count(),
+        'net_non_paye':               float(sum((b.net_a_payer for b in non_payes), Decimal('0'))),
+        'peut_supprimer':             nb_comptabilises == 0 and not avances,
+    }
+
+
+def verifier_periode_employe(employe, mois, annee):
+    """Refuse un bulletin pour un mois postérieur au départ de l'employé.
+
+    Le mois du départ reste payable : c'est le dernier salaire (souvent au
+    prorata, via les retenues). Au-delà, l'employé ne fait plus partie de
+    l'établissement.
+    """
+    depart = employe.date_depart
+    if employe.statut == 'QUITTE' and depart and (annee, mois) > (depart.year, depart.month):
+        raise ValueError(
+            f"{employe.nom_complet} a quitté l'établissement le {depart:%d/%m/%Y} : "
+            f"aucun bulletin ne peut être établi après {depart:%m/%Y}.")
+
+
 class PaieCalculateur:
 
     @staticmethod
@@ -149,6 +191,8 @@ class PaieCalculateur:
         Retourne un dict prêt à être passé à BulletinPaie(**data).
         """
         from .models import ParametresFiscaux, AvanceSalaire
+
+        verifier_periode_employe(employe, mois, annee)
 
         try:
             params = ParametresFiscaux.objects.get(annee=annee)

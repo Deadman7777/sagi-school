@@ -3,7 +3,6 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 from core.permissions import IsSuperAdmin
 from core.tenant import get_tenant
@@ -74,52 +73,57 @@ class LicenceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def demander_renouvellement(self, request, pk=None):
-        """Demande de renouvellement envoyée par email à HADY GESMAN.
+        """Demande de renouvellement — enregistrée, puis courriel ou relais cloud.
 
-        L'isolation tenant est déjà assurée par get_queryset (un admin école
-        ne voit que sa propre licence). Si le SMTP n'est pas configuré (mode
-        local Electron), on renvoie envoye=False avec le sujet/corps pour que
-        le frontend bascule sur un lien mailto:.
+        Voir apps/licences/renouvellement.py. `recue` ne vaut True que si
+        HADY GESMAN a réellement la demande (courriel parti ou cloud qui en
+        accuse réception) : l'écran ne doit plus jamais dire « envoyé » à tort.
+        L'isolation tenant est assurée par get_queryset.
         """
+        from .renouvellement import composer, demander, destinataire
         licence = self.get_object()
-        t       = licence.tenant
-        user    = request.user
-        message = (request.data.get('message') or '').strip()
+        demande, recue = demander(licence, request.user, request.data.get('message') or '')
+        sujet, corps = composer(demande)
+        return Response({
+            'recue':        recue,
+            # Compatibilité avec les écrans déjà déployés.
+            'envoye':       recue,
+            'enregistree':  True,
+            'reference':    str(demande.id),
+            'origine':      demande.origine,
+            'erreur':       demande.erreur if not recue else '',
+            'destinataire': destinataire(),
+            'sujet':        sujet,
+            'corps':        corps,
+        })
 
-        sujet  = f"[SAGI SCHOOL] Demande de renouvellement — {t.nom}"
-        lignes = [
-            "Nouvelle demande de renouvellement de licence.",
-            "",
-            f"École       : {t.nom}" + (f" ({t.ville})" if t.ville else ""),
-            f"Téléphone   : {t.telephone or '—'}",
-            f"Email école : {t.email or '—'}",
-            "",
-            f"Licence     : {licence.type} ({licence.statut})",
-            f"Clé         : {licence.cle_licence}",
-            f"Expire le   : {licence.date_fin} ({licence.jours_restants} jours restants)",
-            "",
-            f"Demandeur   : {f'{user.prenom} {user.nom}'.strip()} — {user.email}",
-        ]
-        if message:
-            lignes += ["", "Message :", message]
-        corps = "\n".join(lignes)
+    @action(detail=False, methods=['get'], url_path='demandes-renouvellement',
+            permission_classes=[IsSuperAdmin])
+    def demandes_renouvellement(self, request):
+        """Toutes les demandes reçues — y compris celles dont le courriel a échoué."""
+        from .models import DemandeRenouvellement
+        qs = DemandeRenouvellement.objects.all()[:200]
+        return Response([{
+            'id': str(d.id), 'created_at': d.created_at, 'ecole_nom': d.ecole_nom,
+            'type_licence': d.type_licence, 'date_fin': d.date_fin,
+            'demandeur': d.demandeur, 'email_demandeur': d.email_demandeur,
+            'telephone': d.telephone, 'message': d.message,
+            'origine': d.origine, 'origine_libelle': d.get_origine_display(),
+            'courriel_envoye': d.courriel_envoye, 'erreur': d.erreur,
+            'traitee': d.traitee, 'traitee_le': d.traitee_le,
+        } for d in qs])
 
-        destinataire = getattr(settings, 'LICENCE_SUPPORT_EMAIL', 'hadygesman@gmail.com')
-        # console.EmailBackend n'envoie rien, et 'localhost' est le défaut
-        # Django sans relais réel : ne prétendre "envoyé" que si un vrai SMTP
-        # est configuré (EMAIL_HOST renseigné, en mode cloud).
-        smtp_configure = ('smtp' in settings.EMAIL_BACKEND
-                          and getattr(settings, 'EMAIL_HOST', '') not in ('', 'localhost'))
-        if smtp_configure:
-            try:
-                send_mail(sujet, corps,
-                          getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@sagi-school.com'),
-                          [destinataire])
-                return Response({'envoye': True, 'destinataire': destinataire})
-            except Exception:
-                pass
-        return Response({'envoye': False, 'destinataire': destinataire,
-                         'sujet': sujet, 'corps': corps})
+    @action(detail=False, methods=['post'], url_path=r'demandes-renouvellement/(?P<demande_id>[^/.]+)/traiter',
+            permission_classes=[IsSuperAdmin])
+    def traiter_demande(self, request, demande_id=None):
+        from .models import DemandeRenouvellement
+        d = DemandeRenouvellement.objects.filter(id=demande_id).first()
+        if d is None:
+            return Response({'error': 'Demande introuvable.'}, status=404)
+        d.traitee = True
+        d.traitee_le = timezone.now()
+        d.save(update_fields=['traitee', 'traitee_le', 'updated_at'])
+        return Response({'traitee': True})
 
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def suspendre(self, request, pk=None):

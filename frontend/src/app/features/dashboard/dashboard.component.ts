@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DashboardService, DashboardKPI, DashboardSuperAdmin, TresorerieCanaux } from '../../core/services/dashboard.service';
 import { AuthService } from '../../core/services/auth.service';
 import { TagModule } from 'primeng/tag';
@@ -106,10 +106,63 @@ import { ApiService } from '../../core/services/api.service';
         <div class="kpi-grid">
           @if (d.exercice) {
             <div class="exercice-bar" style="grid-column:1/-1">
-              📅 Exercice {{ d.exercice.annee_scolaire }} —
+              <span>📅 Exercice {{ d.exercice.annee_scolaire }} —
               du {{ d.exercice.date_debut | date:'dd/MM/yyyy' }}
-              au {{ d.exercice.date_fin   | date:'dd/MM/yyyy' }}
+              au {{ d.exercice.date_fin   | date:'dd/MM/yyyy' }}</span>
+              <span class="live" aria-live="polite">
+                <span class="live-dot" aria-hidden="true"></span>
+                Temps réel · mis à jour à {{ d.mis_a_jour | date:'HH:mm:ss' }}
+                <button type="button" class="btn-refresh" (click)="rafraichir()" aria-label="Actualiser le tableau de bord">↻</button>
+              </span>
             </div>
+          }
+
+          <!-- ══ PILOTAGE DU MOIS ══ La synthèse du cahier mensuel, telle quelle :
+               mêmes chiffres que l'onglet « Mon cahier mensuel » et son PDF. -->
+          @if (d.pilotage; as p) {
+            <section class="pilotage" style="grid-column:1/-1" aria-labelledby="pilotage-titre">
+              <div class="pil-head">
+                <h3 id="pilotage-titre" class="pil-titre">🧭 Pilotage du mois — {{ p.libelle_mois }}</h3>
+                <span class="pil-jours">
+                  @if (p.periode === 'EN_COURS') { J-{{ p.jours_restants }} avant la fin du mois }
+                  @else if (p.periode === 'PASSE') { Mois écoulé }
+                  @else { Mois à venir }
+                </span>
+                <a routerLink="/paiements" [queryParams]="{ onglet: 'cahier' }" class="pil-lien">📒 Ouvrir mon cahier mensuel →</a>
+              </div>
+              <div class="pil-grid">
+                <div class="pil-bloc">
+                  <div class="pil-l">Scolarité du mois</div>
+                  <div class="pil-ligne"><span>Devait entrer</span><strong>{{ p.attendu | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Est entré</span><strong class="txt-vert">{{ p.encaisse | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Reste à encaisser</span><strong class="txt-rouge">{{ p.reste_a_encaisser | number:'1.0-0' }}</strong></div>
+                  <div class="pil-barre" role="progressbar" [attr.aria-valuenow]="p.taux" aria-valuemin="0" aria-valuemax="100"
+                       aria-label="Taux de recouvrement du mois">
+                    <div class="pil-fill" [style.width.%]="p.taux"></div>
+                  </div>
+                  <div class="pil-note">{{ p.taux }} % · {{ p.nb_payes }} à jour · {{ p.nb_partiels }} partiels · <strong class="txt-rouge">{{ p.nb_impayes }} non payés</strong></div>
+                </div>
+                <div class="pil-bloc">
+                  <div class="pil-l">Charges budgétées du mois</div>
+                  <div class="pil-ligne"><span>Budgétées</span><strong>{{ p.charges_prevues | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Payées</span><strong>{{ p.charges_payees | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Restent à payer</span><strong class="txt-orange">{{ p.charges_a_payer | number:'1.0-0' }}</strong></div>
+                  <div class="pil-note">
+                    {{ p.nb_charges_non_payees }} charge(s) à régler
+                    @if (p.nb_depassements > 0) { · <strong class="txt-rouge">{{ p.nb_depassements }} dépassement(s)</strong> }
+                  </div>
+                </div>
+                <div class="pil-bloc">
+                  <div class="pil-l">Aide à la décision</div>
+                  <div class="pil-ligne"><span>Solde constaté du mois</span>
+                    <strong [class.txt-rouge]="p.solde_constate < 0" [class.txt-vert]="p.solde_constate >= 0">{{ p.solde_constate | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Solde si tout est encaissé et payé</span>
+                    <strong [class.txt-rouge]="p.solde_previsionnel < 0">{{ p.solde_previsionnel | number:'1.0-0' }}</strong></div>
+                  <div class="pil-ligne"><span>Trésorerie disponible</span><strong>{{ d.kpis.tresorerie | number:'1.0-0' }}</strong></div>
+                  <div class="pil-note">{{ conseilPilotage(d) }}</div>
+                </div>
+              </div>
+            </section>
           }
           <div class="kpi-card" style="--acc:#00d4aa">
             <div class="kpi-icon">💰</div>
@@ -155,10 +208,10 @@ import { ApiService } from '../../core/services/api.service';
             <div class="kpi-value" style="color:#a855f7">{{ d.kpis.total_attendu | number:'1.0-0' }} FCFA</div>
             <div class="kpi-sub">{{ 'dashboard.frais_annuels' | translate }}</div>
           </div>
-          <!-- Effectif -->
+          <!-- Effectif : élèves PRÉSENTS, même périmètre que le module Élèves -->
           <div class="kpi-card" style="--acc:#00d4aa">
             <div class="kpi-icon">🎓</div>
-            <div class="kpi-label">Effectif Total</div>
+            <div class="kpi-label">Élèves présents</div>
             <div class="kpi-value" style="color:#00d4aa">{{ d.eleves.total }}</div>
             <div class="kpi-sub">
               <span style="color:#7c3aed">{{ d.eleves.garcons || 0 }}G</span> /
@@ -169,7 +222,11 @@ import { ApiService } from '../../core/services/api.service';
             <div class="kpi-icon">🚪</div>
             <div class="kpi-label">Abandons</div>
             <div class="kpi-value" style="color:#ef4444">{{ d.eleves.abandonnes || 0 }}</div>
-            <div class="kpi-sub">sur {{ d.eleves.total }} élèves</div>
+            <div class="kpi-sub">
+              @if (d.kpis.impayes_sortants > 0) {
+                {{ d.kpis.impayes_sortants | number:'1.0-0' }} FCFA dus par {{ d.kpis.nb_sortants_debiteurs }} sortant(s)
+              } @else { cette année }
+            </div>
           </div>
           <div class="kpi-card" style="--acc:#f59e0b">
             <div class="kpi-icon">🤝</div>
@@ -204,7 +261,7 @@ import { ApiService } from '../../core/services/api.service';
                 <div><div class="alert-title">{{ 'dashboard.a_jour' | translate }}</div><div class="alert-sub">{{ 'dashboard.paiements_ok' | translate }}</div></div>
               </div>
               <div class="total-eleves">
-                Inscrits : <strong>{{ d.eleves.inscrits || d.eleves.total }}</strong> ·
+                Présents : <strong>{{ d.eleves.total }}</strong> ·
                 Abandons : <strong style="color:#ef4444">{{ d.eleves.abandonnes || 0 }}</strong> ·
                 Transférés : <strong style="color:#f59e0b">{{ d.eleves.transferes || 0 }}</strong>
               </div>
@@ -354,9 +411,9 @@ import { ApiService } from '../../core/services/api.service';
             <div class="alerte-legende">
               <div class="al-intro">{{ 'dashboard.legende_intro' | translate }}</div>
               <div class="al-tags">
-                <span><p-tag value="ATTENTION" severity="warn" /> {{ 'dashboard.legende_attention' | translate }}</span>
-                <span><p-tag value="URGENT" severity="danger" /> {{ 'dashboard.legende_urgent' | translate }}</span>
-                <span><p-tag value="CRITIQUE" severity="danger" /> {{ 'dashboard.legende_critique' | translate }}</span>
+                <span><span class="tag-alerte tag-alerte-CRITIQUE">CRITIQUE</span> {{ 'dashboard.legende_critique' | translate }}</span>
+                <span><span class="tag-alerte tag-alerte-URGENT">URGENT</span> {{ 'dashboard.legende_urgent' | translate }}</span>
+                <span><span class="tag-alerte tag-alerte-ATTENTION">ATTENTION</span> {{ 'dashboard.legende_attention' | translate }}</span>
               </div>
               <div class="al-note">ℹ️ {{ 'dashboard.legende_reliquat' | translate }}</div>
               <div class="al-note">💰 {{ 'dashboard.legende_montant' | translate }}</div>
@@ -375,7 +432,7 @@ import { ApiService } from '../../core/services/api.service';
                 </tr>
               </ng-template>
               <ng-template pTemplate="body" let-e>
-                <tr>
+                <tr [class]="'ligne-' + e.niveau_alerte">
                   <td class="bold">{{ e.nom_complet }}</td>
                   <td>{{ e.section }}</td>
                   <td class="mono danger">{{ e.montant_arriere | number:'1.0-0' }} FCFA</td>
@@ -387,7 +444,7 @@ import { ApiService } from '../../core/services/api.service';
                     } @else { — }
                   </td>
                   <td>{{ e.mois_arrieres?.join(', ') || '—' }}</td>
-                  <td><p-tag [value]="e.niveau_alerte" [severity]="alerteSeverity(e.niveau_alerte)" /></td>
+                  <td><span [class]="'tag-alerte tag-alerte-' + e.niveau_alerte">{{ e.niveau_alerte }}</span></td>
                   <td class="mono">{{ e.telephone }}</td>
                 </tr>
               </ng-template>
@@ -441,9 +498,43 @@ import { ApiService } from '../../core/services/api.service';
     .alert-num  { font-size:32px; font-weight:700; font-family:monospace; min-width:48px; }
     .alert-title { font-size:13px; font-weight:600; }
     .alert-sub   { font-size:11px; color:var(--text-3); }
-    .critique .alert-num { color:#dc2626; }
-    .urgent   .alert-num { color:#ef4444; }
-    .attention .alert-num { color:#f59e0b; }
+    /* Rouge = critique, orange = urgent, jaune = attention. */
+    .alert-row.critique, .alert-row.urgent, .alert-row.attention { border-left:4px solid; padding-left:12px; border-radius:4px; margin-bottom:4px; }
+    .alert-row.critique  { border-left-color:#dc2626; background:rgba(220,38,38,.08); }
+    .alert-row.urgent    { border-left-color:#ea580c; background:rgba(234,88,12,.08); }
+    .alert-row.attention { border-left-color:#eab308; background:rgba(234,179,8,.10); }
+    .critique .alert-num  { color:#dc2626; }
+    .urgent   .alert-num  { color:#ea580c; }
+    .attention .alert-num { color:#ca8a04; }
+    .critique .alert-title  { color:#dc2626; }
+    .urgent   .alert-title  { color:#ea580c; }
+    .attention .alert-title { color:#ca8a04; }
+    ::ng-deep .ligne-CRITIQUE > td:first-child  { box-shadow:inset 4px 0 0 #dc2626; }
+    ::ng-deep .ligne-URGENT > td:first-child    { box-shadow:inset 4px 0 0 #ea580c; }
+    ::ng-deep .ligne-ATTENTION > td:first-child { box-shadow:inset 4px 0 0 #eab308; }
+
+    .exercice-bar { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+    .live { display:inline-flex; align-items:center; gap:6px; color:var(--text-3); font-size:11px; }
+    .live-dot { width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 0 0 rgba(16,185,129,.6); animation:pulse 2s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)} 70%{box-shadow:0 0 0 8px rgba(16,185,129,0)} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0)} }
+    .btn-refresh { border:1px solid var(--border); background:var(--surface); color:var(--text-2); border-radius:6px; cursor:pointer; padding:1px 7px; font-size:13px; }
+
+    .pilotage { background:var(--surface); border:1px solid var(--border); border-top:3px solid #0099ff; border-radius:12px; padding:14px 18px; }
+    .pil-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+    .pil-titre { margin:0; font-size:15px; color:var(--text); }
+    .pil-jours { font-size:12px; color:var(--text-3); }
+    .pil-lien { margin-left:auto; font-size:12px; color:#0099ff; text-decoration:none; font-weight:600; }
+    .pil-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; }
+    .pil-bloc { background:var(--surface-2); border-radius:8px; padding:10px 12px; }
+    .pil-l { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-3); margin-bottom:6px; }
+    .pil-ligne { display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--text-2); padding:2px 0; }
+    .pil-ligne strong { font-variant-numeric:tabular-nums; color:var(--text); }
+    .pil-barre { height:6px; background:var(--surface); border-radius:3px; overflow:hidden; margin:6px 0 4px; }
+    .pil-fill { height:100%; background:#10b981; }
+    .pil-note { font-size:11px; color:var(--text-3); margin-top:4px; line-height:1.5; }
+    .txt-rouge  { color:#dc2626 !important; }
+    .txt-vert   { color:#059669 !important; }
+    .txt-orange { color:#ea580c !important; }
     .reliquat .alert-num { color:#0099ff; }
     .ok        .alert-num { color:#10b981; }
     .total-eleves { font-size:12px; color:var(--text-3); margin-top:12px; padding-top:8px; border-top:1px solid var(--border); }
@@ -469,7 +560,7 @@ import { ApiService } from '../../core/services/api.service';
     ::ng-deep .p-datatable .p-datatable-tbody > tr:hover { background:var(--surface-hover) !important; }
   `]
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   data             = signal<DashboardKPI | null>(null);
   saData           = signal<DashboardSuperAdmin | null>(null);
   alertes          = signal<any[]>([]);
@@ -489,31 +580,63 @@ export class DashboardComponent implements OnInit {
     return { ORPHELIN: 'Orphelin', HANDICAP: 'Handicap', FAMILLE_DEMUNIE: 'Famille démunie', AUTRE: 'Autre' }[cat] || cat;
   }
 
-  alerteSeverity(niveau: string): 'danger' | 'warn' | 'secondary' {
-    if (niveau === 'CRITIQUE' || niveau === 'URGENT') return 'danger';
-    if (niveau === 'ATTENTION') return 'warn';
-    return 'secondary';  // OK : reliquat sans arriéré
+  /** Une phrase de décision tirée des chiffres du mois — jamais un chiffre neuf. */
+  conseilPilotage(d: DashboardKPI): string {
+    const p = d.pilotage;
+    if (!p) return '';
+    const besoin = p.charges_a_payer - d.kpis.tresorerie;
+    if (besoin > 0) {
+      return `Trésorerie insuffisante pour les charges restantes : il manque ${Math.round(besoin).toLocaleString('fr-FR')} FCFA — prioriser les relances.`;
+    }
+    if (p.nb_impayes > 0 && p.periode !== 'A_VENIR') {
+      return `Relancer en priorité les ${p.nb_impayes} famille(s) sans paiement ce mois (liste dans le cahier).`;
+    }
+    if (p.nb_depassements > 0) {
+      return 'Des postes dépassent leur budget : vérifier les dépenses avant tout nouvel engagement.';
+    }
+    return 'Situation du mois maîtrisée.';
+  }
+
+  private timer?: ReturnType<typeof setInterval>;
+  private surFocus = () => { if (document.visibilityState === 'visible') this.rafraichir(); };
+
+  ngOnDestroy() {
+    if (this.timer) clearInterval(this.timer);
+    document.removeEventListener('visibilitychange', this.surFocus);
+  }
+
+  /** Relit tout ce qui bouge : KPI, pilotage, alertes, trésorerie. */
+  rafraichir() {
+    this.dashService.getKPIs().subscribe({
+      next: res => this.data.set(res.exercice ? res : null),
+      error: err => console.error('KPI error', err)
+    });
+    this.dashService.getAlertes().subscribe({
+      next:  res => this.alertes.set(res),
+      error: err => console.error('Alertes error', err)
+    });
+    this.dashService.getTresorerieCanaux().subscribe({
+      next:  res => this.tresoCanaux.set(res),
+      error: () => {}
+    });
   }
 
   ngOnInit() {
+    if (!this.isSuperAdmin()) {
+      // Temps réel : actualisation chaque minute tant que l'onglet est visible,
+      // et dès qu'on revient sur l'onglet après avoir saisi ailleurs.
+      this.timer = setInterval(() => {
+        if (document.visibilityState === 'visible') this.rafraichir();
+      }, 60_000);
+      document.addEventListener('visibilitychange', this.surFocus);
+    }
     if (this.isSuperAdmin()) {
       this.dashService.getSuperAdmin().subscribe({
         next: res => this.saData.set(res),
         error: err => console.error('SuperAdmin dashboard error', err)
       });
     } else {
-      this.dashService.getKPIs().subscribe({
-        next: res => this.data.set(res.exercice ? res : null),
-        error: err => console.error('KPI error', err)
-      });
-      this.dashService.getAlertes().subscribe({
-        next:  res => this.alertes.set(res),
-        error: err => console.error('Alertes error', err)
-      });
-      this.dashService.getTresorerieCanaux().subscribe({
-        next:  res => this.tresoCanaux.set(res),
-        error: () => {}
-      });
+      this.rafraichir();
       this.dashService.getAuditLog().subscribe({
         next:  res => this.auditLog.set(res),
         error: () => {}
