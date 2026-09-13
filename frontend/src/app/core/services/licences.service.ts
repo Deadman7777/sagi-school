@@ -34,6 +34,10 @@ export class LicencesService {
     return this.api.post<any>(`/licences/${id}/renouveler/`, { mois });
   }
 
+  /** Toutes les demandes reçues (super admin), y compris celles dont le courriel a échoué. */
+  getDemandesRenouvellement() { return this.api.get<any[]>('/licences/demandes-renouvellement/'); }
+  traiterDemande(id: string)  { return this.api.post<any>(`/licences/demandes-renouvellement/${id}/traiter/`, {}); }
+
   demanderRenouvellement(id: string, message: string) {
     return this.api.post<any>(`/licences/${id}/demander_renouvellement/`, { message });
   }

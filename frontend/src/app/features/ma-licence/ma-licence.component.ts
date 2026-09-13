@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LicencesService } from '../../core/services/licences.service';
 import { AuthService } from '../../core/services/auth.service';
+import { LicenceCompteurService } from '../../core/services/licence-compteur.service';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
@@ -12,6 +13,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 /** Coordonnées support HADY GESMAN — à modifier ici uniquement. */
 const SUPPORT_EMAIL  = 'hadygesman@gmail.com';
 const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
+/** Seul numéro associé à un compte WhatsApp. */
+const SUPPORT_WHATSAPP = '221784297830';
 
 @Component({
   selector: 'app-ma-licence',
@@ -40,9 +43,29 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
           <div class="statut-type">{{ 'ma_licence.plan' | translate }} {{ licence().type }}</div>
         </div>
         <div class="statut-jours" [style.color]="joursColor()">
-          <div class="jours-val">{{ licence().jours_restants }}</div>
+          <div class="jours-val">{{ jours() }}</div>
           <div class="jours-label">{{ 'ma_licence.jours_restants' | translate }}</div>
         </div>
+      </div>
+
+      <!-- Rappel de paiement de l'abonnement : compte à rebours en temps réel. -->
+      <div class="compteur" [class]="'compteur cpt-' + compteur.niveau()" role="status">
+        <div class="cpt-jours">
+          @if (compteur.niveau() === 'expiree') { <span class="cpt-val">Expirée</span> }
+          @else { <span class="cpt-val">J-{{ jours() }}</span> }
+        </div>
+        <div class="cpt-texte">
+          @switch (compteur.niveau()) {
+            @case ('expiree')  { <strong>Votre abonnement est expiré.</strong> L'accès aux modules sera coupé après 7 jours de grâce. }
+            @case ('critique') { <strong>Plus que {{ jours() }} jour(s) :</strong> renouvelez maintenant pour éviter toute interruption. }
+            @case ('urgent')   { <strong>Échéance dans {{ jours() }} jours.</strong> Pensez à préparer le règlement de l'abonnement. }
+            @case ('attention'){ <strong>Échéance dans {{ jours() }} jours.</strong> Le renouvellement peut être demandé dès aujourd'hui. }
+            @default           { Abonnement à jour — échéance le <strong>{{ licence().date_fin }}</strong>. }
+          }
+        </div>
+        <p-button [label]="'ma_licence.demander_renouv' | translate" icon="pi pi-refresh"
+                  [severity]="compteur.niveau() === 'ok' ? 'secondary' : 'warn'"
+                  (onClick)="demanderRenouvellement()" />
       </div>
 
       <!-- Détails -->
@@ -70,7 +93,7 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
         <div class="pc-header">
           <span>{{ 'ma_licence.duree_licence' | translate }}</span>
           <span class="mono" [style.color]="joursColor()">
-            {{ licence().jours_restants }} {{ 'ma_licence.jours_restants' | translate }}
+            {{ jours() }} {{ 'ma_licence.jours_restants' | translate }}
           </span>
         </div>
         <div class="progress-track">
@@ -153,6 +176,28 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
       </ng-template>
     </p-dialog>
 
+    <!-- Résultat d'une demande qui n'a pas pu être transmise automatiquement :
+         on ne prétend jamais « envoyé » ; on donne des moyens qui marchent. -->
+    <p-dialog header="📨 Transmettre votre demande" [(visible)]="secoursVisible" [modal]="true"
+              [style]="{ width: '480px', maxWidth: '95vw' }" [draggable]="false">
+      <p class="rd-info">
+        Votre demande est <strong>enregistrée</strong>, mais elle n'a pas pu être transmise
+        automatiquement à HADY GESMAN (connexion ou messagerie indisponible).
+        Envoyez-la en un clic :
+      </p>
+      <div class="secours">
+        <a class="sec-btn sec-wa" [href]="lienWhatsapp()" target="_blank" rel="noopener">💬 Envoyer par WhatsApp</a>
+        @for (tel of supportPhones; track tel.href) {
+          <a class="sec-btn" [href]="tel.href">📞 Appeler le {{ tel.label }}</a>
+        }
+        <button type="button" class="sec-btn" (click)="copierDemande()">📋 Copier le message</button>
+        <a class="sec-btn" [href]="lienMail()">✉️ Ouvrir ma messagerie</a>
+      </div>
+      @if (erreurEnvoi()) {
+        <details class="sec-detail"><summary>Détail technique</summary>{{ erreurEnvoi() }}</details>
+      }
+    </p-dialog>
+
     <!-- Aucune licence -->
     <div class="empty-state" *ngIf="!licence() && !loading()">
       <div style="font-size:48px">🔑</div>
@@ -209,6 +254,23 @@ const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
     .rd-textarea { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; }
     .rd-textarea:focus { outline:none; border-color:#3b82f6; }
     .rd-tel   { display:flex; align-items:center; gap:14px; font-size:13px; margin-top:14px; }
+    .compteur { display:flex; align-items:center; gap:16px; flex-wrap:wrap; border:1px solid; border-radius:12px; padding:14px 18px; margin-bottom:16px; }
+    .cpt-jours { min-width:90px; text-align:center; }
+    .cpt-val  { font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .cpt-texte { flex:1 1 220px; font-size:13px; color:var(--text); line-height:1.5; }
+    .cpt-ok        { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.4); }
+    .cpt-ok .cpt-val { color:#059669; }
+    .cpt-attention { background:rgba(234,179,8,.12); border-color:#ca8a04; }
+    .cpt-attention .cpt-val { color:#a16207; }
+    .cpt-urgent    { background:rgba(234,88,12,.12); border-color:#ea580c; }
+    .cpt-urgent .cpt-val { color:#c2410c; }
+    .cpt-critique, .cpt-expiree { background:rgba(220,38,38,.12); border-color:#dc2626; }
+    .cpt-critique .cpt-val, .cpt-expiree .cpt-val { color:#dc2626; }
+    .secours  { display:flex; flex-direction:column; gap:8px; }
+    .sec-btn  { display:block; text-align:left; padding:10px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:14px; text-decoration:none; cursor:pointer; font-family:inherit; }
+    .sec-btn:hover, .sec-btn:focus-visible { border-color:#00d4aa; outline:none; }
+    .sec-wa   { background:#128c3e; border-color:#128c3e; color:#fff; font-weight:600; }
+    .sec-detail { margin-top:12px; font-size:11px; color:var(--text-3); word-break:break-word; }
   `]
 })
 export class MaLicenceComponent implements OnInit {
@@ -218,6 +280,17 @@ export class MaLicenceComponent implements OnInit {
   renouvDialogVisible = false;
   messageRenouv       = '';
   envoiEnCours        = signal(false);
+
+  compteur = inject(LicenceCompteurService);
+  /** Jours restants en temps réel (même calcul que le badge de la barre du haut). */
+  jours(): number {
+    const j = this.compteur.joursRestants();
+    return j === null ? (this.licence()?.jours_restants || 0) : Math.max(j, 0);
+  }
+
+  secoursVisible = false;
+  erreurEnvoi    = signal('');
+  private texteDemande = { sujet: '', corps: '' };
 
   supportEmail  = SUPPORT_EMAIL;
   supportPhones = SUPPORT_PHONES.map(t => ({ label: t, href: 'tel:' + t.replace(/\s/g, '') }));
@@ -231,6 +304,7 @@ export class MaLicenceComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.compteur.demarrer();
     this.licencesService.getLicences().subscribe({
       next: res => {
         const licences = res.results || res;
@@ -249,12 +323,12 @@ export class MaLicenceComponent implements OnInit {
   }
 
   joursColor(): string {
-    const j = this.licence()?.jours_restants || 0;
+    const j = this.jours();
     return j <= 7 ? '#ef4444' : j <= 30 ? '#f59e0b' : '#10b981';
   }
 
   progressPct(): number {
-    const j = this.licence()?.jours_restants || 0;
+    const j = this.jours();
     return Math.min(Math.round((j / 365) * 100), 100);
   }
 
@@ -270,40 +344,54 @@ export class MaLicenceComponent implements OnInit {
       next: res => {
         this.envoiEnCours.set(false);
         this.renouvDialogVisible = false;
-        if (res.envoye) {
+        if (res.recue ?? res.envoye) {
           this.msg.add({
-            severity: 'success',
+            severity: 'success', life: 7000,
             summary:  this.translate.instant('ma_licence.demande_envoyee'),
-            detail:   this.translate.instant('ma_licence.contactera_24h')
+            detail:   this.translate.instant('ma_licence.contactera_24h'),
           });
+          this.messageRenouv = '';
         } else {
-          this.ouvrirMailto(res.sujet, res.corps);
+          this.ouvrirSecours(res.sujet, res.corps, res.erreur);
         }
       },
-      error: () => {
+      error: err => {
         this.envoiEnCours.set(false);
         this.renouvDialogVisible = false;
-        this.ouvrirMailto();
-      }
+        this.ouvrirSecours(undefined, undefined, err?.message || 'Serveur injoignable');
+      },
     });
   }
 
-  /** SMTP indisponible (mode local) : ouvre le client mail, message pré-rempli. */
-  private ouvrirMailto(sujet?: string, corps?: string) {
+  /** La demande n'a pas atteint HADY GESMAN : proposer des canaux qui marchent. */
+  private ouvrirSecours(sujet?: string, corps?: string, erreur?: string) {
     const lic = this.licence();
-    const s = sujet || `[SAGI SCHOOL] Demande de renouvellement — ${lic?.type || ''}`;
-    const c = corps || [
-      `Licence   : ${lic?.type} — ${lic?.cle_licence}`,
-      `Expire le : ${lic?.date_fin} (${lic?.jours_restants} jours restants)`,
-      '',
-      this.messageRenouv.trim(),
-    ].join('\n');
-    window.location.href =
-      `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(s)}&body=${encodeURIComponent(c)}`;
-    this.msg.add({
-      severity: 'info',
-      summary:  this.translate.instant('ma_licence.messagerie_titre'),
-      detail:   this.translate.instant('ma_licence.messagerie_detail')
-    });
+    this.texteDemande = {
+      sujet: sujet || `[SAGI SCHOOL] Demande de renouvellement — ${lic?.type || ''}`,
+      corps: corps || [
+        'Demande de renouvellement de licence SAGI SCHOOL',
+        `Licence   : ${lic?.type} — ${lic?.cle_licence}`,
+        `Expire le : ${lic?.date_fin} (${this.jours()} jours restants)`,
+        '', this.messageRenouv.trim(),
+      ].join('\n'),
+    };
+    this.erreurEnvoi.set(erreur || '');
+    this.secoursVisible = true;
+  }
+
+  lienWhatsapp(): string {
+    return `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(this.texteDemande.corps)}`;
+  }
+
+  lienMail(): string {
+    return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(this.texteDemande.sujet)}`
+         + `&body=${encodeURIComponent(this.texteDemande.corps)}`;
+  }
+
+  copierDemande() {
+    navigator.clipboard?.writeText(this.texteDemande.corps).then(
+      () => this.msg.add({ severity: 'info', summary: 'Copié', detail: 'Collez le message dans WhatsApp ou un e-mail.' }),
+      () => this.msg.add({ severity: 'warn', summary: 'Copie impossible', detail: 'Sélectionnez le texte manuellement.' }),
+    );
   }
 }

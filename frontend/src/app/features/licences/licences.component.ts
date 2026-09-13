@@ -83,6 +83,33 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       </div>
     </div>
 
+    <!-- Demandes de renouvellement reçues — enregistrées même quand le
+         courriel n'est pas parti : c'est ici qu'on ne les rate plus. -->
+    @if (demandesEnAttente().length) {
+      <div class="demandes-card">
+        <div class="ae-title">📨 Demandes de renouvellement à traiter ({{ demandesEnAttente().length }})</div>
+        @for (d of demandesEnAttente(); track d.id) {
+          <div class="dem-row">
+            <div class="dem-main">
+              <strong>{{ d.ecole_nom }}</strong> · {{ d.type_licence }} · expire le {{ d.date_fin || '—' }}
+              <div class="dem-sub">
+                {{ d.created_at | date:'dd/MM/yyyy HH:mm' }} — {{ d.demandeur || '—' }}
+                @if (d.email_demandeur) { · <a [href]="'mailto:' + d.email_demandeur">{{ d.email_demandeur }}</a> }
+                @if (d.telephone) { · <a [href]="'tel:' + d.telephone">{{ d.telephone }}</a> }
+                · {{ d.origine_libelle }}
+              </div>
+              @if (d.message) { <div class="dem-msg">« {{ d.message }} »</div> }
+              @if (!d.courriel_envoye) {
+                <div class="dem-err">⚠️ Courriel non parti{{ d.erreur ? ' : ' + d.erreur : '' }}</div>
+              }
+            </div>
+            <p-button label="Traitée" icon="pi pi-check" size="small" severity="success" [outlined]="true"
+                      (onClick)="marquerTraitee(d)" />
+          </div>
+        }
+      </div>
+    }
+
     <!-- Table licences -->
     <div class="table-card">
       <p-table [value]="licences()" [loading]="loading()"
@@ -380,6 +407,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     </p-dialog>
   `,
   styles: [`
+    .demandes-card { background:rgba(0,153,255,.06); border:1px solid rgba(0,153,255,.35); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
+    .dem-row  { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; padding:10px 0; border-top:1px solid var(--border); }
+    .dem-main { font-size:13px; color:var(--text); }
+    .dem-sub  { font-size:12px; color:var(--text-3); margin-top:2px; }
+    .dem-sub a { color:#0099ff; }
+    .dem-msg  { font-size:12px; color:var(--text-2); font-style:italic; margin-top:4px; }
+    .dem-err  { font-size:12px; color:#dc2626; margin-top:4px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
@@ -538,6 +572,19 @@ export class LicencesComponent implements OnInit {
     });
     this.licencesService.getStatsGlobales().subscribe({
       next: res => this.stats.set(res)
+    });
+    this.licencesService.getDemandesRenouvellement().subscribe({
+      next: res => this.demandes.set(res || []),
+      error: () => this.demandes.set([]),
+    });
+  }
+
+  demandes = signal<any[]>([]);
+  demandesEnAttente = () => this.demandes().filter(d => !d.traitee);
+
+  marquerTraitee(d: any) {
+    this.licencesService.traiterDemande(d.id).subscribe({
+      next: () => this.demandes.update(l => l.map(x => x.id === d.id ? { ...x, traitee: true } : x)),
     });
   }
 

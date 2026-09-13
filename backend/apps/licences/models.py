@@ -84,3 +84,47 @@ class Licence(TimeStampedModel):
         payload = f"HG-PRO-{timezone.now().year}-{tenant_rccm}-{token}"
         signature = hashlib.sha256(payload.encode()).hexdigest()[:8].upper()
         return f"{payload}-{signature}"
+
+
+class DemandeRenouvellement(TimeStampedModel):
+    """Demande de renouvellement de licence — enregistrée AVANT tout courriel.
+
+    Suivi Shoumoul (septembre 2026) : « Demander un renouvellement » ne
+    parvenait pas à hadygesman@gmail.com, et personne ne le savait. Le courriel
+    était le seul dépôt et ses échecs étaient avalés en silence ; en local, le
+    repli ouvrait un client de messagerie que le poste n'avait pas.
+
+    Même règle que les demandes de démo du site : la base est la source de
+    vérité, le courriel une commodité. Une demande dont l'envoi échoue reste
+    visible dans l'écran Licences de HADY GESMAN, avec l'erreur.
+    """
+    ORIGINE_CHOICES = [
+        ('CLOUD', 'Application cloud'),
+        ('RELAIS', 'Installation locale (relayée au cloud)'),
+        ('LOCAL', 'Installation locale (non relayée)'),
+    ]
+    tenant        = models.ForeignKey('tenants.Tenant', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='demandes_renouvellement')
+    licence       = models.ForeignKey(Licence, null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='demandes_renouvellement')
+    ecole_nom     = models.CharField(max_length=200)
+    cle_licence   = models.CharField(max_length=100, blank=True, default='')
+    type_licence  = models.CharField(max_length=20, blank=True, default='')
+    date_fin      = models.DateField(null=True, blank=True)
+    demandeur     = models.CharField(max_length=200, blank=True, default='')
+    email_demandeur = models.CharField(max_length=254, blank=True, default='')
+    telephone     = models.CharField(max_length=40, blank=True, default='')
+    message       = models.TextField(blank=True, default='')
+    origine       = models.CharField(max_length=10, choices=ORIGINE_CHOICES, default='CLOUD')
+    courriel_envoye = models.BooleanField(default=False)
+    relayee       = models.BooleanField(default=False)
+    erreur        = models.TextField(blank=True, default='')
+    traitee       = models.BooleanField(default=False)
+    traitee_le    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'demandes_renouvellement'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Renouvellement {self.ecole_nom} — {self.created_at:%d/%m/%Y}"
