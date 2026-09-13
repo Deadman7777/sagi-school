@@ -1,0 +1,166 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Mon cahier de notes mensuel — {{ c.libelle_mois }}{% endblock %}
+{% block content %}
+{% with s=c.synthese t=c.scolarite.totaux ch=c.charges.totaux %}
+
+<table class="kpi-table" cellspacing="0" cellpadding="0">
+  <tr>
+    <td>
+      <div class="kb-label">Devait entrer</div>
+      <div class="kb-val kb-blue">{{ s.attendu|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Est entré</div>
+      <div class="kb-val kb-green">{{ s.encaisse|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Reste à encaisser</div>
+      <div class="kb-val red">{{ s.reste_a_encaisser|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Taux de recouvrement</div>
+      <div class="kb-val kb-teal">{{ t.taux }} %</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="kb-label">Charges budgétées</div>
+      <div class="kb-val kb-blue">{{ ch.prevu|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Charges payées</div>
+      <div class="kb-val kb-green">{{ ch.realise|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Charges à payer</div>
+      <div class="kb-val kb-orange">{{ ch.reste|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Solde constaté du mois</div>
+      <div class="kb-val {% if s.solde_constate < 0 %}red{% else %}kb-green{% endif %}">{{ s.solde_constate|floatformat:"0g" }}</div>
+    </td>
+  </tr>
+</table>
+
+<div style="font-size:10px;color:#374151;margin-bottom:8px">
+  Montants en FCFA. Scolarité : mensualités et services mensuels dus pour {{ c.libelle_mois }}, d'après l'échéancier de chaque élève
+  ({{ t.nb_eleves }} élèves concernés : {{ t.nb_payes }} à jour, {{ t.nb_partiels }} partiels, {{ t.nb_impayes }} non payés{% if t.nb_exoneres %}, {{ t.nb_exoneres }} exonérés{% endif %}).
+  Entrées réelles en caisse pendant le mois, toutes rubriques confondues : {{ c.caisse.entrees|floatformat:"0g" }}.
+</div>
+
+<div class="section-title">Élèves n'ayant pas encore payé ({{ t.nb_impayes }}) et paiements partiels ({{ t.nb_partiels }})</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th style="width:22px">N°</th>
+      <th>Élève</th>
+      <th style="width:80px">Classe</th>
+      <th style="width:85px">Téléphone</th>
+      <th class="text-right" style="width:70px">Dû</th>
+      <th class="text-right" style="width:70px">Payé</th>
+      <th class="text-right" style="width:70px">Reste</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in c.scolarite.impayes %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td class="bold">{{ e.nom_complet }}{% if e.sorti %} (sorti){% endif %}</td>
+      <td>{{ e.classe }}</td>
+      <td>{{ e.telephone }}</td>
+      <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
+      <td class="text-right">0</td>
+      <td class="text-right red bold">{{ e.reste|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+    {% for e in c.scolarite.partiels %}
+    <tr>
+      <td>{{ forloop.counter|add:t.nb_impayes }}</td>
+      <td class="bold">{{ e.nom_complet }} (partiel){% if e.sorti %} (sorti){% endif %}</td>
+      <td>{{ e.classe }}</td>
+      <td>{{ e.telephone }}</td>
+      <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
+      <td class="text-right green">{{ e.paye|floatformat:"0g" }}</td>
+      <td class="text-right red bold">{{ e.reste|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+    {% if not c.scolarite.impayes and not c.scolarite.partiels %}
+    <tr><td colspan="7" class="text-center">Aucun impayé pour ce mois.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<div class="section-title">Élèves à jour pour le mois ({{ t.nb_payes }})</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th style="width:22px">N°</th>
+      <th>Élève</th>
+      <th style="width:80px">Classe</th>
+      <th class="text-right" style="width:80px">Dû</th>
+      <th class="text-right" style="width:80px">Payé</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in c.scolarite.payes %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ e.nom_complet }}</td>
+      <td>{{ e.classe }}</td>
+      <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
+      <td class="text-right green">{{ e.paye|floatformat:"0g" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-center">Aucun élève à jour pour ce mois.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3">TOTAL SCOLARITÉ DU MOIS — attendu {{ t.attendu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ t.encaisse|floatformat:"0g" }}</td>
+      <td class="text-right">reste {{ t.reste|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="section-title">Charges budgétées du mois</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th style="width:50px">Compte</th>
+      <th>Poste</th>
+      <th class="text-right" style="width:75px">Budgété</th>
+      <th class="text-right" style="width:75px">Payé</th>
+      <th class="text-right" style="width:75px">Écart</th>
+      <th style="width:85px">État</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in c.charges.lignes %}
+    <tr>
+      <td>{{ l.no_compte }}</td>
+      <td>{{ l.libelle }}</td>
+      <td class="text-right">{{ l.prevu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ l.realise|floatformat:"0g" }}</td>
+      <td class="text-right {% if l.ecart < 0 %}red{% endif %}">{{ l.ecart|floatformat:"0g" }}</td>
+      <td class="{% if l.etat == 'PAYEE' %}green{% elif l.etat == 'DEPASSEMENT' or l.etat == 'NON_PAYEE' %}red{% else %}bold{% endif %}">
+        {% if l.etat == 'PAYEE' %}Payée{% elif l.etat == 'PARTIELLE' %}Partielle{% elif l.etat == 'NON_PAYEE' %}Non payée{% elif l.etat == 'DEPASSEMENT' %}Dépassement{% else %}Hors prévision{% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="text-center">Aucune charge budgétée pour ce mois.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="2">TOTAL CHARGES</td>
+      <td class="text-right">{{ ch.prevu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ ch.realise|floatformat:"0g" }}</td>
+      <td class="text-right">{{ ch.ecart|floatformat:"0g" }}</td>
+      <td></td>
+    </tr>
+  </tfoot>
+</table>
+
+{% endwith %}
+{% endblock %}

@@ -806,3 +806,67 @@ class ReporterReliquatsView(APIView):
                         f"{rapport['montant_total']:,.0f} FCFA"),
             **rapport,
         })
+
+
+def _cahier_depuis_requete(request):
+    """Résout exercice + mois demandés et construit le cahier. Rend (cahier, erreur)."""
+    from apps.comptabilite.views import get_exercice
+    from .cahier_mensuel import cahier_mensuel, mois_de_l_exercice, mois_par_defaut
+
+    tenant = get_tenant(request)
+    exercice = get_exercice(tenant, request)
+    if not exercice:
+        return None, Response({'error': 'Aucun exercice actif.'}, status=404)
+    try:
+        annee = int(request.query_params.get('annee') or 0)
+        mois = int(request.query_params.get('mois') or 0)
+    except ValueError:
+        return None, Response({'error': 'annee et mois doivent être des entiers.'}, status=400)
+    if not (annee and mois):
+        annee, mois = mois_par_defaut(exercice)
+    if (annee, mois) not in mois_de_l_exercice(exercice):
+        return None, Response(
+            {'error': f"{mois:02d}/{annee} n'appartient pas à l'exercice {exercice.annee_scolaire}."},
+            status=400)
+    return cahier_mensuel(tenant, exercice, annee, mois), None
+
+
+class CahierMensuelView(APIView):
+    """GET /api/paiements/cahier-mensuel/?annee=2026&mois=9[&exercice=<id>]"""
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        cahier, erreur = _cahier_depuis_requete(request)
+        return erreur or Response(cahier)
+
+
+class CahierMensuelPdfView(APIView):
+    """Le même cahier, en PDF — exactement les mêmes chiffres que l'écran."""
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        cahier, erreur = _cahier_depuis_requete(request)
+        if erreur:
+            return erreur
+        tenant = get_tenant(request)
+        exercice = Exercice.objects.get(id=cahier['exercice_id'])
+        html = render_to_string('pdf/cahier_mensuel.html', {
+            'tenant': tenant, 'exercice': exercice, 'c': cahier,
+            'date_edition': timezone.localtime(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        resp['Content-Disposition'] = (
+            f'attachment; filename="cahier_mensuel_{cahier["annee"]}_{cahier["mois"]:02d}.pdf"')
+        return resp

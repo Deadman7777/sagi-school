@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PaiementsService } from '../../core/services/paiements.service';
@@ -21,6 +22,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ImportChargesDialogComponent } from './import-charges-dialog.component';
+import { CahierMensuelComponent } from './cahier-mensuel.component';
 
 @Component({
   selector: 'app-paiements',
@@ -28,7 +30,7 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
             InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, PiecesJustificativesComponent,
-            ImportChargesDialogComponent],
+            ImportChargesDialogComponent, CahierMensuelComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -52,7 +54,37 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
               (click)="onglet.set('charges'); chargerCharges()">
         💸 Charges
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'cahier'"
+              (click)="onglet.set('cahier')">
+        📒 Mon cahier mensuel
+        @if (rappelMois(); as r) {
+          @if (r.nb_impayes > 0) { <span class="tab-badge">{{ r.nb_impayes }}</span> }
+        }
+      </button>
     </div>
+
+    <!-- Rappel visuel permanent : le reste à faire du mois, visible depuis
+         n'importe quel onglet. Un clic ouvre le cahier. -->
+    @if (rappelMois(); as r) {
+      @if (onglet() !== 'cahier' && (r.nb_impayes + r.nb_partiels + r.nb_charges_non_payees) > 0) {
+        <button type="button" class="rappel-mois" (click)="onglet.set('cahier')">
+          <span aria-hidden="true">🔔</span>
+          <span><strong>{{ r.libelle_mois }}</strong> :
+            {{ r.nb_impayes }} élève(s) n'ont pas encore payé, {{ r.nb_partiels }} en partie —
+            <strong>{{ r.reste | number:'1.0-0' }} FCFA</strong> restent à encaisser
+            @if (r.nb_charges_non_payees > 0) {
+              · {{ r.nb_charges_non_payees }} charge(s) budgétée(s) à régler ({{ r.charges_a_payer | number:'1.0-0' }} FCFA)
+            }
+            @if (r.periode === 'EN_COURS') { · J-{{ r.jours_restants }} }
+          </span>
+          <span class="rappel-lien">Ouvrir mon cahier →</span>
+        </button>
+      }
+    }
+
+    @if (onglet() === 'cahier') {
+      <app-cahier-mensuel />
+    }
 
     <!-- === ONGLET PAIEMENTS === -->
     <ng-container *ngIf="onglet() === 'paiements'">
@@ -1130,6 +1162,12 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
     .tab-btn  { padding:8px 18px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text-3); cursor:pointer; font-size:13px; transition:all 0.15s; }
     .tab-btn:hover  { border-color:#00d4aa; color:var(--text); }
     .tab-btn.active { background:rgba(0,212,170,0.1); border-color:#00d4aa; color:#00d4aa; font-weight:600; }
+    .tab-badge { display:inline-block; min-width:18px; padding:0 5px; margin-left:4px; border-radius:9px; background:#dc2626; color:#fff; font-size:11px; font-weight:700; }
+    .rappel-mois { display:flex; gap:10px; align-items:center; flex-wrap:wrap; width:100%; text-align:left; cursor:pointer;
+                   background:rgba(234,179,8,.12); border:1px solid #ca8a04; border-radius:10px; padding:10px 14px;
+                   margin-bottom:14px; font-size:13px; color:var(--text); }
+    .rappel-mois:hover, .rappel-mois:focus-visible { background:rgba(234,179,8,.2); outline:none; }
+    .rappel-lien { margin-left:auto; color:#0099ff; font-weight:600; white-space:nowrap; }
     .danger { color:#ef4444; }
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .full { grid-column:1/-1; }
@@ -1148,6 +1186,11 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
 })
 export class PaiementsComponent implements OnInit {
   onglet = signal('paiements');
+  private route = inject(ActivatedRoute);
+  /** Synthèse du mois en cours pour le rappel visuel — même source que le cahier. */
+  rappelMois = signal<{ libelle_mois: string; periode: string; jours_restants: number;
+                        nb_impayes: number; nb_partiels: number; reste: number;
+                        nb_charges_non_payees: number; charges_a_payer: number } | null>(null);
 
   // ── Paiements scolarité ─────────────────────────────────────────────────────
   paiements         = signal<any[]>([]);
@@ -1278,8 +1321,12 @@ export class PaiementsComponent implements OnInit {
       { label: this.translate.instant('paiements.virement'),     value: 'VIREMENT' },
       { label: this.translate.instant('paiements.cheque'),       value: 'CHEQUE' },
     ];
+    // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
+    const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
+    if (ongletDemande === 'cahier' || ongletDemande === 'charges') this.onglet.set(ongletDemande);
     this.chargerPaiements();
     this.chargerStats();
+    this.chargerRappelMois();
     this.chargerExercice();
     this.chargerPlanCharges();
     this.chargerOrganismes();
@@ -1928,6 +1975,19 @@ export class PaiementsComponent implements OnInit {
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le reçu.' }),
+    });
+  }
+
+  chargerRappelMois() {
+    this.paiementsService.getCahierMensuel().subscribe({
+      next: (c: any) => this.rappelMois.set({
+        libelle_mois: c.libelle_mois, periode: c.periode, jours_restants: c.jours_restants,
+        nb_impayes: c.scolarite.totaux.nb_impayes, nb_partiels: c.scolarite.totaux.nb_partiels,
+        reste: c.synthese.reste_a_encaisser,
+        nb_charges_non_payees: c.charges.totaux.nb_non_payees,
+        charges_a_payer: c.synthese.charges_a_payer,
+      }),
+      error: () => this.rappelMois.set(null),
     });
   }
 

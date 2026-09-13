@@ -1669,9 +1669,13 @@ class SuiviMensuelView(APIView):
         # `precharger` : l'échéancier de chaque élève est construit plus bas pour
         # la prévision mensuelle. Sans lui, c'est plusieurs requêtes par fiche —
         # une école de 500 élèves écroulerait la page.
-        from .echeancier import construire_echeancier, precharger
+        from .echeancier import construire_echeancier, lignes_retenues, precharger
+        # Présents ET sortants : un enfant parti en mars devait janvier et
+        # février, la prévision mensuelle doit les compter. Les sortants ne
+        # comptent que pour cette prévision (voir `lignes_retenues`) — ni dans
+        # l'effectif, ni dans les sections, ni dans les créances de l'année.
         eleves_qs = precharger(Eleve.objects.filter(
-            tenant=tenant, exercice=exercice, statut='INSCRIT'))
+            tenant=tenant, exercice=exercice, fiche_creance=False))
 
         # Paiements par élève et par section en 2 requêtes DB au lieu de boucles Python
         _pmt_sum = (
@@ -1707,16 +1711,18 @@ class SuiviMensuelView(APIView):
         nb_dus_mois  = defaultdict(int)
 
         for e in eleves_qs:
-            att  = float(e.total_attendu)
-            paye = pmt_eleve.get(e.id, 0.0)
-            snom = e.section.nom if e.section else '—'
-
-            for ligne in construire_echeancier(e)['lignes']:
+            for ligne in lignes_retenues(e, construire_echeancier(e)['lignes']):
                 cle = (ligne['annee'], ligne['mois'])
                 prevu_mois[cle] += ligne['du']
                 reste_mois[cle] += ligne['reste']
                 if ligne['du'] > 0:
                     nb_dus_mois[cle] += 1
+
+            if e.statut in STATUTS_SORTIE:
+                continue
+            att  = float(e.total_attendu)
+            paye = pmt_eleve.get(e.id, 0.0)
+            snom = e.section.nom if e.section else '—'
 
             total_attendu += att
             nb_eleves     += 1

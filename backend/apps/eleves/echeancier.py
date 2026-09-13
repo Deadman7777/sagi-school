@@ -412,6 +412,25 @@ def construire_echeancier(eleve, today=None):
     }
 
 
+def lignes_retenues(eleve, lignes):
+    """Les mois qu'on attend réellement de cet élève.
+
+    Un élève présent : tous ses mois facturés. Un élève SORTI (abandon,
+    transfert, diplôme) : seulement ceux déjà exigibles le jour de son départ —
+    un enfant parti en mars devait janvier et février, pas avril.
+
+    Partagé par le suivi mensuel et le cahier mensuel : l'un annoncerait sinon
+    une scolarité attendue que l'autre ne réclame pas.
+    """
+    from .parcours import STATUTS_SORTIE
+
+    if eleve.statut not in STATUTS_SORTIE:
+        return lignes
+    if not eleve.date_sortie:
+        return []
+    return [l for l in lignes if l['exigible_le'] <= eleve.date_sortie]
+
+
 # ── Alerte de paiement ────────────────────────────────────────────────────
 # Seuil en francs : sous 1 FCFA, c'est un arrondi, pas une dette. Sans lui, un
 # centime résiduel ferait apparaître une famille soldée dans la liste d'appels.

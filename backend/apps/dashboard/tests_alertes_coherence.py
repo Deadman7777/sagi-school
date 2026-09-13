@@ -260,12 +260,15 @@ class PerimetreCompteursTest(APITestCase):
         self.assertEqual(en_alerte, len(self._liste()))
         self.assertEqual(en_alerte, 2)
 
-    def test_l_effectif_total_compte_toujours_tout_le_monde(self):
-        """Restreindre les alertes ne doit pas amputer l'effectif."""
+    def test_l_effectif_compte_les_presents_et_les_abandons_a_part(self):
+        """Suivi Shoumoul, septembre 2026 : l'effectif comptait les abandons
+        alors que le module Élèves les avait déjà retirés. L'effectif est celui
+        des présents ; les abandons ont leur propre compteur."""
         self._eleve('Présent')
         self._eleve('Parti', statut='ABANDONNE')
 
-        self.assertEqual(self._kpis()['total'], 2)
+        self.assertEqual(self._kpis()['total'], 1)
+        self.assertEqual(self._kpis()['abandonnes'], 1)
 
 
 class SortieTest(APITestCase):

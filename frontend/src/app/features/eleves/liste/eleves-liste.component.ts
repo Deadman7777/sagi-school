@@ -200,11 +200,11 @@ const MOIS_ANNEE = [
         </button>
         @if (legendeVisible) {
           <div class="aide-corps">
-            <span><p-tag value="CRITIQUE" severity="danger" /> {{ 'eleves.alerte_critique' | translate }}</span>
-            <span><p-tag value="URGENT" severity="danger" /> {{ 'eleves.alerte_urgent' | translate }}</span>
-            <span><p-tag value="ATTENTION" severity="warn" /> {{ 'eleves.alerte_attention' | translate }}</span>
-            <span><p-tag value="OK" severity="success" /> {{ 'eleves.alerte_ok' | translate }}</span>
-            <span><p-tag value="A JOUR" severity="success" /> {{ 'eleves.alerte_a_jour' | translate }}</span>
+            <span><span class="tag-alerte tag-alerte-CRITIQUE">CRITIQUE</span> {{ 'eleves.alerte_critique' | translate }}</span>
+            <span><span class="tag-alerte tag-alerte-URGENT">URGENT</span> {{ 'eleves.alerte_urgent' | translate }}</span>
+            <span><span class="tag-alerte tag-alerte-ATTENTION">ATTENTION</span> {{ 'eleves.alerte_attention' | translate }}</span>
+            <span><span class="tag-alerte tag-alerte-OK">OK</span> {{ 'eleves.alerte_ok' | translate }}</span>
+            <span><span class="tag-alerte tag-alerte-A_JOUR">A JOUR</span> {{ 'eleves.alerte_a_jour' | translate }}</span>
           </div>
         }
       </div>
@@ -286,8 +286,7 @@ const MOIS_ANNEE = [
                 }
               </td>
               <td>
-                <p-tag [value]="alerteLabel(eleve.niveau_alerte)"
-                       [severity]="alerteSeverity(eleve.niveau_alerte)" />
+                <span [class]="'tag-alerte tag-alerte-' + eleve.niveau_alerte">{{ alerteLabel(eleve.niveau_alerte) }}</span>
               </td>
               <td>
                 <div class="btn-row">
@@ -651,8 +650,7 @@ const MOIS_ANNEE = [
                 {{ e.reste_a_payer | number:'1.0-0' }} FCFA
               </td>
               <td>
-                <p-tag [value]="alerteLabel(e.niveau_alerte)"
-                       [severity]="alerteSeverity(e.niveau_alerte)" />
+                <span [class]="'tag-alerte tag-alerte-' + e.niveau_alerte">{{ alerteLabel(e.niveau_alerte) }}</span>
               </td>
               <td>
                 <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
@@ -891,7 +889,7 @@ const MOIS_ANNEE = [
                 </strong></div>
             }
             <div class="fiche-row"><span>Alerte</span>
-              <p-tag [value]="alerteLabel(e.niveau_alerte)" [severity]="alerteSeverity(e.niveau_alerte)" /></div>
+              <span [class]="'tag-alerte tag-alerte-' + e.niveau_alerte">{{ alerteLabel(e.niveau_alerte) }}</span></div>
           </div>
         </div>
       }
@@ -2197,9 +2195,6 @@ export class ElevesListeComponent implements OnInit {
 
   alerteLabel(a: NiveauAlerte | string): string {
     return { CRITIQUE: 'CRITIQUE', URGENT: 'URGENT', ATTENTION: 'ATTENTION', OK: 'OK', A_JOUR: 'A JOUR' }[a] || a;
-  }
-  alerteSeverity(a: NiveauAlerte | string): 'danger' | 'warn' | 'success' | 'secondary' {
-    return ({ CRITIQUE:'danger', URGENT:'danger', ATTENTION:'warn', OK:'success', A_JOUR:'success' } as any)[a] || 'secondary';
   }
   statutLabel(s: string) {
     return { INSCRIT:'Inscrit', ABANDONNE:'Abandonné', TRANSFERE:'Transféré', DIPLOME:'Diplômé' }[s] || s;

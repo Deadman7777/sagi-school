@@ -21,6 +21,16 @@ from .models import Eleve
 STATUTS_SORTIE = ('DIPLOME', 'TRANSFERE', 'ABANDONNE')
 
 
+def eleves_presents(qs):
+    """Le périmètre des élèves PRÉSENTS : ni sortis, ni fiches de créance.
+
+    Celui de la liste du module Élèves. Le tableau de bord comptait tout le
+    monde : un élève passé en abandon disparaissait de la liste et restait
+    dans l'effectif affiché à la direction.
+    """
+    return qs.filter(fiche_creance=False).exclude(statut__in=STATUTS_SORTIE)
+
+
 def annoter(qs):
     """Ajoute le payé et le reliquat réglé, pour éviter une requête par fiche."""
     actif = Q(paiements__statut='ACTIF')
