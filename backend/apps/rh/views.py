@@ -20,7 +20,7 @@ from .serializers import (
     EmployeSerializer, PaieSerializer, ParametresFiscauxSerializer,
     AvanceSalaireSerializer, BulletinPaieSerializer, BulletinPaieCreateSerializer,
 )
-from .services import PaieCalculateur, generer_ecriture_avance, generer_ecritures_paie, annuler_ecriture_avance, annuler_ecritures_paie
+from .services import PaieCalculateur, bilan_depart, generer_ecriture_avance, generer_ecritures_paie, annuler_ecriture_avance, annuler_ecritures_paie
 
 NOMS_MOIS = {
     1: 'Janvier', 2: 'Février', 3: 'Mars', 4: 'Avril',
@@ -46,13 +46,108 @@ class EmployeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         tenant = get_tenant(self.request)
-        count  = Employe.objects.filter(tenant=tenant).count() + 1
-        serializer.save(tenant=tenant, matricule=f"EMP-{count:04d}")
+        # Le plus grand numéro + 1, et non le nombre de fiches + 1 : depuis
+        # qu'on peut supprimer un employé, le compte redescend et redonnerait
+        # un matricule déjà porté.
+        import re
+        nums = [int(m.group(1)) for m in
+                (re.match(r'EMP-(\d+)$', x or '') for x in
+                 Employe.objects.filter(tenant=tenant).values_list('matricule', flat=True))
+                if m]
+        serializer.save(tenant=tenant, matricule=f"EMP-{(max(nums, default=0) + 1):04d}")
+
+    def destroy(self, request, *args, **kwargs):
+        """Suppression réservée aux fiches SANS histoire comptable.
+
+        Les bulletins et avances sont en CASCADE : supprimer un employé payé
+        effacerait ses bulletins alors que leurs écritures restent au grand
+        livre. Dans ce cas on renvoie 409 et l'écran propose le départ.
+        """
+        employe = self.get_object()
+        bilan = bilan_depart(employe)
+        if not bilan['peut_supprimer']:
+            return Response({
+                'error': f"{employe.nom_complet} a déjà des bulletins ou des avances "
+                         "comptabilisés : sa fiche ne peut pas être supprimée. "
+                         "Enregistrez plutôt son départ — il sortira des listes et "
+                         "de la paie, son historique restera consultable.",
+                'bilan': bilan,
+            }, status=status.HTTP_409_CONFLICT)
+        from core.models import log_audit
+        log_audit(request, 'DELETE', 'Employe', str(employe.id),
+                  f"Suppression employé {employe.matricule} — {employe.nom_complet}")
+        employe.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'], url_path='bilan-depart')
+    def bilan_depart_employe(self, request, pk=None):
+        return Response(bilan_depart(self.get_object()))
+
+    @action(detail=True, methods=['post'])
+    def depart(self, request, pk=None):
+        """Enregistre le départ : statut QUITTE, date et motif obligatoires."""
+        employe = self.get_object()
+        date_raw = request.data.get('date_depart')
+        motif = (request.data.get('motif_depart') or '').strip()
+        try:
+            date_dep = datetime.date.fromisoformat(str(date_raw))
+        except (TypeError, ValueError):
+            return Response({'error': 'Date de départ requise (AAAA-MM-JJ).'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not motif:
+            return Response({'error': 'Le motif du départ est obligatoire.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if date_dep < employe.date_embauche:
+            return Response({'error': "Le départ ne peut pas précéder l'embauche."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if date_dep > datetime.date.today():
+            return Response({'error': 'La date de départ ne peut pas être dans le futur.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # Un bulletin déjà établi après la date de départ contredirait le départ.
+        posterieurs = (employe.bulletins.exclude(statut='ANNULE')
+                       .filter(annee__gt=date_dep.year) |
+                       employe.bulletins.exclude(statut='ANNULE')
+                       .filter(annee=date_dep.year, mois__gt=date_dep.month))
+        if posterieurs.exists():
+            b = posterieurs.first()
+            return Response({'error': f"Un bulletin existe pour {b.mois:02d}/{b.annee}, après la "
+                                      "date de départ. Annulez-le ou supprimez-le d'abord."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        employe.statut = 'QUITTE'
+        employe.date_depart = date_dep
+        employe.motif_depart = motif
+        if not employe.date_fin_contrat or employe.date_fin_contrat > date_dep:
+            employe.date_fin_contrat = date_dep
+        employe.save(update_fields=['statut', 'date_depart', 'motif_depart', 'date_fin_contrat'])
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Employe', str(employe.id),
+                  f"Départ {employe.nom_complet} le {date_dep:%d/%m/%Y} — {motif}")
+        return Response({**EmployeSerializer(employe).data, 'bilan': bilan_depart(employe)})
+
+    @action(detail=True, methods=['post'])
+    def reintegrer(self, request, pk=None):
+        """Annule un départ (saisi par erreur ou retour de l'employé)."""
+        employe = self.get_object()
+        if employe.statut != 'QUITTE':
+            return Response({'error': "Cet employé n'est pas parti."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        employe.statut = 'ACTIF'
+        employe.date_depart = None
+        employe.motif_depart = ''
+        employe.save(update_fields=['statut', 'date_depart', 'motif_depart'])
+        from core.models import log_audit
+        log_audit(request, 'UPDATE', 'Employe', str(employe.id),
+                  f"Réintégration {employe.nom_complet}")
+        return Response(EmployeSerializer(employe).data)
 
     @action(detail=True, methods=['post'])
     def avance(self, request, pk=None):
         employe = self.get_object()
         tenant  = get_tenant(request)
+        if employe.statut == 'QUITTE':
+            return Response({'error': f"{employe.nom_complet} a quitté l'établissement : "
+                                      "aucune avance ne peut lui être accordée."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         montant_raw = request.data.get('montant')
         if not montant_raw:
@@ -179,6 +274,22 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         tenant  = get_tenant(request)
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
+        # Un bulletin ANNULÉ ne bloque plus la période : seul un bulletin vivant
+        # (brouillon, validé, payé) l'occupe. On le nomme, avec son statut,
+        # pour que l'utilisateur sache quoi faire de celui qui gêne.
+        existant = (BulletinPaie.objects
+                    .filter(tenant=tenant, employe=employe, mois=vd['mois'], annee=vd['annee'])
+                    .exclude(statut='ANNULE').first())
+        if existant:
+            conseil = ("Supprimez ce brouillon" if existant.statut == 'BROUILLON'
+                       else "Annulez-le d'abord")
+            return Response(
+                {'error': f"Un bulletin {existant.get_statut_display().lower()} existe déjà pour "
+                          f"{employe.nom_complet} — {vd['mois']:02d}/{vd['annee']}. {conseil} "
+                          f"ou choisissez une autre période."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         kwargs_paie = {}
         for k in ('prime_transport', 'indemnite_sujetion', 'indemnite_logement',
                   'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues'):
@@ -275,6 +386,18 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         result['employe_matricule'] = employe.matricule
         result['parametres_annee']  = params.annee if params else None
         return Response(result)
+
+    def destroy(self, request, *args, **kwargs):
+        """Seul un BROUILLON se supprime : il n'a encore aucune écriture.
+        Un bulletin validé ou payé s'ANNULE (contre-écritures)."""
+        bulletin = self.get_object()
+        if bulletin.statut != 'BROUILLON':
+            return Response(
+                {'error': 'Seul un bulletin BROUILLON peut être supprimé. '
+                          'Un bulletin validé ou payé doit être annulé.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        bulletin.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
     def valider(self, request, pk=None):
@@ -406,11 +529,12 @@ class RHStatsView(APIView):
             employes.filter(statut='ACTIF').aggregate(t=Sum('salaire_base'))['t'] or 0
         )
         return Response({
-            'total_employes':  employes.count(),
+            'total_employes':  employes.exclude(statut='QUITTE').count(),
             'actifs':          employes.filter(statut='ACTIF').count(),
-            'enseignants':     employes.filter(type_employe='ENSEIGNANT').count(),
-            'administration':  employes.filter(type_employe='ADMINISTRATION').count(),
-            'appui':           employes.filter(type_employe='APPUI').count(),
+            'partis':          employes.filter(statut='QUITTE').count(),
+            'enseignants':     employes.exclude(statut='QUITTE').filter(type_employe='ENSEIGNANT').count(),
+            'administration':  employes.exclude(statut='QUITTE').filter(type_employe='ADMINISTRATION').count(),
+            'appui':           employes.exclude(statut='QUITTE').filter(type_employe='APPUI').count(),
             'masse_salariale': masse,
             'ipres_patronal':  round(masse * 0.084, 2),
             'css_patronal':    round(masse * 0.070, 2),

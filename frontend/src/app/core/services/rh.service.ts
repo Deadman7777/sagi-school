@@ -26,6 +26,8 @@ export interface Employe {
   telephone: string;
   email: string;
   statut: string;
+  date_depart?: string | null;
+  motif_depart?: string;
   niveau_enseignement: string;
   nb_enfants: number;
   situation_matrimoniale: string;
@@ -70,7 +72,7 @@ export interface BulletinPaie {
   total_charges_patronales: number;
   net_a_payer: number;
   cout_total_employeur: number;
-  statut: 'BROUILLON' | 'VALIDE' | 'PAYE';
+  statut: 'BROUILLON' | 'VALIDE' | 'PAYE' | 'ANNULE';
   mode_paiement_effectif: string;
   date_validation?: string;
   date_paiement?: string;
@@ -124,6 +126,13 @@ export class RhService {
   getEmployes(params?: Record<string, string>) { return this.api.get<any>('/rh/employes/', params); }
   creerEmploye(data: Partial<Employe>)         { return this.api.post<Employe>('/rh/employes/', data); }
   modifierEmploye(id: string, data: Partial<Employe>) { return this.api.patch<Employe>(`/rh/employes/${id}/`, data); }
+  /** Refusée (409) si l'employé a des bulletins ou avances comptabilisés. */
+  supprimerEmploye(id: string)                 { return this.api.delete<void>(`/rh/employes/${id}/`); }
+  bilanDepart(id: string)                      { return this.api.get<any>(`/rh/employes/${id}/bilan-depart/`); }
+  enregistrerDepart(id: string, date_depart: string, motif_depart: string) {
+    return this.api.post<Employe>(`/rh/employes/${id}/depart/`, { date_depart, motif_depart });
+  }
+  reintegrerEmploye(id: string)                { return this.api.post<Employe>(`/rh/employes/${id}/reintegrer/`, {}); }
 
   // — Bulletins SYSCOHADA —
   getBulletins(params?: Record<string, string>) { return this.api.get<any>('/rh/bulletins/', params); }
@@ -131,6 +140,7 @@ export class RhService {
   calculerBulletin(data: unknown)               { return this.api.post<any>('/rh/bulletins/calculer/', data); }
   validerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/valider/`, {}); }
   payerBulletin(id: string, mode?: string)      { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/payer/`, mode ? { mode_paiement_effectif: mode } : {}); }
+  supprimerBulletin(id: string)                 { return this.api.delete<void>(`/rh/bulletins/${id}/`); }
   annulerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/annuler/`, {}); }
   telechargerPdf(id: string)                    { return this.api.getBlob(`/rh/bulletins/${id}/pdf/`); }
 
