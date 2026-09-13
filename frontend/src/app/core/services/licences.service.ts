@@ -49,7 +49,10 @@ export class LicencesService {
   suspendre(id: number)              { return this.api.post<any>(`/licences/${id}/suspendre/`, {}); }
   activer(id: number)                { return this.api.post<any>(`/licences/${id}/activer/`, {}); }
   changerType(id: number, type: string) { return this.api.post<any>(`/licences/${id}/changer_type/`, { type }); }
-  supprimer(id: number)              { return this.api.delete<any>(`/licences/${id}/`); }
+  /** Supprime DÉFINITIVEMENT l'école et toutes ses données : le nom exact sert de confirmation. */
+  supprimer(id: string, confirmation: string) {
+    return this.api.delete<any>(`/licences/${id}/?confirmation=${encodeURIComponent(confirmation)}`);
+  }
 
   getDetailsEcole(tenantId: string)  { return this.api.get<any>(`/tenants/${tenantId}/details/`); }
   updateDetailsEcole(tenantId: string, data: { tenant: any; exercice: any }) {

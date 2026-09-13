@@ -33,6 +33,33 @@ class LicenceViewSet(viewsets.ModelViewSet):
             return Licence.objects.filter(tenant=tenant).select_related('tenant')
         return Licence.objects.none()
 
+    def destroy(self, request, *args, **kwargs):
+        """Supprime DÉFINITIVEMENT l'école de cette licence et toutes ses données.
+
+        Supprimer seulement la licence laissait l'école active en base (voir
+        apps/tenants/suppression.py). Le nom exact doit être renvoyé dans
+        `confirmation` : un clic égaré ne doit pas effacer une école.
+        """
+        from apps.dashboard.models import AuditLog
+        from apps.tenants.suppression import supprimer_ecole
+        licence = self.get_object()
+        tenant = licence.tenant
+        tenant_id = str(tenant.pk)
+        confirmation = (request.data.get('confirmation')
+                        or request.query_params.get('confirmation') or '').strip()
+        if confirmation != tenant.nom.strip():
+            return Response({'error': "Confirmation incorrecte : retapez exactement le nom de l'école."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        bilan = supprimer_ecole(tenant)
+        # Journal SANS école : celle-ci n'existe plus (log_audit rattacherait
+        # l'entrée à l'école impersonée, effacée à l'instant).
+        AuditLog.objects.create(
+            tenant=None, utilisateur=str(request.user), action='DELETE', modele='Tenant',
+            objet_id=tenant_id,
+            description=f"Suppression définitive de l'école {bilan['ecole']} — {bilan['eleves']} élèves, "
+                        f"{bilan['paiements']} paiements, {bilan['utilisateurs']} utilisateurs")
+        return Response(bilan)
+
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def catalogue(self, request):
         """La grille tarifaire officielle, servie par le serveur.

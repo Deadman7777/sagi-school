@@ -173,10 +173,14 @@ class PublicStatsView(APIView):
             from apps.eleves.models import Eleve
             from apps.paiements.models import Paiement
 
-            ecoles = Tenant.objects.filter(actif=True).count()
+            # Une école « équipée » a une licence en cours. Compter toutes les
+            # écoles de la base affichait 13 écoles pour 3 réelles : les
+            # comptes de test et les écoles dont on n'avait retiré que la licence.
+            equipees = Tenant.objects.filter(actif=True, licence__statut__in=('ACTIVE', 'ESSAI'))
+            ecoles = equipees.count()
             # Élèves des exercices en cours (un élève par exercice actif)
-            eleves = Eleve.objects.filter(exercice__cloture=False).count()
-            agg = Paiement.objects.filter(statut='ACTIF').aggregate(
+            eleves = Eleve.objects.filter(exercice__cloture=False, tenant__in=equipees).count()
+            agg = Paiement.objects.filter(statut='ACTIF', tenant__in=equipees).aggregate(
                 t=Sum('montant_inscription') + Sum('montant_mensualite') +
                   Sum('montant_uniforme')    + Sum('montant_fournitures') +
                   Sum('montant_cantine')     + Sum('montant_divers'))

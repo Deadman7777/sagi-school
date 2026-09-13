@@ -289,6 +289,25 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     </p-dialog>
 
     <!-- Dialog changement de type -->
+    <p-dialog header="🗑️ Supprimer définitivement l'école" [(visible)]="suppressionVisible" [modal]="true"
+              [style]="{ width: '460px', maxWidth: '95vw' }" [draggable]="false">
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6;margin:0 0 12px">
+        <strong style="color:#dc2626">Action irréversible.</strong> L'école
+        <strong>{{ suppressionCible?.tenant_nom }}</strong> sera effacée avec TOUTES ses données :
+        élèves, paiements, écritures comptables, RH, utilisateurs et licence.
+      </p>
+      <label for="suppr-nom" style="font-size:12px;color:var(--text-2)">Pour confirmer, retapez le nom exact de l'école :</label>
+      <input pInputText id="suppr-nom" [(ngModel)]="suppressionSaisie" autocomplete="off"
+             style="width:100%;margin-top:6px" />
+      <ng-template pTemplate="footer">
+        <p-button label="Annuler" severity="secondary" (onClick)="suppressionVisible = false" />
+        <p-button label="Supprimer définitivement" icon="pi pi-trash" severity="danger"
+                  [loading]="suppressionEnCours()"
+                  [disabled]="suppressionSaisie.trim() !== (suppressionCible?.tenant_nom || '').trim()"
+                  (onClick)="confirmerSuppression()" />
+      </ng-template>
+    </p-dialog>
+
     <p-dialog header="🔄 Changer le Type de Licence" [(visible)]="changementTypeDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
       <div *ngIf="licenceSelectionnee">
@@ -719,13 +738,35 @@ activer(l: any) {
   });
 }
 
+// Suppression DÉFINITIVE : l'école et toutes ses données. Le nom exact doit
+// être retapé — un clic égaré ne doit rien effacer.
+suppressionVisible = false;
+suppressionCible: any = null;
+suppressionSaisie = '';
+suppressionEnCours = signal(false);
+
 supprimer(l: any) {
-  if (!confirm(`Supprimer ${l.tenant_nom} ? Cette action est irréversible.`)) return;
-  this.licencesService.supprimer(l.id).subscribe({
-    next: () => {
-      this.msg.add({ severity:'info', summary:'Supprimée', detail:l.tenant_nom });
+  this.suppressionCible = l;
+  this.suppressionSaisie = '';
+  this.suppressionVisible = true;
+}
+
+confirmerSuppression() {
+  const l = this.suppressionCible;
+  if (!l || this.suppressionSaisie.trim() !== (l.tenant_nom || '').trim()) return;
+  this.suppressionEnCours.set(true);
+  this.licencesService.supprimer(l.id, this.suppressionSaisie.trim()).subscribe({
+    next: (bilan: any) => {
+      this.suppressionEnCours.set(false);
+      this.suppressionVisible = false;
+      this.msg.add({ severity: 'success', summary: 'École supprimée définitivement', life: 6000,
+                     detail: `${bilan.ecole} — ${bilan.eleves} élèves, ${bilan.paiements} paiements, ${bilan.utilisateurs} utilisateurs effacés` });
       this.charger();
-    }
+    },
+    error: (err: any) => {
+      this.suppressionEnCours.set(false);
+      this.msg.add({ severity: 'error', summary: 'Suppression refusée', detail: err?.error?.error || 'Erreur serveur' });
+    },
   });
 }
 
