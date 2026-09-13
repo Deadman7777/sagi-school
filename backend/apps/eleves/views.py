@@ -383,7 +383,82 @@ class EleveViewSet(viewsets.ModelViewSet):
         self._sync_reliquat(serializer, eleve)
 
     def perform_update(self, serializer):
-        self._sync_reliquat(serializer, serializer.save())
+        statut_avant = serializer.instance.statut
+        eleve = serializer.save()
+        self._sync_reliquat(serializer, eleve)
+        # Trace de la sortie : la réintégration effacera la date de sortie de
+        # la fiche, cette ligne est ce qui en garde la mémoire.
+        if eleve.statut in STATUTS_SORTIE and statut_avant not in STATUTS_SORTIE:
+            from .reintegration import tracer_sortie
+            tracer_sortie(eleve, statut_avant,
+                          motif=(self.request.data.get('motif_sortie') or '').strip(),
+                          utilisateur=getattr(self.request.user, 'email', ''))
+
+    def _fiche_du_tenant(self, pk):
+        """Fiche brute, fiches de créance et sortants compris (hors queryset liste)."""
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(Eleve.objects.select_related('exercice', 'tenant', 'section'),
+                                 tenant=get_tenant(self.request), pk=pk)
+
+    @staticmethod
+    def _date_param(valeur):
+        import datetime
+        try:
+            return datetime.date.fromisoformat(str(valeur)) if valeur else None
+        except ValueError:
+            return None
+
+    @action(detail=True, methods=['get'], url_path='reintegration')
+    def reintegration_apercu(self, request, pk=None):
+        """Aperçu d'une réintégration : cas, dette au départ, mois non facturés."""
+        from .reintegration import ReintegrationRefusee, analyser
+        eleve = self._fiche_du_tenant(pk)
+        try:
+            a = analyser(eleve, self._date_param(request.query_params.get('date_retour')))
+        except ReintegrationRefusee as exc:
+            return Response({'possible': False, 'error': exc.message, 'code': exc.code, **exc.extra})
+        return Response({'possible': True, **{k: v for k, v in a.items() if not k.startswith('_')}})
+
+    @action(detail=True, methods=['post'], url_path='reintegrer')
+    def reintegrer(self, request, pk=None):
+        """Réintègre un élève abandonné ou transféré — voir apps/eleves/reintegration.py."""
+        from apps.academique.models import Classe
+        from core.models import log_audit
+        from .reintegration import ReintegrationRefusee, reintegrer
+
+        eleve = self._fiche_du_tenant(pk)
+        tenant = get_tenant(request)
+        section = classe = None
+        if sid := request.data.get('section_id'):
+            section = Section.objects.filter(tenant=tenant, id=sid).first()
+            if section is None:
+                return Response({'error': 'Section introuvable.'}, status=400)
+        if cid := request.data.get('classe_id'):
+            classe = Classe.objects.filter(tenant=tenant, id=cid).first()
+            if classe is None:
+                return Response({'error': 'Classe introuvable.'}, status=400)
+        try:
+            fiche, a = reintegrer(
+                eleve, self._date_param(request.data.get('date_retour')),
+                request.data.get('motif'),
+                dette_reconnue=bool(request.data.get('dette_reconnue')),
+                utilisateur=getattr(request.user, 'email', ''),
+                section=section, classe=classe)
+        except ReintegrationRefusee as exc:
+            return Response({'error': exc.message, 'code': exc.code, **exc.extra}, status=400)
+        log_audit(request, 'UPDATE', 'Eleve', str(fiche.id),
+                  f"Réintégration {fiche.nom_complet} le {request.data.get('date_retour')} "
+                  f"({a['exercice_cible']}) — {request.data.get('motif')}")
+        return Response({
+            'eleve_id': str(fiche.id), 'cas': a['cas'], 'exercice': a['exercice_cible'],
+            'dette': a['dette'], 'mois_retires_noms': a['mois_retires_noms'],
+        })
+
+    @action(detail=True, methods=['get'], url_path='mouvements')
+    def mouvements(self, request, pk=None):
+        """Historique des sorties et retours de l'enfant, toutes années confondues."""
+        from .reintegration import historique
+        return Response(historique(self._fiche_du_tenant(pk)))
 
     @staticmethod
     def _sync_reliquat(serializer, eleve):

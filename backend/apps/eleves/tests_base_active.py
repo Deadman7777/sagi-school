@@ -75,14 +75,26 @@ class BaseActiveTest(APITestCase):
         eleve.refresh_from_db()
         self.assertIsNotNone(eleve.date_sortie)
 
-    def test_reinscrire_efface_la_date_de_sortie(self):
+    def test_corriger_une_sortie_du_jour_efface_la_date_de_sortie(self):
+        """Une sortie saisie par erreur se corrige le jour même."""
+        from django.utils import timezone
         eleve = self._eleve('Bina FALL', statut='ABANDONNE',
-                            date_sortie=datetime.date(2026, 3, 31))
+                            date_sortie=timezone.now().date())
         r = self.client.patch(f'/api/eleves/{eleve.id}/',
                               {'statut': 'INSCRIT'}, format='json')
         self.assertEqual(r.status_code, 200, r.content[:200])
         eleve.refresh_from_db()
         self.assertIsNone(eleve.date_sortie)
+
+    def test_revenir_d_une_sortie_ancienne_exige_la_reintegration(self):
+        """Suivi Shoumoul, septembre 2026 : le retour d'un abandonné suit les
+        règles de réintégration, il ne se contourne pas par le statut."""
+        eleve = self._eleve('Bina FALL', statut='ABANDONNE',
+                            date_sortie=datetime.date(2026, 3, 31))
+        r = self.client.patch(f'/api/eleves/{eleve.id}/',
+                              {'statut': 'INSCRIT'}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('Réintégrer', str(r.data))
 
     def test_les_arrieres_cessent_de_grossir_apres_le_depart(self):
         """Un abandon de mars ne doit pas accumuler jusqu'en décembre."""

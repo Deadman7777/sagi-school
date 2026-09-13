@@ -298,6 +298,10 @@ const MOIS_ANNEE = [
                             severity="success" pTooltip="Situation financière PDF" (onClick)="telechargerSituationPDF(eleve)" />
                   <p-button icon="pi pi-user-edit" [rounded]="true" [text]="true"
                             severity="warn" pTooltip="Changer statut" (onClick)="ouvrirChangerStatut(eleve)" />
+                  @if (eleve.statut === 'ABANDONNE' || eleve.statut === 'TRANSFERE') {
+                    <p-button icon="pi pi-replay" [rounded]="true" [text]="true" severity="success"
+                              pTooltip="Réintégrer l'élève" (onClick)="ouvrirReintegration(eleve.id, eleve.nom_complet)" />
+                  }
                   <p-button icon="pi pi-heart" [rounded]="true" [text]="true"
                             severity="secondary" pTooltip="Prise en charge" (onClick)="ouvrirPriseEnCharge(eleve)" />
                   <p-button icon="pi pi-bookmark" [rounded]="true" [text]="true"
@@ -515,6 +519,10 @@ const MOIS_ANNEE = [
                             [pTooltip]="'eleves.parcours_pdf' | translate"
                             [loading]="exportantParcours()"
                             (onClick)="telechargerParcoursPDF(a.eleve_id)" />
+                  @if (a.statut === 'ABANDONNE' || a.statut === 'TRANSFERE') {
+                    <p-button icon="pi pi-replay" [rounded]="true" [text]="true" severity="success"
+                              pTooltip="Réintégrer l'élève" (onClick)="ouvrirReintegration(a.eleve_id, a.nom_complet)" />
+                  }
                 </div>
               </td>
             </tr>
@@ -899,6 +907,10 @@ const MOIS_ANNEE = [
         <div class="fiche-actions">
           <p-button label="Modifier" severity="warn" icon="pi pi-pencil"
                     (onClick)="ouvrirModifier(eleveSelectionne())" />
+          @if (eleveSelectionne()?.statut === 'ABANDONNE' || eleveSelectionne()?.statut === 'TRANSFERE') {
+            <p-button label="Réintégrer" severity="success" icon="pi pi-replay"
+                      (onClick)="ouvrirReintegration(eleveSelectionne()!.id, eleveSelectionne()!.nom_complet)" />
+          }
           <p-button [label]="'eleves.parcours' | translate" severity="help" icon="pi pi-history"
                     (onClick)="ouvrirParcours(eleveSelectionne()!.id)" />
           <p-button label="Exporter la fiche" severity="info" icon="pi pi-file-pdf"
@@ -1506,6 +1518,72 @@ const MOIS_ANNEE = [
       </ng-template>
     </p-dialog>
 
+    <!-- ════════════════════ DIALOG RÉINTÉGRATION ════════════════════
+         Règles appliquées par le serveur (apps/eleves/reintegration.py) :
+         date et motif obligatoires, dette du départ reconnue, mois d'absence
+         non facturés, retour sur un nouvel exercice avec la dette en reliquat. -->
+    <p-dialog header="↩ Réintégrer un élève" [(visible)]="dialogReintegrationVisible" [modal]="true"
+              [style]="{ width: '560px', maxWidth: '95vw' }" [draggable]="false">
+      <div class="reint">
+        <div class="reint-nom">{{ reintegrationNom }}</div>
+        <div class="reint-grid">
+          <div class="field">
+            <label for="reint-date">Date de retour *</label>
+            <input pInputText id="reint-date" type="date" [(ngModel)]="formReintegration.date_retour"
+                   (change)="analyserReintegration()" class="w-full" />
+          </div>
+          <div class="field">
+            <label for="reint-section">Section (si changement)</label>
+            <p-select appendTo="body" inputId="reint-section" [options]="sections()" optionLabel="nom" optionValue="id"
+                      [(ngModel)]="formReintegration.section_id" [showClear]="true" placeholder="Inchangée" styleClass="w-full" />
+          </div>
+          <div class="field reint-full">
+            <label for="reint-motif">Motif du retour *</label>
+            <input pInputText id="reint-motif" [(ngModel)]="formReintegration.motif" class="w-full"
+                   placeholder="Ex. retour de la famille à Rufisque" />
+          </div>
+        </div>
+
+        @if (chargementReintegration()) {
+          <div class="reint-info">⏳ Vérification des règles…</div>
+        } @else if (apercuReintegration(); as ap) {
+          @if (!ap.possible) {
+            <div class="reint-refus" role="alert">⛔ {{ ap.error }}</div>
+          } @else {
+            <div class="reint-info">
+              <div>
+                @if (ap.cas === 'MEME_EXERCICE') {
+                  ✅ Retour dans l'exercice <strong>{{ ap.exercice_cible }}</strong> : la fiche redevient présente.
+                } @else {
+                  ✅ Retour sur l'exercice <strong>{{ ap.exercice_cible }}</strong> : une fiche est ouverte sur ce nouvel
+                  exercice (même matricule), la facturation démarre à la date de retour.
+                }
+              </div>
+              @if (ap.date_sortie) { <div>Sorti le {{ ap.date_sortie | date:'dd/MM/yyyy' }} ({{ ap.statut === 'ABANDONNE' ? 'abandon' : 'transfert' }}).</div> }
+              @if (ap.mois_retires_noms?.length) {
+                <div>Mois d'absence non facturés : <strong>{{ ap.mois_retires_noms.join(', ') }}</strong>.</div>
+              }
+            </div>
+            @if (ap.dette_a_reconnaitre) {
+              <div class="reint-dette">
+                ⚠️ Dette laissée au départ : <strong>{{ ap.dette | number:'1.0-0' }} FCFA</strong>. Elle reste due
+                @if (ap.cas !== 'MEME_EXERCICE') { (reportée en impayé antérieur) }.
+                <label class="reint-check">
+                  <p-checkbox [(ngModel)]="formReintegration.dette_reconnue" [binary]="true" inputId="reint-dette" />
+                  <span>La famille a reconnu cette dette</span>
+                </label>
+              </div>
+            }
+          }
+        }
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogReintegrationVisible=false" />
+        <p-button label="Réintégrer" icon="pi pi-replay" severity="success" [loading]="saving()"
+                  [disabled]="!peutReintegrer()" (onClick)="confirmerReintegration()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- ════════════════════ DIALOG IMPORT EXCEL ════════════════════ -->
     <app-import-eleves-dialog [(visible)]="dialogImportVisible" (importe)="chargerEleves()" />
   `,
@@ -1737,6 +1815,17 @@ const MOIS_ANNEE = [
     .pv-row span { color:var(--text-2); }
     .pv-row.highlight { border-top:1px solid var(--border); margin-top:4px; padding-top:8px;
                         border-bottom:none; }
+    .reint { display:flex; flex-direction:column; gap:12px; }
+    .reint-nom { font-size:15px; font-weight:700; color:var(--text); }
+    .reint-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .reint-grid .field { display:flex; flex-direction:column; gap:4px; }
+    .reint-grid label { font-size:12px; color:var(--text-2); }
+    .reint-full { grid-column:1/-1; }
+    .reint-info { background:var(--surface-2); border-radius:8px; padding:10px 12px; font-size:13px; color:var(--text-2); line-height:1.6; }
+    .reint-refus { background:rgba(220,38,38,.1); border:1px solid #dc2626; color:#dc2626; border-radius:8px; padding:10px 12px; font-size:13px; }
+    .reint-dette { background:rgba(234,179,8,.12); border:1px solid #ca8a04; border-radius:8px; padding:10px 12px; font-size:13px; color:var(--text); }
+    .reint-check { display:flex; align-items:center; gap:8px; margin-top:8px; cursor:pointer; }
+    @media (max-width: 520px) { .reint-grid { grid-template-columns:1fr; } }
   `]
 })
 export class ElevesListeComponent implements OnInit {
@@ -1999,6 +2088,66 @@ export class ElevesListeComponent implements OnInit {
         this.chargementAnciens.set(false);
         this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
                        detail: this.translate.instant('eleves.anciens_titre') });
+      },
+    });
+  }
+
+  // ── Réintégration d'un élève sorti ──────────────────────────────────────
+  dialogReintegrationVisible = false;
+  reintegrationId  = '';
+  reintegrationNom = '';
+  formReintegration = { date_retour: '', motif: '', section_id: null as string | null, dette_reconnue: false };
+  apercuReintegration     = signal<any | null>(null);
+  chargementReintegration = signal(false);
+
+  ouvrirReintegration(eleveId: string, nom: string) {
+    this.reintegrationId = eleveId;
+    this.reintegrationNom = nom;
+    this.formReintegration = { date_retour: new Date().toISOString().slice(0, 10), motif: '',
+                               section_id: null, dette_reconnue: false };
+    this.apercuReintegration.set(null);
+    this.dialogFicheVisible = false;
+    this.dialogReintegrationVisible = true;
+    this.analyserReintegration();
+  }
+
+  analyserReintegration() {
+    if (!this.formReintegration.date_retour) { this.apercuReintegration.set(null); return; }
+    this.chargementReintegration.set(true);
+    this.elevesService.apercuReintegration(this.reintegrationId, this.formReintegration.date_retour).subscribe({
+      next: ap => { this.apercuReintegration.set(ap); this.chargementReintegration.set(false); },
+      error: () => { this.chargementReintegration.set(false);
+                     this.apercuReintegration.set({ possible: false, error: 'Vérification impossible.' }); },
+    });
+  }
+
+  peutReintegrer(): boolean {
+    const ap = this.apercuReintegration();
+    return !!ap?.possible && !!this.formReintegration.motif.trim()
+      && (!ap.dette_a_reconnaitre || this.formReintegration.dette_reconnue);
+  }
+
+  confirmerReintegration() {
+    this.saving.set(true);
+    this.elevesService.reintegrer(this.reintegrationId, {
+      date_retour: this.formReintegration.date_retour,
+      motif: this.formReintegration.motif.trim(),
+      dette_reconnue: this.formReintegration.dette_reconnue,
+      section_id: this.formReintegration.section_id || undefined,
+    }).subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.dialogReintegrationVisible = false;
+        const mois = r.mois_retires_noms?.length ? ` Mois non facturés : ${r.mois_retires_noms.join(', ')}.` : '';
+        this.msg.add({ severity: 'success', summary: 'Élève réintégré',
+                       detail: `${this.reintegrationNom} est de nouveau présent (${r.exercice}).${mois}`, life: 6000 });
+        this.chargerEleves();
+        if (this.onglet() === 'anciens') this.chargerAnciens();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: 'Réintégration refusée',
+                       detail: err?.error?.error || 'Erreur lors de la réintégration.', life: 7000 });
       },
     });
   }
@@ -2573,6 +2722,14 @@ export class ElevesListeComponent implements OnInit {
   sauvegarderStatut() {
     const e = this.eleveSelectionne();
     if (!e) return;
+    const sortis = ['ABANDONNE', 'TRANSFERE', 'DIPLOME'];
+    // Le retour d'un élève sorti est une réintégration (règles vérifiées par
+    // le serveur), pas un simple changement de statut.
+    if (sortis.includes(e.statut) && !sortis.includes(this.formStatut) && e.statut !== 'DIPLOME') {
+      this.dialogStatutVisible = false;
+      this.ouvrirReintegration(e.id, e.nom_complet);
+      return;
+    }
     this.saving.set(true);
     this.elevesService.updateEleve(e.id, { statut: this.formStatut } as Partial<Eleve>).subscribe({
       next: () => {
@@ -2581,7 +2738,11 @@ export class ElevesListeComponent implements OnInit {
         this.saving.set(false);
         this.chargerEleves();
       },
-      error: () => this.saving.set(false),
+      error: err => {
+        this.saving.set(false);
+        const detail = err?.error?.statut?.[0] || err?.error?.statut || err?.error?.error || 'Changement de statut refusé.';
+        this.msg.add({ severity: 'error', summary: 'Statut', detail: String(detail), life: 7000 });
+      },
     });
   }
 

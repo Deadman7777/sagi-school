@@ -206,6 +206,16 @@ export class ElevesService {
   }
   retirerBourse(id: string)          { return this.api.delete<void>(`/eleves/bourses/${id}/`); }
 
+  // Réintégration d'un élève abandonné ou transféré (règles côté serveur).
+  apercuReintegration(id: string, date_retour: string) {
+    return this.api.get<any>(`/eleves/${id}/reintegration/`, { date_retour });
+  }
+  reintegrer(id: string, data: { date_retour: string; motif: string; dette_reconnue: boolean; section_id?: string }) {
+    return this.api.post<{ eleve_id: string; cas: string; exercice: string; dette: number;
+                           mois_retires_noms: string[] }>(`/eleves/${id}/reintegrer/`, data);
+  }
+  getMouvements(id: string) { return this.api.get<any[]>(`/eleves/${id}/mouvements/`); }
+
   // Base historique des sortis — indépendante de l'exercice actif.
   getAnciens(params?: { q?: string; statut?: string }) {
     return this.api.get<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;
