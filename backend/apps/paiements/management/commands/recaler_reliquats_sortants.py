@@ -22,7 +22,12 @@ class Command(BaseCommand):
     def handle(self, *args, ecole, appliquer, **options):
         qs = Tenant.objects.filter(id=ecole) if len(ecole) == 36 else Tenant.objects.filter(nom__icontains=ecole)
         if qs.count() != 1:
-            raise CommandError(f"{qs.count()} école(s) correspondent à « {ecole} » : précisez.")
+            from apps.eleves.models import Eleve
+            detail = "\n".join(
+                f"  {t.id}  {t.nom}  ({Eleve.objects.filter(tenant=t).count()} fiches"
+                f"{', inactive' if not getattr(t, 'actif', True) else ''})" for t in qs)
+            raise CommandError(f"{qs.count()} école(s) correspondent à « {ecole} ». "
+                               f"Relancez avec --ecole <id> :\n{detail}")
         tenant = qs.get()
         with transaction.atomic():
             r = recaler_reliquats_sortants(tenant, appliquer=appliquer)

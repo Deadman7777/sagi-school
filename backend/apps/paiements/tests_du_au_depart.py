@@ -144,3 +144,14 @@ class RecalageTest(DuAuDepartBase):
         self.ex2.cloture = True
         self.ex2.save()
         self.assertEqual(recaler_reliquats_sortants(self.tenant, appliquer=True)['nb'], 0)
+
+
+class CommandeRecalageTest(DuAuDepartBase):
+    def test_ecole_ambigue_liste_les_candidates(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+        autre = Tenant.objects.create(nom='Shoumoul TEST')
+        with self.assertRaises(CommandError) as ctx:
+            call_command('recaler_reliquats_sortants', ecole='Shoumoul')
+        self.assertIn(str(autre.id), str(ctx.exception))
+        self.assertIn(str(self.tenant.id), str(ctx.exception))
