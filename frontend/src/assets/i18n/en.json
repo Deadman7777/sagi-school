@@ -1310,7 +1310,8 @@
     "confirmer_envoi": "Confirm that quote {{numero}} was sent to the prospect? No email is sent: you send it yourself.",
     "confirmer_suppression_devis": "Delete draft {{numero}}?",
     "proforma": "Proforma",
-    "facturer": "Invoice"
+    "facturer": "Invoice",
+    "telecharger_pdf": "Download PDF"
   },
   "pedago": {
     "onglet": "Learning follow-up",
@@ -1454,6 +1455,8 @@
     "montant_requis": "Enter the amount received.",
     "paiement_enregistre": "Payment recorded, receipt downloaded",
     "motif_annulation": "Reason for cancelling the receipt:",
-    "erreur": "The operation failed."
+    "erreur": "The operation failed.",
+    "etat_pdf": "Report (PDF)",
+    "releve_pdf": "Client statement (PDF)"
   }
 }

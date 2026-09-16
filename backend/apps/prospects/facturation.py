@@ -522,3 +522,106 @@ def rendre_pdf(gabarit, contexte):
     if pisa.CreatePDF(html, dest=tampon, encoding='utf-8').err:
         raise FacturationErreur('Erreur de génération du PDF.')
     return tampon.getvalue()
+
+
+# ── Relevé de compte et état des factures ────────────────────────────────
+
+def documents_du_client(prospect=None, tenant=None, client_nom=''):
+    """Les pièces d'un client : par sa fiche prospect, son école, ou à défaut
+    son nom (client saisi librement)."""
+    qs = DocumentCommercial.objects.all()
+    if prospect is not None:
+        return qs.filter(prospect=prospect)
+    if tenant is not None:
+        return qs.filter(tenant=tenant)
+    if client_nom.strip():
+        return qs.filter(client_nom__iexact=client_nom.strip())
+    return qs.none()
+
+
+def releve_compte(documents):
+    """Mouvements d'un client, dans l'ordre chronologique, avec solde courant.
+
+    Factures au débit ; avoirs et paiements au crédit. Les proformas n'y
+    figurent pas : elles n'engagent aucune somme. Un reçu annulé non plus.
+    """
+    factures = [d for d in documents if d.type == 'FACTURE' and d.statut == 'EMIS']
+    mouvements = []
+    for f in factures:
+        mouvements.append({'date': f.date_emission, 'ordre': f.emis_le, 'piece': f.numero,
+                           'libelle': f"Facture{' — ' + f.objet if f.objet else ''}",
+                           'debit': f.total_ttc, 'credit': Decimal('0')})
+        for r in f.encaissements.filter(annule=False):
+            mouvements.append({'date': r.date, 'ordre': r.created_at, 'piece': r.numero,
+                               'libelle': f'Paiement ({r.get_mode_display().lower()}) — facture {f.numero}',
+                               'debit': Decimal('0'), 'credit': r.montant})
+        for a in f.derives.filter(type='AVOIR', statut='EMIS'):
+            mouvements.append({'date': a.date_emission, 'ordre': a.emis_le, 'piece': a.numero,
+                               'libelle': f'Avoir sur facture {f.numero}',
+                               'debit': Decimal('0'), 'credit': a.total_ttc})
+    mouvements.sort(key=lambda m: (m['date'], m['ordre']))
+    solde = Decimal('0')
+    for m in mouvements:
+        solde += m['debit'] - m['credit']
+        m['solde'] = solde
+    ouvertes = [f for f in factures if f.statut_paiement in ('A_PAYER', 'PARTIELLE')]
+    return {
+        'mouvements': mouvements,
+        'total_debit': sum((m['debit'] for m in mouvements), Decimal('0')),
+        'total_credit': sum((m['credit'] for m in mouvements), Decimal('0')),
+        'solde': solde,
+        'ouvertes': sorted(ouvertes, key=lambda f: (f.date_echeance or date.max)),
+        'en_retard': sum((f.solde for f in ouvertes if f.en_retard), Decimal('0')),
+    }
+
+
+def contexte_releve(documents, client):
+    """`client` : dict des coordonnées à imprimer (prises sur la dernière pièce)."""
+    params = ParametresFacturation.actuels()
+    r = releve_compte(documents)
+    return {
+        'emetteur': params, 'client': client, 'date_edition': date.today(),
+        'mouvements': [{**m, 'debit': francs(m['debit']) if m['debit'] else '',
+                        'credit': francs(m['credit']) if m['credit'] else '',
+                        'solde': francs(m['solde'])} for m in r['mouvements']],
+        'totaux': {'debit': francs(r['total_debit']), 'credit': francs(r['total_credit']),
+                   'solde': francs(max(r['solde'], 0)), 'trop_percu': francs(-r['solde']) if r['solde'] < 0 else '',
+                   'en_retard': francs(r['en_retard'])},
+        'solde_positif': r['solde'] > 0,
+        'ouvertes': [{'numero': f.numero, 'date': f.date_emission, 'echeance': f.date_echeance,
+                      'ttc': francs(f.total_ttc), 'solde': francs(f.solde), 'en_retard': f.en_retard}
+                     for f in r['ouvertes']],
+    }
+
+
+def contexte_etat(documents, titre_filtre=''):
+    """État d'une liste de pièces (celle filtrée à l'écran), avec ses totaux."""
+    params = ParametresFacturation.actuels()
+    lignes, factures = [], []
+    for d in documents:
+        situation = d.get_statut_display()
+        if d.statut == 'BROUILLON':
+            situation = 'Brouillon'
+        elif d.type == 'FACTURE':
+            situation = ('En retard' if d.en_retard else
+                         {'A_PAYER': 'À payer', 'PARTIELLE': 'Partiellement payée',
+                          'PAYEE': 'Payée'}.get(d.statut_paiement, situation))
+            factures.append(d)
+        lignes.append({
+            'numero': d.numero or 'Brouillon', 'type': d.get_type_display(), 'client': d.client_nom,
+            'date': d.date_emission, 'echeance': d.date_echeance if d.type == 'FACTURE' else None,
+            'ttc': francs(d.total_ttc),
+            'encaisse': francs(d.montant_encaisse) if d.type == 'FACTURE' and d.statut == 'EMIS' else '',
+            'solde': francs(d.solde) if d.type == 'FACTURE' and d.statut == 'EMIS' else '',
+            'situation': situation, 'en_retard': d.en_retard,
+        })
+    facture = sum((f.total_ttc - f.montant_avoirs for f in factures), Decimal('0'))
+    encaisse = sum((f.montant_encaisse for f in factures), Decimal('0'))
+    restant = sum((max(f.solde, 0) for f in factures), Decimal('0'))
+    retard = sum((max(f.solde, 0) for f in factures if f.en_retard), Decimal('0'))
+    return {
+        'emetteur': params, 'date_edition': date.today(), 'filtre': titre_filtre,
+        'lignes': lignes, 'nb': len(lignes),
+        'totaux': {'facture': francs(facture), 'encaisse': francs(encaisse),
+                   'restant': francs(restant), 'retard': francs(retard)},
+    }

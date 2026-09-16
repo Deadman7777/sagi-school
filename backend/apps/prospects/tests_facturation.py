@@ -349,3 +349,67 @@ class ApiFacturationTest(APITestCase):
                              format='json')
         self.assertEqual(r.status_code, 201, r.content)
         self.assertEqual(r.data['objet'], 'Renouvellement de licence SAGI SCHOOL')
+
+
+class ReleveEtEtatTest(APITestCase):
+    """Relevé de compte d'un client et état de la facturation, en PDF."""
+
+    def setUp(self):
+        self.client.force_authenticate(User.objects.create_user(
+            email='super@hadygesman.com', password='x', nom='Super', role='SUPER_ADMIN'))
+        self.prospect = Prospect.objects.create(etablissement='Daara Touba', ville='Mbacké')
+        self.autre = Prospect.objects.create(etablissement='Autre école')
+        lignes = _lignes(('Licence Basic', 12, 25000))                       # 354 000 TTC
+        self.f1 = F.emettre(F.creer_brouillon('FACTURE', prospect=self.prospect, lignes=lignes))
+        self.f2 = F.emettre(F.creer_brouillon('FACTURE', prospect=self.prospect, lignes=lignes))
+        F.emettre(F.creer_brouillon('FACTURE', prospect=self.autre, lignes=lignes))
+        F.emettre(F.creer_brouillon('PROFORMA', prospect=self.prospect, lignes=lignes))
+        F.encaisser(self.f1, 354000)
+        F.annuler_encaissement(F.encaisser(self.f2, 100000), 'Chèque rejeté')
+        F.encaisser(self.f2, 54000)
+        avoir = F.preparer_avoir(self.f2, motif='Geste')
+        F.remplacer_lignes(avoir, _lignes(('Geste', 1, 100000)))            # 118 000 TTC
+        F.emettre(avoir)
+
+    def test_releve_ne_compte_que_ce_client_ni_proforma_ni_recu_annule(self):
+        docs = F.documents_du_client(prospect=self.prospect)
+        r = F.releve_compte(docs)
+        self.assertEqual(r['total_debit'], 708000)                  # 2 factures, pas la proforma
+        self.assertEqual(r['total_credit'], 354000 + 54000 + 118000)  # reçu annulé exclu
+        self.assertEqual(r['solde'], 182000)
+        self.assertEqual(r['solde'], sum(f.solde for f in docs if f.type == 'FACTURE'))
+        self.assertEqual([f.numero for f in r['ouvertes']], [self.f2.numero])
+        self.assertEqual(r['mouvements'][-1]['solde'], r['solde'])
+
+    def test_releve_par_nom_pour_un_client_libre(self):
+        F.emettre(F.creer_brouillon('FACTURE', client={'client_nom': 'Cabinet Ndiaye'},
+                                    lignes=_lignes(('Formation', 1, 50000))))
+        r = F.releve_compte(F.documents_du_client(client_nom='cabinet ndiaye'))
+        self.assertEqual(r['total_debit'], 59000)
+
+    def test_releve_pdf(self):
+        r = self.client.get(f'/api/facturation/documents/{self.f2.id}/releve-pdf/')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertTrue(r.content.startswith(b'%PDF'))
+        self.assertIn('releve-Daara-Touba', r['Content-Disposition'])
+        html = render_to_string('pdf/releve_compte_client.html', F.contexte_releve(
+            F.documents_du_client(prospect=self.prospect), {'nom': 'Daara Touba'}))
+        self.assertNotIn('{%', html)
+        self.assertIn('SOLDE RESTANT DÛ', html)
+        self.assertIn('182 000 F', html)
+
+    def test_etat_pdf_suit_les_filtres(self):
+        ctx = F.contexte_etat([self.f2], 'Factures impayées')
+        self.assertEqual(ctx['totaux']['restant'], '182 000 F')
+        r = self.client.get('/api/facturation/documents/etat-pdf/', {'impayees': 1})
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.assertTrue(r.content.startswith(b'%PDF'))
+        self.assertIn('attachment', r['Content-Disposition'])
+        html = render_to_string('pdf/etat_facturation.html', F.contexte_etat(
+            [d for d in DocumentCommercial.objects.all()], 'Toutes les pièces'))
+        self.assertNotIn('{%', html)
+        # Totaux = synthèse de l'écran : un seul calcul
+        s = F.synthese()
+        tout = F.contexte_etat(list(DocumentCommercial.objects.all()), '')
+        self.assertEqual(tout['totaux']['restant'], F.francs(s['restant']))
+        self.assertEqual(tout['totaux']['encaisse'], F.francs(s['encaisse']))

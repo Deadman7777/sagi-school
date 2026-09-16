@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+État des pièces de facturation, tel que filtré à l'écran (voir facturation.contexte_etat).
+A4 paysage : neuf colonnes. Couleurs sur les cellules, jamais sur les lignes.
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:9.5px; color:#111827; }
+  .header-table { width:100%; border-bottom:2px solid #00745a; padding-bottom:5px; margin-bottom:8px; }
+  .emetteur { font-size:15px; font-weight:bold; color:#00745a; }
+  .coord { font-size:8.5px; color:#374151; }
+  .titre { font-size:16px; font-weight:bold; text-align:right; }
+  .meta { font-size:8.5px; color:#374151; text-align:right; }
+  table.kpi { width:100%; margin-bottom:8px; border-collapse:collapse; }
+  table.kpi td { padding:5px 8px; border:1px solid #d1d5db; width:25%; }
+  .kpi-l { font-size:8px; color:#374151; text-transform:uppercase; }
+  .kpi-v { font-size:13px; font-weight:bold; }
+  table.liste { width:100%; border-collapse:collapse; }
+  table.liste th { background:#1a1a2e; color:#ffffff; padding:4px 5px; font-size:8.5px; text-align:left; }
+  table.liste td { padding:3px 5px; border-bottom:1px solid #e5e7eb; font-size:9px; vertical-align:top; }
+  .num { text-align:right; }
+  .rouge { color:#b91c1c; font-weight:bold; }
+  .vert { color:#047857; }
+  @page {
+    size: A4 landscape;
+    @frame contenu { left: 24pt; top: 24pt; width: 794pt; height: 520pt; }
+    @frame pied { -pdf-frame-content: pied-de-page; left: 24pt; top: 560pt; width: 794pt; height: 20pt; }
+  }
+</style>
+</head>
+<body>
+<table class="header-table">
+  <tr>
+    <td>
+      <div class="emetteur">{{ emetteur.raison_sociale }}</div>
+      <div class="coord">{% if emetteur.ninea %}NINEA {{ emetteur.ninea }}{% endif %}{% if emetteur.rccm %} &middot; RCCM {{ emetteur.rccm }}{% endif %}</div>
+    </td>
+    <td>
+      <div class="titre">ÉTAT DE LA FACTURATION</div>
+      <div class="meta">{{ filtre }} &middot; {{ nb }} pièce{{ nb|pluralize }} &middot; édité le {{ date_edition|date:"d/m/Y" }}</div>
+    </td>
+  </tr>
+</table>
+
+<table class="kpi">
+  <tr>
+    <td><div class="kpi-l">Facturé (factures émises, avoirs déduits)</div><div class="kpi-v">{{ totaux.facture }}</div></td>
+    <td><div class="kpi-l">Encaissé</div><div class="kpi-v vert">{{ totaux.encaisse }}</div></td>
+    <td><div class="kpi-l">Reste à encaisser</div><div class="kpi-v">{{ totaux.restant }}</div></td>
+    <td><div class="kpi-l">Dont en retard</div><div class="kpi-v rouge">{{ totaux.retard }}</div></td>
+  </tr>
+</table>
+
+<table class="liste">
+  <tr>
+    <th style="width:12%">Numéro</th>
+    <th style="width:10%">Type</th>
+    <th style="width:21%">Client</th>
+    <th style="width:8%">Émission</th>
+    <th style="width:8%">Échéance</th>
+    <th style="width:10%" class="num">Montant</th>
+    <th style="width:10%" class="num">Encaissé</th>
+    <th style="width:10%" class="num">Reste</th>
+    <th style="width:9%">Situation</th>
+  </tr>
+  {% for l in lignes %}
+  <tr>
+    <td>{{ l.numero }}</td>
+    <td>{{ l.type }}</td>
+    <td>{{ l.client }}</td>
+    <td>{{ l.date|date:"d/m/Y"|default:"—" }}</td>
+    <td>{{ l.echeance|date:"d/m/Y"|default:"—" }}</td>
+    <td class="num">{{ l.ttc }}</td>
+    <td class="num">{{ l.encaisse|default:"—" }}</td>
+    <td class="num">{{ l.solde|default:"—" }}</td>
+    <td{% if l.en_retard %} class="rouge"{% endif %}>{{ l.situation }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="9">Aucune pièce.</td></tr>
+  {% endfor %}
+</table>
+
+<div id="pied-de-page">
+  <table style="width:100%"><tr>
+    <td style="font-size:8px; color:#374151">{{ emetteur.raison_sociale }} &middot; État de la facturation &middot; {{ date_edition|date:"d/m/Y" }}</td>
+    <td style="font-size:8px; color:#374151; text-align:right">page <pdf:pagenumber></td>
+  </tr></table>
+</div>
+</body>
+</html>

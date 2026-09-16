@@ -1310,7 +1310,8 @@
     "confirmer_envoi": "Confirmer que le devis {{numero}} a été envoyé au prospect ? Aucun courriel n'est expédié : c'est vous qui l'adressez.",
     "confirmer_suppression_devis": "Supprimer le brouillon {{numero}} ?",
     "proforma": "Proforma",
-    "facturer": "Facturer"
+    "facturer": "Facturer",
+    "telecharger_pdf": "Télécharger le PDF"
   },
   "pedago": {
     "onglet": "Suivi pédagogique",
@@ -1454,6 +1455,8 @@
     "montant_requis": "Indiquez le montant reçu.",
     "paiement_enregistre": "Paiement enregistré, reçu téléchargé",
     "motif_annulation": "Motif de l'annulation du reçu :",
-    "erreur": "L'opération n'a pas abouti."
+    "erreur": "L'opération n'a pas abouti.",
+    "etat_pdf": "État (PDF)",
+    "releve_pdf": "Relevé du client (PDF)"
   }
 }

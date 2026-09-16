@@ -83,6 +83,8 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
       <input pInputText [(ngModel)]="recherche" (keyup.enter)="charger()"
              [placeholder]="'facturation.recherche' | translate" class="f-recherche" />
       <p-button icon="pi pi-refresh" [text]="true" (onClick)="charger()" />
+      <p-button icon="pi pi-file-pdf" [outlined]="true" size="small" [label]="'facturation.etat_pdf' | translate"
+                [loading]="exportEtat()" (onClick)="telechargerEtat()" />
     </div>
 
     <div class="table-card">
@@ -199,6 +201,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
           <span class="espace"></span>
           <p-button icon="pi pi-eye" [text]="true" [label]="'facturation.apercu' | translate" (onClick)="voirPdf(d)" />
           <p-button icon="pi pi-download" [outlined]="true" [label]="'facturation.telecharger_pdf' | translate" (onClick)="telecharger(d)" />
+          <p-button icon="pi pi-list" [outlined]="true" severity="secondary" [label]="'facturation.releve_pdf' | translate" (onClick)="telechargerReleve(d)" />
         </div>
 
         @if (d.modifiable) {
@@ -529,16 +532,39 @@ export class FacturationComponent implements OnInit {
 
   charger() {
     this.loading.set(true);
-    const f = this.filtre();
-    this.service.documents({
-      type: f && f !== 'IMPAYEES' ? f : undefined,
-      impayees: f === 'IMPAYEES' ? 1 : undefined,
-      recherche: this.recherche.trim() || undefined,
-    }).subscribe({
+    this.service.documents(this.filtresActifs()).subscribe({
       next: docs => { this.documents.set(docs); this.loading.set(false); },
       error: err => { this.loading.set(false); this.erreur(err); },
     });
     this.service.synthese().subscribe({ next: s => this.synthese.set(s) });
+  }
+
+  /** Les mêmes filtres pour la liste et pour son export PDF. */
+  private filtresActifs() {
+    const f = this.filtre();
+    return {
+      type: f && f !== 'IMPAYEES' ? f : undefined,
+      impayees: f === 'IMPAYEES' ? 1 : undefined,
+      recherche: this.recherche.trim() || undefined,
+    };
+  }
+
+  exportEtat = signal(false);
+
+  telechargerEtat() {
+    this.exportEtat.set(true);
+    this.service.etatPdf(this.filtresActifs()).subscribe({
+      next: blob => { this.exportEtat.set(false); this.enregistrerFichier(blob, `etat-facturation-${this.aujourdhui()}.pdf`); },
+      error: err => { this.exportEtat.set(false); this.erreur(err); },
+    });
+  }
+
+  telechargerReleve(d: DocumentCommercial) {
+    this.service.relevePdf(d.id).subscribe({
+      next: blob => this.enregistrerFichier(blob,
+        `releve-${(d.client_nom || 'client').replace(/[^A-Za-z0-9]+/g, '-')}-${this.aujourdhui()}.pdf`),
+      error: err => this.erreur(err),
+    });
   }
 
   situation(d: DocumentCommercial): string {

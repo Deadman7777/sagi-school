@@ -1310,7 +1310,8 @@
     "confirmer_envoi": "تأكيد أن العرض {{numero}} أُرسل إلى العميل المحتمل؟ لا يُرسل أي بريد: أنت من يرسله.",
     "confirmer_suppression_devis": "حذف المسودة {{numero}}؟",
     "proforma": "فاتورة أولية",
-    "facturer": "فوترة"
+    "facturer": "فوترة",
+    "telecharger_pdf": "تنزيل PDF"
   },
   "pedago": {
     "onglet": "المتابعة التربوية",
@@ -1454,6 +1455,8 @@
     "montant_requis": "أدخل المبلغ المستلم.",
     "paiement_enregistre": "تم تسجيل الدفعة وتنزيل الوصل",
     "motif_annulation": "سبب إلغاء الوصل:",
-    "erreur": "لم تنجح العملية."
+    "erreur": "لم تنجح العملية.",
+    "etat_pdf": "الكشف (PDF)",
+    "releve_pdf": "كشف حساب العميل (PDF)"
   }
 }

@@ -258,6 +258,8 @@ import { Router } from '@angular/router';
           <span class="dv-actions">
             <p-button icon="pi pi-file-pdf" [text]="true" size="small"
                       (onClick)="voirPdf(d)" [pTooltip]="'prospects.voir_pdf' | translate" />
+            <p-button icon="pi pi-download" [text]="true" size="small"
+                      (onClick)="telechargerDevis(d)" [pTooltip]="'prospects.telecharger_pdf' | translate" />
             @if (d.statut === 'BROUILLON') {
               <p-button [label]="'prospects.valider' | translate"
                         size="small" severity="success" (onClick)="validerDevis(d)" />
@@ -862,6 +864,20 @@ export class ProspectsComponent implements OnInit {
       next: doc => this.router.navigate(['/facturation'], { queryParams: { document: doc.id } }),
       error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
                                    detail: err?.error?.error || '' }),
+    });
+  }
+
+  telechargerDevis(d: Devis) {
+    this.service.pdfDevis(d.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Le nom porte l'état : un brouillon ne doit pas partir en pièce jointe par mégarde.
+        a.download = `${d.numero}${d.statut === 'BROUILLON' ? '-BROUILLON' : ''}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
     });
   }
 

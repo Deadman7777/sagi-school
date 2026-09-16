@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Relevé de compte d'un client de HADY GESMAN (voir facturation.releve_compte) :
+factures au débit, avoirs et paiements au crédit, solde courant. Les proformas
+n'y figurent pas, elles n'engagent aucune somme.
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:10.5px; color:#111827; }
+  .header-table { width:100%; border-bottom:2px solid #00745a; padding-bottom:6px; margin-bottom:10px; }
+  .header-table td { vertical-align:top; }
+  .emetteur { font-size:17px; font-weight:bold; color:#00745a; }
+  .coord { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .titre { font-size:18px; font-weight:bold; text-align:right; }
+  .meta { font-size:9.5px; color:#374151; text-align:right; margin-top:3px; }
+  table.client { width:100%; margin-bottom:10px; }
+  table.client td { padding:6px 9px; border:1px solid #e5e7eb; }
+  .label { font-size:9px; color:#374151; text-transform:uppercase; }
+  .nom { font-size:12.5px; font-weight:bold; }
+  .section-title { font-size:11.5px; font-weight:bold; border-left:3px solid #00745a; padding-left:6px; margin:10px 0 4px; }
+  table.mvt { width:100%; border-collapse:collapse; }
+  table.mvt th { background:#1a1a2e; color:#ffffff; padding:5px 6px; font-size:9.5px; text-align:left; }
+  table.mvt td { padding:4px 6px; border-bottom:1px solid #e5e7eb; font-size:10px; }
+  table.mvt td.tot { padding:5px 6px; border-top:1.5px solid #111827; font-weight:bold; background:#f3f4f6; }
+  .num { text-align:right; }
+  table.solde { width:100%; margin-top:10px; border-collapse:collapse; }
+  td.solde-l { padding:8px 10px; font-size:13px; font-weight:bold; color:#ffffff; background:#b91c1c; text-align:right; }
+  td.solde-v { padding:8px 10px; font-size:15px; font-weight:bold; color:#ffffff; background:#b91c1c; text-align:right; }
+  td.solde-ok-l { padding:8px 10px; font-size:13px; font-weight:bold; color:#ffffff; background:#00745a; text-align:right; }
+  td.solde-ok-v { padding:8px 10px; font-size:15px; font-weight:bold; color:#ffffff; background:#00745a; text-align:right; }
+  .rouge { color:#b91c1c; font-weight:bold; }
+  .conditions { font-size:9.4px; color:#374151; line-height:1.45; margin-top:8px; }
+  @page {
+    size: A4;
+    @frame contenu { left: 28pt; top: 28pt; width: 539pt; height: 762pt; }
+    @frame pied { -pdf-frame-content: pied-de-page; left: 28pt; top: 800pt; width: 539pt; height: 30pt; }
+  }
+</style>
+</head>
+<body>
+<table class="header-table">
+  <tr>
+    <td>
+      <div class="emetteur">{{ emetteur.raison_sociale }}</div>
+      <div class="coord">
+        {% if emetteur.telephone %}{{ emetteur.telephone }}<br>{% endif %}
+        {% if emetteur.email %}{{ emetteur.email }}<br>{% endif %}
+        {% if emetteur.ninea %}NINEA {{ emetteur.ninea }}{% endif %}{% if emetteur.rccm %} &middot; RCCM {{ emetteur.rccm }}{% endif %}
+      </div>
+    </td>
+    <td style="width:45%">
+      <div class="titre">RELEVÉ DE COMPTE</div>
+      <div class="meta">Situation au {{ date_edition|date:"d/m/Y" }}</div>
+    </td>
+  </tr>
+</table>
+
+<table class="client">
+  <tr><td>
+    <div class="label">Client</div>
+    <div class="nom">{{ client.nom }}</div>
+    {% if client.contact %}<div>{{ client.contact }}</div>{% endif %}
+    {% if client.adresse or client.ville %}<div>{{ client.adresse }}{% if client.adresse and client.ville %}, {% endif %}{{ client.ville }}</div>{% endif %}
+    {% if client.telephone %}<div>{{ client.telephone }}</div>{% endif %}
+    {% if client.email %}<div>{{ client.email }}</div>{% endif %}
+    {% if client.ninea %}<div>NINEA {{ client.ninea }}</div>{% endif %}
+  </td></tr>
+</table>
+
+<div class="section-title">Mouvements</div>
+<table class="mvt">
+  <tr>
+    <th style="width:11%">Date</th>
+    <th style="width:16%">Pièce</th>
+    <th style="width:31%">Libellé</th>
+    <th style="width:12%" class="num">Débit</th>
+    <th style="width:12%" class="num">Crédit</th>
+    <th style="width:12%" class="num">Solde</th>
+  </tr>
+  {% for m in mouvements %}
+  <tr>
+    <td>{{ m.date|date:"d/m/Y" }}</td>
+    <td>{{ m.piece }}</td>
+    <td>{{ m.libelle }}</td>
+    <td class="num">{{ m.debit|default:"—" }}</td>
+    <td class="num">{{ m.credit|default:"—" }}</td>
+    <td class="num">{{ m.solde }}</td>
+  </tr>
+  {% empty %}
+  <tr><td colspan="6">Aucune facture émise pour ce client.</td></tr>
+  {% endfor %}
+  <tr>
+    <td class="tot" colspan="3">Totaux</td>
+    <td class="tot num">{{ totaux.debit }}</td>
+    <td class="tot num">{{ totaux.credit }}</td>
+    <td class="tot num">&nbsp;</td>
+  </tr>
+</table>
+
+<table class="solde">
+  <tr>
+    {% if solde_positif %}
+    <td class="solde-l" style="width:75%">SOLDE RESTANT DÛ</td>
+    <td class="solde-v" style="width:25%">{{ totaux.solde }}</td>
+    {% elif totaux.trop_percu %}
+    <td class="solde-ok-l" style="width:75%">TROP-PERÇU EN VOTRE FAVEUR</td>
+    <td class="solde-ok-v" style="width:25%">{{ totaux.trop_percu }}</td>
+    {% else %}
+    <td class="solde-ok-l" style="width:75%">COMPTE À JOUR</td>
+    <td class="solde-ok-v" style="width:25%">0&nbsp;F</td>
+    {% endif %}
+  </tr>
+</table>
+
+{% if ouvertes %}
+<div class="section-title">Factures restant à régler</div>
+<table class="mvt">
+  <tr>
+    <th style="width:22%">Facture</th>
+    <th style="width:15%">Émise le</th>
+    <th style="width:21%">Échéance</th>
+    <th style="width:18%" class="num">Montant</th>
+    <th style="width:18%" class="num">Reste dû</th>
+  </tr>
+  {% for f in ouvertes %}
+  <tr>
+    <td>{{ f.numero }}</td>
+    <td>{{ f.date|date:"d/m/Y" }}</td>
+    <td{% if f.en_retard %} class="rouge"{% endif %}>{{ f.echeance|date:"d/m/Y"|default:"—" }}{% if f.en_retard %} — en retard{% endif %}</td>
+    <td class="num">{{ f.ttc }}</td>
+    <td class="num">{{ f.solde }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<div class="conditions">
+  Ce relevé récapitule les factures émises, les avoirs et les paiements enregistrés au {{ date_edition|date:"d/m/Y" }}.
+  Tout paiement effectué après cette date n'y figure pas. Pour toute question, merci de rappeler le numéro des pièces concernées.
+  {% if emetteur.coordonnees_paiement %}<br><strong>Coordonnées de paiement.</strong> {{ emetteur.coordonnees_paiement|linebreaksbr }}{% endif %}
+</div>
+
+<div id="pied-de-page">
+  <table style="width:100%; border-top:1px solid #e0e0e0"><tr>
+    <td style="font-size:8.5px; color:#374151; padding-top:3px">{{ emetteur.raison_sociale }} &middot; Relevé de compte &middot; {{ client.nom }}</td>
+    <td style="font-size:8.5px; color:#374151; text-align:right; padding-top:3px">page <pdf:pagenumber></td>
+  </tr></table>
+</div>
+</body>
+</html>

@@ -105,6 +105,10 @@ export class FacturationService {
       `/facturation/documents/${id}/encaisser/`, data);
   }
   pdf(id: string)       { return this.api.getBlob(`/facturation/documents/${id}/pdf/`); }
+  /** Relevé de compte du client de cette pièce (factures, avoirs, paiements, solde). */
+  relevePdf(id: string) { return this.api.getBlob(`/facturation/documents/${id}/releve-pdf/`); }
+  /** La liste telle que filtrée à l'écran, avec ses totaux. */
+  etatPdf(filtres?: ParamsRecord) { return this.api.getBlob('/facturation/documents/etat-pdf/', filtres); }
 
   annulerRecu(id: string, motif: string) {
     return this.api.post<Recu>(`/facturation/encaissements/${id}/annuler/`, { motif });

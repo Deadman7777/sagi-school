@@ -136,7 +136,7 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
     def _get(self, pk):
         return DocumentCommercial.objects.filter(pk=pk).first()
 
-    def list(self, request):
+    def _filtrer(self, request):
         qs = DocumentCommercial.objects.select_related('origine')
         q = request.query_params
         if q.get('type'):
@@ -151,10 +151,53 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
             from django.db.models import Q
             r = q['recherche']
             qs = qs.filter(Q(client_nom__icontains=r) | Q(numero__icontains=r) | Q(objet__icontains=r))
-        documents = [_document_dict(d) for d in qs[:500]]
+        documents = list(qs[:500])
         if q.get('impayees'):
-            documents = [d for d in documents if d['statut_paiement'] in ('A_PAYER', 'PARTIELLE')]
-        return Response(documents)
+            documents = [d for d in documents if d.statut_paiement in ('A_PAYER', 'PARTIELLE')]
+        return documents
+
+    def list(self, request):
+        return Response([_document_dict(d) for d in self._filtrer(request)])
+
+    @action(detail=False, methods=['get'], url_path='etat-pdf')
+    def etat_pdf(self, request):
+        """La liste telle que filtrée à l'écran, en PDF, avec ses totaux."""
+        q = request.query_params
+        filtre = ('Factures impayées' if q.get('impayees') else
+                  {'PROFORMA': 'Factures proforma', 'FACTURE': 'Factures', 'AVOIR': 'Avoirs'}
+                  .get(q.get('type'), 'Toutes les pièces'))
+        if q.get('recherche'):
+            filtre += f" — « {q['recherche']} »"
+        try:
+            octets = F.rendre_pdf('pdf/etat_facturation.html',
+                                  F.contexte_etat(self._filtrer(request), filtre))
+        except F.FacturationErreur as exc:
+            return HttpResponse(str(exc), status=500)
+        reponse = HttpResponse(octets, content_type='application/pdf')
+        reponse['Content-Disposition'] = f'attachment; filename="etat-facturation-{date.today():%Y-%m-%d}.pdf"'
+        return reponse
+
+    @action(detail=True, methods=['get'], url_path='releve-pdf')
+    def releve_pdf(self, request, pk=None):
+        """Relevé de compte du client de cette pièce (même prospect, même école, ou même nom)."""
+        d = self._get(pk)
+        if not d:
+            return HttpResponse('Document introuvable', status=404)
+        documents = list(F.documents_du_client(prospect=d.prospect, tenant=d.tenant,
+                                               client_nom=d.client_nom)
+                         .prefetch_related('encaissements', 'derives'))
+        # Coordonnées de la pièce la plus récente : c'est la plus à jour.
+        recente = max(documents, key=lambda x: x.created_at, default=d)
+        client = {f.replace('client_', ''): getattr(recente, f) for f in CHAMPS_CLIENT}
+        try:
+            octets = F.rendre_pdf('pdf/releve_compte_client.html', F.contexte_releve(documents, client))
+        except F.FacturationErreur as exc:
+            return HttpResponse(str(exc), status=500)
+        import re
+        nom = re.sub(r'[^A-Za-z0-9]+', '-', recente.client_nom).strip('-')[:40] or 'client'
+        reponse = HttpResponse(octets, content_type='application/pdf')
+        reponse['Content-Disposition'] = f'attachment; filename="releve-{nom}-{date.today():%Y-%m-%d}.pdf"'
+        return reponse
 
     def retrieve(self, request, pk=None):
         d = self._get(pk)
