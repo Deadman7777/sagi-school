@@ -497,10 +497,16 @@ def generer_ecritures_paie(bulletin, tenant):
 
     rows = []
 
-    # — Étape 1 : salaire brut —
+    # — Étape 1 : rémunération réellement due —
+    # Les « autres retenues » sanctionnent des manquements de l'employé : ce
+    # n'est pas une somme reversée à un tiers, elle n'a donc pas d'écriture
+    # propre. On comptabilise ce que l'employé perçoit réellement ce mois-là.
+    # Portées au brut, elles laissaient au 422 une dette envers l'employé qui
+    # n'existait pas.
+    remuneration = _d(bulletin.salaire_brut) - _d(bulletin.autres_retenues)
     rows += [
-        entry('661', f"Salaires {emp} {bulletin.mois:02d}/{bulletin.annee}", debit=bulletin.salaire_brut),
-        entry('422', f"Rémunération due {emp} {bulletin.mois:02d}/{bulletin.annee}", credit=bulletin.salaire_brut),
+        entry('661', f"Salaires {emp} {bulletin.mois:02d}/{bulletin.annee}", debit=remuneration),
+        entry('422', f"Rémunération due {emp} {bulletin.mois:02d}/{bulletin.annee}", credit=remuneration),
     ]
 
     # — Étape 2 : retenues salariales —

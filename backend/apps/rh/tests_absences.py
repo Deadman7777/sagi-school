@@ -164,3 +164,34 @@ class RetenueAbsenceApiTest(APITestCase):
         r = self.client.get(f'/api/rh/bulletins/{b.id}/pdf/')
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.content.startswith(b'%PDF'))
+
+
+class AutresRetenuesEcrituresTest(TestCase):
+    """Les autres retenues (manquements de l'employé) n'ont pas d'écriture
+    propre : seule la rémunération réellement perçue est comptabilisée."""
+
+    def setUp(self):
+        from apps.paiements.models import Exercice
+        ParametresFiscaux.objects.create(annee=2026, tranches_ir=[])
+        self.tenant = Tenant.objects.create(nom='École', regime_paie='COMPLET')
+        self.employe = _employe(self.tenant)
+        Exercice.objects.create(tenant=self.tenant, annee_scolaire='2025-2026',
+                                date_debut=datetime.date(2025, 10, 1),
+                                date_fin=datetime.date(2026, 9, 30))
+
+    def test_422_solde_et_charge_egale_a_la_remuneration_percue(self):
+        from django.db.models import Sum
+        from apps.comptabilite.models import JournalEntry
+        from apps.rh.services import generer_ecritures_paie
+        b = PaieCalculateur.creer_bulletin(self.employe, 3, 2026, autres_retenues=7000)
+        generer_ecritures_paie(b, self.tenant)
+        lignes = JournalEntry.objects.filter(tenant=self.tenant)
+        tot = lignes.aggregate(d=Sum('debit'), c=Sum('credit'))
+        self.assertEqual(tot['d'], tot['c'])
+        l422 = lignes.filter(no_compte='422').aggregate(d=Sum('debit'), c=Sum('credit'))
+        self.assertEqual(l422['d'], l422['c'], "aucune dette fictive envers l'employé")
+        self.assertEqual(lignes.filter(no_compte='661').aggregate(s=Sum('debit'))['s'],
+                         b.salaire_brut - Decimal('7000'))
+        # La trésorerie sort bien le net à payer, ni plus ni moins
+        self.assertEqual(lignes.filter(no_compte__startswith='5').aggregate(s=Sum('credit'))['s'],
+                         b.net_a_payer)
