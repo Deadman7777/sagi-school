@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Fiche de suivi pédagogique, en français ou en arabe (ar = True).
+En arabe, xhtml2pdf ignorant direction:rtl, les colonnes sont écrites dans
+l'ordre inverse et les textes arrivent déjà formés (shape_ar).
+Styles de fond et de couleur posés sur les cellules, jamais sur les lignes.
+{% endcomment %}
+<style>
+  @font-face { font-family: "body"; src: url("{{ font_body }}"); }
+  @font-face { font-family: "arf"; src: url("{{ font_ar }}"); }
+  @page { size: A4; margin: 12mm 12mm; }
+  body { font-family: {% if ar %}"arf"{% else %}"body"{% endif %}; font-size: {% if ar %}10pt{% else %}9pt{% endif %}; color: #1a1a1a; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .ecole { font-size: 12pt; color: #1a3c5e; text-align: center; }
+  .titre { font-size: 14pt; color: #1a3c5e; text-align: center; margin-top: 2pt; }
+  .sous-titre { font-size: 9pt; color: #555555; text-align: center; margin-bottom: 6pt; }
+  .info td { border: 0.75pt solid #b0bec5; padding: 3pt 5pt; text-align: {% if ar %}right{% else %}left{% endif %}; }
+  .lbl { font-size: 7.5pt; color: #4b5563; }
+  .sec { margin-top: 10pt; margin-bottom: 3pt; font-size: 11pt; color: #1a3c5e;
+         border-bottom: 1.5pt solid #1a3c5e; padding-bottom: 1pt; text-align: {% if ar %}right{% else %}left{% endif %}; }
+  td.th { background-color: #1a3c5e; color: #ffffff; padding: 3pt; font-size: 8pt; text-align: center;
+          border: 0.5pt solid #3a5a7e; }
+  td.c { padding: 2pt 3pt; border: 0.5pt solid #d1d5db; text-align: center; }
+  td.n { padding: 2pt 5pt; border: 0.5pt solid #d1d5db; text-align: {% if ar %}right{% else %}left{% endif %}; }
+  td.fort { color: #047857; }
+  td.faible { color: #b91c1c; }
+  td.moyen { color: #374151; }
+  .bloc td { padding: 4pt 6pt; border: 0.75pt solid #d1d5db; vertical-align: top;
+             text-align: {% if ar %}right{% else %}left{% endif %}; }
+  .rec { margin: 1pt 0; text-align: {% if ar %}right{% else %}left{% endif %}; }
+  .obs td { border-bottom: 0.5pt dotted #9ca3af; height: 16pt; }
+  .sig td { text-align: center; padding-top: 18pt; }
+  .sig-line { border-top: 0.75pt solid #6b7280; padding-top: 2pt; color: #444444; }
+  .pied { margin-top: 6pt; font-size: 7pt; color: #6b7280; text-align: center; }
+</style>
+</head>
+<body>
+
+  {% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:45px; max-width:130px;"></div>{% endif %}
+  <div class="ecole">{{ tenant.nom|upper }}</div>
+  <div class="titre">{{ t.titre }}</div>
+  <div class="sous-titre">{{ programme }} &nbsp;|&nbsp; {{ annee }}</div>
+
+  <table class="info">
+    {% if ar %}
+    <tr>
+      <td style="width:22%"><div class="lbl">{{ t.annee }}</div>{{ annee }}</td>
+      <td style="width:18%"><div class="lbl">{{ t.matricule }}</div>{{ eleve.matricule|default:"—" }}</td>
+      <td style="width:25%"><div class="lbl">{{ t.classe }}</div>{{ classe }}</td>
+      <td style="width:35%"><div class="lbl">{{ t.eleve }}</div>{{ eleve_nom }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td style="width:35%"><div class="lbl">{{ t.eleve }}</div>{{ eleve_nom }}</td>
+      <td style="width:25%"><div class="lbl">{{ t.classe }}</div>{{ classe }}</td>
+      <td style="width:18%"><div class="lbl">{{ t.matricule }}</div>{{ eleve.matricule|default:"—" }}</td>
+      <td style="width:22%"><div class="lbl">{{ t.annee }}</div>{{ annee }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  {% if not matieres %}
+    <div class="sec">{{ t.aucune_note }}</div>
+  {% else %}
+
+  <div class="sec">{{ t.evolution }}</div>
+  <table>
+    <tr>
+      {% if ar %}
+      <td class="th" style="width:25%">{{ t.moy_classe }}</td><td class="th" style="width:20%">{{ t.rang }}</td>
+      <td class="th" style="width:20%">{{ t.moyenne }}</td><td class="th" style="width:35%">{{ t.periode }}</td>
+      {% else %}
+      <td class="th" style="width:35%">{{ t.periode }}</td><td class="th" style="width:20%">{{ t.moyenne }}</td>
+      <td class="th" style="width:20%">{{ t.rang }}</td><td class="th" style="width:25%">{{ t.moy_classe }}</td>
+      {% endif %}
+    </tr>
+    {% for p in periodes %}
+    <tr>
+      {% if ar %}
+      <td class="c">{{ p.moy_classe }}</td><td class="c">{{ p.rang }}</td>
+      <td class="c">{{ p.moyenne }}</td><td class="n">{{ p.libelle }}</td>
+      {% else %}
+      <td class="n">{{ p.libelle }}</td><td class="c">{{ p.moyenne }}</td>
+      <td class="c">{{ p.rang }}</td><td class="c">{{ p.moy_classe }}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="sec">{{ t.matieres }}</div>
+  <table>
+    <tr>
+      {% if ar %}
+      <td class="th" style="width:24%">{{ t.lecture }}</td>
+      <td class="th" style="width:9%">{{ t.ecart }}</td>
+      <td class="th" style="width:9%">{{ t.moy_classe }}</td>
+      <td class="th" style="width:9%">{{ t.derniere }}</td>
+      {% for e in entetes_periodes %}<td class="th">{{ e }}</td>{% endfor %}
+      <td class="th" style="width:6%">{{ t.coef }}</td>
+      <td class="th" style="width:20%">{{ t.matiere }}</td>
+      {% else %}
+      <td class="th" style="width:20%">{{ t.matiere }}</td>
+      <td class="th" style="width:6%">{{ t.coef }}</td>
+      {% for e in entetes_periodes %}<td class="th">{{ e }}</td>{% endfor %}
+      <td class="th" style="width:9%">{{ t.derniere }}</td>
+      <td class="th" style="width:9%">{{ t.moy_classe }}</td>
+      <td class="th" style="width:9%">{{ t.ecart }}</td>
+      <td class="th" style="width:24%">{{ t.lecture }}</td>
+      {% endif %}
+    </tr>
+    {% for m in matieres %}
+    <tr>
+      {% if ar %}
+      <td class="n {% if m.statut == 'FORT' %}fort{% elif m.statut == 'FAIBLE' %}faible{% else %}moyen{% endif %}">{{ m.lecture }}</td>
+      <td class="c">{{ m.evolution }}</td>
+      <td class="c">{{ m.moy_classe }}</td>
+      <td class="c">{{ m.derniere }}</td>
+      {% for n in m.notes %}<td class="c">{{ n }}</td>{% endfor %}
+      <td class="c">{{ m.coef }}</td>
+      <td class="n">{{ m.nom }}</td>
+      {% else %}
+      <td class="n">{{ m.nom }}</td>
+      <td class="c">{{ m.coef }}</td>
+      {% for n in m.notes %}<td class="c">{{ n }}</td>{% endfor %}
+      <td class="c">{{ m.derniere }}</td>
+      <td class="c">{{ m.moy_classe }}</td>
+      <td class="c">{{ m.evolution }}</td>
+      <td class="n {% if m.statut == 'FORT' %}fort{% elif m.statut == 'FAIBLE' %}faible{% else %}moyen{% endif %}">{{ m.lecture }}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+
+  <table class="bloc" style="margin-top:10pt">
+    <tr>
+      {% if ar %}
+      <td style="width:33%"><div class="lbl" style="color:#b45309">{{ t.ameliorer }}</div>{{ ameliorer }}</td>
+      <td style="width:34%"><div class="lbl" style="color:#b91c1c">{{ t.faibles }}</div>{{ faibles }}</td>
+      <td style="width:33%"><div class="lbl" style="color:#047857">{{ t.forts }}</div>{{ forts }}</td>
+      {% else %}
+      <td style="width:33%"><div class="lbl" style="color:#047857">{{ t.forts }}</div>{{ forts }}</td>
+      <td style="width:34%"><div class="lbl" style="color:#b91c1c">{{ t.faibles }}</div>{{ faibles }}</td>
+      <td style="width:33%"><div class="lbl" style="color:#b45309">{{ t.ameliorer }}</div>{{ ameliorer }}</td>
+      {% endif %}
+    </tr>
+  </table>
+
+  <div class="sec">{{ t.recommandations }}</div>
+  {% for r in recommandations %}<div class="rec">{% if ar %}{{ r }} •{% else %}• {{ r }}{% endif %}</div>{% endfor %}
+
+  {% endif %}
+
+  <div class="sec">{{ t.observations }}</div>
+  <table class="obs"><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr></table>
+
+  <table class="sig">
+    <tr>
+      <td style="width:33%"><div class="sig-line">{% if ar %}{{ t.parent }}{% else %}{{ t.enseignant }}{% endif %}</div></td>
+      <td style="width:34%"><div class="sig-line">{{ t.directeur }}</div></td>
+      <td style="width:33%"><div class="sig-line">{% if ar %}{{ t.enseignant }}{% else %}{{ t.parent }}{% endif %}</div></td>
+    </tr>
+  </table>
+
+  <div class="pied">{{ tenant.nom }} &middot; {{ date_edition|date:"d/m/Y" }}</div>
+</body>
+</html>

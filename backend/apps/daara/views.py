@@ -235,27 +235,7 @@ class ProgressionView(APIView):
 
 # ───────────────────────── Rapport parent (PDF bilingue AR/FR) ─────────────────────────
 
-FONT_DIR = os.path.join(settings.BASE_DIR, 'templates', 'pdf', 'fonts')
-
-
-def shape_ar(text):
-    """Pré-forme l'arabe (ligatures + ordre visuel RTL) pour xhtml2pdf/ReportLab,
-    qui ne savent ni façonner ni inverser. Échoue en douceur sur le texte brut."""
-    if not text:
-        return ''
-    try:
-        import arabic_reshaper
-        from bidi.algorithm import get_display
-        return get_display(arabic_reshaper.reshape(text))
-    except Exception:
-        return text
-
-
-def _font_link_callback(uri, rel):
-    """Résout url('xxx.ttf') du @font-face vers le fichier embarqué."""
-    if uri.endswith('.ttf'):
-        return os.path.join(FONT_DIR, os.path.basename(uri))
-    return uri
+from core.arabe import FONT_DIR, shape_ar, font_link_callback as _font_link_callback  # noqa: E402,F401
 
 
 class RapportParentPDFView(APIView):

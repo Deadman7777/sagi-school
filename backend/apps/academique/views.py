@@ -12,6 +12,8 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
 from core.tenant import get_tenant
+from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
+                        programme_valide, situation_periode)
 
 
 def _est_periode_finale(tenant, periode):
@@ -109,11 +111,11 @@ class ClasseViewSet(viewsets.ModelViewSet):
         rapport = []
         with transaction.atomic():
             for cible in cibles:
-                existantes = {m.nom.strip().lower(): m for m in
+                existantes = {(m.programme, m.nom.strip().lower()): m for m in
                               Matiere.objects.filter(tenant=tenant, classe=cible)}
                 creees = alignees = 0
                 for m in matieres:
-                    cle = m.nom.strip().lower()
+                    cle = (m.programme, m.nom.strip().lower())
                     if cle in existantes:
                         if ecraser:
                             deja = existantes[cle]
@@ -125,7 +127,7 @@ class ClasseViewSet(viewsets.ModelViewSet):
                         continue
                     Matiere.objects.create(
                         tenant=tenant, classe=cible, nom=m.nom, code=m.code,
-                        coefficient=m.coefficient, note_max=m.note_max,
+                        programme=m.programme, coefficient=m.coefficient, note_max=m.note_max,
                         ordre=m.ordre, est_active=True)
                     creees += 1
                 rapport.append({'classe': cible.nom, 'creees': creees,
@@ -201,6 +203,8 @@ class MatiereViewSet(viewsets.ModelViewSet):
         ).select_related('classe')
         if classe := self.request.query_params.get('classe'):
             qs = qs.filter(classe_id=classe)
+        if programme := self.request.query_params.get('programme'):
+            qs = qs.filter(programme=programme)
         return qs
 
     def perform_create(self, serializer):
@@ -322,7 +326,12 @@ class MoteurCalculView(APIView):
         except Classe.DoesNotExist:
             return Response({'error': 'Classe introuvable'}, status=404)
 
-        matieres = list(Matiere.objects.filter(classe=classe, tenant=tenant, est_active=True))
+        matieres_qs = Matiere.objects.filter(classe=classe, tenant=tenant, est_active=True)
+        # Établissement hybride : chaque programme a sa moyenne et son rang
+        programme = programme_valide(request.data.get('programme'))
+        if programme:
+            matieres_qs = matieres_qs.filter(programme=programme)
+        matieres = list(matieres_qs)
         from apps.eleves.models import Eleve
         from apps.paiements.models import Exercice as _Exercice
         exercice_actif = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
@@ -513,6 +522,7 @@ class MoteurCalculView(APIView):
         return Response({
             'classe':    classe.nom,
             'trimestre': trimestre,
+            'programme': programme,
             'resultats': resultats,
             'stats':     stats,
         })
@@ -546,22 +556,10 @@ class BulletinView(APIView):
         except Eleve.DoesNotExist:
             return Response({'error': 'Élève introuvable'}, status=404)
 
-        # Récupérer les données du cache bulletin
-        bulletins = BulletinCache.objects.filter(
-            tenant=tenant, eleve=eleve,
-            trimestre=trimestre, annee_scolaire=annee
-        ).select_related('matiere', 'matiere__classe', 'matiere__classe__niveau')
-
-        if not bulletins.exists():
+        programme = programme_valide(request.query_params.get('programme'))
+        situation = situation_periode(tenant, eleve, trimestre, annee, programme)
+        if situation is None:
             return Response({'error': 'Aucune note calculée. Lancez d\'abord le calcul.'}, status=404)
-
-        # Stats classe
-        tous_bulletins = BulletinCache.objects.filter(
-            tenant=tenant, trimestre=trimestre,
-            annee_scolaire=annee,
-            matiere__classe=bulletins.first().matiere.classe
-        )
-        moyennes_classe = [float(b.moyenne) for b in tous_bulletins if b.moyenne]
 
         data = {
             'eleve': {
@@ -581,20 +579,24 @@ class BulletinView(APIView):
             'tenant':    {'nom': tenant.nom, 'ville': tenant.ville},
             'trimestre': trimestre,
             'annee':     annee,
+            'programme': programme,
             'matieres': [{
                 'nom':         b.matiere.nom,
                 'coefficient': float(b.matiere.coefficient),
                 'note_max':    float(b.matiere.note_max),
-                'moyenne':     float(b.moyenne) if b.moyenne else None,
-                'points':      float(b.points) if b.points else None,
+                'moyenne':     float(b.moyenne) if b.moyenne is not None else None,
+                'points':      float(b.points) if b.points is not None else None,
                 'rang':        b.rang_matiere,
                 'appreciation':b.appreciation,
-            } for b in bulletins.order_by('matiere__ordre')],
+            } for b in situation['lignes']],
             'stats': {
-                'moy_generale': round(sum(float(b.points or 0) for b in bulletins) /
-                               sum(float(b.matiere.coefficient) for b in bulletins), 2)
-                               if bulletins else 0,
-                'moy_classe':  round(sum(moyennes_classe)/len(moyennes_classe), 2) if moyennes_classe else 0,
+                'moy_generale': situation['moy_generale'],
+                # Moyenne des moyennes générales de la classe — la même que le
+                # PDF. C'était la moyenne de toutes les notes de matière de la
+                # classe, un autre chiffre sous le même nom.
+                'moy_classe':   situation['moy_classe'],
+                'rang':         situation['rang'],
+                'effectif':     situation['effectif'],
             }
         }
         return Response(data)
@@ -646,50 +648,21 @@ class BulletinPDFView(APIView):
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 
-        bulletins = BulletinCache.objects.filter(
-            tenant=tenant, eleve=eleve,
-            trimestre=trimestre, annee_scolaire=annee
-        ).select_related('matiere', 'matiere__classe', 'matiere__classe__niveau')
-
-        if not bulletins.exists():
+        programme = programme_valide(request.query_params.get('programme'))
+        situation = situation_periode(tenant, eleve, trimestre, annee, programme)
+        if situation is None:
             return HttpResponse('Aucune note calculée', status=404)
 
-        bulletins_list = list(bulletins.order_by('matiere__ordre'))
-
-        # Calcul moyenne générale
-        total_points = sum(float(b.points or 0) for b in bulletins_list)
-        total_coef   = sum(float(b.matiere.coefficient) for b in bulletins_list)
-        moy_generale = round(total_points / total_coef, 2) if total_coef > 0 else 0
+        bulletins_list = situation['lignes']
+        total_points   = situation['total_points']
+        total_coef     = situation['total_coef']
+        moy_generale   = situation['moy_generale']
         # note_max de référence : niveau si défini, sinon note_max de la matière (niveau nullable)
-        note_max = 20.0
-        if bulletins_list:
-            m0 = bulletins_list[0].matiere
-            niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
-            note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
+        m0 = bulletins_list[0].matiere
+        niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
+        note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
 
-        # Stats classe — 1 seule requête
         from collections import defaultdict
-        classe = bulletins_list[0].matiere.classe if bulletins_list else None
-        tous_bulletins_classe = list(BulletinCache.objects.filter(
-            tenant=tenant, trimestre=trimestre,
-            annee_scolaire=annee, matiere__classe=classe
-        ).select_related('matiere'))
-
-        bulletins_par_eleve: dict = defaultdict(list)
-        for b in tous_bulletins_classe:
-            bulletins_par_eleve[str(b.eleve_id)].append(b)
-
-        moyennes_classe = []
-        rang_eleve = 1
-        for e_bulletins in bulletins_par_eleve.values():
-            e_pts  = sum(float(b.points or 0) for b in e_bulletins)
-            e_coef = sum(float(b.matiere.coefficient) for b in e_bulletins)
-            e_moy  = round(e_pts / e_coef, 2) if e_coef > 0 else 0
-            moyennes_classe.append(e_moy)
-            if e_moy > moy_generale:
-                rang_eleve += 1
-
-        moy_classe = round(sum(moyennes_classe)/len(moyennes_classe), 2) if moyennes_classe else 0
 
         # ── Détail des notes individuelles par matière ────────────────────
         matiere_ids = [b.matiere_id for b in bulletins_list]
@@ -785,23 +758,41 @@ class BulletinPDFView(APIView):
                 # de la vue bulletin plus haut.
                 'classe':         (eleve.classe.nom if eleve.classe_id
                                    else (eleve.section.nom if eleve.section else '—')),
-                'rang':           rang_eleve,
+                'rang':           situation['rang'],
             },
             'matieres':            matieres_ctx,
             'total_coef':          round(total_coef, 1),
             'total_points':        round(total_points, 2),
             'stats': {
                 'moy_generale': moy_generale,
-                'moy_classe':   moy_classe,
-                'moy_max':      max(moyennes_classe) if moyennes_classe else 0,
-                'moy_min':      min(moyennes_classe) if moyennes_classe else 0,
-                'nb_eleves':    len(moyennes_classe),
+                'moy_classe':   situation['moy_classe'],
+                'moy_max':      situation['moy_max'],
+                'moy_min':      situation['moy_min'],
+                'nb_eleves':    situation['effectif'],
             },
             'appreciation_generale': self.get_appreciation(moy_generale, note_max),
             'decision':              self.get_decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
             'is_final':              _est_periode_finale(tenant, trimestre),
             'decision_positive':     moy_generale >= (note_max * 10 / 20),
         }
+
+        context['programme'] = programme
+        context['hybride'] = getattr(tenant, 'programmes_hybrides', False)
+        if programme == 'AR':
+            # Bulletin du programme arabe : tout en arabe, de droite à gauche
+            from .libelles import contexte_bulletin_ar
+            from core.arabe import font_link_callback
+            from xhtml2pdf import pisa
+            html_str = render_to_string('pdf/bulletin_ar.html',
+                                        contexte_bulletin_ar(context, tenant, bulletins_list))
+            buffer = BytesIO()
+            result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
+                                    link_callback=font_link_callback)
+            if result.err:
+                return HttpResponse('Erreur génération bulletin PDF.', status=500)
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="bulletin_ar_{eleve.nom_complet}_{trimestre}.pdf"'
+            return response
 
         import logging, traceback as _tb
         _logger = logging.getLogger('django')
@@ -841,6 +832,8 @@ class AnalysePerformanceView(APIView):
         annee    = exercice.annee_scolaire if exercice else ''
 
         bulletins = BulletinCache.objects.filter(tenant=tenant, annee_scolaire=annee)
+        if programme := programme_valide(request.query_params.get('programme')):
+            bulletins = bulletins.filter(matiere__programme=programme)
 
         # BulletinCache est PAR MATIÈRE → la moyenne générale d'un élève = Σpoints / Σcoef.
         def moyennes_par_eleve(periode):
@@ -954,10 +947,13 @@ class BulletinsHistoriqueView(APIView):
                                eleve__section__nom__iexact=classe_nom))
         if search:
             qs = qs.filter(eleve__nom_complet__icontains=search)
+        if programme := programme_valide(request.query_params.get('programme')):
+            qs = qs.filter(matiere__programme=programme)
 
         zero = Value(Decimal('0'), output_field=DecimalField())
+        # Un bulletin par programme : un élève d'établissement hybride en a deux
         groupes = list(
-            qs.values('eleve_id', 'trimestre', 'annee_scolaire')
+            qs.values('eleve_id', 'trimestre', 'annee_scolaire', 'matiere__programme')
             .annotate(
                 nb_matieres=Count('id'),
                 total_points=Coalesce(Sum('points'), zero),
@@ -987,6 +983,7 @@ class BulletinsHistoriqueView(APIView):
                                   else (e.section.nom if e.section else '—')),
                 'trimestre':     g['trimestre'],
                 'annee_scolaire':g['annee_scolaire'],
+                'programme':     g['matiere__programme'],
                 'moy_generale':  moy,
                 'nb_matieres':   g['nb_matieres'],
             })
@@ -995,6 +992,7 @@ class BulletinsHistoriqueView(APIView):
             -(int(x['annee_scolaire'][:4]) if x['annee_scolaire'] and x['annee_scolaire'][:4].isdigit() else 0),
             x['trimestre'],
             x['eleve_nom'],
+            x['programme'],
         ))
 
         # Années disponibles pour le filtre
@@ -1006,3 +1004,49 @@ class BulletinsHistoriqueView(APIView):
         )
 
         return Response({'bulletins': result, 'annees': annees})
+
+
+class FichePedagogiqueView(APIView):
+    """Suivi pédagogique d'un élève sur l'année : évolution, points forts,
+    points faibles et points d'amélioration, pour un programme.
+
+    GET fiche-pedagogique/<eleve_id>/?programme=FR|AR&annee=… → JSON
+    GET fiche-pedagogique-pdf/<eleve_id>/?…                   → PDF (en arabe pour AR)
+    """
+    permission_classes = [IsAuthenticated]
+    pdf = False
+
+    def get(self, request, eleve_id):
+        tenant = get_tenant(request)
+        from django.core.exceptions import ValidationError
+        try:
+            eleve = Eleve.objects.select_related('classe', 'section').get(id=eleve_id, tenant=tenant)
+        except (Eleve.DoesNotExist, ValidationError, ValueError):
+            return Response({'error': 'Élève introuvable'}, status=404)
+        annee = request.query_params.get('annee') or _get_annee_scolaire(tenant)
+        programme = programme_valide(request.query_params.get('programme'))
+        fiche = fiche_pedagogique(tenant, eleve, annee, programme)
+        classe_nom = (eleve.classe.nom if eleve.classe_id
+                      else (eleve.section.nom if eleve.section else '—'))
+
+        if not self.pdf:
+            return Response({**fiche, 'eleve': {'id': str(eleve.id), 'nom_complet': eleve.nom_complet,
+                                                 'classe': classe_nom}})
+
+        from io import BytesIO
+        from django.utils import timezone
+        from xhtml2pdf import pisa
+        from core.arabe import font_link_callback
+        from .libelles import contexte_fiche
+        langue = 'ar' if programme == 'AR' else 'fr'
+        context = contexte_fiche(fiche, tenant, eleve, classe_nom, langue)
+        context['date_edition'] = timezone.localdate()
+        html_str = render_to_string('pdf/fiche_pedagogique.html', context)
+        buffer = BytesIO()
+        result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8', link_callback=font_link_callback)
+        if result.err:
+            return HttpResponse('Erreur génération fiche pédagogique.', status=500)
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        nom = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+        response['Content-Disposition'] = f'inline; filename="fiche_pedagogique_{nom}_{langue}.pdf"'
+        return response

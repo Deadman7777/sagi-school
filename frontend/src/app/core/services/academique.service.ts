@@ -41,15 +41,22 @@ export class AcademiqueService {
   getBulletin(eleveId: string, trimestre: string, annee: string) {
     return this.api.get<any>(`/academique/bulletin/${eleveId}/${trimestre}/`, { annee });
   }
-  getBulletinPdf(eleveId: string, trimestre: string, annee: string) {
-    return this.api.getBlob(`/academique/bulletin-pdf/${eleveId}/${trimestre}/?annee=${annee}`);
+  /** programme : 'FR' | 'AR' pour un établissement hybride, sinon absent. */
+  getBulletinPdf(eleveId: string, trimestre: string, annee: string, programme?: string | null) {
+    return this.api.getBlob(`/academique/bulletin-pdf/${eleveId}/${trimestre}/`, { annee, programme });
+  }
+  getFichePedagogique(eleveId: string, programme?: string | null, annee?: string) {
+    return this.api.get<any>(`/academique/fiche-pedagogique/${eleveId}/`, { programme, annee });
+  }
+  getFichePedagogiquePdf(eleveId: string, programme?: string | null, annee?: string) {
+    return this.api.getBlob(`/academique/fiche-pedagogique-pdf/${eleveId}/`, { programme, annee });
   }
   getElevesPourClasse(classeId: string) {
     return this.api.get<any[]>(`/academique/classes/${classeId}/eleves/`);
   }
 
-  getAnalysePerformance() {
-    return this.api.get<any>('/academique/analyse/');
+  getAnalysePerformance(programme?: string | null) {
+    return this.api.get<any>('/academique/analyse/', { programme });
   }
 
   getHistoriqueBulletins(params?: any) {

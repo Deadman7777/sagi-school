@@ -28,6 +28,9 @@ class Tenant(TimeStampedModel):
     PERIODE_CHOICES = [('TRIMESTRE', 'Trimestre'), ('SEMESTRE', 'Semestre'), ('PERIODE', 'Période')]
     periode_scolaire = models.CharField(max_length=10, choices=PERIODE_CHOICES, default='TRIMESTRE')
     nb_periodes      = models.IntegerField(default=3)
+    # Établissement hybride (programme français + programme arabe) : active le
+    # choix du programme sur les matières, les bulletins et le suivi pédagogique.
+    programmes_hybrides = models.BooleanField(default=False)
 
     # ── Quand une mensualité devient-elle exigible ? ──────────────────────
     # Les écoles ne collectent pas au même moment, et la réponse décide de tout

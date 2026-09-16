@@ -6,6 +6,7 @@ import { ElevesService } from '../../core/services/eleves.service';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { MemorisationComponent } from './memorisation/memorisation.component';
+import { SuiviPedagogiqueComponent } from './suivi-pedagogique/suivi-pedagogique.component';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
@@ -24,7 +25,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, InputNumberModule, MultiSelectModule, ToastModule, TooltipModule, TranslateModule,
-            MemorisationComponent],
+            MemorisationComponent, SuiviPedagogiqueComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -42,6 +43,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <button class="tab-btn" [class.active]="onglet()==='resultats'" (click)="onglet.set('resultats')">📊 {{ 'academique.onglet_resultats' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet()==='analyse'" (click)="onglet.set('analyse'); chargerAnalyse()">📈 Analyse</button>
       <button class="tab-btn" [class.active]="onglet()==='historique'" (click)="onglet.set('historique'); chargerHistorique()">📋 Historique</button>
+      <button class="tab-btn" [class.active]="onglet()==='suivi'" (click)="onglet.set('suivi')">🎯 {{ 'pedago.onglet' | translate }}</button>
       @if (estDaara) {
         <button class="tab-btn" [class.active]="onglet()==='memorisation'" (click)="onglet.set('memorisation')">🕌 {{ 'daara.onglet' | translate }}</button>
       }
@@ -50,6 +52,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     <!-- MÉMORISATION CORANIQUE (Taxawu Daara) -->
     @if (onglet()==='memorisation') {
       <app-memorisation />
+    }
+
+    <!-- SUIVI PÉDAGOGIQUE -->
+    @if (onglet()==='suivi') {
+      <app-suivi-pedagogique [classes]="classes()" [hybride]="hybride" [periodeLabel]="periodeLabel()" />
     }
 
     <!-- PARAMÉTRAGE -->
@@ -64,6 +71,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <p-inputNumber [(ngModel)]="nbPeriodes" [min]="1" [max]="12" [showButtons]="true"
                        (onInput)="construireTrimestres()" (onBlur)="sauvegarderPeriode()" styleClass="periode-nb" />
         <span class="periode-hint">Ex. {{ periodeLabel() }} 1 … {{ periodeLabel() }} {{ nbPeriodes }}.</span>
+      </div>
+      <div class="periode-bar">
+        <label class="hybride-toggle">
+          <input type="checkbox" [(ngModel)]="hybride" (change)="sauvegarderHybride()" />
+          🌍 {{ 'academique.hybride_label' | translate }}
+        </label>
+        <span class="periode-hint">{{ 'academique.hybride_aide' | translate }}</span>
       </div>
 
       <div class="param-grid">
@@ -118,6 +132,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
             <div class="pc-item" *ngFor="let m of matieres()">
               <span>{{ m.nom }}</span>
               <span class="pc-right">
+                <span class="badge" *ngIf="hybride" [class.badge-ar]="m.programme === 'AR'">{{ m.programme }}</span>
                 <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
                 <span class="pc-actions">
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
@@ -164,7 +179,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   optionLabel="nom" optionValue="id"
                   [placeholder]="'academique.classe_filter' | translate" styleClass="filter-drop"
                   (onChange)="onClasseNotesChange()" />
-        <p-select [options]="matieresNotes()" [(ngModel)]="matiereNotes"
+        @if (hybride) {
+          <p-select [options]="programmesOptions()" [(ngModel)]="programmeNotes" optionLabel="label" optionValue="value"
+                    styleClass="filter-drop" (onChange)="onProgrammeNotesChange()" />
+        }
+        <p-select [options]="matieresNotesAffichees()" [(ngModel)]="matiereNotes"
                   optionLabel="nom" optionValue="id"
                   [placeholder]="'academique.matiere_filter' | translate" styleClass="filter-drop"
                   (onChange)="onMatiereNotesChange()" />
@@ -266,6 +285,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <p-select [options]="trimestres" [(ngModel)]="trimestreResultats"
                   optionLabel="label" optionValue="value"
                   [placeholder]="periodeLabel()" styleClass="filter-drop" />
+        @if (hybride) {
+          <p-select [options]="programmesOptions()" [(ngModel)]="programmeResultats" optionLabel="label" optionValue="value"
+                    styleClass="filter-drop" (onChange)="resultats.set([]); statsClasse.set(null)" />
+        }
         <p-button [label]="'🔢 ' + ('academique.calculer_moyennes' | translate)" severity="success"
                   [loading]="calculant()" (onClick)="calculerMoyennes()" />
       </div>
@@ -306,6 +329,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                           severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
                           [title]="'academique.telecharger_bulletin' | translate" />
+                <p-button icon="pi pi-chart-line" [rounded]="true" [text]="true"
+                          severity="info" (onClick)="telechargerFiche(r.eleve_id, r.eleve_nom)"
+                          [title]="'pedago.telecharger' | translate" />
               </td>
             </tr>
           </ng-template>
@@ -315,6 +341,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
     <!-- ANALYSE PERFORMANCE -->
     <div *ngIf="onglet()==='analyse'">
+      @if (hybride) {
+        <div class="filters-bar" style="margin-bottom:14px">
+          <p-select [options]="programmesOptions()" [(ngModel)]="programmeAnalyse" optionLabel="label" optionValue="value"
+                    styleClass="filter-drop" (onChange)="chargerAnalyse(true)" />
+        </div>
+      }
       @if (loadingAnalyse()) {
         <div class="empty-msg" style="padding:40px; text-align:center; color:var(--text-3)">Chargement...</div>
       } @else if (analyse()) {
@@ -430,6 +462,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   optionLabel="label" optionValue="value"
                   placeholder="Tous les trimestres" styleClass="filter-drop"
                   (onChange)="appliquerFiltreHistorique()" />
+        @if (hybride) {
+          <p-select [options]="histProgrammeOptions()" [(ngModel)]="histProgramme" optionLabel="label" optionValue="value"
+                    styleClass="filter-drop" (onChange)="appliquerFiltreHistorique()" />
+        }
         <p-select [options]="histAnneeOptions()" [(ngModel)]="histAnnee"
                   optionLabel="label" optionValue="value"
                   placeholder="Toutes les années" styleClass="filter-drop"
@@ -460,6 +496,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 <th style="width:32%">Élève</th>
                 <th style="width:18%">Classe</th>
                 <th style="width:10%">Trimestre</th>
+                @if (hybride) { <th style="width:8%">{{ 'academique.programme' | translate }}</th> }
                 <th style="width:14%">Année scolaire</th>
                 <th style="width:10%;text-align:center">Moyenne</th>
                 <th style="width:8%;text-align:center">Matières</th>
@@ -474,6 +511,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   <p-tag [value]="b.trimestre"
                          [severity]="b.trimestre==='T1' ? 'info' : b.trimestre==='T2' ? 'warn' : 'success'" />
                 </td>
+                @if (hybride) { <td><span class="badge" [class.badge-ar]="b.programme === 'AR'">{{ b.programme }}</span></td> }
                 <td class="mono" style="color:var(--text-3)">{{ b.annee_scolaire }}</td>
                 <td style="text-align:center">
                   <span class="mono bold" [style.color]="b.moy_generale >= 10 ? '#10b981' : '#ef4444'">
@@ -526,9 +564,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="classes()" [(ngModel)]="formMatiere.classe"
                     optionLabel="nom" optionValue="id" styleClass="w-full" scrollHeight="320px" />
         </div>
+        @if (hybride) {
+          <div class="form-group">
+            <label>{{ 'academique.programme' | translate }} *</label>
+            <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="programmesOptions()"
+                      [(ngModel)]="formMatiere.programme" optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+        }
         <div class="form-group">
           <label>{{ 'academique.nom' | translate }} *</label>
-          <input pInputText [(ngModel)]="formMatiere.nom" class="w-full" [placeholder]="'academique.ex_matiere' | translate" />
+          <input pInputText [(ngModel)]="formMatiere.nom" class="w-full" [placeholder]="'academique.ex_matiere' | translate"
+                 [attr.dir]="formMatiere.programme === 'AR' ? 'auto' : null" />
         </div>
         <div class="form-group">
           <label>{{ 'academique.coefficient' | translate }}</label>
@@ -586,6 +632,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <label>{{ 'academique.nom' | translate }} *</label>
           <input pInputText [(ngModel)]="formTypeEval.nom" class="w-full" [placeholder]="'academique.ex_type_eval' | translate" />
         </div>
+        @if (hybride) {
+          <div class="form-group">
+            <label>{{ 'academique.nom_ar' | translate }}</label>
+            <input pInputText [(ngModel)]="formTypeEval.nom_ar" class="w-full" dir="rtl" placeholder="فرض، امتحان…" />
+          </div>
+        }
         <div class="form-group">
           <label>{{ 'academique.poids' | translate }}</label>
           <p-inputNumber [(ngModel)]="formTypeEval.poids" [min]="0.5" [max]="5" mode="decimal" styleClass="w-full" />
@@ -677,6 +729,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .form-group.full { grid-column:1/-1; }
     .w-full { width:100%; }
     .stats-classe { display:flex; gap:16px; padding:12px 16px; border-bottom:1px solid var(--border); }
+    .hybride-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer; }
+    .badge-ar { background:rgba(245,158,11,.15) !important; color:#b45309 !important; }
     .sc-item { display:flex; flex-direction:column; gap:2px; font-size:12px; }
     .sc-item span { color:var(--text-3); }
     .sc-item strong { color:var(--text); font-family:monospace; }
@@ -729,6 +783,62 @@ export class AcademiqueComponent implements OnInit {
   evalSelectionnee: any = null;
   private _elevesClasseCache: { classeId: string; eleves: any[] } | null = null;
 
+  // ── Établissement hybride (programme français + programme arabe) ──
+  hybride = false;
+  programmeNotes = 'FR';
+  programmeResultats = 'FR';
+  programmeAnalyse = 'FR';
+  histProgramme = '';
+
+  programmesOptions() {
+    return [
+      { label: this.translate.instant('academique.programme_FR'), value: 'FR' },
+      { label: this.translate.instant('academique.programme_AR'), value: 'AR' },
+    ];
+  }
+  histProgrammeOptions() {
+    return [{ label: this.translate.instant('academique.tous_programmes'), value: '' }, ...this.programmesOptions()];
+  }
+  /** Programme envoyé au serveur : aucun pour une école à programme unique. */
+  private prog(valeur: string): string | null {
+    return this.hybride ? valeur : null;
+  }
+  matieresNotesAffichees() {
+    const toutes = this.matieresNotes();
+    return this.hybride ? toutes.filter((m: any) => (m.programme || 'FR') === this.programmeNotes) : toutes;
+  }
+  onProgrammeNotesChange() {
+    this.matiereNotes = '';
+    this.evalSelectionnee = null;
+    this.evaluations.set([]);
+    this.elevesNotes.set([]);
+  }
+  sauvegarderHybride() {
+    this.api.patch<any>('/tenants/mon_ecole/', { programmes_hybrides: this.hybride }).subscribe({
+      next: () => { this.analyse.set(null); this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }); },
+      error: () => { this.hybride = !this.hybride; this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }); },
+    });
+  }
+
+  telechargerFiche(eleveId: string, nom: string) {
+    this.acad.getFichePedagogiquePdf(eleveId, this.prog(this.programmeResultats)).subscribe({
+      next: (blob: Blob) => this.enregistrer(blob, `fiche_pedagogique_${(nom || 'eleve').replace(/ /g, '_')}.pdf`),
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                   detail: this.translate.instant('pedago.erreur') }),
+    });
+  }
+
+  private enregistrer(blob: Blob, nomFichier: string) {
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href     = url;
+    link.download = nomFichier;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   histSearch    = '';
   histClasse    = '';
   histTrimestre = '';
@@ -745,8 +855,8 @@ export class AcademiqueComponent implements OnInit {
   };
 
   formClasse:   any = { id: null, nom: '', code: '', niveau: '' };
-  formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20 };
-  formTypeEval: any = { id: null, nom: '', poids: 1 };
+  formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20, programme: 'FR' };
+  formTypeEval: any = { id: null, nom: '', nom_ar: '', poids: 1 };
   formEval     = { type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
 
   trimestres: any[] = [];
@@ -807,6 +917,7 @@ export class AcademiqueComponent implements OnInit {
     this.api.get<any>('/tenants/mon_ecole/').subscribe({
       next: e => {
         this.periode = e?.periode_scolaire || 'TRIMESTRE';
+        this.hybride = !!e?.programmes_hybrides;
         this.nbPeriodes = e?.nb_periodes || 3;
         this.construireTrimestres();
       },
@@ -858,10 +969,10 @@ export class AcademiqueComponent implements OnInit {
     });
   }
 
-  chargerAnalyse() {
-    if (this.analyse()) return;
+  chargerAnalyse(forcer = false) {
+    if (this.analyse() && !forcer) return;
     this.loadingAnalyse.set(true);
-    this.acad.getAnalysePerformance().subscribe({
+    this.acad.getAnalysePerformance(this.prog(this.programmeAnalyse)).subscribe({
       next: r => { this.analyse.set(r); this.loadingAnalyse.set(false); },
       error: ()  => this.loadingAnalyse.set(false),
     });
@@ -995,6 +1106,7 @@ export class AcademiqueComponent implements OnInit {
       classe_id:     this.classeResultats,
       trimestre:     this.trimestreResultats,
       annee_scolaire: this._getAnneeScolaire(),
+      programme:     this.prog(this.programmeResultats),
     }).subscribe({
       next: res => {
         const resultats = res.resultats || [];
@@ -1041,16 +1153,17 @@ export class AcademiqueComponent implements OnInit {
   }
   ouvrirDialogMatiere()  {
     // Pré-remplir avec la classe filtrée si active
-    this.formMatiere = { id:null, nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20 };
+    this.formMatiere = { id:null, nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20, programme:'FR' };
     this.dialogMatiereVisible = true;
   }
   ouvrirEditionMatiere(m: any) {
-    this.formMatiere = { id:m.id, nom:m.nom, classe:m.classe, coefficient:+m.coefficient, note_max:+m.note_max };
+    this.formMatiere = { id:m.id, nom:m.nom, classe:m.classe, coefficient:+m.coefficient, note_max:+m.note_max,
+                         programme: m.programme || 'FR' };
     this.dialogMatiereVisible = true;
   }
-  ouvrirDialogTypeEval() { this.formTypeEval = { id:null, nom:'', poids:1 }; this.dialogTypeEvalVisible = true; }
+  ouvrirDialogTypeEval() { this.formTypeEval = { id:null, nom:'', nom_ar:'', poids:1 }; this.dialogTypeEvalVisible = true; }
   ouvrirEditionTypeEval(t: any) {
-    this.formTypeEval = { id:t.id, nom:t.nom, poids:+t.poids };
+    this.formTypeEval = { id:t.id, nom:t.nom, nom_ar:t.nom_ar || '', poids:+t.poids };
     this.dialogTypeEvalVisible = true;
   }
   ouvrirDialogEvaluation() {
@@ -1185,17 +1298,9 @@ export class AcademiqueComponent implements OnInit {
     }
     const annee     = this._getAnneeScolaire();
     const trimestre = this.trimestreResultats;
-    this.acad.getBulletinPdf(eleveId, trimestre, annee).subscribe({
-      next: (blob: Blob) => {
-        const url  = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href     = url;
-        link.download = `bulletin_${trimestre}_${annee}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      },
+    const programme = this.prog(this.programmeResultats);
+    this.acad.getBulletinPdf(eleveId, trimestre, annee, programme).subscribe({
+      next: (blob: Blob) => this.enregistrer(blob, `bulletin_${programme ? programme + '_' : ''}${trimestre}_${annee}.pdf`),
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
     });
@@ -1232,21 +1337,15 @@ export class AcademiqueComponent implements OnInit {
     if (this.histClasse)       liste = liste.filter(b => b.classe === this.histClasse);
     if (this.histTrimestre)    liste = liste.filter(b => b.trimestre === this.histTrimestre);
     if (this.histAnnee)        liste = liste.filter(b => b.annee_scolaire === this.histAnnee);
+    if (this.histProgramme)    liste = liste.filter(b => b.programme === this.histProgramme);
     this.historiqueFiltres.set(liste);
   }
 
   telechargerBulletinHistorique(b: any) {
-    this.acad.getBulletinPdf(b.eleve_id, b.trimestre, b.annee_scolaire).subscribe({
-      next: (blob: Blob) => {
-        const url  = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href     = url;
-        link.download = `bulletin_${b.eleve_nom.replace(/ /g, '_')}_${b.trimestre}_${b.annee_scolaire}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      },
+    const programme = this.prog(b.programme);
+    this.acad.getBulletinPdf(b.eleve_id, b.trimestre, b.annee_scolaire, programme).subscribe({
+      next: (blob: Blob) => this.enregistrer(blob,
+        `bulletin_${b.eleve_nom.replace(/ /g, '_')}_${programme ? programme + '_' : ''}${b.trimestre}_${b.annee_scolaire}.pdf`),
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le bulletin.' }),
     });

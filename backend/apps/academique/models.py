@@ -47,6 +47,9 @@ class Classe(TenantModel):
 
 class TypeEvaluation(TenantModel):
     nom        = models.CharField(max_length=50)  # Devoir, Composition, Interro...
+    # Libellé sur le bulletin du programme arabe (فرض، امتحان…). Vide : une
+    # traduction des noms courants, sinon le nom tel quel.
+    nom_ar     = models.CharField(max_length=50, blank=True)
     poids      = models.DecimalField(max_digits=4, decimal_places=2, default=1)
     description= models.TextField(blank=True)
 
@@ -59,7 +62,13 @@ class TypeEvaluation(TenantModel):
 
 
 class Matiere(TenantModel):
+    # Établissement hybride : une même classe suit le programme français ET le
+    # programme arabe. Chaque matière appartient à l'un des deux ; chacun a son
+    # bulletin, sa moyenne générale et son rang. Une école à un seul programme
+    # garde tout en FR sans jamais voir ce champ.
+    PROGRAMME_CHOICES = [('FR', 'Programme français'), ('AR', 'Programme arabe')]
     classe       = models.ForeignKey(Classe, on_delete=models.CASCADE, related_name='matieres')
+    programme    = models.CharField(max_length=2, choices=PROGRAMME_CHOICES, default='FR')
     nom          = models.CharField(max_length=100)
     code         = models.CharField(max_length=20, blank=True)
     coefficient  = models.DecimalField(max_digits=4, decimal_places=1, default=1)

@@ -3,7 +3,7 @@ from django.urls import path
 from .views import (BulletinPDFView, NiveauScolaireViewSet, ClasseViewSet, TypeEvaluationViewSet,
                     MatiereViewSet, EvaluationViewSet, NoteViewSet,
                     MoteurCalculView, BulletinView, AnalysePerformanceView,
-                    BulletinsHistoriqueView)
+                    BulletinsHistoriqueView, FichePedagogiqueView)
 
 router = DefaultRouter()
 router.register('niveaux',     NiveauScolaireViewSet, basename='niveau')
@@ -19,4 +19,6 @@ urlpatterns = router.urls + [
     path('bulletin-pdf/<str:eleve_id>/<str:trimestre>/', BulletinPDFView.as_view()),
     path('analyse/',                         AnalysePerformanceView.as_view()),
     path('historique-bulletins/',            BulletinsHistoriqueView.as_view()),
+    path('fiche-pedagogique/<str:eleve_id>/',     FichePedagogiqueView.as_view()),
+    path('fiche-pedagogique-pdf/<str:eleve_id>/', FichePedagogiqueView.as_view(pdf=True)),
 ]
