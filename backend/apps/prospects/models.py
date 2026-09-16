@@ -287,3 +287,249 @@ class Devis(TimeStampedModel):
     def modifiable(self):
         """Un devis validé ne se réécrit plus : il a été relu pour être envoyé."""
         return self.statut == 'BROUILLON'
+
+
+# ═════════════════════════════════════════════════════════════════════════
+#  Facturation commerciale de HADY GESMAN
+# ═════════════════════════════════════════════════════════════════════════
+
+MODES_ENCAISSEMENT = [
+    ('VIREMENT',     'Virement bancaire'),
+    ('WAVE',         'Wave'),
+    ('ORANGE_MONEY', 'Orange Money'),
+    ('CHEQUE',       'Chèque'),
+    ('ESPECES',      'Espèces'),
+    ('AUTRE',        'Autre'),
+]
+
+
+class ParametresFacturation(TimeStampedModel):
+    """Ce que HADY GESMAN imprime sur ses pièces, et son régime de TVA.
+
+    Une seule ligne. Réglable depuis l'écran Facturation plutôt que dans le
+    code : le régime fiscal de l'entreprise change (CGU aujourd'hui, réel ou
+    SARL demain) sans que le logiciel ait à être redéployé.
+
+    **La TVA dépend du régime de l'émetteur, pas du client.** Les écoles sont
+    exonérées pour leur enseignement (CGI art. 361-4), mais la licence que
+    nous leur vendons ne l'est pas. Un entrepreneur individuel à la
+    Contribution globale unique (CGI art. 134-135) ne facture pas la TVA ; au
+    réel, il la facture à 18 %.
+    """
+    raison_sociale   = models.CharField(max_length=200, default='HADY GESMAN')
+    forme_juridique  = models.CharField(max_length=100, blank=True)
+    adresse          = models.CharField(max_length=300, blank=True)
+    ville            = models.CharField(max_length=120, blank=True, default='Dakar')
+    telephone        = models.CharField(max_length=120, blank=True)
+    email            = models.CharField(max_length=254, blank=True)
+    site_web         = models.CharField(max_length=200, blank=True)
+    ninea            = models.CharField(max_length=40, blank=True)
+    rccm             = models.CharField(max_length=60, blank=True)
+
+    tva_applicable   = models.BooleanField(default=True)
+    taux_tva         = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    mention_sans_tva = models.CharField(
+        max_length=250, blank=True,
+        default="TVA non applicable — contribuable soumis à la Contribution globale unique (CGI, art. 134)")
+
+    delai_paiement_jours   = models.PositiveIntegerField(default=30)
+    validite_proforma_jours = models.PositiveIntegerField(default=30)
+    coordonnees_paiement   = models.TextField(
+        blank=True, help_text='Banque, IBAN, numéros Wave / Orange Money…')
+    conditions             = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'facturation_parametres'
+        verbose_name = 'Paramètres de facturation'
+
+    @classmethod
+    def actuels(cls):
+        """La ligne unique, créée au premier appel avec les coordonnées déjà
+        connues du serveur (celles du devis)."""
+        from django.conf import settings
+        obj = cls.objects.order_by('created_at').first()
+        if obj is None:
+            obj = cls.objects.create(
+                telephone=getattr(settings, 'EDITEUR_TELEPHONE', ''),
+                email=getattr(settings, 'LICENCE_SUPPORT_EMAIL', ''),
+                site_web=getattr(settings, 'EDITEUR_SITE', ''),
+                ninea=getattr(settings, 'EDITEUR_NINEA', ''))
+        return obj
+
+
+class DocumentCommercial(TimeStampedModel):
+    """Facture proforma, facture ou avoir.
+
+    **Le numéro n'existe qu'à l'émission.** Une facture se numérote sans trou :
+    numéroter les brouillons, dont certains seront supprimés, laisserait des
+    numéros manquants que rien n'explique. Un brouillon n'a donc pas de numéro,
+    et son PDF le dit.
+
+    **Une pièce émise ne se modifie plus.** Pour corriger une facture, on émet
+    un avoir — c'est la seule correction admise d'une pièce comptable remise.
+
+    **Tout est recopié.** Le client, les lignes, le taux de TVA : une révision
+    tarifaire, un nom corrigé ou un changement de régime fiscal ne réécrivent
+    pas une pièce déjà remise.
+    """
+
+    TYPE_CHOICES = [
+        ('PROFORMA', 'Facture proforma'),
+        ('FACTURE',  'Facture'),
+        ('AVOIR',    'Avoir'),
+    ]
+    PREFIXES = {'PROFORMA': 'HG-PRO', 'FACTURE': 'HG-FAC', 'AVOIR': 'HG-AV'}
+
+    STATUT_CHOICES = [
+        ('BROUILLON', 'Brouillon'),
+        ('EMIS',      'Émis'),
+        ('CONVERTI',  'Converti en facture'),   # proforma uniquement
+    ]
+
+    type    = models.CharField(max_length=10, choices=TYPE_CHOICES, db_index=True)
+    numero  = models.CharField(max_length=30, blank=True, db_index=True)
+    statut  = models.CharField(max_length=10, choices=STATUT_CHOICES, default='BROUILLON',
+                               db_index=True)
+
+    # D'où vient la pièce. Tout est facultatif : une facture peut être établie
+    # pour un client qui n'est ni dans le fichier prospects ni une école.
+    prospect = models.ForeignKey(Prospect, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name='documents')
+    tenant   = models.ForeignKey('tenants.Tenant', null=True, blank=True,
+                                 on_delete=models.SET_NULL, related_name='documents_commerciaux')
+    devis    = models.ForeignKey(Devis, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name='documents')
+    # Proforma d'origine d'une facture ; facture corrigée par un avoir.
+    origine  = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
+                                 related_name='derives')
+
+    # ── Le client, tel qu'il figure sur la pièce ─────────────────────────
+    client_nom       = models.CharField(max_length=200)
+    client_contact   = models.CharField(max_length=200, blank=True)
+    client_adresse   = models.CharField(max_length=300, blank=True)
+    client_ville     = models.CharField(max_length=120, blank=True)
+    client_telephone = models.CharField(max_length=60, blank=True)
+    client_email     = models.CharField(max_length=254, blank=True)
+    client_ninea     = models.CharField(max_length=40, blank=True)
+
+    objet = models.CharField(max_length=250, blank=True)
+
+    date_emission = models.DateField(null=True, blank=True)
+    date_echeance = models.DateField(null=True, blank=True)   # facture : limite de paiement
+    date_validite = models.DateField(null=True, blank=True)   # proforma
+
+    # ── TVA, figée sur la pièce ──────────────────────────────────────────
+    tva_applicable = models.BooleanField(default=True)
+    taux_tva       = models.DecimalField(max_digits=5, decimal_places=2, default=18)
+    mention_tva    = models.CharField(max_length=250, blank=True)
+
+    total_ht    = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+    montant_tva = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+    total_ttc   = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+
+    motif        = models.TextField(blank=True)   # avoir : pourquoi
+    conditions   = models.TextField(blank=True)
+    observations = models.TextField(blank=True)
+
+    etabli_par = models.CharField(max_length=150, blank=True)
+    emis_par   = models.CharField(max_length=150, blank=True)
+    emis_le    = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'facturation_documents'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['numero'], condition=~models.Q(numero=''),
+                                    name='uniq_numero_document_commercial'),
+        ]
+        verbose_name = 'Document commercial'
+        verbose_name_plural = 'Documents commerciaux'
+
+    def __str__(self):
+        return f"{self.numero or 'Brouillon'} — {self.client_nom}"
+
+    @property
+    def modifiable(self):
+        return self.statut == 'BROUILLON'
+
+    # ── Suivi de l'argent (factures émises) ──────────────────────────────
+    @property
+    def montant_encaisse(self):
+        from django.db.models import Sum
+        total = self.encaissements.filter(annule=False).aggregate(s=Sum('montant'))['s']
+        return total or 0
+
+    @property
+    def montant_avoirs(self):
+        from django.db.models import Sum
+        total = self.derives.filter(type='AVOIR', statut='EMIS').aggregate(s=Sum('total_ttc'))['s']
+        return total or 0
+
+    @property
+    def solde(self):
+        """Ce qui reste dû. Négatif : trop-perçu à rembourser."""
+        if self.type != 'FACTURE' or self.statut != 'EMIS':
+            return 0
+        return self.total_ttc - self.montant_avoirs - self.montant_encaisse
+
+    @property
+    def statut_paiement(self):
+        if self.type != 'FACTURE' or self.statut != 'EMIS':
+            return None
+        if self.solde <= 0:
+            return 'PAYEE'
+        if self.montant_encaisse or self.montant_avoirs:
+            return 'PARTIELLE'
+        return 'A_PAYER'
+
+    @property
+    def en_retard(self):
+        return (self.statut_paiement in ('A_PAYER', 'PARTIELLE')
+                and self.date_echeance is not None and self.date_echeance < date.today())
+
+
+class LigneDocument(TimeStampedModel):
+    """Une ligne de pièce. Un prix unitaire négatif porte une remise : elle
+    reste visible sur sa propre ligne au lieu d'être fondue dans un prix."""
+    document      = models.ForeignKey(DocumentCommercial, on_delete=models.CASCADE,
+                                      related_name='lignes')
+    ordre         = models.PositiveIntegerField(default=0)
+    designation   = models.CharField(max_length=250)
+    detail        = models.TextField(blank=True)
+    quantite      = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unite         = models.CharField(max_length=30, blank=True)
+    prix_unitaire = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+    montant       = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+
+    class Meta:
+        db_table = 'facturation_lignes'
+        ordering = ['ordre', 'created_at']
+
+
+class Encaissement(TimeStampedModel):
+    """Un paiement reçu sur une facture — et le reçu remis au client.
+
+    Le reçu est numéroté dès l'enregistrement : il est remis au moment où
+    l'argent change de main. Une erreur de saisie s'ANNULE (avec son motif),
+    elle ne s'efface pas : le client a peut-être déjà le reçu entre les mains.
+    """
+    facture     = models.ForeignKey(DocumentCommercial, on_delete=models.PROTECT,
+                                    related_name='encaissements')
+    numero      = models.CharField(max_length=30, unique=True)
+    date        = models.DateField(default=date.today)
+    montant     = models.DecimalField(max_digits=14, decimal_places=0)
+    mode        = models.CharField(max_length=15, choices=MODES_ENCAISSEMENT, default='VIREMENT')
+    reference   = models.CharField(max_length=120, blank=True)
+    observations = models.TextField(blank=True)
+    recu_par    = models.CharField(max_length=150, blank=True)
+
+    annule        = models.BooleanField(default=False)
+    annule_motif  = models.CharField(max_length=250, blank=True)
+    annule_le     = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'facturation_encaissements'
+        ordering = ['-date', '-created_at']
+
+    def __str__(self):
+        return f"{self.numero} — {self.montant} F"

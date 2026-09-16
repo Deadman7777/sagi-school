@@ -17,6 +17,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { Catalogue, Devis, Prospect, ProspectsService, StatsProspects }
   from '../../core/services/prospects.service';
+import { FacturationService } from '../../core/services/facturation.service';
+import { Router } from '@angular/router';
 
 /**
  * Le fichier prospects de HADY GESMAN.
@@ -273,6 +275,14 @@ import { Catalogue, Devis, Prospect, ProspectsService, StatsProspects }
             @if (d.statut === 'BROUILLON') {
               <p-button icon="pi pi-trash" [text]="true"
                         size="small" severity="danger" (onClick)="supprimerDevis(d)" />
+            }
+            @if (['VALIDE', 'ENVOYE', 'ACCEPTE'].includes(d.statut)) {
+              <p-button [label]="'prospects.proforma' | translate" size="small" [text]="true"
+                        (onClick)="facturerDevis(d, 'PROFORMA')" />
+            }
+            @if (d.statut === 'ACCEPTE') {
+              <p-button [label]="'prospects.facturer' | translate" size="small" severity="success"
+                        (onClick)="facturerDevis(d, 'FACTURE')" />
             }
           </span>
         </div>
@@ -546,6 +556,8 @@ export class ProspectsComponent implements OnInit {
   private msg       = inject(MessageService);
   private confirm   = inject(ConfirmationService);
   private translate = inject(TranslateService);
+  private facturation = inject(FacturationService);
+  private router    = inject(Router);
 
   prospects = signal<Prospect[]>([]);
   stats     = signal<StatsProspects | null>(null);
@@ -840,6 +852,16 @@ export class ProspectsComponent implements OnInit {
       accept: () => this.service.supprimerDevis(d.id).subscribe({
         next: () => this.rafraichirFiche(),
       }),
+    });
+  }
+
+  /** Le brouillon est établi par le serveur depuis le devis, puis ouvert dans
+   *  l'écran Facturation où il se relit et s'émet. */
+  facturerDevis(d: Devis, type: 'PROFORMA' | 'FACTURE') {
+    this.facturation.creer({ type, devis: d.id }).subscribe({
+      next: doc => this.router.navigate(['/facturation'], { queryParams: { document: doc.id } }),
+      error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                   detail: err?.error?.error || '' }),
     });
   }
 

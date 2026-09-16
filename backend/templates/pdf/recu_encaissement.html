@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Reçu d'un paiement sur une facture de HADY GESMAN. Un reçu annulé reste
+imprimable, mais le dit en tête : le client a peut-être déjà l'original.
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:11.5px; color:#111827; }
+  .header-table { width:100%; border-bottom:2px solid #00745a; padding-bottom:6px; margin-bottom:12px; }
+  .header-table td { vertical-align:top; }
+  .emetteur   { font-size:17px; font-weight:bold; color:#00745a; }
+  .coord      { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .doc-title  { font-size:19px; font-weight:bold; color:#111827; text-align:right; }
+  .doc-numero { font-size:13px; font-weight:bold; color:#00745a; text-align:right; margin-top:2px; }
+  .doc-meta   { font-size:9.5px; color:#374151; margin-top:3px; text-align:right; }
+  table.encart { width:100%; margin-bottom:10px; }
+  td.annule { border:2px solid #b91c1c; background:#fef2f2; padding:6px 10px; }
+  .annule-titre { font-size:12px; font-weight:bold; color:#b91c1c; }
+  .annule-texte { font-size:10px; color:#7f1d1d; margin-top:2px; }
+  .corps { font-size:12px; line-height:1.7; margin-bottom:12px; }
+  .montant-bloc { width:100%; margin:6px 0 12px; }
+  .montant-label { padding:9px 10px; font-size:13px; font-weight:bold; background:#00745a; color:#ffffff; }
+  .montant-val { padding:9px 10px; font-size:18px; font-weight:bold; background:#00745a; color:#ffffff; text-align:right; }
+  table.detail { width:100%; border-collapse:collapse; margin-bottom:12px; }
+  table.detail td { padding:5px 8px; border:1px solid #e5e7eb; font-size:10.5px; }
+  td.lbl { color:#374151; width:40%; }
+  td.val { color:#111827; font-weight:bold; }
+  .paye { color:#047857; font-weight:bold; }
+  .du   { color:#b91c1c; font-weight:bold; }
+  .signatures { width:100%; margin-top:14px; }
+  .signatures td { padding:7px; border:1px solid #e5e7eb; font-size:9.6px; color:#374151; height:55px; vertical-align:top; }
+  .footer-table { width:100%; border-top:1px solid #e0e0e0; margin-top:14px; }
+  .footer-table td { padding:4px 0; font-size:8.5px; color:#374151; }
+</style>
+</head>
+<body>
+
+<table class="header-table">
+  <tr>
+    <td>
+      <div class="emetteur">{{ emetteur.raison_sociale }}</div>
+      <div class="coord">
+        {% if emetteur.telephone %}{{ emetteur.telephone }}<br>{% endif %}
+        {% if emetteur.email %}{{ emetteur.email }}{% endif %}
+        {% if emetteur.ninea %}<br>NINEA {{ emetteur.ninea }}{% endif %}{% if emetteur.rccm %} &middot; RCCM {{ emetteur.rccm }}{% endif %}
+      </div>
+    </td>
+    <td style="width:45%">
+      <div class="doc-title">REÇU DE PAIEMENT</div>
+      <div class="doc-numero">N° {{ recu.numero }}</div>
+      <div class="doc-meta">Paiement du {{ recu.date|date:"d/m/Y" }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if recu.annule %}
+<table class="encart"><tr><td class="annule">
+  <div class="annule-titre">REÇU ANNULÉ</div>
+  <div class="annule-texte">Motif : {{ recu.annule_motif }}</div>
+</td></tr></table>
+{% endif %}
+
+<div class="corps">
+  {{ emetteur.raison_sociale }} reconnaît avoir reçu de <strong>{{ facture.client_nom }}</strong>
+  la somme de <strong>{{ en_lettres }}</strong>, en règlement de la facture
+  <strong>N° {{ facture.numero }}</strong> du {{ facture.date_emission|date:"d/m/Y" }}{% if facture.objet %} ({{ facture.objet }}){% endif %}.
+</div>
+
+<table class="montant-bloc">
+  <tr>
+    <td class="montant-label">MONTANT REÇU</td>
+    <td class="montant-val">{{ montants.montant }}</td>
+  </tr>
+</table>
+
+<table class="detail">
+  <tr><td class="lbl">Mode de paiement</td><td class="val">{{ mode }}{% if recu.reference %} — réf. {{ recu.reference }}{% endif %}</td></tr>
+  <tr><td class="lbl">Montant de la facture</td><td class="val">{{ montants.facture }}</td></tr>
+  {% if avoirs_au_paiement %}<tr><td class="lbl">Avoirs</td><td class="val">− {{ montants.avoirs }}</td></tr>{% endif %}
+  <tr><td class="lbl">Réglé auparavant</td><td class="val">{{ montants.anterieurs }}</td></tr>
+  <tr><td class="lbl">Reste à payer après ce paiement</td>
+      <td class="val">{% if reste_nul %}<span class="paye">Facture soldée</span>{% else %}<span class="du">{{ montants.reste }}</span>{% endif %}</td></tr>
+  {% if recu.observations %}<tr><td class="lbl">Observations</td><td class="val">{{ recu.observations }}</td></tr>{% endif %}
+</table>
+
+<table class="signatures">
+  <tr>
+    <td style="width:50%"><strong>Pour {{ emetteur.raison_sociale }}</strong><br>{% if recu.recu_par %}Reçu par {{ recu.recu_par }} — {% endif %}signature et cachet</td>
+    <td style="width:50%"><strong>{{ facture.client_nom }}</strong><br>Nom et signature</td>
+  </tr>
+</table>
+
+<table class="footer-table">
+  <tr>
+    <td>{{ emetteur.raison_sociale }}{% if emetteur.ninea %} &middot; NINEA {{ emetteur.ninea }}{% endif %} &middot; {{ recu.numero }}</td>
+    <td style="text-align:right">Facture {{ facture.numero }}</td>
+  </tr>
+</table>
+
+</body>
+</html>

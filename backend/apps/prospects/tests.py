@@ -121,6 +121,13 @@ class EndpointPublicTest(APITestCase):
 
     URL = '/api/public/demande-demo/'
 
+    def setUp(self):
+        # Le formulaire public est limité en débit par adresse IP, compteur en
+        # cache. Tous les tests partagent la même IP : sans remise à zéro, les
+        # derniers de la série tombent sur un 429 selon l'ordre d'exécution.
+        from django.core.cache import cache
+        cache.clear()
+
     def test_la_demande_est_enregistree_et_notifiee(self):
         with patch('apps.licences.site_public.EmailMessage.send',
                    return_value=1) as envoi:

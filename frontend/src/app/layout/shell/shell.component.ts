@@ -204,6 +204,7 @@ export class ShellComponent {
       { labelKey: 'nav.dashboard', icon: '📊', route: '/dashboard' },
       { labelKey: 'nav.licences', icon: '🔐', route: '/licences' },
       { labelKey: 'nav.prospects', icon: '🎯', route: '/prospects' },
+      { labelKey: 'nav.facturation', icon: '🧾', route: '/facturation' },
     ]}
   ];
 
@@ -343,6 +344,7 @@ export class ShellComponent {
       '/fiscal':       'nav.fiscal',
       '/suivi-mensuel': 'nav.suivi',
       '/licences':     'nav.licences',
+      '/facturation':  'nav.facturation',
       '/ma-licence':   'nav.ma_licence',
       '/parametres':   'nav.parametres',
     };

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Facture proforma, facture ou avoir de HADY GESMAN (voir apps/prospects/facturation.py).
+Même charte que devis.html. Pièges xhtml2pdf : couleurs posées sur les cellules,
+jamais sur les lignes ; le remplissage s'ajoute aux largeurs en pourcentage.
+Rien n'est calculé ici : tous les montants arrivent mis en forme.
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:11.5px; color:#111827; }
+
+  .header-table { width:100%; border-bottom:2px solid #00745a; padding-bottom:6px; margin-bottom:10px; }
+  .header-table td { vertical-align:top; }
+  .emetteur   { font-size:17px; font-weight:bold; color:#00745a; }
+  .sub        { font-size:9px; color:#374151; text-transform:uppercase; letter-spacing:.6px; }
+  .coord      { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .doc-title  { font-size:19px; font-weight:bold; color:#111827; text-align:right; }
+  .doc-numero { font-size:13px; font-weight:bold; color:#00745a; text-align:right; margin-top:2px; }
+  .doc-meta   { font-size:9.5px; color:#374151; margin-top:3px; text-align:right; }
+
+  table.encart { width:100%; margin-bottom:9px; }
+  td.bandeau { border:2px solid #b45309; background:#fffbeb; padding:6px 10px; }
+  .bandeau-titre { font-size:12px; font-weight:bold; color:#b45309; }
+  .bandeau-texte { font-size:10px; color:#78350f; margin-top:2px; }
+  td.info { border:1px solid #0369a1; background:#f0f9ff; padding:6px 10px; }
+  .info-titre { font-size:11px; font-weight:bold; color:#0369a1; }
+  .info-texte { font-size:10px; color:#0c4a6e; margin-top:2px; }
+
+  .parties { width:100%; margin-bottom:10px; }
+  .parties td { padding:6px 9px; border:1px solid #e5e7eb; font-size:10.5px; vertical-align:top; }
+  .label { font-size:9px; color:#374151; text-transform:uppercase; letter-spacing:.4px; }
+  .nom { font-size:12.5px; font-weight:bold; color:#111827; margin-top:1px; }
+
+  .section-title { font-size:11.5px; font-weight:bold; color:#111827; border-left:3px solid #00745a;
+                   padding-left:6px; margin:9px 0 4px; }
+
+  table.lignes { width:100%; border-collapse:collapse; margin-bottom:6px; }
+  table.lignes th { background:#1a1a2e; color:#ffffff; padding:6px 8px; font-size:10.5px; text-align:left; }
+  table.lignes td.c { padding:4px 8px; border-bottom:1px solid #e8e8e8; font-size:11px; color:#111827; vertical-align:top; }
+  .ligne-detail { font-size:9.5px; color:#374151; line-height:1.3; }
+  .num { text-align:right; }
+
+  table.totaux { width:100%; border-collapse:collapse; }
+  .tot-label { padding:4px 8px; font-size:11px; text-align:right; color:#111827; }
+  .tot-val   { padding:4px 8px; font-size:11px; text-align:right; color:#111827; font-weight:bold; }
+  .net-label { padding:7px 8px; font-size:13px; font-weight:bold; background:#00745a; color:#ffffff; text-align:right; }
+  .net-val   { padding:7px 8px; font-size:15px; font-weight:bold; background:#00745a; color:#ffffff; text-align:right; }
+  .avoir-label { padding:7px 8px; font-size:13px; font-weight:bold; background:#b91c1c; color:#ffffff; text-align:right; }
+  .avoir-val   { padding:7px 8px; font-size:15px; font-weight:bold; background:#b91c1c; color:#ffffff; text-align:right; }
+  .mention-tva { font-size:9.5px; color:#374151; text-align:right; padding:2px 8px; }
+
+  .lettres { font-size:10.5px; color:#111827; margin:8px 0 4px; }
+  .conditions { font-size:9.4px; color:#374151; line-height:1.45; }
+  .conditions strong { color:#111827; }
+
+  .situation { width:100%; margin-top:8px; border-collapse:collapse; }
+  .situation td { padding:4px 8px; font-size:10px; border:1px solid #d1d5db; }
+  .paye { color:#047857; font-weight:bold; }
+  .du   { color:#b91c1c; font-weight:bold; }
+
+  .signatures { width:100%; margin-top:10px; }
+  .signatures td { padding:7px; border:1px solid #e5e7eb; font-size:9.6px; color:#374151; height:50px; vertical-align:top; }
+
+  .footer-table { width:100%; border-top:1px solid #e0e0e0; }
+  .footer-table td { padding:4px 0; font-size:8.5px; color:#374151; }
+
+  @page {
+    size: A4;
+    @frame contenu { left: 28pt; top: 28pt; width: 539pt; height: 762pt; }
+    @frame pied { -pdf-frame-content: pied-de-page; left: 28pt; top: 800pt; width: 539pt; height: 30pt; }
+  }
+</style>
+</head>
+<body>
+
+<table class="header-table">
+  <tr>
+    <td>
+      <div class="emetteur">{{ emetteur.raison_sociale }}</div>
+      <div class="sub">SAGI SCHOOL &middot; Système de gestion scolaire</div>
+      <div class="coord">
+        {% if emetteur.forme_juridique %}{{ emetteur.forme_juridique }}<br>{% endif %}
+        {% if emetteur.adresse %}{{ emetteur.adresse }}{% if emetteur.ville %}, {{ emetteur.ville }}{% endif %}<br>{% endif %}
+        {% if emetteur.telephone %}{{ emetteur.telephone }}<br>{% endif %}
+        {% if emetteur.email %}{{ emetteur.email }}{% endif %}{% if emetteur.site_web %} &middot; {{ emetteur.site_web }}{% endif %}
+        {% if emetteur.ninea or emetteur.rccm %}<br>{% if emetteur.ninea %}NINEA {{ emetteur.ninea }}{% endif %}{% if emetteur.ninea and emetteur.rccm %} &middot; {% endif %}{% if emetteur.rccm %}RCCM {{ emetteur.rccm }}{% endif %}{% endif %}
+      </div>
+    </td>
+    <td style="width:42%">
+      <div class="doc-title">{{ titre }}</div>
+      <div class="doc-numero">{% if doc.numero %}N° {{ doc.numero }}{% else %}BROUILLON{% endif %}</div>
+      <div class="doc-meta">
+        {% if doc.date_emission %}Émis le {{ doc.date_emission|date:"d/m/Y" }}{% endif %}
+        {% if doc.type == 'FACTURE' and doc.date_echeance %}<br>À régler avant le <strong>{{ doc.date_echeance|date:"d/m/Y" }}</strong>{% endif %}
+        {% if doc.type == 'PROFORMA' and doc.date_validite %}<br>Valable jusqu'au <strong>{{ doc.date_validite|date:"d/m/Y" }}</strong>{% endif %}
+      </div>
+    </td>
+  </tr>
+</table>
+
+{% if doc.statut == 'BROUILLON' %}
+<table class="encart"><tr><td class="bandeau">
+  <div class="bandeau-titre">BROUILLON — NE PAS TRANSMETTRE AU CLIENT</div>
+  <div class="bandeau-texte">Cette pièce n'est pas encore émise : elle n'a pas de numéro et ses montants peuvent changer.</div>
+</td></tr></table>
+{% endif %}
+{% if doc.type == 'PROFORMA' %}
+<table class="encart"><tr><td class="info">
+  <div class="info-titre">Facture proforma</div>
+  <div class="info-texte">Document établi pour engager la dépense ou obtenir un financement. Il ne vaut pas facture définitive et ne peut pas être réglé en l'état : la facture est émise à la commande.</div>
+</td></tr></table>
+{% endif %}
+{% if doc.type == 'AVOIR' and doc.origine %}
+<table class="encart"><tr><td class="info">
+  <div class="info-titre">Avoir sur la facture N° {{ doc.origine.numero }} du {{ doc.origine.date_emission|date:"d/m/Y" }}</div>
+  <div class="info-texte">Motif : {{ doc.motif|default:"—" }}</div>
+</td></tr></table>
+{% endif %}
+
+<table class="parties">
+  <tr>
+    <td>
+      <div class="label">{% if doc.type == 'AVOIR' %}Avoir au profit de{% else %}Facturé à{% endif %}</div>
+      <div class="nom">{{ doc.client_nom }}</div>
+      {% if doc.client_contact %}<div style="margin-top:3px">{{ doc.client_contact }}</div>{% endif %}
+      {% if doc.client_adresse or doc.client_ville %}<div>{{ doc.client_adresse }}{% if doc.client_adresse and doc.client_ville %}, {% endif %}{{ doc.client_ville }}</div>{% endif %}
+      {% if doc.client_telephone %}<div>{{ doc.client_telephone }}</div>{% endif %}
+      {% if doc.client_email %}<div>{{ doc.client_email }}</div>{% endif %}
+      {% if doc.client_ninea %}<div>NINEA {{ doc.client_ninea }}</div>{% endif %}
+    </td>
+    {% if doc.objet %}
+    <td style="width:42%">
+      <div class="label">Objet</div>
+      <div style="margin-top:2px">{{ doc.objet }}</div>
+      {% if doc.devis %}<div style="margin-top:3px; font-size:9.5px; color:#374151">Réf. devis {{ doc.devis.numero }}</div>{% endif %}
+      {% if doc.type == 'FACTURE' and doc.origine %}<div style="margin-top:3px; font-size:9.5px; color:#374151">Réf. proforma {{ doc.origine.numero }}</div>{% endif %}
+    </td>
+    {% endif %}
+  </tr>
+</table>
+
+<table class="lignes">
+  <tr>
+    <th style="width:52%">Désignation</th>
+    <th style="width:12%" class="num">Quantité</th>
+    <th style="width:18%" class="num">Prix unitaire HT</th>
+    <th style="width:18%" class="num">Montant HT</th>
+  </tr>
+  {% for l in lignes %}
+  <tr>
+    <td class="c"><strong>{{ l.designation }}</strong>{% if l.detail %}<div class="ligne-detail">{{ l.detail|linebreaksbr }}</div>{% endif %}</td>
+    <td class="c num">{{ l.quantite }}</td>
+    <td class="c num">{{ l.prix_unitaire }}</td>
+    <td class="c num">{{ l.montant }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table class="totaux">
+  <tr>
+    <td class="tot-label" style="width:75%">Total hors taxes</td>
+    <td class="tot-val" style="width:25%">{{ montants.ht }}</td>
+  </tr>
+  {% if doc.tva_applicable %}
+  <tr>
+    <td class="tot-label">TVA {{ taux_tva }} %</td>
+    <td class="tot-val">{{ montants.tva }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    {% if doc.type == 'AVOIR' %}
+    <td class="avoir-label">MONTANT DE L'AVOIR{% if doc.tva_applicable %} TTC{% endif %}</td>
+    <td class="avoir-val">{{ montants.ttc }}</td>
+    {% else %}
+    <td class="net-label">{% if doc.tva_applicable %}TOTAL TTC{% else %}NET À PAYER{% endif %}</td>
+    <td class="net-val">{{ montants.ttc }}</td>
+    {% endif %}
+  </tr>
+  {% if not doc.tva_applicable and doc.mention_tva %}
+  <tr><td class="mention-tva" colspan="2">{{ doc.mention_tva }}</td></tr>
+  {% endif %}
+</table>
+
+<div class="lettres">
+  Arrêté{% if doc.type != 'AVOIR' %}e{% endif %} {% if doc.type == 'AVOIR' %}le présent avoir{% elif doc.type == 'PROFORMA' %}la présente facture proforma{% else %}la présente facture{% endif %}
+  à la somme de <strong>{{ en_lettres }}</strong>.
+</div>
+
+{% if doc.type == 'FACTURE' and doc.statut == 'EMIS' and doc.statut_paiement != 'A_PAYER' %}
+<table class="situation">
+  <tr>
+    <td style="width:25%">Facturé : {{ montants.ttc }}</td>
+    {% if doc.montant_avoirs %}<td style="width:25%">Avoirs : {{ montants.avoirs }}</td>{% endif %}
+    <td style="width:25%">Déjà réglé : {{ montants.encaisse }}</td>
+    <td style="width:25%">{% if doc.statut_paiement == 'PAYEE' %}<span class="paye">ACQUITTÉE</span>{% else %}Reste à payer : <span class="du">{{ montants.solde }}</span>{% endif %}</td>
+  </tr>
+</table>
+{% endif %}
+
+{% if doc.observations %}
+<div class="section-title">Observations</div>
+<div class="conditions">{{ doc.observations|linebreaksbr }}</div>
+{% endif %}
+
+{% if doc.type != 'AVOIR' %}
+<div class="section-title">Conditions de règlement</div>
+<div class="conditions">
+  {% if doc.type == 'FACTURE' %}<strong>Échéance.</strong> {% if doc.date_echeance %}Paiement à effectuer avant le {{ doc.date_echeance|date:"d/m/Y" }}.{% else %}Paiement à réception de facture.{% endif %}<br>{% endif %}
+  {% if doc.type == 'PROFORMA' %}<strong>Validité.</strong> Les prix de cette proforma sont garantis jusqu'au {{ doc.date_validite|date:"d/m/Y"|default:"terme de sa validité" }}.<br>{% endif %}
+  <strong>Moyens de paiement acceptés.</strong> {{ modes }}.<br>
+  {% if emetteur.coordonnees_paiement %}<strong>Coordonnées de paiement.</strong> {{ emetteur.coordonnees_paiement|linebreaksbr }}<br>{% endif %}
+  {% if doc.numero %}<strong>Référence à rappeler.</strong> {{ doc.numero }}<br>{% endif %}
+  {% if doc.conditions %}{{ doc.conditions|linebreaksbr }}{% endif %}
+</div>
+{% endif %}
+
+<table class="signatures">
+  <tr>
+    <td style="width:50%"><strong>Pour {{ emetteur.raison_sociale }}</strong><br>Nom, date, cachet et signature</td>
+    <td style="width:50%"><strong>{{ doc.client_nom }}</strong><br>{% if doc.type == 'PROFORMA' %}Bon pour commande — nom, qualité, date et signature{% else %}Reçu le — nom et signature{% endif %}</td>
+  </tr>
+</table>
+
+<div id="pied-de-page">
+  <table class="footer-table">
+    <tr>
+      <td>{{ emetteur.raison_sociale }}{% if emetteur.ninea %} &middot; NINEA {{ emetteur.ninea }}{% endif %} &middot; {{ doc.numero|default:"BROUILLON" }}</td>
+      <td style="text-align:right">page <pdf:pagenumber></td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

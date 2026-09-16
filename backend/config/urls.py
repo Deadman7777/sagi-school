@@ -31,6 +31,8 @@ urlpatterns = [
     # prospects est enregistré sur le préfixe vide et capterait
     # « devis » comme un identifiant de fiche.
     path('api/devis/', include('apps.prospects.urls_devis')),
+    # Proformas, factures, avoirs et reçus de HADY GESMAN — même raison.
+    path('api/facturation/', include('apps.prospects.urls_facturation')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):
