@@ -11,6 +11,9 @@ let djangoWorkers   = [];       // processus de travail en mode réseau
 let lanProxy        = null;     // répartiteur devant les processus de travail
 const isDev       = process.env.NODE_ENV === 'development';
 const DJANGO_PORT = 8765;
+// Windows prend l'icône de l'exécutable ; Linux (AppImage/deb) a besoin de
+// la recevoir par fenêtre, sinon la barre des tâches montre une icône générique.
+const APP_ICON    = path.join(__dirname, 'assets', 'icon.png');
 
 function getBackendDir() {
   return isDev
@@ -219,6 +222,7 @@ function showSetupWindow() {
       width: 500, height: 720,
       resizable: false,
       title: 'Configuration — SAGI SCHOOL',
+      icon: APP_ICON,
       webPreferences: {
         preload: path.join(__dirname, 'setup-preload.js'),
         contextIsolation: true,
@@ -651,6 +655,7 @@ async function createWindow() {
     minWidth: 1024, minHeight: 700,
     show: false,
     title: 'SAGI SCHOOL',
+    icon: APP_ICON,
     webPreferences: {
       preload:          path.join(__dirname, 'preload.js'),
       contextIsolation: true,
