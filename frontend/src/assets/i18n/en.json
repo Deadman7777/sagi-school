@@ -1133,7 +1133,11 @@
     "responsable_scolarite": "Academic Manager",
     "lecture_seule": "Read only",
     "vous_gerez": "Managing:",
-    "retour_gestion": "Back to admin"
+    "retour_gestion": "Back to admin",
+    "installer_app": "Install app",
+    "installer_aide": "Adds a SAGI SCHOOL shortcut to your desktop. The app stays online: data is on the server.",
+    "installee": "SAGI SCHOOL is installed: find the icon on your desktop or in the Start menu.",
+    "installer_ios": "In Safari, tap the Share button, then “Add to Home Screen”."
   },
   "sauvegarde": {
     "titre": "Cloud backup",

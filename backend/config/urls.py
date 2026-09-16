@@ -50,7 +50,7 @@ if getattr(settings, 'FRONTEND_DIR', None):
         )
 
     urlpatterns += [
-        re_path(r'^(?P<path>.*\.(js|css|ico|png|jpg|svg|woff2?|ttf|map|json|txt))$',
+        re_path(r'^(?P<path>.*\.(js|css|ico|png|jpg|svg|woff2?|ttf|map|json|webmanifest|txt))$',
                 serve, {'document_root': FRONTEND}),
         re_path(r'^(?!api/)(?!admin/).*$', angular_index),
     ]

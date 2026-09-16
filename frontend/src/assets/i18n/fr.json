@@ -1133,7 +1133,11 @@
     "responsable_scolarite": "Responsable Scolarité",
     "lecture_seule": "Lecture seule",
     "vous_gerez": "Vous gérez :",
-    "retour_gestion": "Retour à la gestion"
+    "retour_gestion": "Retour à la gestion",
+    "installer_app": "Installer l'app",
+    "installer_aide": "Ajoute un raccourci SAGI SCHOOL sur le bureau. L'app reste en ligne : les données sont sur le serveur.",
+    "installee": "SAGI SCHOOL est installée : retrouvez l'icône sur votre bureau ou dans le menu Démarrer.",
+    "installer_ios": "Dans Safari, touchez le bouton Partager puis « Sur l'écran d'accueil »."
   },
   "sauvegarde": {
     "titre": "Sauvegarde cloud",

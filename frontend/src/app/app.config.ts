@@ -1,4 +1,4 @@
-import { ApplicationConfig } from '@angular/core';
+import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors, HttpClient } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
@@ -9,6 +9,7 @@ import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { Observable } from 'rxjs';
 import { BUILD_ID } from '../build-id';
+import { InstallationAppService } from './core/services/installation-app.service';
 
 // Loader personnalisé — compatible toutes versions.
 // Le paramètre ?v=BUILD_ID force le rechargement des traductions après chaque
@@ -25,6 +26,8 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
+    // Capte l'invite d'installation dès le chargement, avant la connexion.
+    provideAppInitializer(() => { inject(InstallationAppService); }),
     providePrimeNG({
       theme: { preset: Aura, options: { darkModeSelector: '.dark-mode' } }
     }),

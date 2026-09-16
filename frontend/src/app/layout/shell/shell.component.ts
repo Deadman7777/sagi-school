@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { LicenceCompteurService } from '../../core/services/licence-compteur.service';
 import { LangueService } from '../../core/services/langue.service';
+import { InstallationAppService } from '../../core/services/installation-app.service';
 import { AvatarModule } from 'primeng/avatar';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
@@ -82,6 +83,13 @@ interface NavItem {
         <header class="topbar">
           <span class="page-title">{{ pageTitle() | translate }}</span>
           <div class="topbar-right">
+            <!-- Mode cloud : raccourci bureau / écran d'accueil (pas le mode local) -->
+            @if (installation.disponible() || installation.iosManuel()) {
+              <button class="install-btn" (click)="installerApp()"
+                      [title]="'shell.installer_aide' | translate">
+                <span aria-hidden="true">📲</span> {{ 'shell.installer_app' | translate }}
+              </button>
+            }
             <!-- Sélecteur de langue -->
             <div class="langue-selector">
               <button class="langue-btn"
@@ -170,6 +178,9 @@ interface NavItem {
     .badge-gold { font-size:11px; padding:3px 12px; border-radius:20px; background:rgba(240,192,64,0.15); color:#f0c040; }
     .badge-blue { font-size:11px; padding:3px 12px; border-radius:20px; background:rgba(0,153,255,0.15); color:#0099ff; }
     .langue-selector { display:flex; gap:4px; }
+    .install-btn { display:inline-flex; align-items:center; gap:6px; background:rgba(0,212,170,0.1); border:1px solid #00d4aa; color:#00a383; border-radius:14px; padding:4px 12px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; white-space:nowrap; transition:all 0.15s; }
+    .install-btn:hover { background:rgba(0,212,170,0.2); }
+    .install-btn:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; }
     .langue-btn { background:transparent; border:1px solid var(--surface); border-radius:6px; padding:3px 7px; cursor:pointer; font-size:14px; transition:all 0.15s; }
     .langue-btn:hover  { border-color:var(--border); }
     .langue-btn.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
@@ -221,6 +232,8 @@ export class ShellComponent {
   private router    = inject(Router);
 
   compteur = inject(LicenceCompteurService);
+  installation = inject(InstallationAppService);
+  private messages = inject(MessageService);
 
   constructor(public auth: AuthService, public langue: LangueService) {
     if (this.afficherCompteurLicence()) this.compteur.demarrer();
@@ -236,6 +249,21 @@ export class ShellComponent {
     const fin = this.compteur.licence()?.date_fin;
     if (j === null) return '';
     return j < 0 ? `Licence expirée depuis le ${fin}` : `Licence : ${j} jour(s) restant(s) — expire le ${fin}`;
+  }
+
+  async installerApp() {
+    if (this.installation.disponible()) {
+      if (await this.installation.installer()) {
+        this.messages.add({ severity: 'success', summary: this.translate.instant('shell.installee') });
+      }
+      return;
+    }
+    // iPhone/iPad : aucune API, on explique le geste.
+    this.messages.add({
+      severity: 'info', sticky: true,
+      summary: this.translate.instant('shell.installer_app'),
+      detail: this.translate.instant('shell.installer_ios'),
+    });
   }
 
   isSuperAdmin() { return this.auth.currentUser()?.role === 'SUPER_ADMIN'; }
