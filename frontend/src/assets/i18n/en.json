@@ -1088,7 +1088,17 @@
     "regime_aide_simplifie": "Simplified: payslips without social contributions (non-affiliated).",
     "regime_aide_complet": "Full: IPRES, CSS, IR and employer charges (affiliated).",
     "avance_restant": "Outstanding",
-    "champs_requis_employe": "Full name, position and hire date are required."
+    "champs_requis_employe": "Full name, position and hire date are required.",
+    "absences_titre": "Absences and late arrivals this month",
+    "jours_absence": "Days absent",
+    "heures_retard": "Hours late",
+    "retenue_absence": "Amount deducted (FCFA)",
+    "retenue_absence_vide": "Empty = suggested amount",
+    "retenue_proposee": "Suggested: {{montant}} FCFA (1/30 of salary per day, 1/173.33 per hour)",
+    "note_remuneration": "Pay note (printed on the payslip)",
+    "note_remuneration_ph": "E.g.: absent on 12 and 13 March without justification; 3 late arrivals.",
+    "note_obligatoire": "Explain the deduction in the note: it appears on the payslip given to the employee.",
+    "retenue_absence_ligne": "Absence / lateness deduction"
   },
   "suivi": {
     "title": "Monthly Tracking",

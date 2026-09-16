@@ -240,6 +240,13 @@ class BulletinPaie(TenantModel):
     prime_transport           = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     primes_diverses           = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     avantages_nature          = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Absences et retards du mois : retranchés du BRUT (seul le travail fait
+    # est dû), donc avant cotisations. La note les explique sur le bulletin
+    # remis à l'employé, qui voit sinon son salaire baisser sans raison.
+    nb_jours_absence          = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    nb_heures_retard          = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    retenue_absence           = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    note_remuneration         = models.TextField(blank=True)
     salaire_brut              = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # RETENUES SALARIALES

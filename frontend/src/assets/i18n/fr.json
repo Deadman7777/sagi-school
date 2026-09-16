@@ -1088,7 +1088,17 @@
     "regime_aide_simplifie": "Simplifié : bulletins sans cotisations sociales (établissement non affilié).",
     "regime_aide_complet": "Complet : IPRES, CSS, IR et charges patronales (établissement affilié).",
     "avance_restant": "Restant dû",
-    "champs_requis_employe": "Nom, poste et date d'embauche sont obligatoires."
+    "champs_requis_employe": "Nom, poste et date d'embauche sont obligatoires.",
+    "absences_titre": "Absences et retards du mois",
+    "jours_absence": "Jours d'absence",
+    "heures_retard": "Heures de retard",
+    "retenue_absence": "Montant retenu (FCFA)",
+    "retenue_absence_vide": "Vide = montant proposé",
+    "retenue_proposee": "Proposé : {{montant}} FCFA (1/30 du salaire par jour, 1/173,33 par heure)",
+    "note_remuneration": "Note sur la rémunération (imprimée sur le bulletin)",
+    "note_remuneration_ph": "Ex. : absent les 12 et 13 mars sans justificatif ; 3 retards cumulés.",
+    "note_obligatoire": "Expliquez la retenue dans la note : elle figure sur le bulletin remis à l'employé.",
+    "retenue_absence_ligne": "Retenue absences / retards"
   },
   "suivi": {
     "title": "Suivi Mensuel",

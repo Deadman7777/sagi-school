@@ -749,6 +749,32 @@ const MOIS_OPTIONS = [
           <label>{{ 'rh.avantages_nature' | translate }}</label>
           <p-inputNumber [(ngModel)]="formBulletin.avantages_nature" [min]="0" mode="decimal" styleClass="w-full" />
         </div>
+        <div class="form-group full absences-bloc">
+          <div class="absences-titre">{{ 'rh.absences_titre' | translate }}</div>
+          <div class="absences-ligne">
+            <div>
+              <label>{{ 'rh.jours_absence' | translate }}</label>
+              <p-inputNumber [(ngModel)]="formBulletin.nb_jours_absence" [min]="0" [max]="31"
+                             [minFractionDigits]="0" [maxFractionDigits]="1" styleClass="w-full" />
+            </div>
+            <div>
+              <label>{{ 'rh.heures_retard' | translate }}</label>
+              <p-inputNumber [(ngModel)]="formBulletin.nb_heures_retard" [min]="0"
+                             [minFractionDigits]="0" [maxFractionDigits]="2" styleClass="w-full" />
+            </div>
+            <div>
+              <label>{{ 'rh.retenue_absence' | translate }}</label>
+              <p-inputNumber [(ngModel)]="formBulletin.retenue_absence" [min]="0" mode="decimal" styleClass="w-full"
+                             [placeholder]="'rh.retenue_absence_vide' | translate" />
+            </div>
+          </div>
+          @if (previewBulletin() && +previewBulletin()!.retenue_absence_proposee > 0) {
+            <small class="absences-aide">{{ 'rh.retenue_proposee' | translate:{ montant: (previewBulletin()!.retenue_absence_proposee | number:'1.0-0') } }}</small>
+          }
+          <label style="margin-top:8px">{{ 'rh.note_remuneration' | translate }}</label>
+          <textarea pInputText rows="2" class="w-full" [(ngModel)]="formBulletin.note_remuneration"
+                    [placeholder]="'rh.note_remuneration_ph' | translate"></textarea>
+        </div>
         <div class="form-group">
           <label>{{ 'rh.opposition_saisie' | translate }}</label>
           <p-inputNumber [(ngModel)]="formBulletin.opposition_saisie" [min]="0" mode="decimal" styleClass="w-full" />
@@ -799,6 +825,9 @@ const MOIS_OPTIONS = [
         <div class="preview-section">
           <div class="pv-sec-title success-txt">{{ 'rh.gains_label' | translate }}</div>
           <div class="pv-row"><span>Salaire de base</span><span class="mono">{{ previewBulletin()!.salaire_base | number:'1.0-0' }}</span></div>
+          @if (+previewBulletin()!.retenue_absence > 0) {
+            <div class="pv-row danger-txt"><span>{{ 'rh.retenue_absence_ligne' | translate }}</span><span class="mono">-{{ previewBulletin()!.retenue_absence | number:'1.0-0' }}</span></div>
+          }
           @if (+previewBulletin()!.heures_sup_montant > 0) {
             <div class="pv-row"><span>Heures sup. ({{ previewBulletin()!.nb_heures_sup }}h)</span><span class="mono">{{ previewBulletin()!.heures_sup_montant | number:'1.0-0' }}</span></div>
           }
@@ -957,6 +986,9 @@ const MOIS_OPTIONS = [
       <div>
         <div class="dg-title success-txt">GAINS</div>
         <div class="dg-row"><span>Salaire de base</span><span>{{ b.salaire_base | number:'1.0-0' }}</span></div>
+        @if (+b.retenue_absence > 0) {
+          <div class="dg-row danger-txt"><span>{{ 'rh.retenue_absence_ligne' | translate }}</span><span>-{{ b.retenue_absence | number:'1.0-0' }}</span></div>
+        }
         @if (+b.heures_sup_montant > 0) {
           <div class="dg-row"><span>Heures sup. ({{ b.nb_heures_sup }}h/sem.)</span><span>{{ b.heures_sup_montant | number:'1.0-0' }}</span></div>
         }
@@ -987,6 +1019,9 @@ const MOIS_OPTIONS = [
       </div>
     </div>
 
+    @if (b.note_remuneration) {
+      <div class="note-remuneration">📝 {{ b.note_remuneration }}</div>
+    }
     <div class="net-box-detail">
       <div>NET À PAYER</div>
       <div class="nbd-val">{{ b.net_a_payer | number:'1.0-0' }} FCFA</div>
@@ -1124,6 +1159,13 @@ const MOIS_OPTIONS = [
     .nh-label { font-size:10px; font-weight:700; color:var(--text-3); text-transform:uppercase; }
     .nh-val   { font-size:18px; font-weight:700; color:#00d4aa; font-family:monospace; }
     .preview-section { margin-bottom:10px; }
+    .absences-bloc { border:1px solid var(--border); border-radius:8px; padding:10px; }
+    .absences-titre { font-size:12px; font-weight:600; margin-bottom:6px; }
+    .absences-ligne { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; }
+    @media (max-width:600px) { .absences-ligne { grid-template-columns:1fr; } }
+    .absences-aide { display:block; margin-top:4px; font-size:10px; color:var(--text-3); }
+    .note-remuneration { margin:10px 0; padding:8px 10px; border-radius:6px; font-size:12px; white-space:pre-line;
+                         background:color-mix(in srgb, var(--warning, #d97706) 12%, transparent); }
     .pv-sec-title { font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:5px; border-bottom:1px solid rgba(42,63,95,0.5); padding-bottom:3px; }
     .pv-row   { display:flex; justify-content:space-between; font-size:11px; color:var(--text-2); padding:3px 0; }
     .pv-total { display:flex; justify-content:space-between; font-size:11px; font-weight:700; padding:5px 0 0; border-top:1px solid rgba(42,63,95,0.5); margin-top:3px; }
@@ -1428,6 +1470,10 @@ export class RhComponent implements OnInit {
       avantages_nature:    0,
       opposition_saisie:   0,
       autres_retenues:     0,
+      nb_jours_absence:    0,
+      nb_heures_retard:    0,
+      retenue_absence:     null,
+      note_remuneration:   '',
       mode_paiement_effectif: emp?.mode_paiement ?? 'CAISSE',
       projet_id: null, ressource_id: null,
     };
@@ -1471,6 +1517,12 @@ export class RhComponent implements OnInit {
 
   creerBulletin() {
     if (!this.formBulletin.employe_id) return;
+    const retenue = (+this.formBulletin.nb_jours_absence || 0) + (+this.formBulletin.nb_heures_retard || 0)
+                  + (+this.formBulletin.retenue_absence || 0);
+    if (retenue > 0 && !(this.formBulletin.note_remuneration || '').trim()) {
+      this.msg.add({ severity: 'warn', summary: this.t('common.requis'), detail: this.t('rh.note_obligatoire') });
+      return;
+    }
     this.saving.set(true);
     this.rh.creerBulletin(this._payloadBulletin()).subscribe({
       next: () => {
@@ -1567,6 +1619,11 @@ export class RhComponent implements OnInit {
       avantages_nature:       this.formBulletin.avantages_nature     || 0,
       opposition_saisie:      this.formBulletin.opposition_saisie    || 0,
       autres_retenues:        this.formBulletin.autres_retenues      || 0,
+      nb_jours_absence:       this.formBulletin.nb_jours_absence     || 0,
+      nb_heures_retard:       this.formBulletin.nb_heures_retard     || 0,
+      // null = montant proposé par le serveur (0 saisi reste une correction)
+      retenue_absence:        this.formBulletin.retenue_absence ?? null,
+      note_remuneration:      this.formBulletin.note_remuneration    || '',
       mode_paiement_effectif: this.formBulletin.mode_paiement_effectif,
       projet_id:              this.formBulletin.projet_id ?? null,
       ressource_id:           this.formBulletin.ressource_id ?? null,

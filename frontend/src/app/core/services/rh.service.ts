@@ -56,6 +56,10 @@ export interface BulletinPaie {
   prime_transport: number;
   primes_diverses: number;
   avantages_nature: number;
+  nb_jours_absence: number;
+  nb_heures_retard: number;
+  retenue_absence: number;
+  note_remuneration: string;
   salaire_brut: number;
   ipres_general_salarie: number;
   ipres_cadre_salarie: number;

@@ -40,6 +40,11 @@ COMPTES_PAIEMENT = {
 }
 
 
+# Bases de la retenue pour absence : mois de 30 jours, 40 h par semaine.
+JOURS_PAR_MOIS  = Decimal('30')
+HEURES_PAR_MOIS = Decimal('173.33')
+
+
 def _d(v):
     return Decimal(str(v))
 
@@ -204,6 +209,18 @@ class PaieCalculateur:
 
         base = _d(employe.salaire_base)
 
+        # Absences et retards : l'app PROPOSE la retenue (1/30 du salaire par
+        # jour, 1/173,33 par heure — 40 h par semaine), l'établissement peut la
+        # corriger en la saisissant. Bornée au salaire de base : on ne retient
+        # pas sur les primes un travail que le salaire de base rémunère.
+        nb_jours_absence = _d(kwargs.get('nb_jours_absence') or 0)
+        nb_heures_retard = _d(kwargs.get('nb_heures_retard') or 0)
+        retenue_proposee = _arrondi(base * nb_jours_absence / JOURS_PAR_MOIS
+                                    + base * nb_heures_retard / HEURES_PAR_MOIS)
+        saisie = kwargs.get('retenue_absence')
+        retenue_absence = retenue_proposee if saisie in (None, '') else _d(saisie)
+        retenue_absence = min(max(retenue_absence, Decimal('0')), base)
+
         heures_sup = cls.calculer_heures_sup(
             base, nb_heures_effectuees, employe.niveau_enseignement
         ) if nb_heures_effectuees else Decimal('0')
@@ -247,7 +264,7 @@ class PaieCalculateur:
         prime_transport = _d(kwargs.get('prime_transport', 0))
 
         salaire_brut = (
-            base + heures_sup + indemnite_sujetion + indemnite_logement
+            base - retenue_absence + heures_sup + indemnite_sujetion + indemnite_logement
             + alloc + prime_transport + primes_diverses + avantages_nature
         )
 
@@ -330,6 +347,10 @@ class PaieCalculateur:
             'prime_transport':             prime_transport,
             'primes_diverses':             primes_diverses,
             'avantages_nature':            avantages_nature,
+            'nb_jours_absence':            nb_jours_absence,
+            'nb_heures_retard':            nb_heures_retard,
+            'retenue_absence':             retenue_absence,
+            'note_remuneration':           (kwargs.get('note_remuneration') or '').strip(),
             'salaire_brut':                salaire_brut,
             # retenues
             'ipres_general_salarie':       ipres_g_sal,
@@ -352,13 +373,20 @@ class PaieCalculateur:
             'mode_paiement_effectif':      mode_pmt,
             # interne — [(AvanceSalaire, montant retenu sur CE bulletin)]
             '_avances_plan':               avances_plan,
+            # interne — ce que l'app propose, affiché à côté de la saisie
+            '_retenue_absence_proposee':   retenue_proposee,
         }
 
     @classmethod
     def creer_bulletin(cls, employe, mois, annee, nb_heures_effectuees=0, **kwargs):
         from .models import BulletinPaie
         data = cls.calculer_bulletin(employe, mois, annee, nb_heures_effectuees, **kwargs)
+        if data['retenue_absence'] > 0 and not data['note_remuneration']:
+            raise ValueError(
+                "Une note est obligatoire quand le salaire est diminué pour absences ou "
+                "retards : elle figure sur le bulletin et explique la baisse à l'employé.")
         avances_plan = data.pop('_avances_plan')
+        data.pop('_retenue_absence_proposee')
         bulletin = BulletinPaie.objects.create(
             tenant=employe.tenant,
             employe=employe,

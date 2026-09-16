@@ -247,6 +247,23 @@ class ParametresFiscauxViewSet(viewsets.ModelViewSet):
         return [CanAccessRH()]
 
 
+def _kwargs_paie(vd):
+    """Paramètres du calcul de paie tirés de BulletinPaieCreateSerializer —
+    communs à la création et à la prévisualisation, qui doivent calculer pareil."""
+    kwargs_paie = {k: vd.get(k, 0) for k in (
+        'prime_transport', 'indemnite_sujetion', 'indemnite_logement',
+        'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues',
+        'nb_jours_absence', 'nb_heures_retard')}
+    kwargs_paie['retenue_absence']   = vd.get('retenue_absence')
+    kwargs_paie['note_remuneration'] = vd.get('note_remuneration', '')
+    # avance_ids non vide = sélection explicite ; sinon auto (toutes EN_ATTENTE du mois)
+    if vd.get('avance_ids'):
+        kwargs_paie['avance_ids'] = vd['avance_ids']
+    if 'mode_paiement_effectif' in vd:
+        kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
+    return kwargs_paie
+
+
 class BulletinPaieViewSet(viewsets.ModelViewSet):
     serializer_class   = BulletinPaieSerializer
     permission_classes = [CanAccessRH]
@@ -290,15 +307,7 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        kwargs_paie = {}
-        for k in ('prime_transport', 'indemnite_sujetion', 'indemnite_logement',
-                  'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues'):
-            kwargs_paie[k] = vd.get(k, 0)
-        # avance_ids non vide = sélection explicite ; sinon auto (toutes EN_ATTENTE du mois)
-        if vd.get('avance_ids'):
-            kwargs_paie['avance_ids'] = vd['avance_ids']
-        if 'mode_paiement_effectif' in vd:
-            kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
+        kwargs_paie = _kwargs_paie(vd)
 
         try:
             bulletin = PaieCalculateur.creer_bulletin(
@@ -358,15 +367,7 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         tenant  = get_tenant(request)
         employe = get_object_or_404(Employe, id=vd['employe_id'], tenant=tenant)
 
-        kwargs_paie = {}
-        for k in ('prime_transport', 'indemnite_sujetion', 'indemnite_logement',
-                  'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues'):
-            kwargs_paie[k] = vd.get(k, 0)
-        # avance_ids non vide = sélection explicite ; sinon auto (toutes EN_ATTENTE du mois)
-        if vd.get('avance_ids'):
-            kwargs_paie['avance_ids'] = vd['avance_ids']
-        if 'mode_paiement_effectif' in vd:
-            kwargs_paie['mode_paiement_effectif'] = vd['mode_paiement_effectif']
+        kwargs_paie = _kwargs_paie(vd)
 
         try:
             data = PaieCalculateur.calculer_bulletin(
@@ -382,6 +383,7 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
         params = data.pop('parametres_fiscaux', None)
 
         result = {k: str(v) for k, v in data.items() if not k.startswith('_')}
+        result['retenue_absence_proposee'] = str(data['_retenue_absence_proposee'])
         result['employe_nom']       = employe.nom_complet
         result['employe_matricule'] = employe.matricule
         result['parametres_annee']  = params.annee if params else None

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import Employe, Paie, ParametresFiscaux, AvanceSalaire, BulletinPaie
 
@@ -95,6 +97,12 @@ class BulletinPaieCreateSerializer(serializers.Serializer):
     avantages_nature       = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
     opposition_saisie      = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
     autres_retenues        = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nb_jours_absence       = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=Decimal('0'), max_value=Decimal('31'), default=0)
+    nb_heures_retard       = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal('0'), default=0)
+    # Vide = montant proposé par l'app ; saisi = correction de l'établissement
+    retenue_absence        = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0'),
+                                                      required=False, allow_null=True, default=None)
+    note_remuneration      = serializers.CharField(required=False, allow_blank=True, default='')
     mode_paiement_effectif = serializers.CharField(max_length=15, required=False)
     avance_ids             = serializers.ListField(
         child=serializers.UUIDField(), required=False, default=list

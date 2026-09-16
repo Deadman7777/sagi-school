@@ -189,6 +189,12 @@
       <td>Salaire de base</td>
       <td class="right">{{ bulletin.salaire_base|floatformat:0 }}</td>
     </tr>
+    {% if bulletin.retenue_absence %}
+    <tr>
+      <td>Retenue pour {% if bulletin.nb_jours_absence %}absence ({{ bulletin.nb_jours_absence|floatformat:"-2" }} j){% endif %}{% if bulletin.nb_jours_absence and bulletin.nb_heures_retard %} et {% endif %}{% if bulletin.nb_heures_retard %}retards ({{ bulletin.nb_heures_retard|floatformat:"-2" }} h){% endif %}{% if not bulletin.nb_jours_absence and not bulletin.nb_heures_retard %}absences / retards{% endif %}</td>
+      <td class="right">-{{ bulletin.retenue_absence|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
     {% if bulletin.heures_sup_montant %}
     <tr>
       <td>Heures supplémentaires ({{ bulletin.nb_heures_sup }} h/sem.)</td>
@@ -239,6 +245,16 @@
     </tr>
   </tfoot>
 </table>
+
+{% if bulletin.note_remuneration %}
+<table>
+  <tr>
+    <td style="background-color:#fef3c7;color:#78350f;border:1px solid #d97706;padding:6px 8px">
+      <strong>Note sur la rémunération du mois :</strong> {{ bulletin.note_remuneration|linebreaksbr }}
+    </td>
+  </tr>
+</table>
+{% endif %}
 
 <!-- ══ RETENUES SALARIALES ══ -->
 <div class="section-title blue">RETENUES SALARIALES</div>

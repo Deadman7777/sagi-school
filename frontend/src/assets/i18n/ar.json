@@ -1088,7 +1088,17 @@
     "regime_aide_simplifie": "مبسّط: قسائم دون اشتراكات اجتماعية (غير منتسبة).",
     "regime_aide_complet": "كامل: IPRES وCSS وIR وأعباء صاحب العمل (منتسبة).",
     "avance_restant": "المتبقي",
-    "champs_requis_employe": "الاسم والوظيفة وتاريخ التوظيف حقول إلزامية."
+    "champs_requis_employe": "الاسم والوظيفة وتاريخ التوظيف حقول إلزامية.",
+    "absences_titre": "الغيابات والتأخرات خلال الشهر",
+    "jours_absence": "أيام الغياب",
+    "heures_retard": "ساعات التأخر",
+    "retenue_absence": "المبلغ المقتطع (فرنك)",
+    "retenue_absence_vide": "فارغ = المبلغ المقترح",
+    "retenue_proposee": "المقترح: {{montant}} فرنك (1/30 من الراتب عن كل يوم، 1/173.33 عن كل ساعة)",
+    "note_remuneration": "ملاحظة حول الأجر (تُطبع في كشف الراتب)",
+    "note_remuneration_ph": "مثال: غائب يومي 12 و13 مارس دون مبرر؛ 3 تأخرات.",
+    "note_obligatoire": "اشرح الاقتطاع في الملاحظة: فهي تظهر في كشف الراتب المسلَّم للموظف.",
+    "retenue_absence_ligne": "اقتطاع الغياب / التأخر"
   },
   "suivi": {
     "title": "المتابعة الشهرية",
