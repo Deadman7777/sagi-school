@@ -59,7 +59,7 @@
         "deb"
       ],
       "category": "Office",
-      "icon": "assets/icon.png",
+      "icon": "assets/icons",
       "maintainer": "HADY GESMAN <contact@hadygesman.com>",
       "description": "Système de Gestion Scolaire"
     },
