@@ -2266,6 +2266,23 @@ class CertificatScolariteView(APIView):
         from apps.paiements.models import Exercice
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
+        # ?modele=word : le modèle Word de l'établissement, rempli pour l'élève
+        # (pas « format » : DRF le réserve à la négociation de contenu → 404)
+        if request.query_params.get('modele') == 'word':
+            import base64
+            from .models import ModeleCertificat
+            from .modele_word import remplir_docx
+            modele = ModeleCertificat.objects.filter(tenant=tenant).first()
+            if modele is None:
+                return HttpResponse("Aucun modèle Word n'a été déposé dans Paramètres → Certificat.",
+                                    status=404)
+            docx = remplir_docx(base64.b64decode(modele.contenu_b64),
+                                valeurs_certificat(eleve, tenant, exercice))
+            response = HttpResponse(docx, content_type=DOCX_MIME)
+            safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
+            response['Content-Disposition'] = f'attachment; filename="certificat_{safe_name}.docx"'
+            return response
+
         # Personnalisation du certificat : défauts = version standard complète,
         # surchargés par la config de l'école (Paramètres → Certificat).
         cfg = {
@@ -2306,6 +2323,139 @@ class CertificatScolariteView(APIView):
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="certificat_{safe_name}.pdf"'
         return response
+
+
+# Codes utilisables dans le modèle Word du certificat, avec ce qu'ils donnent.
+# L'ordre est celui de l'aide affichée dans Paramètres → Certificat.
+CODES_CERTIFICAT = [
+    ('NOM_COMPLET',         "Prénom et nom de l'élève"),
+    ('MATRICULE',           'Matricule'),
+    ('DATE_NAISSANCE',      'Date de naissance (jj/mm/aaaa)'),
+    ('LIEU_NAISSANCE',      'Lieu de naissance'),
+    ('NE_E',                '« né » ou « née » selon le genre'),
+    ('INSCRIT_E',           '« inscrit » ou « inscrite » selon le genre'),
+    ('SEXE',                '« Masculin » ou « Féminin »'),
+    ('CLASSE',              'Classe (ou section si la section n’a pas de classes)'),
+    ('SECTION',             'Section / niveau'),
+    ('ANNEE_SCOLAIRE',      'Année scolaire en cours'),
+    ('DATE_INSCRIPTION',    "Date d'inscription"),
+    ('DATE_ENTREE',         "Date d'entrée dans l'établissement"),
+    ('NOM_PERE',            'Nom du père'),
+    ('NOM_MERE',            'Nom de la mère'),
+    ('NOM_TUTEUR',          'Nom du tuteur'),
+    ('ECOLE',               "Nom de l'établissement"),
+    ('ADRESSE_ECOLE',       "Adresse de l'établissement"),
+    ('VILLE',               "Ville de l'établissement"),
+    ('TELEPHONE_ECOLE',     "Téléphone de l'établissement"),
+    ('EMAIL_ECOLE',         "Email de l'établissement"),
+    ('NUMERO_AUTORISATION', "Numéro d'autorisation d'ouverture"),
+    ('DATE_DU_JOUR',        'Date de délivrance (aujourd’hui)'),
+]
+
+
+def valeurs_certificat(eleve, tenant, exercice):
+    """Valeur de chaque code du modèle Word pour cet élève."""
+    def date(d):
+        return d.strftime('%d/%m/%Y') if d else ''
+    fille = eleve.genre == 'F'
+    section = eleve.section.nom if eleve.section else ''
+    return {
+        'NOM_COMPLET':         eleve.nom_complet,
+        'MATRICULE':           eleve.matricule or '',
+        'DATE_NAISSANCE':      date(eleve.date_naissance),
+        'LIEU_NAISSANCE':      eleve.lieu_naissance or '',
+        'NE_E':                'née' if fille else 'né',
+        'INSCRIT_E':           'inscrite' if fille else 'inscrit',
+        'SEXE':                {'F': 'Féminin', 'G': 'Masculin'}.get(eleve.genre, ''),
+        'CLASSE':              eleve.classe.nom if eleve.classe_id else section,
+        'SECTION':             section,
+        'ANNEE_SCOLAIRE':      exercice.annee_scolaire if exercice else '',
+        'DATE_INSCRIPTION':    date(eleve.date_inscription),
+        'DATE_ENTREE':         date(eleve.date_entree or eleve.date_inscription),
+        'NOM_PERE':            eleve.nom_pere or '',
+        'NOM_MERE':            eleve.nom_mere or '',
+        'NOM_TUTEUR':          eleve.nom_tuteur or '',
+        'ECOLE':               tenant.nom,
+        'ADRESSE_ECOLE':       tenant.adresse or '',
+        'VILLE':               tenant.ville or '',
+        'TELEPHONE_ECOLE':     tenant.telephone or '',
+        'EMAIL_ECOLE':         tenant.email or '',
+        'NUMERO_AUTORISATION': tenant.numero_autorisation or '',
+        'DATE_DU_JOUR':        date(timezone.localdate()),
+    }
+
+
+class ModeleCertificatView(APIView):
+    """Modèle Word du certificat : état (GET), téléversement (POST), retrait (DELETE).
+
+    GET ?telecharger=1 renvoie le fichier tel que l'école l'a déposé.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _modele(self, tenant):
+        from .models import ModeleCertificat
+        return ModeleCertificat.objects.filter(tenant=tenant).first()
+
+    def _etat(self, modele):
+        connus = {c for c, _ in CODES_CERTIFICAT}
+        return {
+            'modele': None if modele is None else {
+                'nom_fichier':    modele.nom_fichier,
+                'date':           modele.updated_at,
+                'codes':          modele.codes,
+                'codes_inconnus': [c for c in modele.codes if c not in connus],
+            },
+            'codes_disponibles': [{'code': c, 'description': d} for c, d in CODES_CERTIFICAT],
+        }
+
+    def get(self, request):
+        import base64
+        from django.http import HttpResponse
+        modele = self._modele(get_tenant(request))
+        if request.query_params.get('telecharger'):
+            if modele is None:
+                return Response({'error': 'Aucun modèle Word déposé.'}, status=404)
+            response = HttpResponse(base64.b64decode(modele.contenu_b64), content_type=DOCX_MIME)
+            response['Content-Disposition'] = f'attachment; filename="{modele.nom_fichier}"'
+            return response
+        return Response(self._etat(modele))
+
+    def post(self, request):
+        import base64
+        from core.permissions import IsAdminEcole
+        from .models import ModeleCertificat
+        from .modele_word import ModeleInvalide, codes_du_modele, verifier_docx
+        if not IsAdminEcole().has_permission(request, self):
+            return Response({'error': "Seul l'administrateur de l'établissement peut changer le modèle."},
+                            status=403)
+        fichier = request.FILES.get('fichier')
+        if fichier is None:
+            return Response({'error': 'Aucun fichier reçu.'}, status=400)
+        contenu = fichier.read()
+        try:
+            verifier_docx(contenu)
+            codes = codes_du_modele(contenu)
+        except ModeleInvalide as exc:
+            return Response({'error': str(exc)}, status=400)
+        tenant = get_tenant(request)
+        modele, _ = ModeleCertificat.objects.update_or_create(
+            tenant=tenant,
+            defaults={'nom_fichier': fichier.name[:255], 'codes': codes,
+                      'contenu_b64': base64.b64encode(contenu).decode('ascii')})
+        return Response(self._etat(modele), status=201)
+
+    def delete(self, request):
+        from core.permissions import IsAdminEcole
+        if not IsAdminEcole().has_permission(request, self):
+            return Response({'error': "Seul l'administrateur de l'établissement peut changer le modèle."},
+                            status=403)
+        modele = self._modele(get_tenant(request))
+        if modele:
+            modele.delete()
+        return Response(self._etat(None))
+
+
+DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 
 class FicheElevePDFView(APIView):

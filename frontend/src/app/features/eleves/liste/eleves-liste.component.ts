@@ -70,6 +70,19 @@ const MOIS_ANNEE = [
   template: `
     <p-toast />
 
+    <p-dialog [(visible)]="dialogCertificatVisible" [modal]="true" [style]="{ width: '420px', maxWidth: '95vw' }"
+              [header]="'eleves.certificat_titre' | translate">
+      @if (certificatPour(); as e) {
+        <p style="margin:0 0 14px;font-size:13px">{{ e.nom_complet }}</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <p-button icon="pi pi-file-word" [label]="'eleves.certificat_word' | translate" styleClass="w-full"
+                    (onClick)="telechargerCertificat(e, 'word')" />
+          <p-button icon="pi pi-file-pdf" severity="secondary" [label]="'eleves.certificat_pdf' | translate" styleClass="w-full"
+                    (onClick)="telechargerCertificat(e)" />
+        </div>
+      }
+    </p-dialog>
+
     <!-- Header -->
     <div class="page-header">
       <div>
@@ -2012,6 +2025,10 @@ export class ElevesListeComponent implements OnInit {
 
   ngOnInit() {
     this.chargerEleves();
+    this.elevesService.getModeleCertificat().subscribe({
+      next: (r: any) => this.modeleCertificatWord.set(!!r?.modele),
+      error: () => this.modeleCertificatWord.set(false),
+    });
     this.chargerSections();
     this.chargerServices();
     this.chargerClasses();
@@ -2618,21 +2635,37 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  /** L'établissement a-t-il déposé son propre modèle Word ? Lu à l'ouverture. */
+  modeleCertificatWord = signal(false);
+  certificatPour = signal<Eleve | null>(null);
+  dialogCertificatVisible = false;
+
   genererCertificat(eleve: Eleve | null) {
     if (!eleve?.id) return;
-    this.elevesService.telechargerCertificat(eleve.id).subscribe({
+    if (this.modeleCertificatWord()) {
+      // Deux versions possibles : on laisse choisir
+      this.certificatPour.set(eleve);
+      this.dialogCertificatVisible = true;
+      return;
+    }
+    this.telechargerCertificat(eleve);
+  }
+
+  telechargerCertificat(eleve: Eleve, modele?: 'word') {
+    this.dialogCertificatVisible = false;
+    this.elevesService.telechargerCertificat(eleve.id, modele).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = `certificat_${(eleve.nom_complet || 'eleve').replace(/ /g, '_')}.pdf`;
+        link.download = `certificat_${(eleve.nom_complet || 'eleve').replace(/ /g, '_')}.${modele === 'word' ? 'docx' : 'pdf'}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       },
-      error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
-                                   detail: 'Impossible de générer le certificat.' }),
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                   detail: this.translate.instant('eleves.certificat_erreur') }),
     });
   }
 

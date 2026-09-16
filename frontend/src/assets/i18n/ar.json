@@ -365,7 +365,11 @@
     "tri_export_aide": "ترتيب التلاميذ في قوائم PDF. في كل الحالات يُرتَّب التلاميذ حسب رقم التسجيل، من الأقدم إلى الأحدث.",
     "tri_section": "حسب القسم",
     "tri_classe": "حسب الفصل",
-    "tri_matricule": "حسب رقم التسجيل فقط"
+    "tri_matricule": "حسب رقم التسجيل فقط",
+    "certificat_titre": "شهادة مدرسية",
+    "certificat_word": "نموذج Word الخاص بالمؤسسة",
+    "certificat_pdf": "الشهادة العادية (PDF)",
+    "certificat_erreur": "تعذّر إنشاء الشهادة."
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
@@ -598,7 +602,20 @@
     "bareme_vide_aide": "املأ شهرًا واحدًا على الأقل.",
     "bareme_applique": "تم تطبيق الجدول",
     "bareme_resume": "{{n}} من {{total}} تلميذ(ة).",
-    "bareme_echec": "تعذّر تطبيق الجدول."
+    "bareme_echec": "تعذّر تطبيق الجدول.",
+    "cert_word_titre": "نموذج Word الخاص بالمؤسسة",
+    "cert_word_aide": "اكتب الشهادة في Word بترويستك وتنسيقك، وضع فيها رموزًا بين قوسين معقوفين مثل {NOM_COMPLET} أو {CLASSE}. عند كل طلب، يملأ التطبيق هذه الرموز ببيانات التلميذ ويسلّمك مستند Word جاهزًا للطباعة.",
+    "cert_word_deposer": "رفع نموذج Word",
+    "cert_word_remplacer": "استبدال النموذج",
+    "cert_word_format": "صيغة ‎.docx‎، بحد أقصى 5 ميغابايت",
+    "cert_word_depose_le": "تم الرفع في",
+    "cert_word_telecharger": "تنزيل",
+    "cert_word_retirer": "حذف",
+    "cert_word_inconnus": "رموز غير معروفة، ستبقى كما هي في الشهادة:",
+    "cert_word_aucun_code": "لم يُعثر على أي رمز في هذا النموذج: ستكون الشهادة واحدة لجميع التلاميذ.",
+    "cert_word_codes": "الرموز المتاحة",
+    "cert_word_copie": "تم النسخ: الصقه في مستند Word.",
+    "cert_word_depose": "تم حفظ نموذج Word"
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",

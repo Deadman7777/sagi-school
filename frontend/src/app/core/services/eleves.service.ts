@@ -69,8 +69,27 @@ export class ElevesService {
     return this.api.get<any>(`/eleves/${eleveId}/saisie-paiement/`);
   }
 
-  telechargerCertificat(eleveId: string) {
-    return this.api.getBlob(`/eleves/${eleveId}/certificat/`);
+  /** modele='word' : le modèle Word de l'établissement, rempli pour l'élève. */
+  telechargerCertificat(eleveId: string, modele?: 'word') {
+    return this.api.getBlob(`/eleves/${eleveId}/certificat/`, { modele });
+  }
+
+  getModeleCertificat() {
+    return this.api.get<any>('/eleves/certificat-modele/');
+  }
+
+  deposerModeleCertificat(fichier: File) {
+    const data = new FormData();
+    data.append('fichier', fichier);
+    return this.api.post<any>('/eleves/certificat-modele/', data);
+  }
+
+  supprimerModeleCertificat() {
+    return this.api.delete<any>('/eleves/certificat-modele/');
+  }
+
+  telechargerModeleCertificat() {
+    return this.api.getBlob('/eleves/certificat-modele/', { telecharger: 1 });
   }
 
   getPriseEnChargeStats() {

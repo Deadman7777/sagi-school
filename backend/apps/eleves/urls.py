@@ -4,7 +4,7 @@ from .views import (EleveViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSe
                     SectionViewSet, ServiceViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
                     ElevesListePDFView, SituationElevePDFView, FicheElevePDFView,
-                    ParcoursElevePDFView)
+                    ParcoursElevePDFView, ModeleCertificatView)
 
 router = DefaultRouter()
 router.register('sections', SectionViewSet, basename='section')
@@ -18,6 +18,7 @@ urlpatterns = [
     path('suivi-mensuel/', SuiviMensuelView.as_view()),
     path('export-pdf/', ElevesListePDFView.as_view()),
     path('prises-en-charge/stats/', PriseEnChargeStatsView.as_view()),
+    path('certificat-modele/', ModeleCertificatView.as_view()),
     path('<str:eleve_id>/certificat/', CertificatScolariteView.as_view()),
     path('<str:eleve_id>/situation-pdf/', SituationElevePDFView.as_view()),
     path('<str:eleve_id>/fiche-pdf/', FicheElevePDFView.as_view()),

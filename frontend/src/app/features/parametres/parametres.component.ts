@@ -55,7 +55,7 @@ import { MessageService } from 'primeng/api';
       <button class="tab-btn" [class.active]="onglet() === 'services'"
               (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'certificat'"
-              (click)="onglet.set('certificat'); initCertConfig()">📜 {{ 'parametres.certificat' | translate }}</button>
+              (click)="onglet.set('certificat'); initCertConfig(); chargerModeleWord()">📜 {{ 'parametres.certificat' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
       <button class="tab-btn" *ngIf="estLocal" [class.active]="onglet() === 'sauvegarde'"
@@ -581,6 +581,51 @@ import { MessageService } from 'primeng/api';
 
     <!-- ══ ONGLET CERTIFICAT ══ -->
     <div *ngIf="onglet() === 'certificat'">
+      <div class="form-card" style="margin-bottom:16px">
+        <div class="fc-title">📝 {{ 'parametres.cert_word_titre' | translate }}</div>
+        <p style="color:var(--text-2);font-size:12px;margin:0 0 14px">{{ 'parametres.cert_word_aide' | translate }}</p>
+        @if (modeleWord()?.modele; as m) {
+          <div class="word-actuel">
+            <div>
+              <strong>{{ m.nom_fichier }}</strong>
+              <div style="font-size:11px;color:var(--text-3)">{{ 'parametres.cert_word_depose_le' | translate }} {{ m.date | date:'dd/MM/yyyy HH:mm' }}</div>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <p-button icon="pi pi-download" [text]="true" [label]="'parametres.cert_word_telecharger' | translate"
+                        (onClick)="telechargerModeleWord()" />
+              <p-button icon="pi pi-trash" [text]="true" severity="danger" [label]="'parametres.cert_word_retirer' | translate"
+                        [loading]="deposantWord()" (onClick)="retirerModeleWord()" />
+            </div>
+          </div>
+          @if (m.codes_inconnus.length) {
+            <div class="word-alerte">⚠️ {{ 'parametres.cert_word_inconnus' | translate }} <strong>{{ m.codes_inconnus.join(', ') }}</strong></div>
+          }
+          @if (!m.codes.length) {
+            <div class="word-alerte">⚠️ {{ 'parametres.cert_word_aucun_code' | translate }}</div>
+          }
+        }
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0">
+          <input #fichierWord type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                 (change)="deposerModeleWord($event)" style="display:none" />
+          <p-button icon="pi pi-upload" [loading]="deposantWord()"
+                    [label]="(modeleWord()?.modele ? 'parametres.cert_word_remplacer' : 'parametres.cert_word_deposer') | translate"
+                    (onClick)="fichierWord.click()" />
+          <small style="color:var(--text-3);font-size:11px">{{ 'parametres.cert_word_format' | translate }}</small>
+        </div>
+        <details class="word-codes">
+          <summary>{{ 'parametres.cert_word_codes' | translate }}</summary>
+          <table>
+            @for (c of modeleWord()?.codes_disponibles || []; track c.code) {
+              <tr>
+                <td><code>{{ '{' + c.code + '}' }}</code></td>
+                <td>{{ c.description }}</td>
+                <td><p-button icon="pi pi-copy" [text]="true" [rounded]="true" size="small"
+                              (onClick)="copierCode(c.code)" /></td>
+              </tr>
+            }
+          </table>
+        </details>
+      </div>
       <div class="form-card">
         <div class="fc-title">📜 {{ 'parametres.cert_titre' | translate }}</div>
         <p style="color:var(--text-2);font-size:12px;margin:0 0 14px">{{ 'parametres.cert_aide' | translate }}</p>
@@ -1087,6 +1132,13 @@ import { MessageService } from 'primeng/api';
     .form-input { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 14px; color:var(--text); font-family:inherit; font-size:13px; outline:none; }
     .form-input:focus { border-color:#00d4aa; }
 
+    .word-actuel { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+                   padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); }
+    .word-alerte { margin-top:8px; font-size:12px; color:var(--text-2); }
+    .word-codes summary { cursor:pointer; font-size:12px; color:var(--text-2); }
+    .word-codes table { margin-top:8px; font-size:12px; border-collapse:collapse; }
+    .word-codes td { padding:2px 8px 2px 0; vertical-align:middle; }
+    .word-codes code { font-size:12px; }
     .form-actions { display:flex; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
 
     .total-tresorerie { display:flex; justify-content:space-between; align-items:center; background:rgba(0,212,170,0.08); border:1px solid rgba(0,212,170,0.2); border-radius:8px; padding:12px 16px; margin-top:16px; font-size:13px; color:var(--text-2); }
@@ -1512,6 +1564,67 @@ chargerExercice() {
     cfg.texte_intro      = saved.texte_intro || '';
     cfg.texte_conclusion = saved.texte_conclusion || '';
     this.certCfg = cfg;
+  }
+
+  // ── Modèle Word du certificat ──
+  modeleWord = signal<any>(null);
+  deposantWord = signal(false);
+
+  chargerModeleWord() {
+    this.eleves.getModeleCertificat().subscribe({
+      next: r => this.modeleWord.set(r),
+      error: () => this.modeleWord.set(null),
+    });
+  }
+
+  deposerModeleWord(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const fichier = input.files?.[0];
+    input.value = '';          // redéposer le même fichier corrigé doit relancer l'envoi
+    if (!fichier) return;
+    this.deposantWord.set(true);
+    this.eleves.deposerModeleCertificat(fichier).subscribe({
+      next: r => {
+        this.modeleWord.set(r);
+        this.deposantWord.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.sauvegarde_ok'),
+                       detail: this.translate.instant('parametres.cert_word_depose') });
+      },
+      error: err => {
+        this.deposantWord.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: err?.error?.error || this.translate.instant('parametres.sauvegarde_echouee') });
+      },
+    });
+  }
+
+  retirerModeleWord() {
+    this.deposantWord.set(true);
+    this.eleves.supprimerModeleCertificat().subscribe({
+      next: r => { this.modeleWord.set(r); this.deposantWord.set(false); },
+      error: err => {
+        this.deposantWord.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: err?.error?.error || this.translate.instant('parametres.sauvegarde_echouee') });
+      },
+    });
+  }
+
+  telechargerModeleWord() {
+    const nom = this.modeleWord()?.modele?.nom_fichier || 'modele_certificat.docx';
+    this.eleves.telechargerModeleCertificat().subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = nom; a.click();
+        URL.revokeObjectURL(url);
+      },
+    });
+  }
+
+  copierCode(code: string) {
+    navigator.clipboard?.writeText(`{${code}}`).then(() =>
+      this.msg.add({ severity: 'info', summary: `{${code}}`, detail: this.translate.instant('parametres.cert_word_copie'), life: 1500 }));
   }
 
   sauvegarderCertificat() {

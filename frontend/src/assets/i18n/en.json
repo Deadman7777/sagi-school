@@ -365,7 +365,11 @@
     "tri_export_aide": "Order of students in PDF lists. In every case students are arranged by registration number, oldest first.",
     "tri_section": "By section",
     "tri_classe": "By class",
-    "tri_matricule": "By registration number only"
+    "tri_matricule": "By registration number only",
+    "certificat_titre": "School certificate",
+    "certificat_word": "School's Word template",
+    "certificat_pdf": "Standard certificate (PDF)",
+    "certificat_erreur": "Unable to generate the certificate."
   },
   "paiements": {
     "title": "Payment Entry",
@@ -598,7 +602,20 @@
     "bareme_vide_aide": "Fill in at least one month.",
     "bareme_applique": "Schedule applied",
     "bareme_resume": "{{n}} of {{total}} student(s).",
-    "bareme_echec": "The schedule could not be applied."
+    "bareme_echec": "The schedule could not be applied.",
+    "cert_word_titre": "School's Word template",
+    "cert_word_aide": "Write your certificate in Word, with your letterhead and layout, and insert codes in braces such as {NOM_COMPLET} or {CLASSE}. On each request the app fills these codes with the student's details and gives you the Word document, ready to print.",
+    "cert_word_deposer": "Upload my Word template",
+    "cert_word_remplacer": "Replace template",
+    "cert_word_format": ".docx format, 5 MB maximum",
+    "cert_word_depose_le": "Uploaded on",
+    "cert_word_telecharger": "Download",
+    "cert_word_retirer": "Remove",
+    "cert_word_inconnus": "Unrecognised codes, they will remain as is in the certificate:",
+    "cert_word_aucun_code": "No code found in this template: the certificate will be the same for every student.",
+    "cert_word_codes": "Available codes",
+    "cert_word_copie": "Copied: paste it into your Word document.",
+    "cert_word_depose": "Word template saved"
   },
   "cloture": {
     "title": "Year Closing",

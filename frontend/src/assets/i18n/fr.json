@@ -365,7 +365,11 @@
     "tri_export_aide": "Ordre des élèves dans les listes PDF. Dans tous les cas, les élèves sont rangés par matricule, du plus ancien au plus récent.",
     "tri_section": "Par section",
     "tri_classe": "Par classe",
-    "tri_matricule": "Par matricule seul"
+    "tri_matricule": "Par matricule seul",
+    "certificat_titre": "Certificat de scolarité",
+    "certificat_word": "Modèle Word de l'établissement",
+    "certificat_pdf": "Certificat standard (PDF)",
+    "certificat_erreur": "Impossible de générer le certificat."
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -598,7 +602,20 @@
     "bareme_vide_aide": "Renseignez au moins un mois.",
     "bareme_applique": "Barème appliqué",
     "bareme_resume": "{{n}} élève(s) sur {{total}}.",
-    "bareme_echec": "Le barème n'a pas pu être appliqué."
+    "bareme_echec": "Le barème n'a pas pu être appliqué.",
+    "cert_word_titre": "Modèle Word de l'établissement",
+    "cert_word_aide": "Rédigez votre certificat dans Word, avec votre en-tête et votre mise en page, et placez-y des codes entre accolades, par exemple {NOM_COMPLET} ou {CLASSE}. À chaque demande, l'app remplit ces codes avec les informations de l'élève et vous remet le document Word, prêt à imprimer.",
+    "cert_word_deposer": "Déposer mon modèle Word",
+    "cert_word_remplacer": "Remplacer le modèle",
+    "cert_word_format": "Format .docx, 5 Mo maximum",
+    "cert_word_depose_le": "Déposé le",
+    "cert_word_telecharger": "Télécharger",
+    "cert_word_retirer": "Retirer",
+    "cert_word_inconnus": "Codes non reconnus, ils resteront tels quels dans le certificat :",
+    "cert_word_aucun_code": "Aucun code trouvé dans ce modèle : le certificat sera identique pour tous les élèves.",
+    "cert_word_codes": "Codes disponibles",
+    "cert_word_copie": "Copié : collez-le dans votre document Word.",
+    "cert_word_depose": "Modèle Word enregistré"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

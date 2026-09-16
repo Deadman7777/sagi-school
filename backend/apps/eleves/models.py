@@ -843,3 +843,26 @@ class PriseEnChargeOrganisme(TenantModel):
         if self.couvre_services:
             total += eleve.montant_services_annuel
         return round(total, 2)
+
+
+class ModeleCertificat(TenantModel):
+    """Certificat de scolarité rédigé par l'établissement dans Word.
+
+    Le .docx est gardé en base (base64), comme le logo : il suit l'école en
+    local comme en cloud, et dans ses sauvegardes. Pas sur le Tenant lui-même,
+    relu à chaque requête : un modèle avec en-tête illustré pèse des centaines
+    de Ko. Un seul modèle par établissement.
+    """
+    nom_fichier = models.CharField(max_length=255)
+    contenu_b64 = models.TextField()
+    codes       = models.JSONField(default=list, blank=True,
+                                   help_text='Codes trouvés dans le modèle au téléversement')
+
+    class Meta:
+        db_table = 'modeles_certificat'
+        constraints = [
+            models.UniqueConstraint(fields=['tenant'], name='uniq_modele_certificat_par_ecole'),
+        ]
+
+    def __str__(self):
+        return f"{self.tenant} — {self.nom_fichier}"
