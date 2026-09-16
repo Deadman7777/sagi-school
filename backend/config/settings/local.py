@@ -31,3 +31,8 @@ if 'test' not in sys.argv:
 #         },
 #     },
 # }
+# ng serve prend un autre port quand 4200 est occupé : en développement, on
+# accepte localhost sur n'importe quel port plutôt que de les ajouter un à un.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^http://(localhost|127\.0\.0\.1):\d+$',
+]
