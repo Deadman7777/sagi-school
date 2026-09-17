@@ -666,10 +666,15 @@
     "regrouper_simuler": "Simuler",
     "regrouper_appliquer": "Appliquer",
     "regrouper_fait": "Sections regroupées",
-    "cert_standard_aide": "Sans modèle Word, SAGI SCHOOL édite un certificat standard, simple et lisible : en-tête de l'établissement, identité de l'élève, classe, année scolaire, lieu et date, signature du directeur.",
+    "cert_standard_aide": "Sans modèle Word, SAGI SCHOOL édite un certificat standard, simple et lisible : en-tête et logo de l'établissement, « Je soussigné, Monsieur … , Directeur de … », identité de l'élève, classe, année scolaire, lieu et date, signature nommée. Renseignez la civilité et le nom du directeur dans l'onglet École.",
     "cert_word_champs": "Remplis automatiquement :",
     "cert_word_aucun_champ": "Aucun champ reconnu dans ce document. Laissez des pointillés (.....) après « Nom et prénom », « Né(e) le », « Classe »…, ou utilisez les codes ci-dessous.",
-    "cert_word_codes_option": "Pour aller plus loin : codes à placer dans le document (facultatif)"
+    "cert_word_codes_option": "Pour aller plus loin : codes à placer dans le document (facultatif)",
+    "directeur_civilite": "Civilité du directeur / de la directrice",
+    "monsieur": "Monsieur",
+    "madame": "Madame",
+    "directeur_nom": "Nom du directeur / de la directrice",
+    "directeur_nom_ph": "Ex. Mouhamed GUEYE"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

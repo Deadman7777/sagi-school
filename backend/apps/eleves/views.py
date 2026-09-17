@@ -2412,9 +2412,14 @@ class CertificatScolariteView(APIView):
 
         # Un seul modèle standard, simple et lisible : plus d'options à cocher.
         # L'école qui veut sa propre mise en page dépose son modèle Word.
+        from apps.tenants.logo import dimensions_logo
         fille = eleve.genre == 'F'
         context = {
             'tenant':          tenant,
+            'signataire':      tenant.signataire,
+            # Logo centré au-dessus du nom de l'école, à ses vraies proportions
+            # (boîte de 200 × 70 pt) : une bannière n'est plus écrasée.
+            'logo_dim':        dimensions_logo(tenant.logo, 200, 70) if tenant.logo else None,
             'eleve':           eleve,
             'classe_nom':      (eleve.classe.nom if eleve.classe_id
                                 else (eleve.section.nom if eleve.section else '')),
@@ -2423,7 +2428,7 @@ class CertificatScolariteView(APIView):
             'section_nom':     eleve.section.nom if eleve.section else '—',
             'annee_scolaire':  exercice.annee_scolaire if exercice else '—',
             'date_edition':    timezone.now(),
-            'directeur_nom':   getattr(tenant, 'directeur_nom', '') or '',
+            'directeur_nom':   tenant.signataire['nom'],
             'tenant_ville':    getattr(tenant, 'ville', '') or '',
             'tenant_rccm':     getattr(tenant, 'rccm', '') or '',
             'tenant_autorisation': getattr(tenant, 'numero_autorisation', '') or '',
@@ -2467,6 +2472,9 @@ CODES_CERTIFICAT = [
     ('EMAIL_ECOLE',         "Email de l'établissement"),
     ('NUMERO_AUTORISATION', "Numéro d'autorisation d'ouverture"),
     ('DATE_DU_JOUR',        'Date de délivrance (aujourd’hui)'),
+    ('DIRECTEUR',           '« Monsieur Mouhamed GUEYE » : civilité et nom (Paramètres → École)'),
+    ('TITRE_DIRECTEUR',     '« Directeur » ou « Directrice »'),
+    ('SOUSSIGNE',           '« soussigné » ou « soussignée »'),
 ]
 
 
@@ -2499,6 +2507,9 @@ def valeurs_certificat(eleve, tenant, exercice):
         'EMAIL_ECOLE':         tenant.email or '',
         'NUMERO_AUTORISATION': tenant.numero_autorisation or '',
         'DATE_DU_JOUR':        date(timezone.localdate()),
+        'DIRECTEUR':           tenant.signataire['nom'],
+        'TITRE_DIRECTEUR':     tenant.signataire['titre'],
+        'SOUSSIGNE':           tenant.signataire['soussigne'],
     }
 
 

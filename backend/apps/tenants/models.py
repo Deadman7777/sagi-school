@@ -11,6 +11,23 @@ class Tenant(TimeStampedModel):
     # Numéro d'autorisation d'ouverture délivré par l'autorité de tutelle —
     # figure sur les documents officiels (certificat, bulletins, reçus).
     numero_autorisation = models.CharField(max_length=100, blank=True)
+    # Qui signe les documents officiels (certificat) : « Monsieur Mouhamed
+    # GUEYE, Directeur de… », « Madame Fatou Kiné NDIAYE, Directrice de… ».
+    # La civilité accorde le titre et « soussigné(e) ».
+    CIVILITE_CHOICES = [('M', 'Monsieur'), ('MME', 'Madame')]
+    directeur_civilite = models.CharField(max_length=3, choices=CIVILITE_CHOICES, blank=True)
+    directeur_nom      = models.CharField(max_length=150, blank=True)
+
+    @property
+    def signataire(self):
+        """{'nom': 'Monsieur Mouhamed GUEYE', 'titre': 'Directeur', 'soussigne': 'soussigné'}."""
+        madame = self.directeur_civilite == 'MME'
+        civilite = {'M': 'Monsieur', 'MME': 'Madame'}.get(self.directeur_civilite, '')
+        nom = ' '.join(x for x in (civilite, (self.directeur_nom or '').strip()) if x)
+        if not self.directeur_civilite:
+            return {'nom': nom, 'titre': 'Directeur / Directrice', 'soussigne': 'soussigné(e)'}
+        return {'nom': nom, 'titre': 'Directrice' if madame else 'Directeur',
+                'soussigne': 'soussignée' if madame else 'soussigné'}
     # Personnalisation du certificat de scolarité : dict {element: bool} +
     # textes libres. Vide = version standard complète (tous les éléments).
     config_certificat = models.JSONField(default=dict, blank=True)

@@ -22,6 +22,12 @@ version. Chaque suite de points, de soulignés ou de points de suspension est
 donc un blanc, et le libellé qui le précède dans le paragraphe dit ce qu'il
 attend. Un blanc dont le libellé n'est pas reconnu, ou dont la valeur manque
 sur la fiche, reste tel quel : il se remplit à la main, comme avant.
+
+**Et les valeurs déjà écrites.** Un certificat déposé tel qu'il a servi porte
+souvent les informations d'un autre élève : « Classe : CM2 », « Né(e) le :
+12/03/2018 à Dakar », « Fait à Rufisque, le 02/10/2025 ». Après un libellé suivi
+de deux-points — ou dans ces tournures connues — la valeur est remplacée par
+celle de l'élève. Ce qui n'est pas reconnu ne bouge pas.
 """
 import unicodedata
 import io
@@ -83,6 +89,8 @@ _REGLES = [
     (r"tuteur", 'NOM_TUTEUR'),
     (r"\bsexe\b|\bgenre\b", 'SEXE'),
     (r"fait a\b", 'VILLE'),
+    (r"soussignee?s?(\(e\))?", 'DIRECTEUR'),
+    (r"\b(de l'etablissement|de l'ecole|du complexe|etablissement scolaire)\b", 'ECOLE'),
     (r"\bnom\b", 'NOM_COMPLET'),
 ]
 _REGLES = [(re.compile(motif), code) for motif, code in _REGLES]
@@ -101,7 +109,91 @@ LIBELLES_CHAMPS = {
     'NOM_PERE': 'Père', 'NOM_MERE': 'Mère', 'NOM_TUTEUR': 'Tuteur', 'SEXE': 'Sexe',
     'DATE_INSCRIPTION': "Date d'inscription", 'DATE_ENTREE': "Date d'entrée",
     'VILLE': 'Lieu de délivrance', 'DATE_DU_JOUR': 'Date de délivrance',
+    'DIRECTEUR': 'Directeur / Directrice', 'ECOLE': "Nom de l'établissement",
 }
+
+# Libellé suivi de deux-points : la valeur qui suit est remplacée.
+_ETIQUETTES = [
+    (r"nom et prenoms?|prenoms? et noms?|nom complet|nom de l'eleve|l'eleve|eleve", 'NOM_COMPLET'),
+    (r"date de naissance|nee?s? ?(\(e\))? le", 'DATE_NAISSANCE'),
+    (r"lieu de naissance", 'LIEU_NAISSANCE'),
+    (r"(n° ?|numero )?matricule", 'MATRICULE'),
+    (r"classe|niveau", 'CLASSE'),
+    (r"annee scolaire", 'ANNEE_SCOLAIRE'),
+    (r"sexe|genre", 'SEXE'),
+    (r"nom du pere|pere", 'NOM_PERE'),
+    (r"nom de la mere|mere", 'NOM_MERE'),
+    (r"tuteur", 'NOM_TUTEUR'),
+    (r"nom du directeur|nom de la directrice|directeur|directrice", 'DIRECTEUR'),
+]
+_ETIQUETTE = re.compile(r"(?<![\w'])(" + '|'.join(f'(?P<e{i}>{m})' for i, (m, _) in enumerate(_ETIQUETTES))
+                        + r")\s*:[ \t\u00a0]*")
+_DATE = r"\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}"
+# Tournures sans deux-points, sur le texte normalisé.
+_TOURNURES = [
+    (re.compile(r"\bnee?s? ?(?:\(e\))? le (?P<DATE_NAISSANCE>" + _DATE + r")(?: a (?P<LIEU_NAISSANCE>[^,;.\n]+?))?(?=[,;.]|$| et | est | inscrit)"), None),
+    (re.compile(r"\bfait a (?P<VILLE>[^,\n]+?),? le (?P<DATE_DU_JOUR>" + _DATE + r")"), None),
+    (re.compile(r"\bannee scolaire (?P<ANNEE_SCOLAIRE>\d{4} ?[-/] ?\d{4})"), None),
+]
+
+
+def _normaliser_meme_longueur(texte):
+    """Comme _normaliser, mais caractère pour caractère : les positions trouvées
+    dans le texte normalisé valent dans le texte d'origine."""
+    sortie = []
+    for c in texte:
+        if c == '\u2019':
+            sortie.append("'")
+            continue
+        base = ''.join(x for x in unicodedata.normalize('NFKD', c) if not unicodedata.combining(x))
+        sortie.append((base[:1] or c).lower() if len(base) <= 1 else c.lower())
+    return ''.join(sortie)
+
+
+def _chevauche(debut, fin, occupes):
+    return any(a < fin and debut < b for a, b in occupes)
+
+
+def _valeurs_existantes(complet, occupes=()):
+    """[(début, fin, code)] des valeurs déjà écrites à remplacer."""
+    norm = _normaliser_meme_longueur(complet)
+    trouves, pris = [], list(occupes)
+    etiquettes = list(_ETIQUETTE.finditer(norm))
+    for k, m in enumerate(etiquettes):
+        code = next(_ETIQUETTES[i][1] for i in range(len(_ETIQUETTES)) if m.group(f'e{i}'))
+        debut = m.end()
+        fin = etiquettes[k + 1].start() if k + 1 < len(etiquettes) else len(complet)
+        tab = complet.find('\t', debut, fin)
+        if tab != -1:
+            fin = tab
+        while fin > debut and complet[fin - 1] in ' \u00a0,;.':
+            fin -= 1
+        valeur = complet[debut:fin]
+        if not valeur.strip() or _BLANC.fullmatch(valeur.strip()) or _chevauche(debut, fin, pris):
+            continue
+        if code == 'DATE_NAISSANCE':
+            # « 12/03/2018 à Dakar » : la date, puis le lieu séparément.
+            d = re.match(_DATE, norm[debut:fin])
+            if not d:
+                continue
+            trouves.append((debut, debut + d.end(), 'DATE_NAISSANCE'))
+            lieu = re.match(r'\s+a\s+', norm[debut + d.end():fin])
+            if lieu:
+                trouves.append((debut + d.end() + lieu.end(), fin, 'LIEU_NAISSANCE'))
+        else:
+            trouves.append((debut, fin, code))
+        pris.append((debut, fin))
+    for motif, _ in _TOURNURES:
+        for m in motif.finditer(norm):
+            for code, valeur in m.groupdict().items():
+                if valeur is None:
+                    continue
+                debut, fin = m.span(code)
+                if _BLANC.search(complet[debut:fin]) or _chevauche(debut, fin, pris):
+                    continue
+                trouves.append((debut, fin, code))
+                pris.append((debut, fin))
+    return trouves
 
 
 def _normaliser(texte):
@@ -156,7 +248,9 @@ def champs_reconnus(contenu):
                 codes = [(c.start(), c.end(), c.group(1).upper(), 'code') for c in _CODE.finditer(texte)]
                 blancs = [(a, b, code, 'blanc') for a, b, code in
                           _blancs(texte, [(a, b) for a, b, _, _ in codes]) if code]
-                for _, _, code, source in sorted(codes + blancs):
+                existantes = [(a, b, code, 'valeur') for a, b, code in
+                              _valeurs_existantes(texte, [(a, b) for a, b, _, _ in codes + blancs])]
+                for _, _, code, source in sorted(codes + blancs + existantes):
                     if code not in vus:
                         vus.add(code)
                         champs.append({'code': code, 'source': source,
@@ -220,8 +314,14 @@ def _remplir_xml(xml, valeurs):
         # dont la fiche a la valeur. Un blanc sans valeur reste à remplir à la main.
         remplacements = [(c.start(), c.end(), str(valeurs[c.group(1).upper()] or ''))
                          for c in tous_codes if c.group(1).upper() in valeurs]
-        for debut, fin, code in _blancs(complet, [(c.start(), c.end()) for c in tous_codes]):
+        occupes = [(c.start(), c.end()) for c in tous_codes]
+        blancs = _blancs(complet, occupes)
+        for debut, fin, code in blancs:
             if code and str(valeurs.get(code) or '').strip():
+                remplacements.append((debut, fin, str(valeurs[code])))
+        # Valeurs déjà écrites (modèle rempli pour un autre élève).
+        for debut, fin, code in _valeurs_existantes(complet, occupes + [(a, b) for a, b, _ in blancs]):
+            if str(valeurs.get(code) or '').strip():
                 remplacements.append((debut, fin, str(valeurs[code])))
         if not remplacements:
             continue

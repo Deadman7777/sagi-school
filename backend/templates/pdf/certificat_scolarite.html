@@ -3,79 +3,85 @@
 <head>
 <meta charset="UTF-8">
 {% comment %}
-Certificat de scolarité standard. Volontairement sobre : pas de cadre, pas de
-traits entre les lignes, une seule mise en page (retour des écoles, sept. 2026).
-Pièges xhtml2pdf : largeurs de colonnes explicites, aucun remplissage
-horizontal dans les cellules (il s'ajoute aux pourcentages).
+Certificat de scolarité standard. Sobre : pas de cadre, pas de traits.
+- Le directeur est NOMMÉ (« Monsieur Mouhamed GUEYE, Directeur de… ») : Paramètres → École.
+- L'identité se lit « L'élève : … / Né(e) le : … / Matricule : … / Classe : … ».
+- Logo centré sur sa propre ligne, dimensions calculées depuis l'image (logo_dim) :
+  xhtml2pdf écrasait une bannière dont on ne fixait qu'une dimension.
+Pièges xhtml2pdf : largeurs de colonnes explicites, pas de remplissage horizontal,
+line-height en px.
 {% endcomment %}
 <style>
-  @page { size: A4; margin: 18mm 20mm 16mm 20mm; }
+  @page { size: A4; margin: 16mm 20mm 16mm 20mm; }
   body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #111; }
 
-  table.entete { width: 100%; }
-  td.republique { width: 34%; vertical-align: top; font-size: 9.5px; color: #222; line-height: 1.45; }
-  td.ecole { width: 66%; vertical-align: top; text-align: right; }
-  .ecole-nom { font-size: 15px; font-weight: bold; color: #0f3057; text-transform: uppercase; }
-  .ecole-coord { font-size: 9.5px; color: #333; line-height: 1.45; }
+  .republique { font-size: 9.5px; color: #222; line-height: 14px; }
+  .logo { text-align: center; margin-top: 6px; }
+  .ecole-nom { text-align: center; font-size: 16px; font-weight: bold; color: #0f3057;
+               text-transform: uppercase; margin-top: 4px; }
+  .ecole-coord { text-align: center; font-size: 9.5px; color: #333; line-height: 14px; margin-top: 2px; }
 
   .titre { text-align: center; font-size: 20px; font-weight: bold; color: #0f3057;
-           letter-spacing: 3px; margin-top: 60px; }
+           letter-spacing: 3px; margin-top: 40px; }
   .sous-titre { text-align: center; font-size: 12px; color: #444; margin-top: 3px; }
 
-  .texte { font-size: 14px; line-height: 24px; margin-top: 44px; text-align: justify; }
+  .texte { font-size: 13.5px; line-height: 24px; text-align: justify; }
 
-  table.identite { width: 100%; margin-top: 20px; margin-bottom: 14px; }
-  td.lib { width: 32%; font-size: 13.5px; color: #444; padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
-  td.val { width: 68%; font-size: 14px; font-weight: bold; padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
+  table.identite { width: 100%; margin-top: 16px; margin-bottom: 16px; }
+  td.lib { width: 22%; font-size: 13.5px; color: #333; padding-top: 4px; padding-bottom: 4px; vertical-align: top; }
+  td.deux-points { width: 3%; font-size: 13.5px; color: #333; padding-top: 4px; padding-bottom: 4px; vertical-align: top; }
+  td.val { width: 75%; font-size: 13.5px; font-weight: bold; padding-top: 4px; padding-bottom: 4px; vertical-align: top; }
 
-  table.signature { width: 100%; margin-top: 70px; }
-  td.vide { width: 50%; }
-  td.sign { width: 50%; text-align: center; font-size: 13.5px; line-height: 1.6; }
-  .espace-signature { height: 90px; }
+  table.signature { width: 100%; margin-top: 50px; }
+  td.vide { width: 45%; }
+  td.sign { width: 55%; text-align: center; font-size: 13px; line-height: 20px; }
+  .espace-signature { height: 80px; }
 
-  .pied { font-size: 9px; color: #555; text-align: center; margin-top: 90px; }
+  .pied { font-size: 9px; color: #555; text-align: center; margin-top: 60px; }
 </style>
 </head>
 <body>
 
-<table class="entete">
-  <tr>
-    <td class="republique">
-      <b>RÉPUBLIQUE DU SÉNÉGAL</b><br>
-      Un Peuple — Un But — Une Foi<br>
-      Ministère de l'Éducation nationale
-    </td>
-    <td class="ecole">
-      {% if tenant.logo %}<img src="{{ tenant.logo }}" style="height:56px;"><br>{% endif %}
-      <div class="ecole-nom">{{ tenant.nom }}</div>
-      <div class="ecole-coord">
-        {% if tenant.adresse %}{{ tenant.adresse }}{% if tenant_ville %}, {% endif %}{% endif %}{% if tenant_ville %}{{ tenant_ville }}{% endif %}<br>
-        {% if tenant_telephone %}Tél. {{ tenant_telephone }}{% endif %}{% if tenant_telephone and tenant.email %} · {% endif %}{% if tenant.email %}{{ tenant.email }}{% endif %}
-        {% if tenant_autorisation %}<br>Autorisation d'ouverture N° {{ tenant_autorisation }}{% endif %}
-      </div>
-    </td>
-  </tr>
-</table>
+<div class="republique">
+  <b>RÉPUBLIQUE DU SÉNÉGAL</b><br>
+  Un Peuple — Un But — Une Foi<br>
+  Ministère de l'Éducation nationale
+</div>
+
+{% if tenant.logo %}
+<div class="logo">
+  {% if logo_dim %}<img src="{{ tenant.logo }}" width="{{ logo_dim.0 }}" height="{{ logo_dim.1 }}">
+  {% else %}<img src="{{ tenant.logo }}" height="60">{% endif %}
+</div>
+{% endif %}
+<div class="ecole-nom">{{ tenant.nom }}</div>
+<div class="ecole-coord">
+  {% if tenant.adresse %}{{ tenant.adresse }}{% if tenant_ville %}, {% endif %}{% endif %}{% if tenant_ville %}{{ tenant_ville }}{% endif %}<br>
+  {% if tenant_telephone %}Tél. {{ tenant_telephone }}{% endif %}{% if tenant_telephone and tenant.email %} · {% endif %}{% if tenant.email %}{{ tenant.email }}{% endif %}
+  {% if tenant_autorisation %}<br>Autorisation d'ouverture N° {{ tenant_autorisation }}{% endif %}
+</div>
 
 <div class="titre">CERTIFICAT DE SCOLARITÉ</div>
 <div class="sous-titre">Année scolaire {{ annee_scolaire }}</div>
 
-<div class="texte">
-  Je soussigné(e){% if directeur_nom %}, <b>{{ directeur_nom }}</b>,{% endif %} Directeur / Directrice de
-  l'établissement <b>{{ tenant.nom }}</b>{% if tenant_ville %} à {{ tenant_ville }}{% endif %}, certifie que :
+<div class="texte" style="margin-top:36px">
+  Je {{ signataire.soussigne }}{% if signataire.nom %}, <b>{{ signataire.nom }}</b>,{% endif %}
+  {{ signataire.titre }} de l'établissement <b>{{ tenant.nom }}</b>{% if tenant_ville %} à {{ tenant_ville }}{% endif %},
+  certifie que :
 </div>
 
 <table class="identite">
-  <tr><td class="lib">Prénom et nom</td><td class="val">{{ eleve.nom_complet }}</td></tr>
+  <tr><td class="lib">L'élève</td><td class="deux-points">:</td><td class="val">{{ eleve.nom_complet }}</td></tr>
   {% if eleve.date_naissance or eleve.lieu_naissance %}
-  <tr><td class="lib">{{ ne|capfirst }} le</td>
+  <tr><td class="lib">{{ ne|capfirst }} le</td><td class="deux-points">:</td>
       <td class="val">{% if eleve.date_naissance %}{{ eleve.date_naissance|date:"d/m/Y" }}{% endif %}{% if eleve.lieu_naissance %} à {{ eleve.lieu_naissance }}{% endif %}</td></tr>
   {% endif %}
-  {% if eleve.matricule %}<tr><td class="lib">Matricule</td><td class="val">{{ eleve.matricule }}</td></tr>{% endif %}
-  {% if classe_nom %}<tr><td class="lib">Classe</td><td class="val">{{ classe_nom }}</td></tr>{% endif %}
+  {% if eleve.matricule %}<tr><td class="lib">Matricule</td><td class="deux-points">:</td><td class="val">{{ eleve.matricule }}</td></tr>{% endif %}
+  {% if classe_nom %}<tr><td class="lib">Classe</td><td class="deux-points">:</td><td class="val">{{ classe_nom }}</td></tr>{% endif %}
+  <tr><td class="lib">Année scolaire</td><td class="deux-points">:</td><td class="val">{{ annee_scolaire }}</td></tr>
 </table>
 
-<div class="texte" style="margin-top:10px">
+<div class="texte">
   est régulièrement {{ inscrit }} dans notre établissement{% if classe_nom %} en classe de <b>{{ classe_nom }}</b>{% endif %}
   pour l'année scolaire <b>{{ annee_scolaire }}</b>.
 </div>
@@ -88,9 +94,9 @@ horizontal dans les cellules (il s'ajoute aux pourcentages).
     <td class="vide"></td>
     <td class="sign">
       Fait à {{ tenant_ville|default:"............" }}, le {{ date_edition|date:"d/m/Y" }}<br>
-      <b>Le Directeur / La Directrice</b>
+      <b>{% if signataire.titre == 'Directrice' %}La Directrice{% elif signataire.titre == 'Directeur' %}Le Directeur{% else %}Le Directeur / La Directrice{% endif %}</b>
       <div class="espace-signature"></div>
-      {% if directeur_nom %}<b>{{ directeur_nom }}</b>{% endif %}
+      {% if signataire.nom %}<b>{{ signataire.nom }}</b>{% endif %}
     </td>
   </tr>
 </table>

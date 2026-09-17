@@ -267,3 +267,51 @@ class GabaritsSobresTest(SimpleTestCase):
         self.assertIn('Née le', html)
         self.assertIn('régulièrement inscrite', html)
         self.assertNotIn('border', html)
+
+
+class ValeursExistantesTest(SimpleTestCase):
+    """Modèle déposé tel qu'il a servi : les valeurs d'un autre élève sont mises à jour."""
+    VALEURS = dict(BlancsSansCodesTest.VALEURS, DIRECTEUR='Madame Fatou Kiné NDIAYE', ECOLE='Complexe Shoumoul',
+                   TITRE_DIRECTEUR='Directrice', SOUSSIGNE='soussignée')
+
+    def _rempli(self, *paras):
+        return texte_de(remplir_docx(docx(''.join(paragraphe(*p) for p in paras)), self.VALEURS))
+
+    def test_libelles_avec_deux_points(self):
+        lignes = self._rempli(
+            [run("L'élève : Moussa DIOP")],
+            [run('Né le : 03/05/2017 à Dakar')],
+            [run('Matricule : 2024-XYZ-0012')],
+            [run('Classe : CM2\tAnnée scolaire : 2024-2025')])
+        self.assertEqual(lignes, [
+            "L'élève : Awa NDIAYE",
+            'Né le : 12/03/2019 à Rufisque',
+            'Matricule : 2026-EFA-0001',
+            'Classe : CI\tAnnée scolaire : 2026-2027'])
+
+    def test_plusieurs_libelles_sur_une_ligne(self):
+        self.assertEqual(self._rempli([run('Classe : CM2  Matricule : 2024-XYZ-0012')]),
+                         ['Classe : CI  Matricule : 2026-EFA-0001'])
+
+    def test_tournures_sans_deux_points(self):
+        lignes = self._rempli(
+            [run('née le 03/05/2017 à Dakar, est inscrite')],
+            [run("pour l'année scolaire 2024-2025.")],
+            [run('Fait à Dakar, le 02/10/2025')])
+        self.assertEqual(lignes, [
+            'née le 12/03/2019 à Rufisque, est inscrite',
+            "pour l'année scolaire 2026-2027.",
+            'Fait à Rufisque, le 17/09/2026'])
+
+    def test_directeur_par_blanc_et_par_libelle(self):
+        lignes = self._rempli([run('Je soussigné ..................., Directeur')],
+                              [run('Nom du directeur : Amadou FALL')])
+        self.assertEqual(lignes, ['Je soussigné Madame Fatou Kiné NDIAYE, Directeur',
+                                  'Nom du directeur : Madame Fatou Kiné NDIAYE'])
+
+    def test_texte_libre_intact(self):
+        texte = "Ce certificat est valable pour l'année en cours : il ne remplace pas le bulletin."
+        self.assertEqual(self._rempli([run(texte)]), [texte])
+
+    def test_valeur_sans_equivalent_sur_la_fiche_conservee(self):
+        self.assertEqual(self._rempli([run('Tuteur : Ibrahima SARR')]), ['Tuteur : Ibrahima SARR'])

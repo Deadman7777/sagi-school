@@ -324,6 +324,21 @@ import { MessageService } from 'primeng/api';
             <label>{{ 'parametres.autorisation' | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.numero_autorisation" class="w-full" />
           </div>
+          <!-- Signataire des documents officiels : « Monsieur Mouhamed GUEYE,
+               Directeur de… ». La civilité accorde Directeur / Directrice. -->
+          <div class="form-group">
+            <label for="dir-civ">{{ 'parametres.directeur_civilite' | translate }}</label>
+            <select id="dir-civ" class="select-natif" [(ngModel)]="ecole()!.directeur_civilite">
+              <option value="">—</option>
+              <option value="M">{{ 'parametres.monsieur' | translate }}</option>
+              <option value="MME">{{ 'parametres.madame' | translate }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="dir-nom">{{ 'parametres.directeur_nom' | translate }}</label>
+            <input pInputText id="dir-nom" [(ngModel)]="ecole()!.directeur_nom" class="w-full"
+                   [placeholder]="'parametres.directeur_nom_ph' | translate" />
+          </div>
           <div class="form-group full">
             <label>{{ 'parametres.logo' | translate }}</label>
             <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
@@ -1235,6 +1250,8 @@ import { MessageService } from 'primeng/api';
     </p-dialog>
   `,
   styles: [`
+    .select-natif { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px;
+                    background:var(--surface); color:var(--text); font-size:14px; }
     .regroupement-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
       font-size:12px; color:var(--text-3); margin:0 0 12px; }
     .regroup-ligne { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:center; margin-bottom:6px; }
