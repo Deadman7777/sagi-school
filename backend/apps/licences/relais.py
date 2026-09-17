@@ -42,7 +42,7 @@ class RelaisRenouvellementView(APIView):
             ecole_nom=champ('ecole_nom') or 'École (installation locale)',
             cle_licence=cle, type_licence=champ('type_licence', 20), date_fin=date_fin,
             demandeur=champ('demandeur'), email_demandeur=champ('email_demandeur', 254),
-            telephone=champ('telephone', 40), message=champ('message', 2000),
+            telephone=champ('telephone', 60), message=champ('message', 2000),
             origine='RELAIS', relayee=True,
         )
         ok, _ = notifier_par_courriel(demande)

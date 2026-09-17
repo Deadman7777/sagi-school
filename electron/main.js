@@ -713,31 +713,15 @@ if (!gotTheLock) {
       await runMaintenance(getBackendDir());
     }
 
-    // ── 2. Démarrer Django (nécessaire pour la vérif licence) ──
+    // ── 2. Ouvrir la fenêtre principale ──
     createWindow();
 
-    // ── 3. Vérification licence APRÈS démarrage Django ─────────
-    if (!isDev) {
-      try {
-        // Attendre que Django soit prêt avant de vérifier
-        await waitForDjango(20);
-        const { verifierLicence } = require('./licence-check');
-        const result = await verifierLicence();
-
-        if (!result.valide) {
-          dialog.showErrorBox(
-            '⚠️ Licence SAGI SCHOOL',
-            result.message + '\n\nContactez HADY GESMAN pour renouveler votre licence.'
-          );
-          // On ne quitte pas — on laisse l'utilisateur fermer manuellement
-        } else if (result.mode !== 'online') {
-          // Avertissement doux pour essai ou offline
-          console.log('[Licence]', result.message);
-        }
-      } catch (e) {
-        console.warn('[Licence] Vérification échouée (non bloquant):', e.message);
-      }
-    }
+    // Pas de contrôle de licence ici. Il est fait par le serveur, sur la
+    // licence réellement enregistrée (Licence.acces_expire) : 7 jours de grâce
+    // après la date de fin, puis seuls « Ma licence » et « Paramètres » restent
+    // accessibles. L'ancienne vérification Electron lisait un fichier local
+    // (~/.sagischool_licence) créé en « essai 30 jours » au premier lancement et
+    // jamais mis à jour : elle annonçait une licence expirée même renouvelée.
   });
 }
 

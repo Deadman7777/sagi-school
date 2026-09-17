@@ -212,34 +212,14 @@ class LicenceViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def creer_ecole(self, request):
-        data = request.data
-        tenant = Tenant.objects.create(
-            nom=data.get('nom'), ville=data.get('ville', ''),
-            adresse=data.get('adresse', ''), telephone=data.get('telephone', ''),
-            email=data.get('email', ''), rccm=data.get('rccm', ''),
-            ninea=data.get('ninea', ''),
-            code_etablissement=data.get('code_etablissement', 'ETB'),
-        )
-        from datetime import date
-        from dateutil.relativedelta import relativedelta
-        mois     = int(data.get('mois_licence', 12))
-        type_lic = data.get('type_licence', 'ESSAI')
-        cle      = Licence.generer_cle(tenant.rccm or tenant.nom[:6].upper())
-        licence  = Licence.objects.create(
-            tenant=tenant, cle_licence=cle, type=type_lic,
-            statut='ACTIVE' if type_lic != 'ESSAI' else 'ESSAI',
-            date_debut=date.today(),
-            date_fin=date.today() + relativedelta(months=mois),
-        )
-        Exercice.objects.create(
-            tenant=tenant,
-            annee_scolaire=data.get('annee_scolaire', '2025-2026'),
-            date_debut=data.get('date_debut', '2025-10-01'),
-            date_fin=data.get('date_fin', '2026-09-30'),
-            devise='FCFA',
-        )
+        """École + licence + exercice, tout ou rien (voir creation_ecole.py)."""
+        from .creation_ecole import CreationEcoleErreur, creer_ecole
+        try:
+            tenant, licence = creer_ecole(request.data)
+        except CreationEcoleErreur as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             'tenant_id': str(tenant.id), 'nom': tenant.nom,
-            'cle_licence': cle, 'type': type_lic,
+            'cle_licence': licence.cle_licence, 'type': licence.type,
             'date_fin': str(licence.date_fin),
         }, status=status.HTTP_201_CREATED)

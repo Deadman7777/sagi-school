@@ -113,7 +113,7 @@ class DemandeRenouvellement(TimeStampedModel):
     date_fin      = models.DateField(null=True, blank=True)
     demandeur     = models.CharField(max_length=200, blank=True, default='')
     email_demandeur = models.CharField(max_length=254, blank=True, default='')
-    telephone     = models.CharField(max_length=40, blank=True, default='')
+    telephone     = models.CharField(max_length=60, blank=True, default='')  # = Tenant.telephone
     message       = models.TextField(blank=True, default='')
     origine       = models.CharField(max_length=10, choices=ORIGINE_CHOICES, default='CLOUD')
     courriel_envoye = models.BooleanField(default=False)

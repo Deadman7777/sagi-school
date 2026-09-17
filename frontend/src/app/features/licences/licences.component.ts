@@ -672,8 +672,11 @@ ouvrirDialog() {
         this.saving.set(false);
         this.charger();
       },
-      error: () => {
-        this.msg.add({ severity:'error', summary: this.translate.instant('common.erreur'), detail: this.translate.instant('licences.impossible_creer') });
+      // Le serveur dit quel champ corriger (ex. « Téléphone : 60 caractères au plus ») :
+      // on l'affiche plutôt qu'un message générique.
+      error: err => {
+        this.msg.add({ severity:'error', summary: this.translate.instant('licences.impossible_creer'),
+                       detail: err?.error?.error || this.translate.instant('common.erreur'), life: 8000 });
         this.saving.set(false);
       }
     });

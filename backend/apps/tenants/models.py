@@ -14,7 +14,9 @@ class Tenant(TimeStampedModel):
     # Personnalisation du certificat de scolarité : dict {element: bool} +
     # textes libres. Vide = version standard complète (tous les éléments).
     config_certificat = models.JSONField(default=dict, blank=True)
-    telephone = models.CharField(max_length=20, blank=True)
+    # Plusieurs numéros tiennent sur la fiche : 20 caractères n'en laissaient
+    # passer qu'un, et la création d'une école échouait sans dire pourquoi.
+    telephone = models.CharField(max_length=60, blank=True)
     email     = models.EmailField(blank=True)
     code_etablissement = models.CharField(max_length=10, default='ETB')
     # Logo de l'établissement en data URI base64 (ex. "data:image/png;base64,...").
