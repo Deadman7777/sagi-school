@@ -24,6 +24,7 @@ export interface Prospect {
   interactions?: Interaction[];
   conversations?: ConversationSama[];
   devis?: Devis[];
+  documents?: PieceProspect[];
   donnees_brutes?: Record<string, string>;
   [autre: string]: any;
 }
@@ -63,7 +64,26 @@ export interface Devis {
   date_validite: string;
   expire: boolean;
   modifiable: boolean;
+  /** La pièce la plus avancée issue du devis (facture, sinon proforma). */
+  piece?: { id: string; type: 'PROFORMA' | 'FACTURE'; numero: string; statut: string } | null;
   [autre: string]: any;
+}
+
+/** Une pièce de facturation vue depuis la fiche prospect. */
+export interface PieceProspect {
+  id: string;
+  type: 'PROFORMA' | 'FACTURE' | 'AVOIR';
+  type_libelle: string;
+  numero: string;
+  statut: string;
+  objet: string;
+  date_emission: string | null;
+  total_ttc: number;
+  solde: number;
+  statut_paiement: 'A_PAYER' | 'PARTIELLE' | 'PAYEE' | null;
+  en_retard: boolean;
+  etape: string | null;
+  montant_acompte: number;
 }
 
 export interface LigneCatalogue {

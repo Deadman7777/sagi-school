@@ -16,7 +16,7 @@ from core.permissions import IsSuperAdmin
 
 from . import facturation as F
 from .models import (MODES_ENCAISSEMENT, Devis, DocumentCommercial, Encaissement,
-                     ParametresFacturation, Prospect)
+                     JustificatifFacturation, ParametresFacturation, Prospect)
 
 CHAMPS_CLIENT = ('client_nom', 'client_contact', 'client_adresse', 'client_ville',
                  'client_telephone', 'client_email', 'client_ninea')
@@ -40,8 +40,18 @@ def _date(valeur):
         raise F.FacturationErreur('Date invalide.')
 
 
+def _justificatif_dict(j):
+    """Sans le contenu : la liste reste légère, le fichier se télécharge à part."""
+    return {
+        'id': str(j.id), 'nom': j.nom, 'type_piece': j.type_piece,
+        'type_libelle': j.get_type_piece_display(), 'mime_type': j.mime_type, 'taille': j.taille,
+        'observations': j.observations, 'ajoute_par': j.ajoute_par, 'created_at': j.created_at,
+    }
+
+
 def _recu_dict(r):
     return {
+        'justificatifs': [_justificatif_dict(j) for j in r.justificatifs.defer('contenu')],
         'id': str(r.id), 'numero': r.numero, 'date': r.date, 'montant': int(r.montant),
         'mode': r.mode, 'mode_libelle': r.get_mode_display(), 'reference': r.reference,
         'observations': r.observations, 'recu_par': r.recu_par,
@@ -64,6 +74,10 @@ def _document_dict(d, complet=False):
         'prospect': str(d.prospect_id) if d.prospect_id else None,
         'tenant': str(d.tenant_id) if d.tenant_id else None,
         'modifiable': d.modifiable, 'created_at': d.created_at,
+        'taux_acompte': float(d.taux_acompte), 'montant_acompte': int(d.montant_acompte),
+        'acompte_recu': d.acompte_recu, 'etape': d.etape,
+        'prestation_demarree_le': d.prestation_demarree_le,
+        'prestation_livree_le': d.prestation_livree_le,
     }
     if not complet:
         return base
@@ -85,6 +99,9 @@ def _document_dict(d, complet=False):
             'prix_unitaire': int(l.prix_unitaire), 'montant': int(l.montant),
         } for l in d.lignes.all()],
         'encaissements': [_recu_dict(r) for r in d.encaissements.all()],
+        'echeancier': [{**e, 'montant': int(e['montant']), 'paye': int(e['paye'])}
+                       for e in F.echeancier(d)],
+        'justificatifs': [_justificatif_dict(j) for j in d.justificatifs.defer('contenu')],
     })
     return base
 
@@ -99,6 +116,9 @@ class ParametresFacturationView(APIView):
         d.update({'tva_applicable': p.tva_applicable, 'taux_tva': float(p.taux_tva),
                   'delai_paiement_jours': p.delai_paiement_jours,
                   'validite_proforma_jours': p.validite_proforma_jours,
+                  'taux_acompte_defaut': float(p.taux_acompte_defaut),
+                  'types_justificatif': [{'value': c, 'label': l}
+                                         for c, l in JustificatifFacturation.TYPE_CHOICES],
                   'modes': [{'value': c, 'label': l} for c, l in MODES_ENCAISSEMENT]})
         return d
 
@@ -124,6 +144,10 @@ class ParametresFacturationView(APIView):
                     if not 0 <= jours <= 365:
                         raise ValueError
                     setattr(p, champ, jours)
+            if 'taux_acompte_defaut' in request.data:
+                p.taux_acompte_defaut = F.taux_acompte_valide(request.data['taux_acompte_defaut'])
+        except F.FacturationErreur as exc:
+            return _erreur(exc)
         except (TypeError, ValueError):
             return _erreur('Taux de TVA (0 à 100) ou délai (0 à 365 jours) invalide.')
         p.save()
@@ -152,6 +176,8 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
             r = q['recherche']
             qs = qs.filter(Q(client_nom__icontains=r) | Q(numero__icontains=r) | Q(objet__icontains=r))
         documents = list(qs[:500])
+        if q.get('suivi'):              # prestations avec acompte pas encore terminées
+            documents = [d for d in documents if d.etape not in (None, 'TERMINEE')]
         if q.get('impayees'):
             documents = [d for d in documents if d.statut_paiement in ('A_PAYER', 'PARTIELLE')]
         return documents
@@ -164,6 +190,7 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
         """La liste telle que filtrée à l'écran, en PDF, avec ses totaux."""
         q = request.query_params
         filtre = ('Factures impayées' if q.get('impayees') else
+                  'Prestations en cours de suivi' if q.get('suivi') else
                   {'PROFORMA': 'Factures proforma', 'FACTURE': 'Factures', 'AVOIR': 'Avoirs'}
                   .get(q.get('type'), 'Toutes les pièces'))
         if q.get('recherche'):
@@ -242,7 +269,8 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
                 client = {c: data.get(c) for c in CHAMPS_CLIENT if data.get(c)}
                 document = F.creer_brouillon(type_doc, auteur=_auteur(request), prospect=prospect,
                                              tenant=tenant, client=client, lignes=lignes,
-                                             objet=objet, observations=str(data.get('observations') or ''))
+                                             objet=objet, observations=str(data.get('observations') or ''),
+                                             taux_acompte=data.get('taux_acompte'))
         except F.FacturationErreur as exc:
             return _erreur(exc)
         return Response(_document_dict(document, complet=True), status=status.HTTP_201_CREATED)
@@ -274,6 +302,8 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
                     d.taux_tva = taux
                 if 'mention_tva' in data:
                     d.mention_tva = str(data['mention_tva'] or '').strip()[:250]
+                if 'taux_acompte' in data:
+                    d.taux_acompte = F.taux_acompte_valide(data['taux_acompte'])
             d.save()
             if 'lignes' in data:
                 F.remplacer_lignes(d, data['lignes'] or [])
@@ -316,6 +346,26 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
         except F.FacturationErreur as exc:
             return _erreur(exc, 409)
         return Response(_document_dict(facture, complet=True), status=status.HTTP_201_CREATED)
+
+    def _etape(self, request, pk, fonction):
+        d = self._get(pk)
+        if not d:
+            return _erreur('Document introuvable.', 404)
+        try:
+            fonction(d, jour=_date(request.data.get('date')), auteur=_auteur(request))
+        except F.FacturationErreur as exc:
+            return _erreur(exc, 409)
+        return Response(_document_dict(d, complet=True))
+
+    @action(detail=True, methods=['post'])
+    def demarrer(self, request, pk=None):
+        """Acompte reçu → la prestation démarre."""
+        return self._etape(request, pk, F.demarrer_prestation)
+
+    @action(detail=True, methods=['post'])
+    def livrer(self, request, pk=None):
+        """Prestation livrée → le solde devient exigible."""
+        return self._etape(request, pk, F.livrer_prestation)
 
     @action(detail=True, methods=['post'])
     def avoir(self, request, pk=None):
@@ -378,6 +428,60 @@ class DocumentCommercialViewSet(viewsets.ViewSet):
                            'licence_type': licence.type if licence else None,
                            'licence_fin': licence.date_fin if licence else None})
         return Response(ecoles)
+
+
+class JustificatifViewSet(viewsets.ViewSet):
+    """Pièces justificatives : {"document"|"encaissement", "nom", "contenu" (data URI), "type_piece"}."""
+    permission_classes = [IsSuperAdmin]
+
+    def list(self, request):
+        qs = JustificatifFacturation.objects.all()
+        if d := request.query_params.get('document'):
+            qs = qs.filter(document_id=d)
+        if e := request.query_params.get('encaissement'):
+            qs = qs.filter(encaissement_id=e)
+        return Response([_justificatif_dict(j) for j in qs.defer('contenu')[:500]])
+
+    def create(self, request):
+        data = request.data
+        document = encaissement = None
+        if data.get('document'):
+            document = DocumentCommercial.objects.filter(pk=data['document']).first()
+            if not document:
+                return _erreur('Document introuvable.', 404)
+        if data.get('encaissement'):
+            encaissement = Encaissement.objects.filter(pk=data['encaissement']).first()
+            if not encaissement:
+                return _erreur('Reçu introuvable.', 404)
+        try:
+            piece = F.ajouter_justificatif(data.get('contenu'), data.get('nom'), document=document,
+                                           encaissement=encaissement,
+                                           type_piece=str(data.get('type_piece') or ''),
+                                           observations=data.get('observations'),
+                                           auteur=_auteur(request))
+        except F.FacturationErreur as exc:
+            return _erreur(exc)
+        return Response(_justificatif_dict(piece), status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, pk=None):
+        piece = JustificatifFacturation.objects.filter(pk=pk).first()
+        if not piece:
+            return _erreur('Pièce introuvable.', 404)
+        F.supprimer_justificatif(piece, auteur=_auteur(request))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'])
+    def fichier(self, request, pk=None):
+        piece = JustificatifFacturation.objects.filter(pk=pk).first()
+        if not piece:
+            return HttpResponse('Pièce introuvable', status=404)
+        octets, mime = F.fichier_justificatif(piece)
+        reponse = HttpResponse(octets, content_type=mime)
+        from urllib.parse import quote
+        ascii_nom = piece.nom.encode('ascii', 'ignore').decode().replace('"', '') or 'justificatif'
+        reponse['Content-Disposition'] = (f'inline; filename="{ascii_nom}"; '
+                                          f"filename*=UTF-8''{quote(piece.nom)}")
+        return reponse
 
 
 class EncaissementViewSet(viewsets.ViewSet):

@@ -13,7 +13,12 @@ ne laisse donc aucun trou.
 **Le serveur calcule, l'écran affiche.** Montant de ligne, total HT, TVA, TTC,
 solde d'une facture : tout est calculé ici, une seule fois. Le franc CFA n'a
 pas de centimes : chaque montant est arrondi au franc, la TVA sur le total HT.
+
+L'acompte (40 % à la signature pour une prestation) n'ajoute pas de pièce : c'est
+l'échéancier de la facture, et chaque paiement s'impute d'abord sur l'acompte.
+Voir `DocumentCommercial`.
 """
+import base64
 import re
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -22,7 +27,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .models import (MODES_ENCAISSEMENT, DocumentCommercial, Encaissement, InteractionProspect,
-                     LigneDocument, ParametresFacturation)
+                     JustificatifFacturation, LigneDocument, ParametresFacturation)
 
 MAX_TENTATIVES = 3
 PREFIXE_RECU = 'HG-REC'
@@ -74,8 +79,21 @@ def recalculer(document):
     document.montant_tva = (franc(total_ht * Decimal(document.taux_tva) / 100)
                             if document.tva_applicable else Decimal('0'))
     document.total_ttc = document.total_ht + document.montant_tva
-    document.save(update_fields=['total_ht', 'montant_tva', 'total_ttc', 'updated_at'])
+    document.montant_acompte = (franc(document.total_ttc * Decimal(document.taux_acompte) / 100)
+                                if document.type != 'AVOIR' and document.total_ttc > 0 else Decimal('0'))
+    document.save(update_fields=['total_ht', 'montant_tva', 'total_ttc', 'montant_acompte',
+                                 'updated_at'])
     return document
+
+
+def taux_acompte_valide(valeur):
+    try:
+        taux = Decimal(str(valeur if valeur not in (None, '') else 0))
+    except Exception:
+        raise FacturationErreur("Taux d'acompte invalide.")
+    if not 0 <= taux < 100:
+        raise FacturationErreur("Le taux d'acompte doit être compris entre 0 et 99 %.")
+    return taux
 
 
 def remplacer_lignes(document, lignes):
@@ -133,7 +151,8 @@ def _tracer(document, resume, auteur):
 
 
 def creer_brouillon(type_doc, auteur='', prospect=None, tenant=None, devis=None,
-                    origine=None, client=None, lignes=None, objet='', observations=''):
+                    origine=None, client=None, lignes=None, objet='', observations='',
+                    taux_acompte=None):
     """Un brouillon, client recopié depuis la source la plus précise disponible."""
     if type_doc not in DocumentCommercial.PREFIXES:
         raise FacturationErreur('Type de document inconnu.')
@@ -163,8 +182,16 @@ def creer_brouillon(type_doc, auteur='', prospect=None, tenant=None, devis=None,
         tva = {'tva_applicable': params.tva_applicable, 'taux_tva': params.taux_tva,
                'mention_tva': '' if params.tva_applicable else params.mention_sans_tva}
 
+    # La facture d'une proforma garde l'acompte annoncé au client ; un avoir n'en a pas.
+    if type_doc == 'AVOIR':
+        taux_acompte = 0
+    elif taux_acompte is None:
+        taux_acompte = origine.taux_acompte if origine is not None else 0
+    taux_acompte = taux_acompte_valide(taux_acompte)
+
     document = DocumentCommercial.objects.create(
         type=type_doc, prospect=prospect, tenant=tenant, devis=devis, origine=origine,
+        taux_acompte=taux_acompte,
         objet=objet[:250], observations=observations, conditions=params.conditions,
         etabli_par=auteur, **tva, **{k: str(v)[:300] for k, v in champs.items()})
     remplacer_lignes(document, lignes or [])
@@ -196,13 +223,46 @@ def lignes_depuis_devis(devis):
 
 
 def depuis_devis(devis, type_doc, auteur=''):
+    """Proforma ou facture d'un devis validé.
+
+    **Facturer un devis, c'est constater que le client l'a accepté.** Un devis
+    envoyé (ou validé et remis en main propre) passe donc à ACCEPTE au moment où
+    l'on établit sa facture, et l'historique du prospect le dit — sans détour
+    obligé par le bouton « Accepté ». Un devis expiré ne se facture pas : son
+    prix n'est plus garanti.
+
+    **Une seule facture par devis.** Si le devis a déjà une proforma émise, la
+    facture en est la conversion (la chaîne devis → proforma → facture reste
+    lisible) ; si sa facture est encore un brouillon, c'est ce brouillon qu'on
+    rouvre.
+    """
     if devis.statut not in ('VALIDE', 'ENVOYE', 'ACCEPTE'):
         raise FacturationErreur("Seul un devis validé peut être repris dans une facture.")
-    if type_doc == 'FACTURE' and devis.statut != 'ACCEPTE':
-        raise FacturationErreur("Une facture se fonde sur un devis accepté. "
-                                "Pour un devis encore en attente, établissez une proforma.")
+    if type_doc == 'FACTURE':
+        existante = devis.documents.filter(type='FACTURE').exclude(statut='CONVERTI').first()
+        if existante is not None:
+            if existante.modifiable:
+                return existante
+            raise FacturationErreur(f'Ce devis est déjà facturé ({existante.numero}).')
+        if devis.statut != 'ACCEPTE':
+            if devis.expire:
+                raise FacturationErreur("Ce devis a dépassé sa validité : son prix n'est plus "
+                                        "garanti. Établissez un nouveau devis.")
+            devis.statut = 'ACCEPTE'
+            devis.save(update_fields=['statut', 'updated_at'])
+            if devis.prospect_id:
+                InteractionProspect.objects.create(
+                    prospect=devis.prospect, canal='AUTRE', auteur=auteur or 'Serveur',
+                    resume=f'Devis {devis.numero} accepté par le prospect — facture établie.')
+        proforma = devis.documents.filter(type='PROFORMA', statut='EMIS').order_by('-emis_le').first()
+        if proforma is not None:
+            return convertir_proforma(proforma, auteur=auteur)
+
+    # Une prestation (installation, formation, migration…) se règle avec un acompte.
+    taux = (ParametresFacturation.actuels().taux_acompte_defaut
+            if devis.frais_installation or devis.montant_prestations else 0)
     document = creer_brouillon(type_doc, auteur=auteur, prospect=devis.prospect, devis=devis,
-                               lignes=lignes_depuis_devis(devis),
+                               lignes=lignes_depuis_devis(devis), taux_acompte=taux,
                                objet=f'Licence SAGI SCHOOL — devis {devis.numero}')
     # Les coordonnées figées sur le devis priment sur la fiche, peut-être retouchée depuis.
     for champ, source in (('client_nom', 'etablissement'), ('client_ville', 'ville'),
@@ -247,8 +307,11 @@ def convertir_proforma(proforma, auteur=''):
     """La facture définitive d'une proforma émise : brouillon, lignes reprises."""
     if proforma.type != 'PROFORMA' or proforma.statut != 'EMIS':
         raise FacturationErreur('Seule une proforma émise se convertit en facture.')
-    if proforma.derives.filter(type='FACTURE').exists():
-        raise FacturationErreur('Cette proforma a déjà sa facture.')
+    existante = proforma.derives.filter(type='FACTURE').first()
+    if existante is not None:
+        if existante.modifiable:
+            return existante
+        raise FacturationErreur(f'Cette proforma a déjà sa facture ({existante.numero}).')
     return creer_brouillon('FACTURE', auteur=auteur, origine=proforma, objet=proforma.objet,
                            lignes=_copier_lignes(proforma))
 
@@ -304,7 +367,9 @@ def emettre(document, auteur=''):
                 document.numero = prochain_numero_document(document.type, aujourdhui.year)
                 document.statut = 'EMIS'
                 document.date_emission = aujourdhui
-                if document.type == 'FACTURE' and document.date_echeance is None:
+                # Avec acompte, le solde est exigible à la livraison : l'échéance est fixée alors.
+                if (document.type == 'FACTURE' and document.date_echeance is None
+                        and not document.avec_acompte):
                     document.date_echeance = aujourdhui + timedelta(days=params.delai_paiement_jours)
                 if document.type == 'PROFORMA' and document.date_validite is None:
                     document.date_validite = aujourdhui + timedelta(days=params.validite_proforma_jours)
@@ -372,6 +437,165 @@ def annuler_encaissement(recu, motif, auteur=''):
     return recu
 
 
+# ── Suivi de la prestation ───────────────────────────────────────────────
+
+def _jour_passe(jour):
+    jour = jour or date.today()
+    if jour > date.today():
+        raise FacturationErreur('La date ne peut pas être dans le futur.')
+    return jour
+
+
+def _facture_suivie(facture):
+    if facture.type != 'FACTURE' or facture.statut != 'EMIS' or not facture.avec_acompte:
+        raise FacturationErreur("Le suivi de prestation concerne une facture émise avec acompte.")
+
+
+def demarrer_prestation(facture, jour=None, auteur=''):
+    """Procédure d'entrée d'un client : l'acompte payé, la prestation démarre."""
+    _facture_suivie(facture)
+    if facture.prestation_demarree_le:
+        raise FacturationErreur('Cette prestation est déjà démarrée.')
+    if not facture.acompte_recu:
+        raise FacturationErreur(
+            f"L'acompte de {francs(facture.montant_acompte)} n'est pas encore reçu "
+            f"(encaissé : {francs(facture.montant_encaisse)}). La prestation ne démarre qu'après.")
+    facture.prestation_demarree_le = _jour_passe(jour)
+    facture.save(update_fields=['prestation_demarree_le', 'updated_at'])
+    _tracer(facture, f'Prestation de la facture {facture.numero} démarrée '
+                     f'le {facture.prestation_demarree_le:%d/%m/%Y}.', auteur)
+    return facture
+
+
+def livrer_prestation(facture, jour=None, auteur=''):
+    """La prestation est livrée : le solde devient exigible."""
+    _facture_suivie(facture)
+    if facture.prestation_livree_le:
+        raise FacturationErreur('Cette prestation est déjà marquée livrée.')
+    if not facture.prestation_demarree_le:
+        raise FacturationErreur('Démarrez la prestation avant de la marquer livrée.')
+    jour = _jour_passe(jour)
+    if jour < facture.prestation_demarree_le:
+        raise FacturationErreur('La livraison ne peut pas précéder le démarrage.')
+    facture.prestation_livree_le = jour
+    champs = ['prestation_livree_le', 'updated_at']
+    if facture.solde > 0 and facture.date_echeance is None:
+        delai = ParametresFacturation.actuels().delai_paiement_jours
+        facture.date_echeance = jour + timedelta(days=delai)
+        champs.append('date_echeance')
+    facture.save(update_fields=champs)
+    suite = (f' Solde de {francs(facture.solde)} exigible avant le {facture.date_echeance:%d/%m/%Y}.'
+             if facture.solde > 0 and facture.date_echeance else '')
+    _tracer(facture, f'Prestation de la facture {facture.numero} livrée '
+                     f'le {jour:%d/%m/%Y}.{suite}', auteur)
+    return facture
+
+
+def echeancier(document):
+    """Acompte puis solde, avec ce qui est payé sur chacun (acompte servi en premier).
+
+    Sur une proforma ou un brouillon, seuls les montants : rien n'est encore dû.
+    """
+    if not document.avec_acompte:
+        return []
+    suivi = document.type == 'FACTURE' and document.statut == 'EMIS'
+    encaisse = document.montant_encaisse if suivi else Decimal('0')
+    acompte = document.montant_acompte
+    solde = document.total_ttc - acompte
+    taux = document.taux_acompte
+    lignes = []
+    for libelle, montant, paye in (
+            (f"Acompte {_quantite(taux)} % — exigible à la signature", acompte, min(encaisse, acompte)),
+            (f"Solde {_quantite(100 - Decimal(taux))} % — exigible à la livraison"
+             + (f" (avant le {document.date_echeance:%d/%m/%Y})" if document.date_echeance else ''),
+             solde, max(min(encaisse - acompte, solde), 0))):
+        if not suivi:
+            etat = 'A_VENIR'
+        elif paye >= montant:
+            etat = 'PAYE'
+        elif paye > 0:
+            etat = 'PARTIEL'
+        else:
+            etat = 'A_PAYER'
+        lignes.append({'libelle': libelle, 'montant': montant, 'paye': paye, 'etat': etat})
+    return lignes
+
+
+def nature_paiement(facture, anterieurs, montant):
+    """Ce que règle un paiement : l'acompte, le solde, ou les deux."""
+    acompte = facture.montant_acompte if facture.avec_acompte else Decimal('0')
+    if not acompte:
+        return ''
+    if anterieurs >= acompte:
+        return 'Règlement du solde'
+    if anterieurs + montant <= acompte:
+        return ("Règlement de l'acompte" if anterieurs + montant == acompte
+                else "Règlement partiel de l'acompte")
+    return "Règlement de l'acompte et d'une partie du solde"
+
+
+# ── Pièces justificatives ────────────────────────────────────────────────
+
+MAX_JUSTIFICATIF_OCTETS = 5 * 1024 * 1024
+MAX_JUSTIFICATIFS = 20
+MIMES_JUSTIFICATIF = ('application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic')
+
+
+def ajouter_justificatif(contenu, nom, document=None, encaissement=None, type_piece='',
+                         observations='', auteur=''):
+    """Une pièce justificative numérique rattachée à une facture ou à un reçu."""
+    if (document is None) == (encaissement is None):
+        raise FacturationErreur('Une pièce se rattache à une facture ou à un reçu.')
+    cible = document or encaissement.facture
+    if cible.statut == 'BROUILLON':
+        raise FacturationErreur("Émettez la pièce avant d'y joindre des justificatifs.")
+    types = dict(JustificatifFacturation.TYPE_CHOICES)
+    type_piece = type_piece if type_piece in types else (
+        'PREUVE_PAIEMENT' if encaissement is not None else 'AUTRE')
+
+    trouve = re.match(r'data:([^;,]+);base64,(.+)$', str(contenu or ''), re.DOTALL)
+    if not trouve:
+        raise FacturationErreur('Fichier invalide.')
+    mime = trouve.group(1).lower()
+    if mime not in MIMES_JUSTIFICATIF:
+        raise FacturationErreur('Formats acceptés : PDF, JPEG, PNG, WEBP ou HEIC.')
+    try:
+        octets = base64.b64decode(trouve.group(2), validate=True)
+    except Exception:
+        raise FacturationErreur('Fichier illisible.')
+    if not octets:
+        raise FacturationErreur('Le fichier est vide.')
+    if len(octets) > MAX_JUSTIFICATIF_OCTETS:
+        raise FacturationErreur('Fichier trop volumineux (5 Mo au plus).')
+    existants = JustificatifFacturation.objects.filter(document=document, encaissement=encaissement)
+    if existants.count() >= MAX_JUSTIFICATIFS:
+        raise FacturationErreur(f'{MAX_JUSTIFICATIFS} pièces au plus par élément.')
+
+    piece = JustificatifFacturation.objects.create(
+        document=document, encaissement=encaissement, type_piece=type_piece,
+        nom=(str(nom or '').strip() or 'justificatif')[:200], mime_type=mime, taille=len(octets),
+        contenu=contenu, observations=str(observations or '').strip()[:250], ajoute_par=auteur)
+    rattachement = f'reçu {encaissement.numero}' if encaissement else f'pièce {document.numero}'
+    _tracer(cible, f'Justificatif « {piece.nom} » joint au {rattachement}.', auteur)
+    return piece
+
+
+def supprimer_justificatif(piece, auteur=''):
+    """Retire une pièce jointe par erreur. La suppression reste dans l'historique."""
+    cible = piece.document or piece.encaissement.facture
+    rattachement = (f'reçu {piece.encaissement.numero}' if piece.encaissement_id
+                    else f'pièce {piece.document.numero}')
+    nom = piece.nom
+    piece.delete()
+    _tracer(cible, f'Justificatif « {nom} » retiré du {rattachement}.', auteur)
+
+
+def fichier_justificatif(piece):
+    """(octets, type MIME) du fichier stocké."""
+    _, _, donnees = piece.contenu.partition(',')
+    return base64.b64decode(donnees), piece.mime_type or 'application/octet-stream'
+
+
 # ── Tableau de bord ──────────────────────────────────────────────────────
 
 def synthese():
@@ -382,7 +606,12 @@ def synthese():
     encaisse = sum((f.montant_encaisse for f in factures), Decimal('0'))
     impayees = [f for f in factures if f.statut_paiement in ('A_PAYER', 'PARTIELLE')]
     retard = [f for f in impayees if f.en_retard]
+    attente = [f for f in factures if f.etape == 'ACOMPTE_ATTENDU']
     return {
+        'nb_acomptes_attendus': len(attente),
+        'acomptes_attendus':  int(sum((f.montant_acompte - f.montant_encaisse for f in attente),
+                                      Decimal('0'))),
+        'nb_prestations_en_cours': sum(1 for f in factures if f.etape in ('A_DEMARRER', 'EN_COURS')),
         'facture':          int(facture),
         'encaisse':         int(encaisse),
         'restant':          int(sum((f.solde for f in impayees), Decimal('0'))),
@@ -486,6 +715,8 @@ def contexte_document(document):
             'solde': francs(max(document.solde, 0)),
         },
         'taux_tva': _quantite(document.taux_tva),
+        'echeancier': [{**e, 'montant': francs(e['montant']), 'paye': francs(e['paye'])}
+                       for e in echeancier(document)],
         'en_lettres': montant_en_lettres(document.total_ttc),
         'modes': ', '.join(label for code, label in MODES_ENCAISSEMENT if code != 'AUTRE'),
     }
@@ -501,7 +732,11 @@ def contexte_recu(recu):
     avoirs = sum((a.total_ttc for a in facture.derives.filter(type='AVOIR', statut='EMIS')
                   if a.emis_le and a.emis_le <= recu.created_at), Decimal('0'))
     reste = facture.total_ttc - avoirs - anterieurs - (0 if recu.annule else recu.montant)
+    acompte = facture.montant_acompte if facture.avec_acompte else Decimal('0')
     return {
+        'nature': nature_paiement(facture, anterieurs, recu.montant),
+        'acompte': francs(acompte) if acompte else '',
+        'taux_acompte': _quantite(facture.taux_acompte),
         'recu': recu, 'facture': facture, 'emetteur': params,
         'mode': recu.get_mode_display(),
         'montants': {'montant': francs(recu.montant), 'facture': francs(facture.total_ttc),
@@ -594,6 +829,15 @@ def contexte_releve(documents, client):
     }
 
 
+ETAPES = {
+    'ACOMPTE_ATTENDU': 'Acompte attendu',
+    'A_DEMARRER':      'Acompte reçu — à démarrer',
+    'EN_COURS':        'Prestation en cours',
+    'LIVREE':          'Livrée — solde dû',
+    'TERMINEE':        'Terminée',
+}
+
+
 def contexte_etat(documents, titre_filtre=''):
     """État d'une liste de pièces (celle filtrée à l'écran), avec ses totaux."""
     params = ParametresFacturation.actuels()
@@ -604,6 +848,7 @@ def contexte_etat(documents, titre_filtre=''):
             situation = 'Brouillon'
         elif d.type == 'FACTURE':
             situation = ('En retard' if d.en_retard else
+                         ETAPES.get(d.etape) or
                          {'A_PAYER': 'À payer', 'PARTIELLE': 'Partiellement payée',
                           'PAYEE': 'Payée'}.get(d.statut_paiement, situation))
             factures.append(d)

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, OnInit, computed, inject, signal,
+         viewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -15,7 +16,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService, OverlayListenerOptions, OverlayOptions } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { DocumentCommercial, EcoleCliente, FacturationService, LigneDocument, Recu,
+import { DocumentCommercial, EcoleCliente, FacturationService, Justificatif, LigneDocument, Recu,
          SyntheseFacturation, TypeDocument } from '../../core/services/facturation.service';
 import { Prospect, ProspectsService } from '../../core/services/prospects.service';
 
@@ -72,6 +73,11 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
         <div class="kpi-label">{{ 'facturation.kpi_retard' | translate }} ({{ s.nb_en_retard }})</div>
         <div class="kpi-value rouge">{{ s.en_retard | number:'1.0-0' }}</div>
       </div>
+      <div class="kpi-card" style="--acc:#8b5cf6">
+        <div class="kpi-label">{{ 'facturation.kpi_acomptes' | translate }} ({{ s.nb_acomptes_attendus }})</div>
+        <div class="kpi-value violet">{{ s.acomptes_attendus | number:'1.0-0' }}</div>
+        <div class="sous">{{ 'facturation.kpi_prestations' | translate:{ n: s.nb_prestations_en_cours } }}</div>
+      </div>
     </div>
     }
 
@@ -119,7 +125,9 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
             <td class="ta-r mono bold">{{ d.total_ttc | number:'1.0-0' }}</td>
             <td>
               <p-tag [value]="situation(d)" [severity]="severite(d)" />
-              @if (d.statut_paiement === 'PARTIELLE') {
+              @if (d.etape === 'ACOMPTE_ATTENDU') {
+                <div class="sous">{{ 'facturation.acompte' | translate }} {{ d.montant_acompte | number:'1.0-0' }}</div>
+              } @else if (d.statut_paiement === 'PARTIELLE') {
                 <div class="sous">{{ 'facturation.reste' | translate }} {{ d.solde | number:'1.0-0' }}</div>
               }
             </td>
@@ -219,6 +227,16 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
               <div class="form-group full"><label>{{ 'facturation.motif' | translate }} *</label><textarea pTextarea rows="2" [(ngModel)]="edition['motif']"></textarea></div>
             } @else {
               <div class="form-group">
+                <label>{{ 'facturation.taux_acompte' | translate }}</label>
+                <div class="acompte-saisie">
+                  <input pInputText type="number" min="0" max="99" [(ngModel)]="edition['taux_acompte']" />
+                  @if (+edition['taux_acompte'] !== tauxAcompteDefaut) {
+                    <p-button size="small" [text]="true" [label]="tauxAcompteDefaut + ' %'" (onClick)="edition['taux_acompte'] = tauxAcompteDefaut" />
+                  }
+                </div>
+                <small class="sous">{{ 'facturation.aide_acompte' | translate }}</small>
+              </div>
+              <div class="form-group">
                 <label>{{ 'facturation.tva' | translate }}</label>
                 <label class="case"><input type="checkbox" [(ngModel)]="edition['tva_applicable']" /> {{ 'facturation.tva_applicable' | translate }}</label>
               </div>
@@ -300,6 +318,46 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
           @if (!d['tva_applicable'] && d['mention_tva']) { <div class="sous">{{ d['mention_tva'] }}</div> }
         </div>
 
+        <!-- Acompte : échéancier, et suivi de la prestation jusqu'à sa finalisation -->
+        @if (d.echeancier?.length) {
+          <div class="separator">{{ 'facturation.echeancier' | translate }}</div>
+          <table class="lignes-lecture">
+            @for (e of d.echeancier; track $index) {
+              <tr>
+                <td>{{ e.libelle }}</td>
+                <td class="ta-r mono bold">{{ e.montant | number:'1.0-0' }}</td>
+                <td class="ta-r" style="width:150px">
+                  @if (e.etat !== 'A_VENIR') {
+                    <p-tag [value]="('facturation.echeance_' + e.etat | translate) + (e.etat === 'PARTIEL' ? ' ' + (e.paye | number:'1.0-0') : '')"
+                           [severity]="e.etat === 'PAYE' ? 'success' : e.etat === 'PARTIEL' ? 'warn' : 'secondary'" />
+                  }
+                </td>
+              </tr>
+            }
+          </table>
+        }
+        @if (d.etape) {
+          <div class="separator">{{ 'facturation.suivi_prestation' | translate }}</div>
+          <div class="etapes">
+            @for (e of etapes; track e; let i = $index) {
+              <span class="etape" [class.faite]="rangEtape(d) > i" [class.courante]="rangEtape(d) === i">
+                {{ 'facturation.etape_' + e | translate }}
+              </span>
+            }
+          </div>
+          <div class="suivi-actions">
+            @if (d.prestation_demarree_le) { <span class="sous">{{ 'facturation.demarree_le' | translate }} {{ d.prestation_demarree_le | date:'dd/MM/yyyy' }}</span> }
+            @if (d.prestation_livree_le) { <span class="sous">· {{ 'facturation.livree_le' | translate }} {{ d.prestation_livree_le | date:'dd/MM/yyyy' }}</span> }
+            <span class="espace"></span>
+            @if (!d.prestation_demarree_le) {
+              <p-button icon="pi pi-play" size="small" [label]="'facturation.demarrer' | translate" [disabled]="!d.acompte_recu"
+                        [pTooltip]="d.acompte_recu ? '' : ('facturation.acompte_requis' | translate)" (onClick)="demarrer(d)" />
+            } @else if (!d.prestation_livree_le) {
+              <p-button icon="pi pi-check-circle" size="small" severity="success" [label]="'facturation.livrer' | translate" (onClick)="livrer(d)" />
+            }
+          </div>
+        }
+
         <!-- Paiements d'une facture émise -->
         @if (d.type === 'FACTURE' && !d.modifiable) {
           <div class="separator">{{ 'facturation.paiements' | translate }}</div>
@@ -316,21 +374,76 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
               @if (r.annule) { <p-tag severity="danger" [value]="'facturation.annule' | translate" [pTooltip]="r.annule_motif" /> }
               <b class="mono">{{ r.montant | number:'1.0-0' }}</b>
               <p-button icon="pi pi-download" [text]="true" size="small" (onClick)="telechargerRecu(r)" [pTooltip]="'facturation.recu_pdf' | translate" />
+              <p-button icon="pi pi-paperclip" [text]="true" size="small" (onClick)="choisirFichier({ encaissement: r.id })"
+                        [pTooltip]="'facturation.joindre_preuve' | translate" />
               @if (!r.annule) {
                 <p-button icon="pi pi-ban" [text]="true" size="small" severity="danger" (onClick)="annulerRecu(r)" [pTooltip]="'facturation.annuler_recu' | translate" />
               }
             </div>
+            @for (j of r.justificatifs; track j.id) {
+              <div class="piece">
+                <i class="pi" aria-hidden="true" [class.pi-file-pdf]="j.mime_type === 'application/pdf'" [class.pi-image]="j.mime_type !== 'application/pdf'"></i>
+                <button type="button" class="lien" (click)="voirJustificatif(j)">{{ j.nom }}</button>
+                <span class="sous">{{ j.type_libelle }} · {{ taille(j.taille) }}</span>
+                <p-button icon="pi pi-times" [text]="true" size="small" severity="danger" (onClick)="supprimerJustificatif(j)"
+                          [pTooltip]="'facturation.retirer_piece' | translate" />
+              </div>
+            } @empty {
+              @if (!r.annule) { <div class="piece sous manque">{{ 'facturation.sans_preuve' | translate }}</div> }
+            }
           }
           @if (d.solde > 0) {
+            @if (d.montant_acompte && !d.acompte_recu) {
+              <div class="raccourcis">
+                <p-button size="small" [outlined]="true" [label]="('facturation.payer_acompte' | translate) + ' · ' + (resteAcompte(d) | number:'1.0-0')"
+                          (onClick)="paiement.montant = resteAcompte(d)" />
+                <p-button size="small" [outlined]="true" [label]="('facturation.payer_tout' | translate) + ' · ' + (d.solde | number:'1.0-0')"
+                          (onClick)="paiement.montant = d.solde" />
+              </div>
+            }
             <div class="form-grid quatre paiement">
               <div class="form-group"><label>{{ 'facturation.montant' | translate }}</label><input pInputText type="number" [(ngModel)]="paiement.montant" /></div>
               <div class="form-group"><label>{{ 'facturation.mode' | translate }}</label>
                 <p-select [(ngModel)]="paiement.mode" [options]="modes()" optionLabel="label" optionValue="value" appendTo="body" [overlayOptions]="overlaySansFermeture" /></div>
               <div class="form-group"><label>{{ 'facturation.date' | translate }}</label><input pInputText type="date" [(ngModel)]="paiement.date" /></div>
               <div class="form-group"><label>{{ 'facturation.reference' | translate }}</label><input pInputText [(ngModel)]="paiement.reference" /></div>
+              <div class="form-group full">
+                <label>{{ 'facturation.preuve_paiement' | translate }}</label>
+                <div class="fichier">
+                  <p-button icon="pi pi-paperclip" size="small" [outlined]="true" severity="secondary"
+                            [label]="(preuve ? 'facturation.changer_fichier' : 'facturation.choisir_fichier') | translate"
+                            (onClick)="choisirPreuve()" />
+                  @if (preuve) {
+                    <span class="sous">{{ preuve.nom }}</span>
+                    <p-button icon="pi pi-times" [text]="true" size="small" (onClick)="preuve = null" />
+                  } @else {
+                    <span class="sous">{{ 'facturation.aide_preuve' | translate }}</span>
+                  }
+                </div>
+              </div>
             </div>
             <div class="ta-r"><p-button icon="pi pi-check" severity="success" [label]="'facturation.enregistrer_paiement' | translate" [loading]="saving()" (onClick)="encaisser(d)" /></div>
           }
+        }
+
+        @if (!d.modifiable && d.type !== 'AVOIR') {
+          <div class="separator">{{ 'facturation.dossier' | translate }}</div>
+          @for (j of d.justificatifs; track j.id) {
+            <div class="piece">
+              <i class="pi" aria-hidden="true" [class.pi-file-pdf]="j.mime_type === 'application/pdf'" [class.pi-image]="j.mime_type !== 'application/pdf'"></i>
+              <button type="button" class="lien" (click)="voirJustificatif(j)">{{ j.nom }}</button>
+              <span class="sous">{{ j.type_libelle }} · {{ taille(j.taille) }} · {{ j.created_at | date:'dd/MM/yyyy' }}</span>
+              <p-button icon="pi pi-times" [text]="true" size="small" severity="danger" (onClick)="supprimerJustificatif(j)"
+                        [pTooltip]="'facturation.retirer_piece' | translate" />
+            </div>
+          }
+          <div class="fichier">
+            <p-select [(ngModel)]="typePieceDossier" [options]="typesDossier()" optionLabel="label" optionValue="value"
+                      appendTo="body" [overlayOptions]="overlaySansFermeture" styleClass="type-piece" />
+            <p-button icon="pi pi-upload" size="small" [outlined]="true" [label]="'facturation.joindre' | translate"
+                      (onClick)="choisirFichier({ document: d.id }, typePieceDossier)" />
+            <small class="sous">{{ 'facturation.aide_dossier' | translate }}</small>
+          </div>
         }
 
         @if (d.derives?.length) {
@@ -391,6 +504,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
         <div class="separator">{{ 'facturation.conditions' | translate }}</div>
         <div class="form-group"><label>{{ 'facturation.delai_paiement' | translate }}</label><input pInputText type="number" [(ngModel)]="params['delai_paiement_jours']" /></div>
         <div class="form-group"><label>{{ 'facturation.validite_proforma' | translate }}</label><input pInputText type="number" [(ngModel)]="params['validite_proforma_jours']" /></div>
+        <div class="form-group"><label>{{ 'facturation.taux_acompte_defaut' | translate }}</label><input pInputText type="number" min="0" max="99" [(ngModel)]="params['taux_acompte_defaut']" /></div>
         <div class="form-group full"><label>{{ 'facturation.coordonnees_paiement' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['coordonnees_paiement']"></textarea></div>
         <div class="form-group full"><label>{{ 'facturation.conditions_generales' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['conditions']"></textarea></div>
       </div>
@@ -399,6 +513,10 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
         <p-button [label]="'facturation.enregistrer' | translate" [loading]="saving()" (onClick)="enregistrerParametres()" />
       </ng-template>
     </p-dialog>
+
+    <input #fichierInput type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+           class="cache" tabindex="-1" [attr.aria-label]="'facturation.choisir_fichier' | translate"
+           (change)="fichierChoisi($event)" />
   `,
   styles: [`
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
@@ -460,6 +578,20 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
     .recu.annule { opacity:.6; }
     .paiement { margin-top:10px; }
     .lien { color:#0099ff; cursor:pointer; font-weight:600; }
+    .violet { color:#8b5cf6; }
+    .cache { display:none; }
+    button.lien { background:none; border:0; padding:0; font:inherit; font-weight:600; text-align:left; }
+    .acompte-saisie { display:flex; align-items:center; gap:4px; }
+    .acompte-saisie input { width:90px; }
+    .etapes { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+    .etape { font-size:12px; padding:4px 10px; border-radius:14px; border:1px solid var(--border); color:var(--text-3); }
+    .etape.faite { border-color:#10b981; color:#10b981; }
+    .etape.courante { border-color:#0099ff; background:rgba(0,153,255,.12); color:var(--text); font-weight:600; }
+    .suivi-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .raccourcis { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .piece { display:flex; align-items:center; gap:8px; padding:3px 0 3px 18px; font-size:12px; color:var(--text-2); flex-wrap:wrap; }
+    .piece.manque { font-style:italic; }
+    .fichier { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
   `],
 })
 export class FacturationComponent implements OnInit {
@@ -483,7 +615,20 @@ export class FacturationComponent implements OnInit {
     { value: 'PROFORMA', label: 'facturation.filtre_proformas' },
     { value: 'AVOIR', label: 'facturation.filtre_avoirs' },
     { value: 'IMPAYEES', label: 'facturation.filtre_impayees' },
+    { value: 'SUIVI', label: 'facturation.filtre_suivi' },
   ];
+
+  /** Les étapes d'une facture avec acompte, dans l'ordre. */
+  etapes = ['ACOMPTE_ATTENDU', 'A_DEMARRER', 'EN_COURS', 'LIVREE', 'TERMINEE'];
+  tauxAcompteDefaut = 40;
+  typesDossier = signal<{ value: string; label: string }[]>([]);
+  typePieceDossier = 'BON_COMMANDE';
+  /** Preuve jointe au paiement en cours de saisie, envoyée une fois le reçu créé. */
+  preuve: { nom: string; contenu: string } | null = null;
+  private cibleFichier: { document?: string; encaissement?: string } | 'PREUVE' | null = null;
+  private typeFichier = '';
+  private fichierInput = viewChild<ElementRef<HTMLInputElement>>('fichierInput');
+  private cdr = inject(ChangeDetectorRef);
 
   // Un menu déroulant dans un dialog ne se ferme pas au défilement.
   overlaySansFermeture: OverlayOptions = {
@@ -525,7 +670,13 @@ export class FacturationComponent implements OnInit {
 
   ngOnInit() {
     this.charger();
-    this.service.parametres().subscribe({ next: p => this.modes.set(p.modes || []) });
+    this.service.parametres().subscribe({ next: p => {
+      this.modes.set(p.modes || []);
+      this.tauxAcompteDefaut = p.taux_acompte_defaut ?? 40;
+      // Le dossier d'une facture : tout sauf les preuves de paiement, qui vont sur le reçu.
+      this.typesDossier.set((p.types_justificatif || []).filter(
+        (t: { value: string }) => !['PREUVE_PAIEMENT', 'BORDEREAU', 'CHEQUE'].includes(t.value)));
+    } });
     const id = this.route.snapshot.queryParamMap.get('document');
     if (id) this.ouvrir(id);
   }
@@ -543,8 +694,9 @@ export class FacturationComponent implements OnInit {
   private filtresActifs() {
     const f = this.filtre();
     return {
-      type: f && f !== 'IMPAYEES' ? f : undefined,
+      type: f === 'SUIVI' ? 'FACTURE' : f && f !== 'IMPAYEES' ? f : undefined,
       impayees: f === 'IMPAYEES' ? 1 : undefined,
+      suivi: f === 'SUIVI' ? 1 : undefined,
       recherche: this.recherche.trim() || undefined,
     };
   }
@@ -571,6 +723,7 @@ export class FacturationComponent implements OnInit {
     if (d.statut === 'BROUILLON') return this.translate.instant('facturation.brouillon');
     if (d.type === 'FACTURE') {
       if (d.en_retard) return this.translate.instant('facturation.en_retard');
+      if (d.etape) return this.translate.instant('facturation.etape_' + d.etape);
       return this.translate.instant('facturation.paiement_' + d.statut_paiement);
     }
     return d.statut_libelle;
@@ -581,6 +734,7 @@ export class FacturationComponent implements OnInit {
     if (d.type === 'AVOIR') return 'secondary';
     if (d.type === 'PROFORMA') return d.statut === 'CONVERTI' ? 'success' : 'info';
     if (d.en_retard) return 'danger';
+    if (d.etape && d.etape !== 'TERMINEE') return d.etape === 'ACOMPTE_ATTENDU' ? 'warn' : 'info';
     return d.statut_paiement === 'PAYEE' ? 'success' : d.statut_paiement === 'PARTIELLE' ? 'warn' : 'info';
   }
 
@@ -627,9 +781,13 @@ export class FacturationComponent implements OnInit {
       client_ville: d['client_ville'], client_telephone: d['client_telephone'], client_email: d['client_email'],
       client_ninea: d['client_ninea'], objet: d.objet, motif: d['motif'],
       tva_applicable: d['tva_applicable'], taux_tva: d['taux_tva'], mention_tva: d['mention_tva'],
+      taux_acompte: d.taux_acompte,
     };
     this.lignes = (d.lignes || []).map(l => ({ ...l }));
-    this.paiement = { montant: Math.max(d.solde, 0), mode: 'VIREMENT', date: this.aujourdhui(), reference: '' };
+    // Tant que l'acompte n'est pas réglé, c'est lui qu'on attend.
+    const attendu = d.montant_acompte && !d.acompte_recu ? this.resteAcompte(d) : Math.max(d.solde, 0);
+    this.paiement = { montant: attendu, mode: 'VIREMENT', date: this.aujourdhui(), reference: '' };
+    this.preuve = null;
     this.docVisible.set(true);
   }
 
@@ -648,7 +806,9 @@ export class FacturationComponent implements OnInit {
   private payloadEdition(): Record<string, unknown> {
     const data: Record<string, unknown> = { ...this.edition };
     if (this.doc()?.type === 'AVOIR') {
-      delete data['tva_applicable']; delete data['taux_tva']; delete data['mention_tva'];
+      delete data['tva_applicable']; delete data['taux_tva']; delete data['mention_tva']; delete data['taux_acompte'];
+    } else {
+      data['taux_acompte'] = Number(data['taux_acompte']) || 0;
     }
     data['lignes'] = this.lignes.map(l => ({
       designation: l.designation, detail: l.detail, quantite: +l.quantite, unite: l.unite,
@@ -729,14 +889,117 @@ export class FacturationComponent implements OnInit {
       date: this.paiement.date || undefined, reference: this.paiement.reference,
     }).subscribe({
       next: r => {
+        const preuve = this.preuve;
         this.saving.set(false);
         this.afficher(r.facture);
         this.charger();
         this.msg.add({ severity: 'success', summary: this.translate.instant('facturation.paiement_enregistre'), detail: r.recu.numero });
         this.telechargerRecu(r.recu);
+        if (preuve) this.envoyerJustificatif({ encaissement: r.recu.id }, preuve, 'PREUVE_PAIEMENT');
       },
       error: err => { this.saving.set(false); this.erreur(err); },
     });
+  }
+
+  resteAcompte(d: DocumentCommercial): number {
+    return Math.max(d.montant_acompte - (d['montant_encaisse'] || 0), 0);
+  }
+
+  rangEtape(d: DocumentCommercial): number {
+    // Terminée : toutes les étapes sont faites.
+    return d.etape === 'TERMINEE' ? this.etapes.length : this.etapes.indexOf(d.etape || '');
+  }
+
+  demarrer(d: DocumentCommercial) {
+    this.confirm.confirm({
+      header: this.translate.instant('facturation.demarrer'),
+      message: this.translate.instant('facturation.confirmer_demarrage'),
+      accept: () => this.service.demarrer(d.id).subscribe({
+        next: maj => { this.afficher(maj); this.charger(); },
+        error: err => this.erreur(err),
+      }),
+    });
+  }
+
+  livrer(d: DocumentCommercial) {
+    this.confirm.confirm({
+      header: this.translate.instant('facturation.livrer'),
+      message: this.translate.instant('facturation.confirmer_livraison'),
+      accept: () => this.service.livrer(d.id).subscribe({
+        next: maj => { this.afficher(maj); this.charger(); },
+        error: err => this.erreur(err),
+      }),
+    });
+  }
+
+  // ── Pièces justificatives ────────────────────────────────────────────
+  choisirPreuve() {
+    this.cibleFichier = 'PREUVE';
+    this.fichierInput()?.nativeElement.click();
+  }
+
+  choisirFichier(cible: { document?: string; encaissement?: string }, type = '') {
+    this.cibleFichier = cible;
+    this.typeFichier = type;
+    this.fichierInput()?.nativeElement.click();
+  }
+
+  fichierChoisi(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const fichier = input.files?.[0];
+    input.value = '';               // le même fichier pourra être choisi à nouveau
+    const cible = this.cibleFichier;
+    if (!fichier || !cible) return;
+    if (fichier.size > 5 * 1024 * 1024) return this.avertir('facturation.fichier_trop_gros');
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      const lu = { nom: fichier.name, contenu: String(lecteur.result) };
+      if (cible === 'PREUVE') {
+        this.preuve = lu;
+        this.cdr.markForCheck();
+      } else {
+        this.envoyerJustificatif(cible, lu, this.typeFichier);
+      }
+    };
+    lecteur.readAsDataURL(fichier);
+  }
+
+  private envoyerJustificatif(cible: { document?: string; encaissement?: string },
+                              fichier: { nom: string; contenu: string }, type_piece: string) {
+    this.service.ajouterJustificatif(cible, { ...fichier, type_piece }).subscribe({
+      next: () => {
+        this.msg.add({ severity: 'success', summary: this.translate.instant('facturation.piece_jointe'), detail: fichier.nom });
+        const d = this.doc();
+        if (d) this.ouvrir(d.id);
+      },
+      error: err => this.erreur(err),
+    });
+  }
+
+  voirJustificatif(j: Justificatif) {
+    this.service.fichierJustificatif(j.id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: err => this.erreur(err),
+    });
+  }
+
+  supprimerJustificatif(j: Justificatif) {
+    this.confirm.confirm({
+      header: this.translate.instant('facturation.retirer_piece'),
+      message: this.translate.instant('facturation.confirmer_retrait', { nom: j.nom }),
+      accept: () => this.service.supprimerJustificatif(j.id).subscribe({
+        next: () => { const d = this.doc(); if (d) this.ouvrir(d.id); },
+        error: err => this.erreur(err),
+      }),
+    });
+  }
+
+  taille(octets: number): string {
+    return octets >= 1024 * 1024 ? `${(octets / 1024 / 1024).toFixed(1)} Mo` : `${Math.max(1, Math.round(octets / 1024))} Ko`;
   }
 
   annulerRecu(r: Recu) {
