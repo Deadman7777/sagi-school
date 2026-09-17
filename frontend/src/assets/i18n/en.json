@@ -674,7 +674,15 @@
     "monsieur": "Mr",
     "madame": "Mrs",
     "directeur_nom": "Principal's name",
-    "directeur_nom_ph": "E.g. Mouhamed GUEYE"
+    "directeur_nom_ph": "E.g. Mouhamed GUEYE",
+    "garde_soir_titre": "Evening care",
+    "garde_soir_aide": "Children picked up late are billed per slot. The first slot runs from the cut-off time to the next full hour, then one slot per clock hour.",
+    "garde_soir_actif": "Bill evening care",
+    "garde_soir_limite": "Pick-up cut-off time",
+    "garde_soir_facturation_a": "Billing starts at",
+    "garde_soir_tolerance_aide": "Before this time nothing is billed (grace period).",
+    "garde_soir_tarif": "Rate per slot",
+    "garde_soir_exemple": "Example: cut-off {{limite}}, billing from {{facturation}} — leaving at 6:00 pm: {{tarif}}; at 6:15 or 7:00 pm: {{tarif}} × 2."
   },
   "cloture": {
     "title": "Year Closing",
@@ -1594,6 +1602,17 @@
     "montant": "Amount",
     "reclasser": "Reclassify as day care",
     "reclasse": "Payment reclassified",
-    "reprise_aide": "Visits collected as \"Miscellaneous\" before per-day billing. First take the roll call for those days (Roll call tab, past date), then reclassify each amount to its month: the receipt keeps its total and the days become paid."
+    "reprise_aide": "Visits collected as \"Miscellaneous\" before per-day billing. First take the roll call for those days (Roll call tab, past date), then reclassify each amount to its month: the receipt keeps its total and the days become paid.",
+    "onglet_soir": "Evening care",
+    "soir_aide": "Pick-up until {{limite}} (billing from {{facturation}}): each started slot costs {{tarif}} FCFA. Enter the child’s departure time.",
+    "chercher_enfant": "Child’s name (at least 2 letters)",
+    "heure_depart": "Departure time",
+    "ajouter_soir": "Save",
+    "enfant_choisi": "Selected child:",
+    "tranches": "Slots",
+    "aucun_soir": "No late departure recorded for this date.",
+    "soir_enregistre": "Evening care recorded",
+    "heure_requise": "Choose the child and the departure time.",
+    "soir_encaisser": "The amount is added to the month and collected at the desk with the monthly fee."
   }
 }

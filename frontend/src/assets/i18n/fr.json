@@ -674,7 +674,15 @@
     "monsieur": "Monsieur",
     "madame": "Madame",
     "directeur_nom": "Nom du directeur / de la directrice",
-    "directeur_nom_ph": "Ex. Mouhamed GUEYE"
+    "directeur_nom_ph": "Ex. Mouhamed GUEYE",
+    "garde_soir_titre": "Garde du soir",
+    "garde_soir_aide": "Les enfants récupérés tard sont facturés par tranche. La 1re tranche va de l'heure limite à l'heure pleine suivante, puis une tranche par heure d'horloge.",
+    "garde_soir_actif": "Facturer la garde du soir",
+    "garde_soir_limite": "Heure limite de récupération",
+    "garde_soir_facturation_a": "Facturation à partir de",
+    "garde_soir_tolerance_aide": "Avant cette heure, rien n’est facturé (tolérance).",
+    "garde_soir_tarif": "Tarif par tranche",
+    "garde_soir_exemple": "Exemple : limite {{limite}}, facturation dès {{facturation}} — départ à 18h00 : {{tarif}} F ; à 18h15 ou 19h00 : {{tarif}} × 2."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -1594,6 +1602,17 @@
     "montant": "Montant",
     "reclasser": "Reclasser en garderie",
     "reclasse": "Paiement reclassé",
-    "reprise_aide": "Passages encaissés en « Frais divers » avant la garderie à la journée. Faites d'abord l'appel des jours concernés (onglet Appel, date passée), puis reclassez chaque montant sur son mois : le reçu garde son total, les jours passent payés."
+    "reprise_aide": "Passages encaissés en « Frais divers » avant la garderie à la journée. Faites d'abord l'appel des jours concernés (onglet Appel, date passée), puis reclassez chaque montant sur son mois : le reçu garde son total, les jours passent payés.",
+    "onglet_soir": "Garde du soir",
+    "soir_aide": "Récupération jusqu'à {{limite}} (facturation à partir de {{facturation}}) : chaque tranche entamée coûte {{tarif}} FCFA. Saisissez l'heure de départ de l'enfant.",
+    "chercher_enfant": "Nom de l’enfant (2 lettres au moins)",
+    "heure_depart": "Heure de départ",
+    "ajouter_soir": "Enregistrer",
+    "enfant_choisi": "Enfant choisi :",
+    "tranches": "Tranches",
+    "aucun_soir": "Aucun départ tardif saisi pour cette date.",
+    "soir_enregistre": "Garde du soir enregistrée",
+    "heure_requise": "Choisissez l'enfant et l'heure de départ.",
+    "soir_encaisser": "Le montant s’ajoute au mois concerné : il s’encaisse au guichet avec la mensualité."
   }
 }

@@ -581,7 +581,7 @@ class Eleve(TenantModel):
         from .echeancier import mois_factures
         return mois_factures(self)
 
-    def du_du_mois(self, mois):
+    def _du_scolarite_du_mois(self, mois):
         """Montant dû pour UN mois : celui saisi par l'école s'il existe,
         sinon le tarif ordinaire. Zéro saisi vaut zéro, pas « non saisi ».
 
@@ -591,15 +591,36 @@ class Eleve(TenantModel):
         cle = str(int(mois))
         if cle in saisis:
             return round(float(saisis[cle] or 0), 2)
+        if not self._mois_du_calendrier(int(mois)):
+            # Mois hors du calendrier des mensualités (vacances, mois d'été) :
+            # seuls les suppléments du mois sont dus. Y compter la scolarité
+            # facturerait un mois entier pour un soir de garde ou un jour gardé.
+            return 0.0
         if self.a_la_journee:
-            from .garderie import du_presences_du_mois
-            return round(du_presences_du_mois(self, int(mois)) + self.du_mensuel_standard, 2)
+            return self.du_mensuel_standard
         if self._formules_datees():
             mensuel = sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
                           if ab.service.periodicite == 'MENSUEL')
             net = max(self.mensualite_brute_du_mois(mois) - self.pec_du_mois(mois), 0.0)
             return round(net + mensuel, 2)
         return self.du_mensuel_standard
+
+    def _mois_du_calendrier(self, mois):
+        """Le mois fait-il partie des mensualités facturées (hors suppléments) ?"""
+        from .echeancier import mois_de_base
+        return int(mois) in mois_de_base(self)
+
+    def du_du_mois(self, mois):
+        """Dû d'un mois : la scolarité de ce mois, plus ses suppléments — jours de
+        garderie (enfant facturé à la journée) et soirs de garde tardive. Les
+        suppléments sont dus même dans un mois hors calendrier ; la scolarité non."""
+        from .garde_soir import du_garde_soir_du_mois
+        mois = int(mois)
+        supplements = du_garde_soir_du_mois(self, mois)
+        if self.a_la_journee:
+            from .garderie import du_presences_du_mois
+            supplements += du_presences_du_mois(self, mois)
+        return round(self._du_scolarite_du_mois(mois) + supplements, 2)
 
     @property
     def a_la_journee(self):
@@ -844,6 +865,30 @@ class PresenceGarderie(TenantModel):
 
     def __str__(self):
         return f"{self.eleve} — {self.date:%d/%m/%Y} ({self.get_formule_display()})"
+
+
+class GardeSoir(TenantModel):
+    """Un enfant récupéré après l'heure limite : l'heure de départ et ce qu'elle coûte.
+
+    Nombre de tranches et montant sont FIGÉS à la saisie : changer le tarif ou
+    l'heure limite ne réécrit pas les soirs déjà facturés.
+    """
+    eleve        = models.ForeignKey(Eleve, on_delete=models.CASCADE, related_name='gardes_soir')
+    date         = models.DateField()
+    heure_depart = models.TimeField()
+    tranches     = models.PositiveSmallIntegerField()
+    montant      = models.DecimalField(max_digits=10, decimal_places=2)
+    saisi_par    = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'gardes_soir'
+        ordering = ['date', 'heure_depart']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'eleve', 'date'], name='uniq_garde_soir_par_jour'),
+        ]
+
+    def __str__(self):
+        return f"{self.eleve} — {self.date:%d/%m/%Y} {self.heure_depart:%H:%M}"
 
 
 class Service(TenantModel):

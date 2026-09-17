@@ -2773,3 +2773,48 @@ class GarderieRepriseView(APIView):
                          'montant_divers': float(p.montant_divers),
                          'montant_mensualite': float(p.montant_mensualite), 'mois_regles': p.mois_regles})
 
+
+class GardeSoirView(APIView):
+    """Garde du soir (retard de récupération).
+
+    GET  ?date=AAAA-MM-JJ             → réglages + soirs saisis ce jour-là
+    GET  ?mois=1..12                  → récapitulatif du mois
+    POST {eleve, date, heure_depart}  → enregistre ou corrige le départ
+    DELETE ?id=<id>                   → retire une saisie
+    """
+    permission_classes = [IsAuthenticated, IsTenantMember]
+
+    def get(self, request):
+        import datetime as _dt
+        from .garde_soir import GardeSoirErreur, recap_du_mois, reglages, soirs_du_jour
+        tenant = get_tenant(request)
+        r = reglages(tenant)
+        base = {'actif': r['actif'], 'tarif': r['tarif'], 'limite': r['limite'].strftime('%H:%M'),
+                'facturation_a': r['facturation_a'].strftime('%H:%M')}
+        try:
+            if request.query_params.get('mois'):
+                return Response({**base, **recap_du_mois(tenant, int(request.query_params['mois']))})
+            jour = _dt.date.fromisoformat(request.query_params.get('date') or _dt.date.today().isoformat())
+        except (ValueError, GardeSoirErreur) as exc:
+            return Response({'error': str(exc) if isinstance(exc, GardeSoirErreur) else 'Date ou mois invalide.'},
+                            status=400)
+        return Response({**base, 'date': jour, 'soirs': soirs_du_jour(tenant, jour)})
+
+    def post(self, request):
+        import datetime as _dt
+        from .garde_soir import GardeSoirErreur, enregistrer
+        try:
+            jour = _dt.date.fromisoformat(str(request.data.get('date') or _dt.date.today().isoformat())[:10])
+            heure = _dt.time.fromisoformat(str(request.data.get('heure_depart') or '')[:5])
+            g = enregistrer(get_tenant(request), request.data.get('eleve'), jour, heure, auteur=str(request.user))
+        except GardeSoirErreur as exc:
+            return Response({'error': str(exc)}, status=400)
+        except ValueError:
+            return Response({'error': 'Date ou heure invalide (HH:MM).'}, status=400)
+        return Response({'id': str(g.id), 'tranches': g.tranches, 'montant': float(g.montant)}, status=201)
+
+    def delete(self, request):
+        from .models import GardeSoir
+        n, _ = GardeSoir.objects.filter(tenant=get_tenant(request), pk=request.query_params.get('id')).delete()
+        return Response(status=204 if n else 404)
+

@@ -1,3 +1,4 @@
+import datetime
 from django.db import models
 from core.models import TimeStampedModel
 
@@ -17,6 +18,16 @@ class Tenant(TimeStampedModel):
     CIVILITE_CHOICES = [('M', 'Monsieur'), ('MME', 'Madame')]
     directeur_civilite = models.CharField(max_length=3, choices=CIVILITE_CHOICES, blank=True)
     directeur_nom      = models.CharField(max_length=150, blank=True)
+
+    # ── Garde du soir (retard de récupération) ───────────────────────────
+    # Les enfants doivent être récupérés avant l'heure limite ; au-delà de la
+    # tolérance, la garde se facture par tranche : de l'heure limite à l'heure
+    # pleine suivante, puis par heure pleine d'horloge (17h30 → 18h00, 18h00 →
+    # 19h00…). Voir apps/eleves/garde_soir.py.
+    garde_soir_actif          = models.BooleanField(default=False)
+    garde_soir_heure_limite   = models.TimeField(default=datetime.time(17, 30))
+    garde_soir_facturation_a  = models.TimeField(default=datetime.time(17, 45))
+    garde_soir_tarif          = models.DecimalField(max_digits=10, decimal_places=2, default=1000)
 
     @property
     def signataire(self):

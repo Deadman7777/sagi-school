@@ -107,7 +107,7 @@ const MOIS_ANNEE = [
                   (onClick)="allerOnglet('anciens')" />
         <!-- Crèche : l'appel du jour des enfants gardés à la journée. Visible
              seulement si l'école a une section facturée à la journée. -->
-        @if (aDesSectionsAlaJournee()) {
+        @if (aDesSectionsAlaJournee() || gardeSoirActive()) {
           <p-button icon="pi pi-calendar-plus" [label]="'garderie.title' | translate" size="small"
                     severity="secondary" [outlined]="true" (onClick)="ouvrirGarderie()" />
         }
@@ -1926,6 +1926,9 @@ export class ElevesListeComponent implements OnInit {
   elevesFiltres = signal<Eleve[]>([]);
   sections      = signal<any[]>([]);
   aDesSectionsAlaJournee = computed(() => this.sections().some(s => s.mode_tarif === 'JOURNEE'));
+  // L'écran Garderie sert aussi à la garde du soir : une école qui n'a pas de
+  // section à la journée doit pouvoir l'ouvrir.
+  gardeSoirActive = signal(false);
   classes       = signal<any[]>([]);
   statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);
@@ -2109,8 +2112,16 @@ export class ElevesListeComponent implements OnInit {
     this.chargerSections();
     this.chargerServices();
     this.chargerClasses();
+    this.chargerGardeSoir();
     this.elevesService.getExercices().subscribe({
       next: (r: any) => this.exercices.set(r?.results || r || []),
+      error: () => {},
+    });
+  }
+
+  private chargerGardeSoir() {
+    this.elevesService.reglagesGardeSoir().subscribe({
+      next: r => this.gardeSoirActive.set(!!r?.actif),
       error: () => {},
     });
   }

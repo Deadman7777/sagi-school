@@ -109,6 +109,46 @@ import { MessageService } from 'primeng/api';
         </div>
       </div>
 
+      <!-- Garde du soir : au-delà de la tolérance, chaque tranche est facturée. -->
+      <div class="form-card" *ngIf="ecole()">
+        <div class="fc-title">🌙 {{ 'parametres.garde_soir_titre' | translate }}</div>
+        <p class="fc-aide">{{ 'parametres.garde_soir_aide' | translate }}</p>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.garde_soir_actif" [binary]="true" inputId="gs-actif" />
+              <span>{{ 'parametres.garde_soir_actif' | translate }}</span>
+            </label>
+          </div>
+          <ng-container *ngIf="ecole()!.garde_soir_actif">
+            <div class="form-group">
+              <label for="gs-limite">{{ 'parametres.garde_soir_limite' | translate }}</label>
+              <input id="gs-limite" type="time" class="select-natif" [(ngModel)]="ecole()!.garde_soir_heure_limite" />
+            </div>
+            <div class="form-group">
+              <label for="gs-fact">{{ 'parametres.garde_soir_facturation_a' | translate }}</label>
+              <input id="gs-fact" type="time" class="select-natif" [(ngModel)]="ecole()!.garde_soir_facturation_a" />
+              <small class="fc-hint">{{ 'parametres.garde_soir_tolerance_aide' | translate }}</small>
+            </div>
+            <div class="form-group">
+              <label for="gs-tarif">{{ 'parametres.garde_soir_tarif' | translate }}</label>
+              <p-inputNumber inputId="gs-tarif" [(ngModel)]="ecole()!.garde_soir_tarif" mode="decimal"
+                             [min]="0" [fluid]="true" suffix=" FCFA" />
+            </div>
+            <div class="form-group full">
+              <small class="fc-hint">{{ 'parametres.garde_soir_exemple' | translate:{
+                limite: (ecole()!.garde_soir_heure_limite || '').slice(0,5),
+                facturation: (ecole()!.garde_soir_facturation_a || '').slice(0,5),
+                tarif: ecole()!.garde_soir_tarif } }}</small>
+            </div>
+          </ng-container>
+        </div>
+        <div class="sc-actions">
+          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
+                    size="small" (onClick)="sauvegarderEcole()" />
+        </div>
+      </div>
+
       <div class="form-card" *ngIf="ecole()">
         <div class="fc-title">🔔 {{ 'parametres.rappels_titre' | translate }}</div>
         <p class="fc-aide">{{ 'parametres.rappels_aide' | translate }}</p>

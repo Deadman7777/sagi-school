@@ -65,7 +65,10 @@ export class ElevesService {
     return this.api.delete(`/eleves/${id}/`);
   }
 
-  searchEleves(q: string) {
+  /** Réglages de la garde du soir (actif, heure limite, tarif). */
+  reglagesGardeSoir() { return this.api.get<any>('/eleves/garde-soir/'); }
+
+    searchEleves(q: string) {
     return this.api.get<any[]>('/eleves/search/', { q });
   }
 

@@ -52,8 +52,9 @@ def precharger(qs):
 
     from apps.paiements.models import Paiement
 
+    from .garde_soir import PREFETCH_GARDES
     from .garderie import PREFETCH_PRESENCES
-    from .models import PresenceGarderie
+    from .models import GardeSoir, PresenceGarderie
 
     actif    = Q(paiements__statut='ACTIF')
     organism = actif & Q(paiements__organisme__isnull=False)
@@ -67,6 +68,9 @@ def precharger(qs):
         # dépendent l'appellent chacune à leur tour.
         'prises_en_charge_organisme__organisme',
         # Jours de garde des enfants facturés à la journée (vide pour les autres).
+        Prefetch('gardes_soir',
+                 queryset=GardeSoir.objects.only('eleve_id', 'date', 'heure_depart', 'tranches', 'montant'),
+                 to_attr=PREFETCH_GARDES),
         Prefetch('presences_garderie',
                  queryset=PresenceGarderie.objects.only('eleve_id', 'date', 'formule', 'montant'),
                  to_attr=PREFETCH_PRESENCES),
@@ -99,6 +103,30 @@ def precharger(qs):
     )
 
 
+def mois_de_base(eleve):
+    """Les mois de MENSUALITÉ de l'élève, sans les suppléments.
+
+    Séparé de `mois_factures` (qui y ajoute les mois porteurs d'un jour de
+    garderie ou d'un soir de garde) : dans un mois hors calendrier, la
+    scolarité n'est pas due — sinon un soir de garde en août facturerait un
+    mois entier (`Eleve.du_du_mois`).
+    """
+    cache = getattr(eleve, '_mois_base_cache', None)
+    if cache is not None:
+        return cache
+    if eleve.mois_dus:
+        mois = sorted(int(m) for m in eleve.mois_dus)
+    elif not eleve.exercice_id:
+        mois = []
+    else:
+        nb = eleve.nb_mensualites_dues
+        debut = eleve.exercice.date_debut.month
+        premier = eleve.exercice.nb_mensualites - nb
+        mois = [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
+    eleve._mois_base_cache = mois
+    return mois
+
+
 def mois_factures(eleve, jusqu_a_la_sortie=True):
     """Les numéros de mois réellement facturés à cet élève, dans l'ordre.
 
@@ -114,23 +142,21 @@ def mois_factures(eleve, jusqu_a_la_sortie=True):
     `jusqu_a_la_sortie=False` rend le calendrier complet : la réintégration en
     a besoin pour rétablir les mois qui suivent le retour.
     """
-    if eleve.mois_dus:
-        mois = sorted(int(m) for m in eleve.mois_dus)
-    elif not eleve.exercice_id:
+    mois = list(mois_de_base(eleve))
+    if not eleve.exercice_id and not mois:
         return []
-    else:
-        nb = eleve.nb_mensualites_dues
-        debut = eleve.exercice.date_debut.month
-        premier = eleve.exercice.nb_mensualites - nb
-        mois = [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
-    if eleve.a_la_journee and eleve.exercice_id:
-        # Garderie à la journée : un jour gardé hors du calendrier des
-        # mensualités (vacances, mois d'été) reste dû. Il ajoute son mois,
-        # remis dans l'ordre de l'année scolaire.
-        from .garderie import mois_avec_presences
-        debut_ex = eleve.exercice.date_debut.month
-        mois = sorted(set(mois) | set(mois_avec_presences(eleve)),
-                      key=lambda m: (m - debut_ex) % 12)
+    if eleve.exercice_id:
+        # Jours de garderie et soirs de garde tardive : un dû qui tombe hors du
+        # calendrier des mensualités (vacances, mois d'été) reste dû. Il ajoute
+        # son mois, remis dans l'ordre de l'année scolaire.
+        from .garde_soir import mois_avec_garde_soir
+        supplementaires = set(mois_avec_garde_soir(eleve))
+        if eleve.a_la_journee:
+            from .garderie import mois_avec_presences
+            supplementaires |= set(mois_avec_presences(eleve))
+        if supplementaires - set(mois):
+            debut_ex = eleve.exercice.date_debut.month
+            mois = sorted(set(mois) | supplementaires, key=lambda m: (m - debut_ex) % 12)
     if jusqu_a_la_sortie:
         mois = _tronquer_a_la_sortie(eleve, mois)
     return mois

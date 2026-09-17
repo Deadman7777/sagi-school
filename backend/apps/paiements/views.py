@@ -333,6 +333,12 @@ class PaiementViewSet(viewsets.ModelViewSet):
             if mois_entames and len(mois_entames) != len(mois_regles):
                 entames = ', '.join(_MOIS.get(m, str(m)) for m in sorted(mois_entames))
                 label_mens += f" — dont reliquat {entames}"
+            # Garde du soir comprise dans les mois réglés : le reçu le dit.
+            if p.eleve_id and mois_regles:
+                from apps.eleves.garde_soir import detail_du_mois as _garde_du_mois
+                soir = sum(_garde_du_mois(p.eleve, m)['montant'] for m in mois_regles)
+                if soir:
+                    label_mens += f" — dont garde du soir {int(soir):,} F".replace(',', '\u202f')
             lignes.append((label_mens, float(p.montant_mensualite)))
         if p.montant_uniforme:    lignes.append(('Uniforme scolaire',     float(p.montant_uniforme)))
         if p.montant_fournitures: lignes.append(('Fournitures scolaires', float(p.montant_fournitures)))

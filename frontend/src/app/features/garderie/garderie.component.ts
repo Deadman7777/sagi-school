@@ -12,6 +12,16 @@ import { ElevesService } from '../../core/services/eleves.service';
 
 type Formule = 'DEMI_JOURNEE' | 'JOURNEE' | null;
 
+interface SoirGarde {
+  id: string;
+  eleve: string;
+  nom_complet: string;
+  classe: string;
+  heure_depart: string;
+  tranches: number;
+  montant: number;
+}
+
 interface EnfantAppel {
   eleve: string;
   nom_complet: string;
@@ -73,6 +83,11 @@ interface LigneRecap {
         <button type="button" role="tab" [attr.aria-selected]="onglet() === 'recap'"
                 [class.actif]="onglet() === 'recap'" (click)="ouvrirRecap()">
           {{ 'garderie.onglet_recap' | translate }}</button>
+        @if (gardeSoir().actif) {
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'soir'"
+                  [class.actif]="onglet() === 'soir'" (click)="ouvrirSoir()">
+            {{ 'garderie.onglet_soir' | translate }}</button>
+        }
         @if (aReprendre().length) {
           <button type="button" role="tab" [attr.aria-selected]="onglet() === 'reprise'"
                   [class.actif]="onglet() === 'reprise'" (click)="onglet.set('reprise')">
@@ -80,6 +95,65 @@ interface LigneRecap {
         }
       </div>
     </div>
+
+    @if (onglet() === 'soir') {
+      <p class="aide">{{ 'garderie.soir_aide' | translate:{ limite: gardeSoir().limite,
+                          facturation: gardeSoir().facturation_a, tarif: gardeSoir().tarif } }}</p>
+      <div class="filtres">
+        <label class="champ">
+          <span>{{ 'garderie.date' | translate }}</span>
+          <input type="date" [max]="aujourdhui" [ngModel]="date()" (ngModelChange)="date.set($event); chargerSoir()" />
+        </label>
+        <label class="champ" style="flex:1;min-width:220px">
+          <span>{{ 'garderie.enfant' | translate }}</span>
+          <input type="text" [(ngModel)]="rechercheSoir" (ngModelChange)="chercherEleve($event)"
+                 [placeholder]="'garderie.chercher_enfant' | translate" />
+          @if (suggestions().length) {
+            <div class="suggestions">
+              @for (e of suggestions(); track e.id) {
+                <button type="button" (click)="choisirEleve(e)">{{ e.nom_complet }}
+                  <span class="sous">{{ e.classe_nom || e.section_nom }}</span></button>
+              }
+            </div>
+          }
+        </label>
+        <label class="champ">
+          <span>{{ 'garderie.heure_depart' | translate }}</span>
+          <input type="time" [(ngModel)]="heureSoir" />
+        </label>
+        <label class="champ" style="justify-content:flex-end">
+          <span>&nbsp;</span>
+          <p-button icon="pi pi-plus" [label]="'garderie.ajouter_soir' | translate" [loading]="saving()"
+                    [disabled]="!eleveSoir" (onClick)="enregistrerSoir()" />
+        </label>
+      </div>
+      @if (eleveSoir) { <p class="aide">{{ 'garderie.enfant_choisi' | translate }} <b>{{ eleveSoir.nom_complet }}</b></p> }
+
+      <div class="table-card">
+        <table class="recap">
+          <thead>
+            <tr><th>{{ 'garderie.enfant' | translate }}</th><th>{{ 'garderie.heure_depart' | translate }}</th>
+                <th class="ta-r">{{ 'garderie.tranches' | translate }}</th>
+                <th class="ta-r">{{ 'garderie.montant' | translate }}</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (s of soirs(); track s.id) {
+              <tr>
+                <td><div class="bold">{{ s.nom_complet }}</div><div class="sous">{{ s.classe }}</div></td>
+                <td class="mono">{{ s.heure_depart }}</td>
+                <td class="ta-r mono">{{ s.tranches }}</td>
+                <td class="ta-r mono bold">{{ s.montant | number:'1.0-0' }}</td>
+                <td class="ta-r"><p-button icon="pi pi-times" severity="danger" [text]="true" size="small"
+                                           (onClick)="retirerSoir(s)" /></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="5" class="vide">{{ 'garderie.aucun_soir' | translate }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="aide">{{ 'garderie.soir_encaisser' | translate }}</p>
+    }
 
     @if (onglet() === 'reprise') {
       <p class="aide">{{ 'garderie.reprise_aide' | translate }}</p>
@@ -277,6 +351,9 @@ interface LigneRecap {
     .rouge { color:#ef4444; }
     .aide { font-size:12px; color:var(--text-3); margin-top:10px; }
     .reprise-actions { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
+    .suggestions { position:relative; }
+    .suggestions button { display:block; width:100%; text-align:left; padding:6px 10px; font-size:13px;
+      background:var(--surface); border:1px solid var(--border); border-top:0; color:var(--text); cursor:pointer; }
     .reprise-actions .champ input, .reprise-actions .champ select { min-width:110px; }
   `],
 })
@@ -289,7 +366,15 @@ export class GarderieComponent implements OnInit {
   readonly aujourdhui = this.isoLocal(new Date());
   readonly moisOptions = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
 
-  onglet = signal<'appel' | 'recap' | 'reprise'>('appel');
+  onglet = signal<'appel' | 'recap' | 'reprise' | 'soir'>('appel');
+  // ── Garde du soir ──
+  gardeSoir = signal<{ actif: boolean; limite: string; facturation_a: string; tarif: number }>(
+    { actif: false, limite: '', facturation_a: '', tarif: 0 });
+  soirs = signal<SoirGarde[]>([]);
+  suggestions = signal<any[]>([]);
+  rechercheSoir = '';
+  heureSoir = '';
+  eleveSoir: any = null;
   date = signal(this.aujourdhui);
   mois = signal(new Date().getMonth() + 1);
   classe = signal('');
@@ -336,7 +421,71 @@ export class GarderieComponent implements OnInit {
     });
   }
 
+  ouvrirSoir() {
+    this.onglet.set('soir');
+    this.chargerSoir();
+  }
+
+  /** Réglages + soirs saisis pour la date choisie. */
+  chargerSoir() {
+    this.api.get<any>('/eleves/garde-soir/', { date: this.date() }).subscribe({
+      next: r => {
+        this.gardeSoir.set({ actif: r.actif, limite: r.limite, facturation_a: r.facturation_a, tarif: r.tarif });
+        this.soirs.set(r.soirs || []);
+      },
+      error: err => this.erreur.set(this.message(err)),
+    });
+  }
+
+  chercherEleve(q: string) {
+    this.eleveSoir = null;
+    if ((q || '').trim().length < 2) { this.suggestions.set([]); return; }
+    this.eleves.searchEleves(q.trim()).subscribe({
+      next: r => this.suggestions.set((r as any[]).slice(0, 8)),
+      error: () => this.suggestions.set([]),
+    });
+  }
+
+  choisirEleve(e: any) {
+    this.eleveSoir = e;
+    this.rechercheSoir = e.nom_complet;
+    this.suggestions.set([]);
+  }
+
+  enregistrerSoir() {
+    if (!this.eleveSoir || !this.heureSoir) return this.avertir('garderie.heure_requise');
+    this.saving.set(true);
+    this.api.post<any>('/eleves/garde-soir/', {
+      eleve: this.eleveSoir.id, date: this.date(), heure_depart: this.heureSoir }).subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('garderie.soir_enregistre'),
+                       detail: `${this.eleveSoir.nom_complet} — ${r.montant} FCFA` });
+        this.eleveSoir = null;
+        this.rechercheSoir = '';
+        this.chargerSoir();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'warn', summary: this.translate.instant('common.attention'), detail: this.message(err) });
+        this.chargerSoir();
+      },
+    });
+  }
+
+  retirerSoir(s: SoirGarde) {
+    this.api.delete<void>(`/eleves/garde-soir/?id=${s.id}`).subscribe({
+      next: () => this.chargerSoir(),
+      error: err => this.msg.add({ severity: 'error', summary: this.message(err) }),
+    });
+  }
+
+  private avertir(cle: string) {
+    this.msg.add({ severity: 'warn', summary: this.translate.instant(cle) });
+  }
+
   ngOnInit() {
+    this.chargerSoir();
     this.chargerReprise();
     this.eleves.getClasses().subscribe({
       next: res => this.classes.set((res as any).results || res || []),
