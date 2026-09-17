@@ -1269,8 +1269,10 @@ const MOIS_ANNEE = [
     </p-dialog>
 
     <!-- ══════════════════════ DIALOG NOUVEL ÉLÈVE ══════════════════════ -->
+    <!-- Large et responsive : la fiche porte bien plus de champs qu'avant
+         (professions, résidences, attitudes, champs de l'école). -->
     <p-dialog [header]="(editId ? 'eleves.modifier' : 'eleves.nouveau') | translate" [(visible)]="dialogVisible"
-              [modal]="true" [style]="{width:'480px'}" [draggable]="false">
+              [modal]="true" [style]="{width:'780px', maxWidth:'96vw'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
           <label>{{ 'eleves.nom_complet' | translate }} *</label>
@@ -1780,7 +1782,10 @@ const MOIS_ANNEE = [
     .aide-corps span { display:inline-flex; align-items:center; gap:6px; }
     ::ng-deep .filter-drop { min-width:160px; }
 
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
     .table-toolbar { display:flex; justify-content:space-between; align-items:center;
                      padding:12px 16px; border-bottom:1px solid var(--border); }
     .tbl-count { color:var(--text); font-weight:600; font-size:13px; }
@@ -1805,7 +1810,10 @@ const MOIS_ANNEE = [
     .success { color:#10b981; }
     .danger  { color:#ef4444; }
     .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
-    .btn-row { display:flex; gap:2px; }
+    /* Les actions passent à la ligne : huit boutons sur une seule ligne
+       poussaient le tableau hors de l'écran. */
+    .btn-row { display:flex; flex-wrap:wrap; gap:2px; justify-content:flex-end; max-width:190px; }
+    @media (max-width: 900px) { .btn-row { max-width:120px; } }
     .text-right { text-align:right; }
 
     /* Fiche */
@@ -1915,7 +1923,9 @@ const MOIS_ANNEE = [
     @media (max-width: 640px) { .mois-grille { grid-template-columns:repeat(2, 1fr); } }
 
     /* Formulaires */
-    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; }
+    @media (max-width: 560px) { .form-grid { grid-template-columns:1fr; } }
+    .form-grid > * { min-width:0; }
     .form-group { display:flex; flex-direction:column; gap:5px; }
     .form-group.full { grid-column:1/-1; }
     .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }

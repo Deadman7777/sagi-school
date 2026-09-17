@@ -298,7 +298,13 @@ def _soldes_canaux(tenant, exercice):
     }
     plan = get_plan_dict(tenant)
     canaux = []
-    for compte, libelle, cle in CANAUX_TRESORERIE:
+    # Caisses de service créées par l'école (garderie, cantine…) : elles sont
+    # des canaux comme les autres, sinon leur solde n'apparaîtrait nulle part.
+    from apps.comptabilite.models import CaisseEncaissement
+    supplementaires = [(c.no_compte, c.nom, None)
+                       for c in CaisseEncaissement.objects.filter(tenant=tenant, actif=True)
+                       if c.no_compte not in {x[0] for x in CANAUX_TRESORERIE}]
+    for compte, libelle, cle in list(CANAUX_TRESORERIE) + supplementaires:
         init = initiaux.get(cle, 0.0) if cle else 0.0
         canaux.append({
             'compte': compte,

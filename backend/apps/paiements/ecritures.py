@@ -13,7 +13,7 @@ from apps.comptabilite.tresorerie import lignes_tresorerie
 COMPTE_CREANCE_ORGANISME = '4112'
 
 
-def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False):
+def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False, caisse=None):
     """Rend les lignes d'écriture d'un règlement d'élève.
 
     `part_exercice` = frais de l'année en cours → constatation de la créance
@@ -46,7 +46,7 @@ def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False)
         ordre = 3
 
     compte_creance = COMPTE_CREANCE_ORGANISME if organisme else '411'
-    tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre)
+    tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre, caisse=caisse)
     ecritures += tresor
     ecritures.append(
         dict(ordre=ordre + len(tresor), no_compte=compte_creance,

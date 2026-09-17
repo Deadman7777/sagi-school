@@ -40,6 +40,61 @@ class JournalEntry(TenantModel):
         return f"{self.no_piece} — {self.libelle}"
 
 
+class CaisseEncaissement(TenantModel):
+    """Une caisse de l'école, avec son compte de trésorerie.
+
+    Les services extra (garderie, cantine, activités) sont encaissés à part de
+    la caisse principale : chaque caisse a son compte 571x, donc son solde, son
+    journal et son décompte. Sans cela, tout tombait sur « 571 Caisse » et il
+    fallait décompter à la main.
+
+    Le compte est créé dans le plan de l'école à l'enregistrement : les états,
+    les soldes par canal et les transferts internes le reconnaissent alors
+    comme les autres comptes de trésorerie.
+    """
+    nom       = models.CharField(max_length=100)
+    no_compte = models.CharField(max_length=10)
+    actif     = models.BooleanField(default=True)
+    ordre     = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'caisses_encaissement'
+        ordering = ['ordre', 'nom']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'no_compte'], name='uniq_caisse_compte_par_ecole'),
+            models.UniqueConstraint(fields=['tenant', 'nom'], name='uniq_caisse_nom_par_ecole'),
+        ]
+
+    def __str__(self):
+        return f"{self.nom} ({self.no_compte})"
+
+    @staticmethod
+    def prochain_compte(tenant):
+        """Prochain sous-compte de caisse libre.
+
+        571 est la caisse principale et 5715 la petite caisse du plan standard :
+        les caisses de service prennent 5716, 5717, 5718, 5719, puis 57120,
+        57121… Toutes restent des sous-comptes de 571, donc comptées dans la
+        caisse de l'école.
+        """
+        pris = set(CaisseEncaissement.objects.filter(tenant=tenant)
+                   .values_list('no_compte', flat=True))
+        pris |= set(CompteComptable.objects.filter(tenant=tenant, no_compte__startswith='571')
+                    .values_list('no_compte', flat=True))
+        candidats = [f'571{n}' for n in range(6, 10)] + [f'571{n}' for n in range(20, 100)]
+        for candidat in candidats:
+            if candidat not in pris:
+                return candidat
+        raise ValueError('Plus de compte de caisse disponible.')
+
+    def assurer_le_compte(self):
+        """Crée (ou renomme) le compte de cette caisse dans le plan de l'école."""
+        CompteComptable.objects.update_or_create(
+            tenant=self.tenant, no_compte=self.no_compte,
+            defaults={'libelle': self.nom, 'type': 'BILAN', 'classe': 5,
+                      'est_actif': self.actif, 'est_systeme': False})
+
+
 class CompteComptable(TenantModel):
     """Plan comptable SYSCOHADA Révisé paramétrable par établissement."""
     TYPE_CHOICES = [

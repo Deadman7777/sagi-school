@@ -1578,7 +1578,10 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
     .etafi-btn:hover  { background:rgba(0,212,170,0.05); color:var(--text); border-color:rgba(0,212,170,0.3); }
     .etafi-btn.active { background:rgba(0,212,170,0.12); color:#00d4aa; border-color:#00d4aa; font-weight:600; }
 
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
     .totaux-row td { background:var(--surface-2) !important; color:var(--text) !important; border-top:2px solid var(--border) !important; }
 
     .mono    { font-family:monospace; font-size:12px; }

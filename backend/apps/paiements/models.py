@@ -82,6 +82,11 @@ class Paiement(TenantModel):
     # Détail des services optionnels réglés dans ce paiement (itemisation reçu).
     # Ex. [{"nom": "Cantine", "montant": 10000}]. Le montant est inclus dans montant_divers.
     services_regles     = models.JSONField(default=list, blank=True)
+    # Caisse qui reçoit les espèces de ce règlement (garderie, cantine…).
+    # Vide = la caisse principale (571). Les autres modes gardent leur compte :
+    # un versement Wave n'entre pas dans une caisse en espèces.
+    caisse              = models.ForeignKey('comptabilite.CaisseEncaissement', null=True, blank=True,
+                                            on_delete=models.PROTECT, related_name='paiements')
     mode_paiement       = models.CharField(max_length=20, choices=MODE_CHOICES, default='ESPECE')
     # Ventilation du règlement sur plusieurs modes (multi-mode). Vide → règlement
     # simple via mode_paiement. Ex. [{"mode": "ESPECE", "montant": 30000},

@@ -3,6 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -67,7 +68,8 @@ interface LigneRecap {
 @Component({
   selector: 'app-garderie',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, DecimalPipe, FormsModule, RouterLink, ButtonModule, ToastModule, TranslateModule],
+  imports: [DatePipe, DecimalPipe, FormsModule, RouterLink, ButtonModule, DialogModule, ToastModule,
+            TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -143,8 +145,12 @@ interface LigneRecap {
                 <td class="mono">{{ s.heure_depart }}</td>
                 <td class="ta-r mono">{{ s.tranches }}</td>
                 <td class="ta-r mono bold">{{ s.montant | number:'1.0-0' }}</td>
-                <td class="ta-r"><p-button icon="pi pi-times" severity="danger" [text]="true" size="small"
-                                           (onClick)="retirerSoir(s)" /></td>
+                <td class="ta-r nowrap">
+                  <p-button size="small" icon="pi pi-wallet" [label]="'garderie.encaisser' | translate"
+                            (onClick)="ouvrirEncaissement(s.eleve, s.nom_complet, s.montant, moisDeLaDate())" />
+                  <p-button icon="pi pi-times" severity="danger" [text]="true" size="small"
+                            (onClick)="retirerSoir(s)" />
+                </td>
               </tr>
             } @empty {
               <tr><td colspan="5" class="vide">{{ 'garderie.aucun_soir' | translate }}</td></tr>
@@ -182,6 +188,42 @@ interface LigneRecap {
         }
       </div>
     }
+
+    <!-- Encaissement sur place : même chemin que le guichet (un seul calcul,
+         mêmes écritures, même reçu). -->
+    <p-dialog [header]="'garderie.encaisser_titre' | translate" [(visible)]="encaissementVisible"
+              [modal]="true" [style]="{ width: '440px', maxWidth: '95vw' }" [draggable]="false">
+      @if (encaissement) {
+        <div class="form-encaissement">
+          <div class="bold">{{ encaissement.nom_complet }}</div>
+          <label class="champ">
+            <span>{{ 'garderie.montant' | translate }}</span>
+            <input type="number" min="1" [(ngModel)]="encaissement.montant" />
+          </label>
+          <label class="champ">
+            <span>{{ 'garderie.mode' | translate }}</span>
+            <select [(ngModel)]="encaissement.mode">
+              @for (m of modes; track m.value) { <option [value]="m.value">{{ m.label }}</option> }
+            </select>
+          </label>
+          @if (caisses().length) {
+            <label class="champ">
+              <span>{{ 'garderie.caisse' | translate }}</span>
+              <select [(ngModel)]="encaissement.caisse">
+                <option [ngValue]="null">{{ 'garderie.caisse_principale' | translate }}</option>
+                @for (c of caisses(); track c.id) { <option [ngValue]="c.id">{{ c.nom }}</option> }
+              </select>
+            </label>
+          }
+          <small class="sous">{{ 'garderie.encaisser_aide' | translate:{ mois: nomMois(encaissement.mois) } }}</small>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" [text]="true" (onClick)="encaissementVisible = false" />
+        <p-button [label]="'garderie.encaisser' | translate" severity="success" [loading]="saving()"
+                  (onClick)="encaisser()" />
+      </ng-template>
+    </p-dialog>
 
     <div class="filtres" [hidden]="onglet() === 'reprise'">
       @if (onglet() === 'appel') {
@@ -278,6 +320,7 @@ interface LigneRecap {
               <th class="ta-r">{{ 'garderie.du' | translate }}</th>
               <th class="ta-r">{{ 'garderie.verse' | translate }}</th>
               <th class="ta-r">{{ 'garderie.reste' | translate }}</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -289,9 +332,15 @@ interface LigneRecap {
                 <td class="ta-r mono">{{ l.du | number:'1.0-0' }}</td>
                 <td class="ta-r mono">{{ l.paye | number:'1.0-0' }}</td>
                 <td class="ta-r mono bold" [class.rouge]="l.reste > 0">{{ l.reste | number:'1.0-0' }}</td>
+                <td class="ta-r">
+                  @if (l.reste > 0) {
+                    <p-button size="small" icon="pi pi-wallet" [label]="'garderie.encaisser' | translate"
+                              (onClick)="ouvrirEncaissement(l.eleve, l.nom_complet, l.reste, mois())" />
+                  }
+                </td>
               </tr>
             } @empty {
-              <tr><td colspan="6" class="vide">{{ 'garderie.aucun_enfant' | translate }}</td></tr>
+              <tr><td colspan="7" class="vide">{{ 'garderie.aucun_enfant' | translate }}</td></tr>
             }
           </tbody>
           @if (recap().length) {
@@ -301,6 +350,7 @@ interface LigneRecap {
                 <td class="ta-r mono bold">{{ recapTotaux().du | number:'1.0-0' }}</td>
                 <td class="ta-r mono bold">{{ recapTotaux().paye | number:'1.0-0' }}</td>
                 <td class="ta-r mono bold rouge">{{ recapTotaux().reste | number:'1.0-0' }}</td>
+                <td></td>
               </tr>
             </tfoot>
           }
@@ -352,6 +402,8 @@ interface LigneRecap {
     .aide { font-size:12px; color:var(--text-3); margin-top:10px; }
     .reprise-actions { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
     .suggestions { position:relative; }
+    .form-encaissement { display:flex; flex-direction:column; gap:10px; }
+    .nowrap { white-space:nowrap; }
     .suggestions button { display:block; width:100%; text-align:left; padding:6px 10px; font-size:13px;
       background:var(--surface); border:1px solid var(--border); border-top:0; color:var(--text); cursor:pointer; }
     .reprise-actions .champ input, .reprise-actions .champ select { min-width:110px; }
@@ -396,6 +448,76 @@ export class GarderieComponent implements OnInit {
     this.version();
     return this.enfants().some(e => (this.origine.get(e.eleve) ?? null) !== e.formule);
   });
+
+  // ── Encaissement sur place ───────────────────────────────────────────
+  caisses = signal<{ id: string; nom: string }[]>([]);
+  modes = [
+    { value: 'ESPECE', label: 'Espèces' },
+    { value: 'WAVE', label: 'Wave' },
+    { value: 'ORANGE_MONEY', label: 'Orange Money' },
+    { value: 'FREE_MONEY', label: 'Free Money' },
+    { value: 'VIREMENT', label: 'Virement' },
+    { value: 'CHEQUE', label: 'Chèque' },
+  ];
+  encaissementVisible = false;
+  encaissement: { eleve: string; nom_complet: string; montant: number; mois: number;
+                  mode: string; caisse: string | null } | null = null;
+
+  private chargerCaisses() {
+    this.api.get<any>('/comptabilite/caisses/', { actives: 1 }).subscribe({
+      next: r => this.caisses.set((r?.results || r || []) as any[]),
+      error: () => this.caisses.set([]),
+    });
+  }
+
+  /** Mois de la date affichée dans l'onglet « Garde du soir ». */
+  moisDeLaDate(): number {
+    return Number(this.date().slice(5, 7));
+  }
+
+  ouvrirEncaissement(eleve: string, nom_complet: string, montant: number, mois: number) {
+    this.encaissement = { eleve, nom_complet, montant: Math.round(montant), mois,
+                          mode: 'ESPECE', caisse: this.caisses()[0]?.id ?? null };
+    this.encaissementVisible = true;
+  }
+
+  /** Enregistre le règlement comme au guichet : mensualité du mois concerné,
+   *  d'où les mêmes écritures (créance, produit, trésorerie) et le même reçu. */
+  encaisser() {
+    const e = this.encaissement;
+    if (!e || !(e.montant > 0)) return this.avertir('garderie.montant_requis');
+    this.saving.set(true);
+    this.api.post<any>('/paiements/paiements/', {
+      eleve: e.eleve, montant_mensualite: e.montant, mois_regles: [e.mois],
+      mode_paiement: e.mode, caisse: e.caisse || null,
+    }).subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.encaissementVisible = false;
+        this.msg.add({ severity: 'success', summary: this.translate.instant('garderie.encaisse'),
+                       detail: `${e.nom_complet} — ${this.translate.instant('garderie.recu')} ${r.no_piece}` });
+        this.telechargerRecu(r.id);
+        this.chargerSoir();
+        if (this.onglet() === 'recap') this.chargerRecap();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'), detail: this.message(err) });
+      },
+    });
+  }
+
+  /** Reçu du règlement, au format ticket 80 mm. */
+  private telechargerRecu(paiementId: string) {
+    this.api.getBlob(`/paiements/paiements/${paiementId}/recu-pdf/?taille=80MM`).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () => {},
+    });
+  }
 
   aReprendre = signal<(LigneReprise & { montant: number; mois: number })[]>([]);
 
@@ -486,6 +608,7 @@ export class GarderieComponent implements OnInit {
 
   ngOnInit() {
     this.chargerSoir();
+    this.chargerCaisses();
     this.chargerReprise();
     this.eleves.getClasses().subscribe({
       next: res => this.classes.set((res as any).results || res || []),

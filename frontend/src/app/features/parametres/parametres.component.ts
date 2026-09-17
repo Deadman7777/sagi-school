@@ -56,6 +56,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'services'"
               (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'caisses'"
+              (click)="onglet.set('caisses'); chargerCaisses()">🧰 {{ 'parametres.caisses' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'fiche'"
               (click)="onglet.set('fiche'); chargerChampsFiche()">🗂️ {{ 'parametres.fiche_eleve' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'certificat'"
@@ -690,6 +692,47 @@ import { MessageService } from 'primeng/api';
     </div>
 
     <!-- ══ ONGLET CERTIFICAT ══ -->
+    <!-- ══ ONGLET CAISSES : une caisse par service extra ══ -->
+    <div *ngIf="onglet() === 'caisses'">
+      <div class="section-header-row">
+        <div class="fc-title" style="margin:0">🧰 {{ 'parametres.caisses_titre' | translate }}</div>
+        <p-button [label]="'parametres.ajouter_caisse' | translate" severity="success" size="small"
+                  (onClick)="ajouterCaisse()" />
+      </div>
+      <p style="font-size:12px;color:var(--text-3);margin:4px 0 12px">{{ 'parametres.caisses_aide' | translate }}</p>
+
+      <div class="sections-list">
+        <div class="section-card" *ngFor="let c of caisses(); let i = index">
+          <div class="sc-frais-grid">
+            <div class="sc-frais">
+              <span>{{ 'parametres.caisse_nom' | translate }}</span>
+              <input pInputText [(ngModel)]="c.nom" class="w-full" [placeholder]="'parametres.caisse_nom_ph' | translate" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.caisse_compte' | translate }}</span>
+              <input pInputText [(ngModel)]="c.no_compte" class="w-full" [placeholder]="'parametres.caisse_compte_ph' | translate" />
+              <small class="fc-hint">{{ 'parametres.caisse_compte_aide' | translate }}</small>
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.caisse_solde' | translate }}</span>
+              <div class="caisse-solde mono">{{ (c.solde || 0) | number:'1.0-0' }} FCFA</div>
+              <label class="case-service"><input type="checkbox" [(ngModel)]="c.actif" />
+                {{ 'parametres.champ_actif' | translate }}</label>
+            </div>
+          </div>
+          <div class="sc-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
+                      [loading]="saving()" (onClick)="enregistrerCaisse(c)" />
+            <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
+                      (onClick)="supprimerCaisse(c, i)" />
+          </div>
+        </div>
+        <div *ngIf="caisses().length === 0" style="color:var(--text-3);font-size:13px;padding:8px">
+          {{ 'parametres.caisses_vide' | translate }}
+        </div>
+      </div>
+    </div>
+
     <!-- ══ ONGLET FICHE ÉLÈVE : champs ajoutés par l'école ══ -->
     <div *ngIf="onglet() === 'fiche'">
       <div class="section-header-row">
@@ -1368,6 +1411,7 @@ import { MessageService } from 'primeng/api';
       font-size:13px; color:var(--text-2); display:flex; flex-direction:column; gap:4px; }
     .regroup-alerte { color:#f59e0b; }
     .regroup-ok { color:#10b981; }
+    .caisse-solde { font-size:14px; font-weight:600; color:#00d4aa; padding:6px 0; }
     .word-champs { font-size:12px; color:#10b981; margin:8px 0; }
     .case-service { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); margin-top:6px; white-space:nowrap; }
     .mode-tarif { display:flex; gap:4px; }
@@ -1451,7 +1495,10 @@ import { MessageService } from 'primeng/api';
     .sc-total { font-size:16px; font-weight:700; color:#00d4aa; font-family:monospace; padding:8px 0; }
     .sc-actions { display:flex; justify-content:flex-end; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
 
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
 
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
@@ -1703,6 +1750,52 @@ export class ParametresComponent implements OnInit {
       .map(r => ({ libelle: r.libelle.trim(), montant: +r.montant || 0, premiere_fois: !!r.premiere_fois }));
     this.adhesionDialogVisible = false;
     this.sauvegarderService(this.serviceAdhesion);
+  }
+
+  // ── Caisses de l'école ──────────────────────────────────────────────
+  caisses = signal<any[]>([]);
+
+  chargerCaisses() {
+    this.api.get<any>('/comptabilite/caisses/').subscribe({
+      next: r => this.caisses.set(((r?.results || r || []) as any[]).map(c => ({ ...c }))),
+      error: () => {},
+    });
+  }
+
+  ajouterCaisse() {
+    this.caisses.update(l => [...l, { nom: '', no_compte: '', actif: true, ordre: l.length, solde: 0 }]);
+  }
+
+  enregistrerCaisse(c: any) {
+    this.saving.set(true);
+    const corps = { nom: c.nom, no_compte: c.no_compte || undefined, actif: !!c.actif, ordre: c.ordre || 0 };
+    const requete = c.id ? this.api.patch<any>(`/comptabilite/caisses/${c.id}/`, corps)
+                         : this.api.post<any>('/comptabilite/caisses/', corps);
+    requete.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: c.nom });
+        this.chargerCaisses();
+      },
+      error: err => {
+        this.saving.set(false);
+        const e = err?.error;
+        const detail: any = e && typeof e === 'object'
+          ? [].concat(...Object.values(e) as any[]).filter(Boolean)[0] : null;
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: detail || this.translate.instant('parametres.sauvegarde_echouee') });
+      },
+    });
+  }
+
+  supprimerCaisse(c: any, i: number) {
+    if (!c.id) { this.caisses.update(l => l.filter((_, j) => j !== i)); return; }
+    if (!confirm(`${this.translate.instant('parametres.caisse_confirm_suppr')}\n« ${c.nom} »`)) return;
+    this.api.delete<any>(`/comptabilite/caisses/${c.id}/`).subscribe({
+      next: () => this.chargerCaisses(),
+      error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                                   detail: err?.error?.error || '' }),
+    });
   }
 
   // ── Champs de la fiche élève ────────────────────────────────────────

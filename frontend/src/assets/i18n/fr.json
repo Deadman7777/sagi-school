@@ -445,7 +445,9 @@
     "inclure_premier_mois": "Inclure le premier mois ({{mois}}) dans l'inscription",
     "reste_mois": "reste",
     "premiere_adhesion": "{{service}} : première adhésion (équipement dû)",
-    "premiere_adhesion_aide": "Décochez si l'enfant a déjà adhéré les années passées. Coché et non payé, l'équipement reste dû et sera réclamé aux prochains paiements."
+    "premiere_adhesion_aide": "Décochez si l'enfant a déjà adhéré les années passées. Coché et non payé, l'équipement reste dû et sera réclamé aux prochains paiements.",
+    "caisse": "Caisse (espèces)",
+    "caisse_principale": "Caisse principale"
   },
   "parametres": {
     "title": "Paramètres",
@@ -707,7 +709,19 @@
     "champ_confirm_suppr_renseigne": "Ce champ est renseigné sur {{n}} fiche(s). Les réponses seront perdues. Supprimer ?",
     "modules_utilisateur": "Modules ouverts à cet utilisateur",
     "modules_defaut_role": "Par défaut : ceux de son rôle",
-    "modules_aide": "Laissez vide pour appliquer les modules du rôle. La licence de l'école reste le plafond."
+    "modules_aide": "Laissez vide pour appliquer les modules du rôle. La licence de l'école reste le plafond.",
+    "caisses": "Caisses",
+    "caisses_titre": "Caisses de l’établissement",
+    "caisses_aide": "Une caisse par service extra (garderie, cantine, activités) : son solde, son journal et son décompte sont séparés de la caisse principale. Le compte est créé dans votre plan comptable.",
+    "ajouter_caisse": "Ajouter une caisse",
+    "caisse_nom": "Nom de la caisse",
+    "caisse_nom_ph": "Ex. Caisse garderie",
+    "caisse_compte": "Compte de trésorerie",
+    "caisse_compte_ph": "Laisser vide : proposé (5716, 5717…)",
+    "caisse_compte_aide": "Sous-compte de 571 : il entre dans la caisse de l’école.",
+    "caisse_solde": "Solde courant",
+    "caisses_vide": "Aucune caisse spécifique : tout entre dans la caisse principale.",
+    "caisse_confirm_suppr": "Supprimer cette caisse ?"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

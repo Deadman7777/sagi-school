@@ -1,13 +1,19 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 from .views import (JournalView, GrandLivreView, BalanceView,
                     CompteResultatView, BilanView,
                     TableauFluxView, HistoriqueExercicesView, ChargeView,
                     NotesAnnexesView, PlanComptableView, BudgetView,
                     BudgetComptabiliserView, ImmobilisationView, AmortirView,
-                    ReglerImmobilisationView, ImportChargesView)
+                    ReglerImmobilisationView, ImportChargesView,
+                    CaisseEncaissementViewSet)
 from .pdf_views import ExportPDFView
 
+router = DefaultRouter()
+router.register('caisses', CaisseEncaissementViewSet, basename='caisse')
+
 urlpatterns = [
+    path('', include(router.urls)),
     path('journal/',            JournalView.as_view()),
     path('grand-livre/',        GrandLivreView.as_view()),
     path('balance/',            BalanceView.as_view()),

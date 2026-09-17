@@ -3,11 +3,12 @@ from django.db.models.functions import ExtractMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status as drf_status
+from rest_framework import status as drf_status, serializers, viewsets
 from apps.paiements.models import Exercice, Paiement
 from apps.eleves.models import Eleve
 from core.tenant import get_tenant
-from .models import JournalEntry, CompteComptable, BudgetLigne, Immobilisation
+from .models import (BudgetLigne, CaisseEncaissement, CompteComptable, Immobilisation,
+                     JournalEntry)
 from django.utils import timezone
 
 
@@ -211,6 +212,73 @@ PLAN_COMPTABLE = {
     '851':   'Dotations aux provisions réglementées',
     '861':   'Reprises de provisions réglementées',
 }
+
+
+class CaisseEncaissementSerializer(serializers.ModelSerializer):
+    """Une caisse de l'école. Le compte est proposé par le serveur (571x) mais
+    reste modifiable : une école qui a son propre plan garde la main."""
+    solde = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = CaisseEncaissement
+        fields = ['id', 'nom', 'no_compte', 'actif', 'ordre', 'solde']
+        extra_kwargs = {'no_compte': {'required': False}}
+
+    def get_solde(self, obj):
+        """Solde courant de la caisse : débits − crédits au journal de l'exercice."""
+        exercice = Exercice.objects.filter(tenant=obj.tenant, cloture=False).order_by('-date_debut').first()
+        if exercice is None:
+            return 0.0
+        agg = JournalEntry.objects.filter(tenant=obj.tenant, exercice=exercice,
+                                          no_compte=obj.no_compte).aggregate(d=Sum('debit'), c=Sum('credit'))
+        return round(float(agg['d'] or 0) - float(agg['c'] or 0), 2)
+
+    def validate(self, attrs):
+        nom = str(attrs.get('nom', getattr(self.instance, 'nom', '')) or '').strip()
+        if not nom:
+            raise serializers.ValidationError({'nom': 'Donnez un nom à la caisse.'})
+        attrs['nom'] = nom
+        tenant = get_tenant(self.context['request'])
+        compte = str(attrs.get('no_compte') or getattr(self.instance, 'no_compte', '') or '').strip()
+        if not compte:
+            compte = CaisseEncaissement.prochain_compte(tenant)
+        if not compte.startswith('57'):
+            raise serializers.ValidationError(
+                {'no_compte': "Un compte de caisse commence par 57 (trésorerie SYSCOHADA)."})
+        attrs['no_compte'] = compte
+        return attrs
+
+
+class CaisseEncaissementViewSet(viewsets.ModelViewSet):
+    """Caisses de l'école (Paramètres → Caisses).
+
+    Chaque caisse porte son compte de trésorerie, créé dans le plan de l'école
+    à l'enregistrement. Une caisse qui a déjà reçu un règlement ne se supprime
+    pas : son solde et son journal en dépendent — on la désactive.
+    """
+    serializer_class   = CaisseEncaissementSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = CaisseEncaissement.objects.filter(tenant=get_tenant(self.request))
+        if self.request.query_params.get('actives'):
+            qs = qs.filter(actif=True)
+        return qs
+
+    def perform_create(self, serializer):
+        caisse = serializer.save(tenant=get_tenant(self.request))
+        caisse.assurer_le_compte()
+
+    def perform_update(self, serializer):
+        caisse = serializer.save()
+        caisse.assurer_le_compte()
+
+    def destroy(self, request, *args, **kwargs):
+        caisse = self.get_object()
+        if caisse.paiements.exists():
+            return Response({'error': f"La caisse « {caisse.nom} » a déjà reçu des règlements : "
+                                      "désactivez-la plutôt que de la supprimer."}, status=409)
+        return super().destroy(request, *args, **kwargs)
 
 
 def get_plan_dict(tenant):

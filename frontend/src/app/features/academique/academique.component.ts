@@ -713,7 +713,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .eval-card.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
     .ec-titre { font-size:13px; font-weight:600; color:var(--text); }
     .ec-info  { font-size:11px; color:var(--text-3); margin-top:4px; }
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
     .mono  { font-family:monospace; font-size:12px; }

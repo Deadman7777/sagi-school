@@ -17,6 +17,7 @@ class ExerciceSerializer(serializers.ModelSerializer):
 
 class PaiementSerializer(serializers.ModelSerializer):
     total     = serializers.ReadOnlyField()
+    caisse_nom = serializers.CharField(source='caisse.nom', read_only=True, default='')
     # Part « frais de l'année » : total − reliquat antérieur. C'est elle qui
     # constate un produit 706 (voir apps.paiements.ecritures).
     total_exercice = serializers.ReadOnlyField()
@@ -26,6 +27,19 @@ class PaiementSerializer(serializers.ModelSerializer):
     # un règlement des parents.
     organisme_nom = serializers.CharField(source='organisme.nom', read_only=True,
                                           default='')
+
+    def validate_caisse(self, caisse):
+        """Une caisse d'une AUTRE école n'existe pas pour ce règlement."""
+        if caisse is None:
+            return caisse
+        from core.tenant import get_tenant
+        request = self.context.get('request')
+        tenant = get_tenant(request) if request is not None else None
+        if tenant is not None and caisse.tenant_id != tenant.id:
+            raise serializers.ValidationError('Caisse inconnue.')
+        if not caisse.actif:
+            raise serializers.ValidationError(f"La caisse « {caisse.nom} » est désactivée.")
+        return caisse
 
     class Meta:
         model  = Paiement

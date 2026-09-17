@@ -533,7 +533,10 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
     .filtres { display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
     .f-recherche { min-width:240px; margin-left:auto; }
 
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
     .mono { font-family:monospace; font-size:12px; }
     .bold { font-weight:600; color:var(--text); }
     .sous { font-size:11px; color:var(--text-3); }

@@ -133,7 +133,12 @@ def soirs_du_jour(tenant, jour):
 
 
 def recap_du_mois(tenant, mois):
-    """Par enfant : soirs, tranches et montant du mois."""
+    """Par enfant : soirs, tranches et montant du mois, et ce qui reste dû.
+
+    Le reste vient de l'échéancier, la même source que la fiche et le guichet :
+    l'école encaisse sur place, elle doit voir ici ce qu'il reste à prendre.
+    """
+    from .echeancier import construire_echeancier
     from .tri import cle_nom
     exercice = _exercice(tenant)
     if exercice is None:
@@ -149,6 +154,15 @@ def recap_du_mois(tenant, mois):
         l['tranches'] += g.tranches
         l['montant'] += float(g.montant)
         noms[g.eleve_id] = g.eleve.nom_complet
-    enfants = sorted(({'eleve': str(eid), 'nom_complet': noms[eid], **v} for eid, v in lignes.items()),
-                     key=lambda x: cle_nom(x['nom_complet']))
-    return {'mois': int(mois), 'enfants': enfants, 'total': round(sum(e['montant'] for e in enfants), 2)}
+    enfants = []
+    for eid, valeurs in lignes.items():
+        eleve = Eleve.objects.select_related('section', 'exercice', 'tenant', 'classe').get(pk=eid)
+        ligne = next((l for l in construire_echeancier(eleve)['lignes'] if l['mois'] == int(mois)), None)
+        enfants.append({'eleve': str(eid), 'nom_complet': noms[eid], **valeurs,
+                        'du_mois': ligne['du'] if ligne else 0.0,
+                        'paye_mois': ligne['paye'] if ligne else 0.0,
+                        'reste_mois': ligne['reste'] if ligne else 0.0})
+    enfants.sort(key=lambda x: cle_nom(x['nom_complet']))
+    return {'mois': int(mois), 'enfants': enfants,
+            'total': round(sum(e['montant'] for e in enfants), 2),
+            'total_reste': round(sum(e['reste_mois'] for e in enfants), 2)}

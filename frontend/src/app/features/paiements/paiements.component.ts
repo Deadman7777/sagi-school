@@ -20,6 +20,7 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ApiService } from '../../core/services/api.service';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ImportChargesDialogComponent } from './import-charges-dialog.component';
 import { CahierMensuelComponent } from './cahier-mensuel.component';
@@ -704,6 +705,17 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
             </small>
           </div>
 
+          <!-- Caisse qui reçoit les espèces : une école qui tient une caisse
+               par service (garderie, cantine) choisit ici où l'argent entre.
+               Les autres modes gardent leur compte. -->
+          @if (caisses().length) {
+            <div class="form-group" style="margin-bottom:10px">
+              <label>{{ 'paiements.caisse' | translate }}</label>
+              <p-select appendTo="body" [options]="caisses()" [(ngModel)]="form.caisse" optionLabel="nom"
+                        optionValue="id" [showClear]="true"
+                        [placeholder]="'paiements.caisse_principale' | translate" styleClass="w-full" />
+            </div>
+          }
           <!-- Date du règlement. Volontairement VIDE par défaut : le serveur
                pose alors « aujourd'hui », exactement comme avant. La remplir
                sert au cas qu'on ne savait pas traiter — enregistrer le
@@ -1086,7 +1098,10 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
     .mode-x:disabled { opacity:.4; cursor:not-allowed; }
     .mode-add   { background:transparent; border:1px dashed var(--border); color:#4fc3f7; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
 
-    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+                  /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
+                     Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
+                  overflow-x:auto; }
 
     ::ng-deep .p-datatable .p-datatable-thead > tr > th { background:var(--surface-2) !important; color:var(--text-3) !important; font-size:11px !important; text-transform:uppercase !important; border-color:var(--border) !important; }
     ::ng-deep .p-datatable .p-datatable-tbody > tr { background:var(--surface) !important; color:var(--text-2) !important; border-bottom:1px solid rgba(42,63,95,0.4) !important; }
@@ -1313,6 +1328,8 @@ export class PaiementsComponent implements OnInit {
     // totalForm() (qui somme tous les champs montant_*) et donc dans la
     // ventilation multi-mode, puisqu'elle est bien encaissée.
     montant_reliquat:    0,
+    // Caisse qui reçoit les espèces (null = caisse principale).
+    caisse:              null as string | null,
     mois_regles:         [] as number[],
     // `du` = ce que le service coûte dans ce contexte (tarif × mois cochés pour
     // un service mensuel) ; `montant` = ce qu'on en encaisse. Deux champs, parce
@@ -1362,6 +1379,7 @@ export class PaiementsComponent implements OnInit {
       { label: this.translate.instant('paiements.virement'),     value: 'VIREMENT' },
       { label: this.translate.instant('paiements.cheque'),       value: 'CHEQUE' },
     ];
+    this.chargerCaisses();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
     const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
     if (ongletDemande === 'cahier' || ongletDemande === 'charges') this.onglet.set(ongletDemande);
@@ -1868,7 +1886,8 @@ export class PaiementsComponent implements OnInit {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
       montant_reliquat: 0,
-      mois_regles: [], services: [], inclure_premier_mois: false, mode_paiement: this.form.mode_paiement || '',
+      mois_regles: [], services: [], inclure_premier_mois: false, caisse: this.form.caisse || null,
+      mode_paiement: this.form.mode_paiement || '',
       multi_mode: false, modes_reglement: [], observations: '',
       // Le payeur n'est PAS conservé d'une saisie à l'autre, contrairement au
       // mode : enchaîner deux reçus et attribuer le second à l'organisme par
@@ -1891,6 +1910,17 @@ export class PaiementsComponent implements OnInit {
     return Object.entries(this.modifForm)
       .filter(([k]) => k.startsWith('montant_'))
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+  }
+
+  // ── Caisses de l'école (espèces d'un service extra) ──────────────────
+  caisses = signal<{ id: string; nom: string }[]>([]);
+  private apiCaisses = inject(ApiService);
+
+  private chargerCaisses() {
+    this.apiCaisses.get<any>('/comptabilite/caisses/', { actives: 1 }).subscribe({
+      next: r => this.caisses.set((r?.results || r || []) as any[]),
+      error: () => this.caisses.set([]),
+    });
   }
 
   // ── Paiement multi-mode ────────────────────────────────────────────────
@@ -1972,6 +2002,7 @@ export class PaiementsComponent implements OnInit {
         : [],
       observations:        this.form.observations,
       organisme:           this.form.organisme || null,
+      caisse:              this.form.caisse || null,
       // Absent du corps quand l'utilisateur n'a rien saisi : c'est le défaut
       // du modèle (aujourd'hui) qui s'applique, et le contrôle d'exercice
       // côté serveur ne se déclenche pas.

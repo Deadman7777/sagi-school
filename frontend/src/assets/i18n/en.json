@@ -445,7 +445,9 @@
     "inclure_premier_mois": "Include the first month ({{mois}}) with enrolment",
     "reste_mois": "remaining",
     "premiere_adhesion": "{{service}}: first membership (equipment due)",
-    "premiere_adhesion_aide": "Untick if the child already joined in previous years. Ticked and unpaid, the equipment stays due and will be claimed at the next payments."
+    "premiere_adhesion_aide": "Untick if the child already joined in previous years. Ticked and unpaid, the equipment stays due and will be claimed at the next payments.",
+    "caisse": "Cash box",
+    "caisse_principale": "Main cash box"
   },
   "parametres": {
     "title": "Settings",
@@ -707,7 +709,19 @@
     "champ_confirm_suppr_renseigne": "This field is filled on {{n}} record(s). The answers will be lost. Delete?",
     "modules_utilisateur": "Modules open to this user",
     "modules_defaut_role": "Default: those of their role",
-    "modules_aide": "Leave empty to use the role's modules. The school licence remains the ceiling."
+    "modules_aide": "Leave empty to use the role's modules. The school licence remains the ceiling.",
+    "caisses": "Cash boxes",
+    "caisses_titre": "School cash boxes",
+    "caisses_aide": "One cash box per extra service (day care, canteen, activities): its balance, ledger and counting stay separate from the main box. The account is created in your chart of accounts.",
+    "ajouter_caisse": "Add a cash box",
+    "caisse_nom": "Cash box name",
+    "caisse_nom_ph": "E.g. Day-care box",
+    "caisse_compte": "Treasury account",
+    "caisse_compte_ph": "Leave empty: suggested (5716, 5717…)",
+    "caisse_compte_aide": "Sub-account of 571: it counts in the school cash.",
+    "caisse_solde": "Current balance",
+    "caisses_vide": "No specific cash box: everything goes to the main one.",
+    "caisse_confirm_suppr": "Delete this cash box?"
   },
   "cloture": {
     "title": "Year Closing",

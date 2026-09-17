@@ -178,7 +178,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
         # elle, ne constate aucun produit (déjà comptabilisé l'année d'origine).
         ecritures = lignes_paiement(
             montant, float(paiement.total_exercice), ventilation, libelle,
-            organisme=bool(paiement.organisme_id))
+            organisme=bool(paiement.organisme_id),
+            # Espèces d'un service extra : elles entrent dans SA caisse.
+            caisse=paiement.caisse)
 
         for e in ecritures:
             JournalEntry.objects.create(
@@ -629,7 +631,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
         libelle_new = f"{paiement.eleve.nom_complet} - {no_piece_new}"
         ecritures_new = lignes_paiement(nouveau_total, part_exercice,
                                         ventilation, libelle_new,
-                                        organisme=bool(nouveau.organisme_id))
+                                        organisme=bool(nouveau.organisme_id),
+                                        caisse=nouveau.caisse)
         for e in ecritures_new:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,

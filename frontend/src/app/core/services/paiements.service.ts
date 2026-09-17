@@ -27,6 +27,9 @@ export interface Paiement {
   // qu'il prend en charge : le versement solde SA créance, pas celle de la
   // famille, et l'alerte de l'élève n'en tient pas compte.
   organisme?: string | null;
+  // Caisse qui reçoit les espèces (garderie, cantine…). null = caisse principale.
+  caisse?: string | null;
+  caisse_nom?: string;
   organisme_nom?: string;
   total?: number;
   statut?: 'ACTIF' | 'ANNULE';

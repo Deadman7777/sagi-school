@@ -28,9 +28,17 @@ MODE_DEFAUT = 'ESPECE'
 _EPS = Decimal('0.01')
 
 
-def compte_du_mode(mode):
-    """(compte, libellé) du mode, avec repli sur la caisse si mode inconnu."""
-    return COMPTE_MODE.get(mode, COMPTE_MODE[MODE_DEFAUT])
+def compte_du_mode(mode, caisse=None):
+    """(compte, libellé) du mode, avec repli sur la caisse si mode inconnu.
+
+    `caisse` : caisse de l'école qui reçoit les ESPÈCES (garderie, cantine…).
+    Elle ne change rien aux autres modes — un versement Wave n'entre pas dans
+    une caisse en espèces.
+    """
+    compte, libelle = COMPTE_MODE.get(mode, COMPTE_MODE[MODE_DEFAUT])
+    if caisse is not None and compte == COMPTE_MODE['ESPECE'][0]:
+        return (caisse.no_compte, caisse.nom)
+    return (compte, libelle)
 
 
 def normaliser_ventilation(modes_reglement, total, mode_simple=None):
@@ -76,7 +84,7 @@ def normaliser_ventilation(modes_reglement, total, mode_simple=None):
     return lignes
 
 
-def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1):
+def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1, caisse=None):
     """Construit les dict d'écriture de la jambe de trésorerie.
 
     - `ventilation` : sortie de `normaliser_ventilation`.
@@ -92,7 +100,7 @@ def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1):
 
     lignes = []
     for i, v in enumerate(ventilation):
-        compte, lib_compte = compte_du_mode(v['mode'])
+        compte, lib_compte = compte_du_mode(v['mode'], caisse)
         montant = float(v['montant'])
         lignes.append(dict(
             ordre=ordre_debut + i,
@@ -128,11 +136,18 @@ def soldes_cloture(exercice):
     from django.db.models import Sum
     from .models import JournalEntry
 
-    comptes = [c for postes in POSTES_TRESORERIE.values() for c in postes]
+    # Préfixes, et non liste exacte : les caisses de service (5716, 5717…) et
+    # les sous-comptes bancaires appartiennent à leur poste. Les compter à
+    # l'identique laissait leur solde hors de la trésorerie de l'école.
+    from django.db.models import Q
+    filtre = Q()
+    for postes in POSTES_TRESORERIE.values():
+        for prefixe in postes:
+            filtre |= Q(no_compte__startswith=prefixe)
     mouvements = {
         b['no_compte']: float(b['d'] or 0) - float(b['c'] or 0)
         for b in JournalEntry.objects
-        .filter(tenant=exercice.tenant, exercice=exercice, no_compte__in=comptes)
+        .filter(filtre, tenant=exercice.tenant, exercice=exercice)
         .values('no_compte').annotate(d=Sum('debit'), c=Sum('credit'))
     }
 
@@ -143,7 +158,8 @@ def soldes_cloture(exercice):
     }
 
     soldes = {
-        poste: ouverture[poste] + sum(mouvements.get(c, 0.0) for c in comptes_poste)
+        poste: ouverture[poste] + sum(montant for compte, montant in mouvements.items()
+                                       if compte.startswith(tuple(comptes_poste)))
         for poste, comptes_poste in POSTES_TRESORERIE.items()
     }
     soldes['total'] = sum(soldes.values())
