@@ -386,7 +386,13 @@
     "tri_ecole_alpha": "Whole school — alphabetical",
     "tri_classe_matricule": "By class — seniority",
     "tri_section_matricule": "By section — seniority",
-    "tri_ecole_matricule": "Whole school — seniority"
+    "tri_ecole_matricule": "Whole school — seniority",
+    "profession_pere": "Father's occupation",
+    "residence_pere": "Father's residence",
+    "profession_mere": "Mother's occupation",
+    "residence_mere": "Mother's residence",
+    "attitudes": "Particular behaviours to report",
+    "attitudes_ph": "E.g. very shy, does not eat alone, afraid of noise…"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -682,7 +688,26 @@
     "garde_soir_facturation_a": "Billing starts at",
     "garde_soir_tolerance_aide": "Before this time nothing is billed (grace period).",
     "garde_soir_tarif": "Rate per slot",
-    "garde_soir_exemple": "Example: cut-off {{limite}}, billing from {{facturation}} — leaving at 6:00 pm: {{tarif}}; at 6:15 or 7:00 pm: {{tarif}} × 2."
+    "garde_soir_exemple": "Example: cut-off {{limite}}, billing from {{facturation}} — leaving at 6:00 pm: {{tarif}}; at 6:15 or 7:00 pm: {{tarif}} × 2.",
+    "fiche_eleve": "Student record",
+    "champs_titre": "Fields added by the school",
+    "champs_aide": "Add to the student record the information specific to your school. It appears in the form, on the record and in the PDF.",
+    "ajouter_champ": "Add a field",
+    "champ_libelle": "Field name",
+    "champ_type": "Type",
+    "champ_groupe": "Record section",
+    "champ_options": "Choices (comma separated)",
+    "champ_options_ph": "Shuttle, On foot, Car",
+    "champ_reglages": "Settings",
+    "champ_obligatoire": "Required",
+    "champ_actif": "Active",
+    "champ_renseignes": "Filled on {{n}} record(s)",
+    "champs_vide": "No field added yet.",
+    "champ_confirm_suppr": "Delete this field?",
+    "champ_confirm_suppr_renseigne": "This field is filled on {{n}} record(s). The answers will be lost. Delete?",
+    "modules_utilisateur": "Modules open to this user",
+    "modules_defaut_role": "Default: those of their role",
+    "modules_aide": "Leave empty to use the role's modules. The school licence remains the ceiling."
   },
   "cloture": {
     "title": "Year Closing",

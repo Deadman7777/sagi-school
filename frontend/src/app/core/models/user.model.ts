@@ -7,6 +7,8 @@ export interface User {
   tenant?: string;
   type_licence?: string;
   modules?: string[];
+  /** Vrai quand l'école a choisi les modules de CET utilisateur. */
+  modules_perso?: boolean;
 }
 
 export interface AuthTokens {

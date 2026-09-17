@@ -33,6 +33,7 @@ export class AuthService {
           role: payload.role, tenant: payload.tenant_id,
           type_licence: payload.type_licence || null,
           modules: payload.modules || [],
+          modules_perso: !!payload.modules_perso,
         };
         localStorage.setItem('user',      JSON.stringify(user));
         localStorage.setItem('tenant_id', payload.tenant_id || '');

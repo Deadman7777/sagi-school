@@ -72,6 +72,14 @@ export interface Eleve {
   // Services optionnels (IDs de services auxquels l'élève est abonné)
   /** « GUEYE Moustapha » : clé du tri alphabétique (nom de famille, prénoms). */
   nom_tri?: string;
+  profession_pere?: string;
+  residence_pere?: string;
+  profession_mere?: string;
+  residence_mere?: string;
+  /** Attitudes particulières à signaler chez l'enfant. */
+  attitudes_particulieres?: string;
+  /** Réponses aux champs que l'école a ajoutés : {champ_id: valeur}. */
+  champs_perso?: Record<string, any>;
   abonnements: string[];
   /** Pour chaque service : première adhésion (équipement dû) ou non. */
   abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean }[];

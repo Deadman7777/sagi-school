@@ -36,6 +36,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     email     = models.EmailField(unique=True)
     role      = models.CharField(max_length=20, choices=ROLE_CHOICES, default='LECTEUR')
     actif     = models.BooleanField(default=True)
+    # Modules ouverts à CET utilisateur, au-delà de son rôle : ['eleves',
+    # 'paiements', 'academique']. Vide = les modules de son rôle. L'école
+    # compose ainsi les accès de son personnel ; la licence reste le plafond.
+    modules_autorises = models.JSONField(default=list, blank=True)
     is_staff  = models.BooleanField(default=False)
     derniere_connexion = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

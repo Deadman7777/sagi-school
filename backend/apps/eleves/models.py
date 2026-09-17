@@ -133,8 +133,14 @@ class Eleve(TenantModel):
     lieu_naissance        = models.CharField(max_length=200, blank=True)
     nom_pere              = models.CharField(max_length=200, blank=True)
     telephone_pere        = models.CharField(max_length=20, blank=True)
+    profession_pere       = models.CharField(max_length=150, blank=True)
+    # Résidence actuelle du parent : elle diffère souvent de l'adresse de la
+    # famille (père en déplacement, parents séparés).
+    residence_pere        = models.CharField(max_length=200, blank=True)
     nom_mere              = models.CharField(max_length=200, blank=True)
     telephone_mere        = models.CharField(max_length=20, blank=True)
+    profession_mere       = models.CharField(max_length=150, blank=True)
+    residence_mere        = models.CharField(max_length=200, blank=True)
     # Tuteur — peut différer des parents (famille d'accueil, oncle, marabout…)
     nom_tuteur            = models.CharField(max_length=200, blank=True)
     telephone_tuteur      = models.CharField(max_length=20, blank=True)
@@ -145,6 +151,14 @@ class Eleve(TenantModel):
                                              default='SAIN', blank=True)
     observations_sante    = models.TextField(blank=True,
                                              help_text='Allergies, maladies chroniques, traitements en cours…')
+    # Ce que l'école doit savoir du comportement de l'enfant pour l'accueillir
+    # correctement : timidité, agitation, peurs, besoins d'attention…
+    attitudes_particulieres = models.TextField(
+        blank=True, help_text="Attitudes particulières à signaler chez l'enfant")
+    # Réponses aux champs que l'ÉCOLE a ajoutés elle-même ({champ_id: valeur}) :
+    # chaque établissement a ses réalités, et la fiche standard ne peut pas les
+    # porter toutes sans devenir illisible. Voir ChampFiche.
+    champs_perso          = models.JSONField(default=dict, blank=True)
     date_inscription      = models.DateField(default=datetime.date.today,
                                               help_text="Date d'entrée — sert au prorata des mensualités dues")
     # Jour d'inscription inconnu (données historiques) : la date est stockée au
@@ -865,6 +879,48 @@ class PresenceGarderie(TenantModel):
 
     def __str__(self):
         return f"{self.eleve} — {self.date:%d/%m/%Y} ({self.get_formule_display()})"
+
+
+class ChampFiche(TenantModel):
+    """Un champ ajouté par l'école à la fiche élève.
+
+    La fiche standard ne peut pas porter les réalités de toutes les écoles sans
+    devenir illisible : chacune ajoute donc ses propres champs (« Quartier »,
+    « École précédente », « Navette »…), qui apparaissent dans la fiche, dans le
+    formulaire et sur le PDF. Les réponses vivent dans `Eleve.champs_perso`.
+    """
+    TYPE_CHOICES = [
+        ('TEXTE',      'Texte court'),
+        ('TEXTE_LONG', 'Texte long'),
+        ('NOMBRE',     'Nombre'),
+        ('DATE',       'Date'),
+        ('LISTE',      'Liste de choix'),
+        ('OUI_NON',    'Oui / Non'),
+    ]
+    GROUPE_CHOICES = [
+        ('IDENTITE', "Identité de l'élève"),
+        ('PARENTS',  'Parents et tuteur'),
+        ('SANTE',    'Santé et comportement'),
+        ('AUTRE',    'Autres informations'),
+    ]
+    libelle     = models.CharField(max_length=120)
+    type_champ  = models.CharField(max_length=12, choices=TYPE_CHOICES, default='TEXTE')
+    # Choix proposés quand type_champ = LISTE : ["Oui", "Non", "Parfois"]
+    options     = models.JSONField(default=list, blank=True)
+    groupe      = models.CharField(max_length=10, choices=GROUPE_CHOICES, default='AUTRE')
+    obligatoire = models.BooleanField(default=False)
+    ordre       = models.IntegerField(default=0)
+    actif       = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'champs_fiche'
+        ordering = ['groupe', 'ordre', 'libelle']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'libelle'], name='uniq_champ_fiche_par_ecole'),
+        ]
+
+    def __str__(self):
+        return self.libelle
 
 
 class GardeSoir(TenantModel):

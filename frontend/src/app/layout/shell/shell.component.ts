@@ -303,9 +303,14 @@ export class ShellComponent {
       'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/garderie', '/paiements', '/suivi-mensuel', '/academique'],
       'LECTEUR':         ['/dashboard'],
     };
-    const roleAllowed = acces[role] || [];
-    const roleOk = roleAllowed.includes('*') || roleAllowed.includes(route);
-    if (!roleOk) return false;
+    // Modules choisis par l'école pour cet utilisateur : ils remplacent ceux
+    // de son rôle (sinon un compte « Lecteur » à qui l'école ouvre Élèves ne
+    // verrait rien). Le filtrage par licence, plus bas, reste le plafond.
+    if (!this.auth.currentUser()?.modules_perso) {
+      const roleAllowed = acces[role] || [];
+      const roleOk = roleAllowed.includes('*') || roleAllowed.includes(route);
+      if (!roleOk) return false;
+    }
 
     // Routes toujours visibles quelle que soit la licence
     const alwaysVisible = ['/ma-licence', '/parametres'];

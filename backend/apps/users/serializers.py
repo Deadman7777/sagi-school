@@ -13,7 +13,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model  = User
         fields = ['id', 'nom', 'prenom', 'email', 'role', 'tenant', 'actif',
-                  'created_at', 'password']
+                  'created_at', 'password', 'modules_autorises']
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -55,7 +55,16 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
             try:
                 licence = user.tenant.licence
                 token['type_licence'] = licence.type
-                token['modules']      = licence.modules
+                # Modules choisis par l'école pour cet utilisateur : ils
+                # restreignent ceux de la licence, qui reste le plafond.
+                perso = getattr(user, 'modules_autorises', None) or []
+                if perso:
+                    toujours = ('/ma-licence', '/parametres')
+                    token['modules'] = [m for m in licence.modules
+                                        if m.lstrip('/') in perso or m in toujours]
+                    token['modules_perso'] = True
+                else:
+                    token['modules'] = licence.modules
             except Exception:
                 token['type_licence'] = None
                 token['modules']      = []

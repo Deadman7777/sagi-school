@@ -16,6 +16,11 @@ def has_module_access(user, module):
     role = getattr(user, 'role', None)
     if not role:
         return False
+    # Modules choisis par l'école pour cet utilisateur : ils font foi et
+    # remplacent ceux du rôle. Le plafond reste la licence, vérifiée ailleurs.
+    perso = getattr(user, 'modules_autorises', None) or []
+    if perso:
+        return module in perso or module == 'dashboard'
     allowed = ROLE_PERMISSIONS.get(role, [])
     return '*' in allowed or module in allowed
 

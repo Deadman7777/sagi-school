@@ -65,6 +65,13 @@ export class ElevesService {
     return this.api.delete(`/eleves/${id}/`);
   }
 
+  /** Champs ajoutés par l'école à la fiche élève. */
+  champsFiche()                      { return this.api.get<any>('/eleves/champs/', { actifs: 1 }); }
+  champsFicheTous()                  { return this.api.get<any>('/eleves/champs/'); }
+  creerChampFiche(data: any)          { return this.api.post<any>('/eleves/champs/', data); }
+  modifierChampFiche(id: string, data: any) { return this.api.patch<any>(`/eleves/champs/${id}/`, data); }
+  supprimerChampFiche(id: string)     { return this.api.delete<void>(`/eleves/champs/${id}/`); }
+
   /** Réglages de la garde du soir (actif, heure limite, tarif). */
   reglagesGardeSoir() { return this.api.get<any>('/eleves/garde-soir/'); }
 

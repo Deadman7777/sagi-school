@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import (Eleve, EleveService, FormuleEleve, FormuleSection, Organisme,
+from .models import (ChampFiche, Eleve, EleveService, FormuleEleve, FormuleSection, Organisme,
                      PriseEnChargeOrganisme, Section, Service)
 
 # Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
@@ -70,6 +70,82 @@ class FormuleSectionSerializer(serializers.ModelSerializer):
         if request is not None and section.tenant_id != get_tenant(request).id:
             raise serializers.ValidationError('Section inconnue.')
         return section
+
+
+class ChampFicheSerializer(serializers.ModelSerializer):
+    """Un champ ajouté par l'école à la fiche élève."""
+    nb_renseignes = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = ChampFiche
+        fields = ['id', 'libelle', 'type_champ', 'options', 'groupe', 'obligatoire',
+                  'ordre', 'actif', 'nb_renseignes']
+
+    def get_nb_renseignes(self, obj):
+        """Combien de fiches portent une réponse : une école hésite à supprimer
+        un champ sans savoir ce qu'elle perd."""
+        return sum(1 for valeurs in Eleve.objects.filter(tenant=obj.tenant)
+                   .values_list('champs_perso', flat=True)
+                   if str(obj.id) in (valeurs or {}) and str((valeurs or {}).get(str(obj.id)) or '').strip())
+
+    def validate(self, attrs):
+        type_champ = attrs.get('type_champ', getattr(self.instance, 'type_champ', 'TEXTE'))
+        options = attrs.get('options', getattr(self.instance, 'options', None) or [])
+        if type_champ == 'LISTE':
+            propres = [str(o).strip() for o in options if str(o).strip()]
+            if len(propres) < 2:
+                raise serializers.ValidationError(
+                    {'options': 'Une liste de choix demande au moins deux valeurs.'})
+            attrs['options'] = propres
+        else:
+            attrs['options'] = []
+        libelle = str(attrs.get('libelle', getattr(self.instance, 'libelle', '')) or '').strip()
+        if not libelle:
+            raise serializers.ValidationError({'libelle': 'Donnez un nom au champ.'})
+        attrs['libelle'] = libelle
+        return attrs
+
+
+def valider_champs_perso(tenant, valeurs, existantes=None, partiel=False):
+    """Nettoie les réponses aux champs de l'école ({champ_id: valeur}).
+
+    Un champ obligatoire vide est refusé ; une valeur hors liste aussi ; un
+    champ inconnu (supprimé depuis) est ignoré. `partiel` : mise à jour qui ne
+    touche qu'une partie des champs — les autres gardent leur réponse.
+    """
+    champs = {str(c.id): c for c in ChampFiche.objects.filter(tenant=tenant, actif=True)}
+    propres = dict(existantes or {}) if partiel else {}
+    for cid, brut in (valeurs or {}).items():
+        champ = champs.get(str(cid))
+        if champ is None:
+            continue
+        valeur = '' if brut is None else brut
+        if isinstance(valeur, str):
+            valeur = valeur.strip()
+        if valeur in ('', None):
+            propres.pop(str(cid), None)
+            continue
+        if champ.type_champ == 'NOMBRE':
+            try:
+                valeur = float(valeur)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({champ.libelle: 'Nombre attendu.'})
+        elif champ.type_champ == 'DATE':
+            import datetime as _dt
+            try:
+                valeur = _dt.date.fromisoformat(str(valeur)[:10]).isoformat()
+            except ValueError:
+                raise serializers.ValidationError({champ.libelle: 'Date attendue (AAAA-MM-JJ).'})
+        elif champ.type_champ == 'OUI_NON':
+            valeur = bool(valeur) and str(valeur).lower() not in ('false', 'non', '0')
+        elif champ.type_champ == 'LISTE' and str(valeur) not in champ.options:
+            raise serializers.ValidationError(
+                {champ.libelle: f"Choisissez une valeur parmi : {', '.join(champ.options)}."})
+        propres[str(cid)] = valeur
+    for cid, champ in champs.items():
+        if champ.obligatoire and not str(propres.get(cid, '') or '').strip():
+            raise serializers.ValidationError({champ.libelle: 'Ce champ est obligatoire.'})
+    return propres
 
 
 class EleveSerializer(serializers.ModelSerializer):
@@ -162,6 +238,7 @@ class EleveSerializer(serializers.ModelSerializer):
             attrs['nb_mois_passager'] = None
         self._dater_la_sortie(attrs)
         self._valider_mois_dus(attrs)
+        self._valider_champs_perso(attrs)
         self._valider_reliquat(attrs)
         return attrs
 
@@ -266,6 +343,29 @@ class EleveSerializer(serializers.ModelSerializer):
     def get_abonnements(self, obj):
         """Liste des IDs de services auxquels l'élève est abonné."""
         return [str(ab.service_id) for ab in obj.abonnements.all()]
+
+    def _tenant(self):
+        tenant = getattr(self.instance, 'tenant', None) or self.context.get('tenant')
+        if tenant is None:
+            from core.tenant import get_tenant
+            request = self.context.get('request')
+            tenant = get_tenant(request) if request is not None else None
+        return tenant
+
+    def _valider_champs_perso(self, attrs):
+        """Réponses aux champs de l'école : validées à la création, et dès que la
+        requête y touche. Une fiche ancienne ne se bloque pas parce que l'école a
+        ajouté un champ obligatoire depuis — on ne le réclame qu'à la prochaine
+        saisie de ces champs."""
+        touche = 'champs_perso' in self.initial_data
+        if not touche and self.partial:
+            return
+        tenant = self._tenant()
+        if tenant is not None:
+            attrs['champs_perso'] = valider_champs_perso(
+                tenant, self.initial_data.get('champs_perso') or {},
+                existantes=getattr(self.instance, 'champs_perso', None),
+                partiel=self.partial and touche)
 
     def _sync_abonnements(self, eleve):
         """Crée/supprime les abonnements selon la liste 'abonnements' (IDs de services) en entrée.

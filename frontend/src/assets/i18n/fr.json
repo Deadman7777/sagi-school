@@ -386,7 +386,13 @@
     "tri_ecole_alpha": "Toute l'école — alphabétique",
     "tri_classe_matricule": "Par classe — ancienneté",
     "tri_section_matricule": "Par section — ancienneté",
-    "tri_ecole_matricule": "Toute l'école — ancienneté"
+    "tri_ecole_matricule": "Toute l'école — ancienneté",
+    "profession_pere": "Profession du père",
+    "residence_pere": "Résidence du père",
+    "profession_mere": "Profession de la mère",
+    "residence_mere": "Résidence de la mère",
+    "attitudes": "Attitudes particulières à signaler chez l'enfant",
+    "attitudes_ph": "Ex. très timide, ne mange pas seul, peur du bruit…"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -682,7 +688,26 @@
     "garde_soir_facturation_a": "Facturation à partir de",
     "garde_soir_tolerance_aide": "Avant cette heure, rien n’est facturé (tolérance).",
     "garde_soir_tarif": "Tarif par tranche",
-    "garde_soir_exemple": "Exemple : limite {{limite}}, facturation dès {{facturation}} — départ à 18h00 : {{tarif}} F ; à 18h15 ou 19h00 : {{tarif}} × 2."
+    "garde_soir_exemple": "Exemple : limite {{limite}}, facturation dès {{facturation}} — départ à 18h00 : {{tarif}} F ; à 18h15 ou 19h00 : {{tarif}} × 2.",
+    "fiche_eleve": "Fiche élève",
+    "champs_titre": "Champs ajoutés par l’école",
+    "champs_aide": "Ajoutez à la fiche élève les informations propres à votre établissement. Elles apparaissent dans le formulaire, sur la fiche et sur la fiche PDF.",
+    "ajouter_champ": "Ajouter un champ",
+    "champ_libelle": "Nom du champ",
+    "champ_type": "Type",
+    "champ_groupe": "Section de la fiche",
+    "champ_options": "Choix (séparés par des virgules)",
+    "champ_options_ph": "Navette, À pied, Voiture",
+    "champ_reglages": "Réglages",
+    "champ_obligatoire": "Obligatoire",
+    "champ_actif": "Actif",
+    "champ_renseignes": "Renseigné sur {{n}} fiche(s)",
+    "champs_vide": "Aucun champ ajouté pour le moment.",
+    "champ_confirm_suppr": "Supprimer ce champ ?",
+    "champ_confirm_suppr_renseigne": "Ce champ est renseigné sur {{n}} fiche(s). Les réponses seront perdues. Supprimer ?",
+    "modules_utilisateur": "Modules ouverts à cet utilisateur",
+    "modules_defaut_role": "Par défaut : ceux de son rôle",
+    "modules_aide": "Laissez vide pour appliquer les modules du rôle. La licence de l'école reste le plafond."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

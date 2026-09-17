@@ -17,6 +17,7 @@ import { DialogModule } from 'primeng/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastModule } from 'primeng/toast';
 import { CheckboxModule } from 'primeng/checkbox';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { MessageService } from 'primeng/api';
 
 @Component({
@@ -24,7 +25,7 @@ import { MessageService } from 'primeng/api';
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, InputTextModule, ButtonModule,
             SelectModule, InputNumberModule, TableModule, TagModule,
-            DialogModule, ToastModule, CheckboxModule],
+            DialogModule, ToastModule, CheckboxModule, MultiSelectModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -55,6 +56,8 @@ import { MessageService } from 'primeng/api';
               (click)="onglet.set('sections')">📚 {{ 'parametres.sections' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'services'"
               (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'fiche'"
+              (click)="onglet.set('fiche'); chargerChampsFiche()">🗂️ {{ 'parametres.fiche_eleve' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'certificat'"
               (click)="onglet.set('certificat'); initCertConfig(); chargerModeleWord()">📜 {{ 'parametres.certificat' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'users'"
@@ -687,6 +690,61 @@ import { MessageService } from 'primeng/api';
     </div>
 
     <!-- ══ ONGLET CERTIFICAT ══ -->
+    <!-- ══ ONGLET FICHE ÉLÈVE : champs ajoutés par l'école ══ -->
+    <div *ngIf="onglet() === 'fiche'">
+      <div class="section-header-row">
+        <div class="fc-title" style="margin:0">🗂️ {{ 'parametres.champs_titre' | translate }}</div>
+        <p-button [label]="'parametres.ajouter_champ' | translate" severity="success" size="small"
+                  (onClick)="ajouterChamp()" />
+      </div>
+      <p style="font-size:12px;color:var(--text-3);margin:4px 0 12px">{{ 'parametres.champs_aide' | translate }}</p>
+
+      <div class="sections-list">
+        <div class="section-card" *ngFor="let c of champsFiche(); let i = index">
+          <div class="sc-frais-grid">
+            <div class="sc-frais">
+              <span>{{ 'parametres.champ_libelle' | translate }}</span>
+              <input pInputText [(ngModel)]="c.libelle" class="w-full" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.champ_type' | translate }}</span>
+              <p-select appendTo="body" [options]="typesChamp" [(ngModel)]="c.type_champ"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.champ_groupe' | translate }}</span>
+              <p-select appendTo="body" [options]="groupesChamp" [(ngModel)]="c.groupe"
+                        optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+            <div class="sc-frais" *ngIf="c.type_champ === 'LISTE'">
+              <span>{{ 'parametres.champ_options' | translate }}</span>
+              <input pInputText [ngModel]="(c.options || []).join(', ')"
+                     (ngModelChange)="c.options = decouperOptions($event)" class="w-full"
+                     [placeholder]="'parametres.champ_options_ph' | translate" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.champ_reglages' | translate }}</span>
+              <label class="case-service"><input type="checkbox" [(ngModel)]="c.obligatoire" />
+                {{ 'parametres.champ_obligatoire' | translate }}</label>
+              <label class="case-service"><input type="checkbox" [(ngModel)]="c.actif" />
+                {{ 'parametres.champ_actif' | translate }}</label>
+            </div>
+          </div>
+          <div class="sc-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <small class="fc-hint" *ngIf="c.nb_renseignes">{{ 'parametres.champ_renseignes' | translate:{ n: c.nb_renseignes } }}</small>
+            <span style="flex:1"></span>
+            <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
+                      [loading]="saving()" (onClick)="enregistrerChamp(c)" />
+            <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
+                      (onClick)="supprimerChamp(c, i)" />
+          </div>
+        </div>
+        <div *ngIf="champsFiche().length === 0" style="color:var(--text-3);font-size:13px;padding:8px">
+          {{ 'parametres.champs_vide' | translate }}
+        </div>
+      </div>
+    </div>
+
     <div *ngIf="onglet() === 'certificat'">
       <div class="form-card" style="margin-bottom:16px">
         <div class="fc-title">📝 {{ 'parametres.cert_word_titre' | translate }}</div>
@@ -1059,6 +1117,16 @@ import { MessageService } from 'primeng/api';
                     optionLabel="label" optionValue="value"
                     appendTo="body" [scrollHeight]="'260px'"
                     styleClass="w-full" />
+        </div>
+        <!-- Modules ouverts à CET utilisateur, au-delà de son rôle. La licence
+             de l'école reste le plafond : un module qu'elle ne couvre pas
+             n'apparaîtra pas, même coché. -->
+        <div class="form-group full">
+          <label>{{ 'parametres.modules_utilisateur' | translate }}</label>
+          <p-multiSelect appendTo="body" [options]="modulesDisponibles" [(ngModel)]="newUser.modules_autorises"
+                         optionLabel="label" optionValue="value" display="chip"
+                         [placeholder]="'parametres.modules_defaut_role' | translate" styleClass="w-full" />
+          <small class="fc-hint">{{ 'parametres.modules_aide' | translate }}</small>
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -1472,7 +1540,8 @@ export class ParametresComponent implements OnInit {
   userSelectionne: any = null;
   nouveauMdp           = '';
 
-  newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
+  newUser    = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE',
+                 modules_autorises: [] as string[] };
   newSection = { nom:'' };
   newService: any = { nom:'', montant:0, periodicite:'MENSUEL', mois_unique:null, actif:true };
 
@@ -1634,6 +1703,88 @@ export class ParametresComponent implements OnInit {
       .map(r => ({ libelle: r.libelle.trim(), montant: +r.montant || 0, premiere_fois: !!r.premiere_fois }));
     this.adhesionDialogVisible = false;
     this.sauvegarderService(this.serviceAdhesion);
+  }
+
+  // ── Champs de la fiche élève ────────────────────────────────────────
+  champsFiche = signal<any[]>([]);
+  typesChamp = [
+    { label: 'Texte court',    value: 'TEXTE' },
+    { label: 'Texte long',     value: 'TEXTE_LONG' },
+    { label: 'Nombre',         value: 'NOMBRE' },
+    { label: 'Date',           value: 'DATE' },
+    { label: 'Liste de choix', value: 'LISTE' },
+    { label: 'Oui / Non',      value: 'OUI_NON' },
+  ];
+  groupesChamp = [
+    { label: "Identité de l'élève",   value: 'IDENTITE' },
+    { label: 'Parents et tuteur',     value: 'PARENTS' },
+    { label: 'Santé et comportement', value: 'SANTE' },
+    { label: 'Autres informations',   value: 'AUTRE' },
+  ];
+  /** Modules ouvrables à un utilisateur (les routes de l'application). */
+  modulesDisponibles = [
+    { label: 'Tableau de bord', value: 'dashboard' },
+    { label: 'Élèves',          value: 'eleves' },
+    { label: 'Paiements',       value: 'paiements' },
+    { label: 'Comptabilité',    value: 'comptabilite' },
+    { label: 'Fiscal',          value: 'fiscal' },
+    { label: 'Académique',      value: 'academique' },
+    { label: 'Ressources humaines', value: 'rh' },
+    { label: 'GMRF',            value: 'gmrf' },
+    { label: 'Gouvernance',     value: 'gouvernance' },
+    { label: 'Suivi mensuel',   value: 'suivi-mensuel' },
+    { label: 'Garderie',        value: 'garderie' },
+  ];
+
+  chargerChampsFiche() {
+    this.eleves.champsFicheTous().subscribe({
+      next: (r: any) => this.champsFiche.set((r?.results || r || []).map((c: any) => ({ ...c }))),
+      error: () => {},
+    });
+  }
+
+  decouperOptions(texte: string): string[] {
+    return (texte || '').split(',').map(o => o.trim()).filter(Boolean);
+  }
+
+  ajouterChamp() {
+    this.champsFiche.update(liste => [...liste, { libelle: '', type_champ: 'TEXTE', groupe: 'AUTRE',
+                                                  options: [], obligatoire: false, actif: true,
+                                                  ordre: liste.length }]);
+  }
+
+  enregistrerChamp(c: any) {
+    this.saving.set(true);
+    const corps = { libelle: c.libelle, type_champ: c.type_champ, groupe: c.groupe, options: c.options || [],
+                    obligatoire: !!c.obligatoire, actif: !!c.actif, ordre: c.ordre || 0 };
+    const requete = c.id ? this.eleves.modifierChampFiche(c.id, corps) : this.eleves.creerChampFiche(corps);
+    requete.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: c.libelle });
+        this.chargerChampsFiche();
+      },
+      error: err => {
+        this.saving.set(false);
+        const e = err?.error;
+        const detail: any = e && typeof e === 'object'
+          ? [].concat(...Object.values(e) as any[]).filter(Boolean)[0] : null;
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: detail || this.translate.instant('parametres.sauvegarde_echouee') });
+      },
+    });
+  }
+
+  supprimerChamp(c: any, i: number) {
+    if (!c.id) { this.champsFiche.update(l => l.filter((_, j) => j !== i)); return; }
+    const avertissement = c.nb_renseignes
+      ? this.translate.instant('parametres.champ_confirm_suppr_renseigne', { n: c.nb_renseignes })
+      : this.translate.instant('parametres.champ_confirm_suppr');
+    if (!confirm(`${avertissement}\n« ${c.libelle} »`)) return;
+    this.eleves.supprimerChampFiche(c.id).subscribe({
+      next: () => this.chargerChampsFiche(),
+      error: err => this.msg.add({ severity: 'error', summary: err?.error?.error || this.translate.instant('parametres.erreur') }),
+    });
   }
 
   periodiciteOptions = [
@@ -2253,7 +2404,8 @@ chargerExercice() {
   }
 
   ouvrirDialogUser() {
-    this.newUser = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE' };
+    this.newUser = { nom:'', prenom:'', email:'', password:'', role:'ADMIN_SCOLARITE',
+                 modules_autorises: [] as string[] };
     this.userDialogVisible = true;
   }
 

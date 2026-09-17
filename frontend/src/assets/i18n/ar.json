@@ -386,7 +386,13 @@
     "tri_ecole_alpha": "كل المؤسسة — أبجدي",
     "tri_classe_matricule": "حسب القسم — الأقدمية",
     "tri_section_matricule": "حسب الشعبة — الأقدمية",
-    "tri_ecole_matricule": "كل المؤسسة — الأقدمية"
+    "tri_ecole_matricule": "كل المؤسسة — الأقدمية",
+    "profession_pere": "مهنة الأب",
+    "residence_pere": "محل سكن الأب",
+    "profession_mere": "مهنة الأم",
+    "residence_mere": "محل سكن الأم",
+    "attitudes": "سلوكيات خاصة يجب الإشارة إليها",
+    "attitudes_ph": "مثال: خجول جدًا، لا يأكل بمفرده، يخاف الضجيج…"
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
@@ -682,7 +688,26 @@
     "garde_soir_facturation_a": "تبدأ الفوترة من",
     "garde_soir_tolerance_aide": "قبل هذه الساعة لا شيء يُفوتر (تسامح).",
     "garde_soir_tarif": "التعريفة لكل شريحة",
-    "garde_soir_exemple": "مثال: الحدّ {{limite}}، الفوترة من {{facturation}} — الخروج في 18:00: {{tarif}}؛ في 18:15 أو 19:00: {{tarif}} × 2."
+    "garde_soir_exemple": "مثال: الحدّ {{limite}}، الفوترة من {{facturation}} — الخروج في 18:00: {{tarif}}؛ في 18:15 أو 19:00: {{tarif}} × 2.",
+    "fiche_eleve": "بطاقة التلميذ",
+    "champs_titre": "حقول أضافتها المؤسسة",
+    "champs_aide": "أضف إلى بطاقة التلميذ المعلومات الخاصة بمؤسستك. تظهر في النموذج وفي البطاقة وفي ملف PDF.",
+    "ajouter_champ": "إضافة حقل",
+    "champ_libelle": "اسم الحقل",
+    "champ_type": "النوع",
+    "champ_groupe": "قسم البطاقة",
+    "champ_options": "الخيارات (مفصولة بفواصل)",
+    "champ_options_ph": "حافلة، مشيًا، سيارة",
+    "champ_reglages": "الإعدادات",
+    "champ_obligatoire": "إلزامي",
+    "champ_actif": "مفعّل",
+    "champ_renseignes": "مُعبّأ في {{n}} بطاقة",
+    "champs_vide": "لا حقل مضاف حتى الآن.",
+    "champ_confirm_suppr": "حذف هذا الحقل؟",
+    "champ_confirm_suppr_renseigne": "هذا الحقل مُعبّأ في {{n}} بطاقة. ستُفقد الأجوبة. حذف؟",
+    "modules_utilisateur": "الوحدات المفتوحة لهذا المستخدم",
+    "modules_defaut_role": "افتراضيًا: وحدات دوره",
+    "modules_aide": "اتركه فارغًا لاستعمال وحدات الدور. تبقى رخصة المؤسسة هي الحد الأعلى."
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",

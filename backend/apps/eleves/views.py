@@ -8,13 +8,13 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import (Eleve, FormuleEleve, FormuleSection, Organisme, PriseEnChargeOrganisme,
-                     Section, Service)
+from .models import (ChampFiche, Eleve, FormuleEleve, FormuleSection, Organisme,
+                     PriseEnChargeOrganisme, Section, Service)
 from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
+from .serializers import (ChampFicheSerializer, EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
 from django.db.models import Max
@@ -63,6 +63,45 @@ class SectionViewSet(viewsets.ModelViewSet):
         except RepriseErreur as exc:
             return Response({'error': str(exc)}, status=400)
         return Response(rapport)
+
+
+class ChampFicheViewSet(viewsets.ModelViewSet):
+    """Champs que l'école ajoute à la fiche élève (Paramètres → Fiche élève).
+
+    Seule la direction les définit : ils changent ce que le personnel doit
+    saisir pour chaque enfant. Les lire reste ouvert, puisque le formulaire et
+    la fiche PDF en ont besoin.
+    """
+    serializer_class   = ChampFicheSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = ChampFiche.objects.filter(tenant=get_tenant(self.request))
+        if self.request.query_params.get('actifs'):
+            qs = qs.filter(actif=True)
+        return qs
+
+    def _direction(self, request):
+        from core.permissions import IsAdminEcole
+        return IsAdminEcole().has_permission(request, self)
+
+    def create(self, request, *args, **kwargs):
+        if not self._direction(request):
+            return Response({'error': "Réservé à la direction de l'école."}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if not self._direction(request):
+            return Response({'error': "Réservé à la direction de l'école."}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if not self._direction(request):
+            return Response({'error': "Réservé à la direction de l'école."}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
 
 
 class FormuleSectionViewSet(viewsets.ModelViewSet):
@@ -2636,6 +2675,9 @@ class FicheElevePDFView(APIView):
             'reste':             reste,
             'motif_pec':         motif_pec,
             'type_pec':          type_pec,
+            # Champs ajoutés par l'école, groupés et par lignes de quatre :
+            # le gabarit ne calcule rien, il place ce qu'on lui donne.
+            'champs_perso':      champs_perso_pour_pdf(tenant, eleve),
         }
 
         html_str = render_to_string('pdf/fiche_eleve.html', context)
@@ -2648,6 +2690,42 @@ class FicheElevePDFView(APIView):
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="fiche_{safe_name}.pdf"'
         return response
+
+
+def champs_perso_pour_pdf(tenant, eleve):
+    """[{titre, lignes: [[{libelle, valeur}]]}] — champs de l'école renseignés."""
+    valeurs = eleve.champs_perso or {}
+    groupes = []
+    libelles_groupes = dict(ChampFiche.GROUPE_CHOICES)
+    for code, titre in ChampFiche.GROUPE_CHOICES:
+        remplis = []
+        for champ in ChampFiche.objects.filter(tenant=tenant, actif=True, groupe=code):
+            brut = valeurs.get(str(champ.id))
+            if brut in (None, '', []):
+                continue
+            if champ.type_champ == 'OUI_NON':
+                texte = 'Oui' if brut else 'Non'
+            elif champ.type_champ == 'DATE':
+                import datetime as _dt
+                try:
+                    texte = _dt.date.fromisoformat(str(brut)[:10]).strftime('%d/%m/%Y')
+                except ValueError:
+                    texte = str(brut)
+            elif champ.type_champ == 'NOMBRE':
+                nombre = float(brut)
+                texte = str(int(nombre)) if nombre == int(nombre) else str(nombre)
+            else:
+                texte = str(brut)
+            remplis.append({'libelle': champ.libelle, 'valeur': texte})
+        if not remplis:
+            continue
+        lignes = [{'champs': remplis[i:i + 4],
+                   # Cellules de complément : sans elles, la dernière ligne
+                   # n'aurait pas la même largeur de colonnes que les autres.
+                   'vides': range(4 - len(remplis[i:i + 4]))}
+                  for i in range(0, len(remplis), 4)]
+        groupes.append({'titre': libelles_groupes.get(code, titre), 'lignes': lignes})
+    return groupes
 
 
 class ParcoursElevePDFView(APIView):

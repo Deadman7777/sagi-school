@@ -753,6 +753,10 @@ const MOIS_ANNEE = [
             <div class="fiche-row"><span>Tél. père</span><strong class="mono">{{ e.telephone_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Mère</span><strong>{{ e.nom_mere || '—' }}</strong></div>
             <div class="fiche-row"><span>Tél. mère</span><strong class="mono">{{ e.telephone_mere || '—' }}</strong></div>
+            @if (e['profession_pere']) { <div class="fiche-row"><span>Profession du père</span><strong>{{ e['profession_pere'] }}</strong></div> }
+            @if (e['residence_pere']) { <div class="fiche-row"><span>Résidence du père</span><strong>{{ e['residence_pere'] }}</strong></div> }
+            @if (e['profession_mere']) { <div class="fiche-row"><span>Profession de la mère</span><strong>{{ e['profession_mere'] }}</strong></div> }
+            @if (e['residence_mere']) { <div class="fiche-row"><span>Résidence de la mère</span><strong>{{ e['residence_mere'] }}</strong></div> }
             @if (e.nom_tuteur) {
               <div class="fiche-row"><span>Tuteur</span><strong>{{ e.nom_tuteur }}{{ e.lien_tuteur ? ' (' + e.lien_tuteur + ')' : '' }}</strong></div>
             }
@@ -765,6 +769,12 @@ const MOIS_ANNEE = [
             <div class="fiche-row"><span>État</span><strong>{{ etatSanteLabel(e.etat_sante) }}</strong></div>
             @if (e.observations_sante) {
               <div class="fiche-row"><span>Observations</span><strong>{{ e.observations_sante }}</strong></div>
+            }
+            @if (e['attitudes_particulieres']) {
+              <div class="fiche-row"><span>Attitudes à signaler</span><strong>{{ e['attitudes_particulieres'] }}</strong></div>
+            }
+            @for (c of champsRenseignes(e); track c.libelle) {
+              <div class="fiche-row"><span>{{ c.libelle }}</span><strong>{{ c.valeur }}</strong></div>
             }
           </div>
           <div class="fiche-section">
@@ -1355,6 +1365,22 @@ const MOIS_ANNEE = [
           <input pInputText [(ngModel)]="nouvelEleve.telephone_mere" class="w-full" placeholder="7X XXX XX XX" />
         </div>
         <div class="form-group">
+          <label>{{ 'eleves.profession_pere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.profession_pere" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.residence_pere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.residence_pere" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.profession_mere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.profession_mere" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.residence_mere' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.residence_mere" class="w-full" />
+        </div>
+        <div class="form-group">
           <label>{{ 'eleves.nom_tuteur' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.nom_tuteur" class="w-full"
                  [placeholder]="'eleves.nom_tuteur_ph' | translate" />
@@ -1368,6 +1394,40 @@ const MOIS_ANNEE = [
           <input pInputText [(ngModel)]="nouvelEleve.lien_tuteur" class="w-full"
                  [placeholder]="'eleves.lien_tuteur_ph' | translate" />
         </div>
+        <!-- Ce que l'école doit savoir pour accueillir l'enfant. -->
+        <div class="form-group full">
+          <label>{{ 'eleves.attitudes' | translate }}</label>
+          <textarea pTextarea rows="2" class="w-full" [(ngModel)]="nouvelEleve.attitudes_particulieres"
+                    [placeholder]="'eleves.attitudes_ph' | translate"></textarea>
+        </div>
+        <!-- Champs ajoutés par l'école (Paramètres → Fiche élève) -->
+        @for (c of champsFiche(); track c.id) {
+          <div class="form-group" [class.full]="c.type_champ === 'TEXTE_LONG'">
+            <label>{{ c.libelle }}{{ c.obligatoire ? ' *' : '' }}</label>
+            @switch (c.type_champ) {
+              @case ('TEXTE_LONG') {
+                <textarea pTextarea rows="2" class="w-full" [(ngModel)]="champsSaisis[c.id]"></textarea>
+              }
+              @case ('NOMBRE') {
+                <input pInputText type="number" class="w-full" [(ngModel)]="champsSaisis[c.id]" />
+              }
+              @case ('DATE') {
+                <input pInputText type="date" class="w-full" [(ngModel)]="champsSaisis[c.id]" />
+              }
+              @case ('LISTE') {
+                <p-select appendTo="body" [options]="c.options" [(ngModel)]="champsSaisis[c.id]"
+                          [showClear]="true" [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
+              }
+              @case ('OUI_NON') {
+                <label class="case-adhesion"><input type="checkbox" [(ngModel)]="champsSaisis[c.id]" />
+                  {{ 'common.oui' | translate }}</label>
+              }
+              @default {
+                <input pInputText class="w-full" [(ngModel)]="champsSaisis[c.id]" />
+              }
+            }
+          </div>
+        }
         <div class="form-group">
           <label>{{ 'eleves.etat_sante' | translate }}</label>
           <p-select appendTo="body" [options]="santeOptions" [(ngModel)]="nouvelEleve.etat_sante"
@@ -2113,10 +2173,38 @@ export class ElevesListeComponent implements OnInit {
     this.chargerServices();
     this.chargerClasses();
     this.chargerGardeSoir();
+    this.chargerChampsFiche();
     this.elevesService.getExercices().subscribe({
       next: (r: any) => this.exercices.set(r?.results || r || []),
       error: () => {},
     });
+  }
+
+  // ── Champs ajoutés par l'école ───────────────────────────────────────
+  champsFiche = signal<any[]>([]);
+  champsSaisis: Record<string, any> = {};
+
+  private chargerChampsFiche() {
+    this.elevesService.champsFiche().subscribe({
+      next: r => this.champsFiche.set(((r as any).results || r || []).filter((c: any) => c.actif)),
+      error: () => {},
+    });
+  }
+
+  /** Réponses d'un élève, mises en forme, pour le panneau de consultation. */
+  champsRenseignes(eleve: any): { libelle: string; valeur: string }[] {
+    const valeurs = eleve?.champs_perso || {};
+    return this.champsFiche()
+      .filter(c => valeurs[c.id] !== undefined && valeurs[c.id] !== '' && valeurs[c.id] !== null)
+      .map(c => {
+        const brut = valeurs[c.id];
+        if (c.type_champ === 'OUI_NON') return { libelle: c.libelle, valeur: brut ? 'Oui' : 'Non' };
+        if (c.type_champ === 'DATE') {
+          const [a, m, j] = String(brut).split('-');
+          return { libelle: c.libelle, valeur: `${j}/${m}/${a}` };
+        }
+        return { libelle: c.libelle, valeur: String(brut) };
+      });
   }
 
   private chargerGardeSoir() {
@@ -3161,12 +3249,15 @@ export class ElevesListeComponent implements OnInit {
     this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE',
                          etat_sante: 'SAIN', date_inscription_jour_estime: false,
                          reliquat_anterieur: 0, reliquat_note: '' };
+    this.champsSaisis = {};
     this.dialogVisible = true;
   }
 
   ouvrirModifier(eleve: Eleve | null) {
     if (!eleve) return;
     this.editId = eleve.id;
+    // Réponses aux champs de l'école : copiées pour l'édition.
+    this.champsSaisis = { ...((eleve as any).champs_perso || {}) };
     this.nouvelEleve = {
       nom_complet:      eleve.nom_complet,
       section:          eleve.section,
@@ -3189,6 +3280,11 @@ export class ElevesListeComponent implements OnInit {
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
       formule:          eleve.formule ?? null,
+      profession_pere:  eleve['profession_pere'],
+      residence_pere:   eleve['residence_pere'],
+      profession_mere:  eleve['profession_mere'],
+      residence_mere:   eleve['residence_mere'],
+      attitudes_particulieres: eleve['attitudes_particulieres'],
       reliquat_anterieur: Number(eleve.reliquat_anterieur || 0),
       reliquat_note:      eleve.reliquat_note || '',
     };
@@ -3244,9 +3340,12 @@ export class ElevesListeComponent implements OnInit {
       return;
     }
     this.saving.set(true);
+    // Les champs de l'école partent avec la fiche : un champ vidé est retiré
+    // côté serveur, les autres gardent leur réponse.
+    const payload = { ...this.nouvelEleve, champs_perso: this.champsSaisis } as any;
     const obs = this.editId
-      ? this.elevesService.updateEleve(this.editId, this.nouvelEleve)
-      : this.elevesService.createEleve(this.nouvelEleve);
+      ? this.elevesService.updateEleve(this.editId, payload)
+      : this.elevesService.createEleve(payload);
     obs.subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'),
