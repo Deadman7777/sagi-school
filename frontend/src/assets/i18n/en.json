@@ -619,7 +619,7 @@
     "bareme_resume": "{{n}} of {{total}} student(s).",
     "bareme_echec": "The schedule could not be applied.",
     "cert_word_titre": "School's Word template",
-    "cert_word_aide": "Write your certificate in Word, with your letterhead and layout, and insert codes in braces such as {NOM_COMPLET} or {CLASSE}. On each request the app fills these codes with the student's details and gives you the Word document, ready to print.",
+    "cert_word_aide": "Upload your Word certificate as you print it. The dotted lines or blanks after \"Name\", \"Born on … at …\", \"Class\", \"School year\", \"Done at … on …\" are filled in automatically for each student; the rest of the document is unchanged.",
     "cert_word_deposer": "Upload my Word template",
     "cert_word_remplacer": "Replace template",
     "cert_word_format": ".docx format, 5 MB maximum",
@@ -659,7 +659,11 @@
     "regrouper_sections_videes": "Sections now empty, delete them if no longer used: {{noms}}",
     "regrouper_simuler": "Simulate",
     "regrouper_appliquer": "Apply",
-    "regrouper_fait": "Sections merged"
+    "regrouper_fait": "Sections merged",
+    "cert_standard_aide": "Without a Word template, SAGI SCHOOL issues a simple, readable standard certificate: school header, student identity, class, school year, place and date, principal signature.",
+    "cert_word_champs": "Filled in automatically:",
+    "cert_word_aucun_champ": "No field recognized in this document. Leave dotted lines (.....) after \"Name\", \"Born on\", \"Class\"…, or use the codes below.",
+    "cert_word_codes_option": "Going further: codes to place in the document (optional)"
   },
   "cloture": {
     "title": "Year Closing",

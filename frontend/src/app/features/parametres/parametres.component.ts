@@ -649,11 +649,17 @@ import { MessageService } from 'primeng/api';
                         [loading]="deposantWord()" (onClick)="retirerModeleWord()" />
             </div>
           </div>
+          <!-- Ce que l'app remplira dans le document tel quel. -->
+          @if (m.champs_reconnus?.length) {
+            <div class="word-champs">
+              ✓ {{ 'parametres.cert_word_champs' | translate }}
+              <strong>{{ libellesChamps(m.champs_reconnus) }}</strong>
+            </div>
+          } @else {
+            <div class="word-alerte">⚠️ {{ 'parametres.cert_word_aucun_champ' | translate }}</div>
+          }
           @if (m.codes_inconnus.length) {
             <div class="word-alerte">⚠️ {{ 'parametres.cert_word_inconnus' | translate }} <strong>{{ m.codes_inconnus.join(', ') }}</strong></div>
-          }
-          @if (!m.codes.length) {
-            <div class="word-alerte">⚠️ {{ 'parametres.cert_word_aucun_code' | translate }}</div>
           }
         }
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0">
@@ -665,7 +671,7 @@ import { MessageService } from 'primeng/api';
           <small style="color:var(--text-3);font-size:11px">{{ 'parametres.cert_word_format' | translate }}</small>
         </div>
         <details class="word-codes">
-          <summary>{{ 'parametres.cert_word_codes' | translate }}</summary>
+          <summary>{{ 'parametres.cert_word_codes_option' | translate }}</summary>
           <table>
             @for (c of modeleWord()?.codes_disponibles || []; track c.code) {
               <tr>
@@ -678,29 +684,10 @@ import { MessageService } from 'primeng/api';
           </table>
         </details>
       </div>
+      <!-- Sans modèle Word : un certificat standard, sobre, sans option à régler. -->
       <div class="form-card">
         <div class="fc-title">📜 {{ 'parametres.cert_titre' | translate }}</div>
-        <p style="color:var(--text-2);font-size:12px;margin:0 0 14px">{{ 'parametres.cert_aide' | translate }}</p>
-        <div class="form-grid">
-          @for (k of certElements; track k) {
-            <div class="form-group" style="flex-direction:row;align-items:center;gap:8px">
-              <p-checkbox [(ngModel)]="certCfg[k]" [binary]="true" [inputId]="'cert_' + k" />
-              <label [for]="'cert_' + k" style="margin:0;cursor:pointer">{{ ('parametres.cert_' + k) | translate }}</label>
-            </div>
-          }
-          <div class="form-group full">
-            <label>{{ 'parametres.cert_texte_intro' | translate }}</label>
-            <textarea rows="3" class="w-full cert-textarea" [(ngModel)]="certCfg.texte_intro"></textarea>
-          </div>
-          <div class="form-group full">
-            <label>{{ 'parametres.cert_texte_conclusion' | translate }}</label>
-            <textarea rows="3" class="w-full cert-textarea" [(ngModel)]="certCfg.texte_conclusion"></textarea>
-          </div>
-        </div>
-        <div class="form-actions">
-          <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success"
-                    [loading]="saving()" (onClick)="sauvegarderCertificat()" />
-        </div>
+        <p style="color:var(--text-2);font-size:12px;margin:0">{{ 'parametres.cert_standard_aide' | translate }}</p>
       </div>
     </div>
 
@@ -1256,6 +1243,7 @@ import { MessageService } from 'primeng/api';
       font-size:13px; color:var(--text-2); display:flex; flex-direction:column; gap:4px; }
     .regroup-alerte { color:#f59e0b; }
     .regroup-ok { color:#10b981; }
+    .word-champs { font-size:12px; color:#10b981; margin:8px 0; }
     .case-service { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); margin-top:6px; white-space:nowrap; }
     .mode-tarif { display:flex; gap:4px; }
     .mode-tarif button { flex:1; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px;
@@ -1442,6 +1430,10 @@ export class ParametresComponent implements OnInit {
   compositionDialogVisible = false;
   sectionCompo: any = null;
   compoRows: { libelle: string; montant: number }[] = [];
+
+  libellesChamps(champs: { libelle: string }[]): string {
+    return champs.map(c => c.libelle).join(', ');
+  }
 
   ouvrirComposition(s: any) {
     this.sectionCompo = s;

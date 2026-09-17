@@ -2,86 +2,110 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+{% load humanize_fcfa %}
+{% comment %}
+Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
+- une bordure posée sur une ligne de tableau se dessine À TRAVERS le texte de
+  la ligne suivante : aucune bordure de ligne, des <hr> entre blocs (un <div>
+  vide bordé ne s'affiche pas) ;
+- sans largeur de colonne, la colonne des montants démarre au milieu du ticket :
+  largeurs fixes (libellé 64 %, montant 36 %), sans remplissage horizontal,
+  qui s'ajouterait aux pourcentages ;
+- montants mis en forme (« 16 000 ») : sur un ticket, « 16000 » se lit mal.
+{% endcomment %}
 <style>
-  @page { size: {{ page_size|default:"80mm 297mm" }}; margin: 3mm; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:Arial, sans-serif; font-size:9px; color:#000; }
-  .center { text-align:center; }
-  .b { font-weight:bold; }
-  .school { font-size:13px; font-weight:bold; text-transform:uppercase; }
-  .sub { font-size:8px; color:#333; }
-  .doc { font-size:10px; font-weight:bold; margin-top:3px; }
-  .sep { border-top:1px dashed #000; margin:5px 0; }
-  .row { width:100%; }
-  .row td { font-size:9px; padding:1px 0; vertical-align:top; }
-  .row td.r { text-align:right; }
-  .lbl { color:#333; }
-  .line td { font-size:9px; padding:2px 0; border-bottom:1px dotted #6b7280; }
-  .line td.r { text-align:right; font-weight:bold; }
-  .tot td { font-size:11px; font-weight:bold; padding:4px 0; border-top:2px solid #000; }
-  .tot td.r { text-align:right; }
-  .small { font-size:8px; color:#444; }
-  .footer { text-align:center; font-size:8px; color:#444; margin-top:6px; }
+  @page { size: {{ page_size|default:"80mm 297mm" }}; margin: 4mm 4mm 4mm 4mm; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5px; color: #000; }
+  .center { text-align: center; }
+  .ecole { font-size: 12.5px; font-weight: bold; text-transform: uppercase; line-height: 1.25; }
+  .coord { font-size: 8.5px; color: #222; line-height: 1.35; }
+  .titre { font-size: 11.5px; font-weight: bold; margin-top: 5px; letter-spacing: 0.5px; }
+  .numero { font-size: 10px; font-weight: bold; }
+  hr.sep { border: 0; border-top: 0.8px dashed #000; color: #000; height: 0; margin-top: 4px; margin-bottom: 4px; }
+  hr.sep-fort { border: 0; border-top: 1.4px solid #000; color: #000; height: 0; margin-top: 3px; margin-bottom: 3px; }
+
+  table.t { width: 100%; }
+  td.l { width: 64%; font-size: 9.5px; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; color: #111; }
+  td.m { width: 36%; font-size: 9.5px; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; text-align: right; }
+  td.gras { font-weight: bold; }
+  td.info-l { width: 38%; font-size: 9px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; color: #333; }
+  td.info-v { width: 62%; font-size: 9px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; text-align: right; }
+  td.total-l { width: 50%; font-size: 11.5px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; }
+  td.total-m { width: 50%; font-size: 11.5px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; text-align: right; }
+  td.reste-l { width: 50%; font-size: 10.5px; font-weight: bold; padding-top: 2px; }
+  td.reste-m { width: 50%; font-size: 10.5px; font-weight: bold; padding-top: 2px; text-align: right; }
+  .pied { text-align: center; font-size: 8.5px; color: #333; line-height: 1.4; }
 </style>
 </head>
 <body>
 
   <div class="center">
-    {% if tenant_logo %}<img src="{{ tenant_logo }}" style="max-height:40px; max-width:60mm; margin-bottom:2px;"><br>{% endif %}
-    <div class="school">{{ tenant_nom }}</div>
-    {% if tenant_ville %}<div class="sub">{{ tenant_ville }}</div>{% endif %}
-    {% if tenant_autorisation %}<div class="sub">Aut. N° {{ tenant_autorisation }}</div>{% endif %}
-    {% if tenant_telephone %}<div class="sub">Tél : {{ tenant_telephone }}</div>{% endif %}
-    <div class="doc">REÇU DE PAIEMENT</div>
-    <div class="sub b">N° {{ no_piece }}</div>
-    <div class="sub">{{ date_edition }}</div>
+    {% if tenant_logo %}<img src="{{ tenant_logo }}" style="height:48px;"><br>{% endif %}
+    <div class="ecole">{{ tenant_nom }}</div>
+    <div class="coord">
+      {% if tenant_ville %}{{ tenant_ville }}<br>{% endif %}
+      {% if tenant_autorisation %}Aut. N° {{ tenant_autorisation }}<br>{% endif %}
+      {% if tenant_telephone %}Tél : {{ tenant_telephone }}{% endif %}
+    </div>
+    <div class="titre">REÇU DE PAIEMENT</div>
+    <div class="numero">N° {{ no_piece }}</div>
+    <div class="coord">{{ date_edition }}</div>
   </div>
 
-  <div class="sep"></div>
+  <hr class="sep">
 
-  <table class="row">
-    <tr><td class="lbl">Élève</td><td class="r b">{{ eleve }}</td></tr>
-    <tr><td class="lbl">Matricule</td><td class="r">{{ matricule }}</td></tr>
-    <tr><td class="lbl">Section</td><td class="r">{{ section }}</td></tr>
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="info-l">Élève</td><td class="info-v"><b>{{ eleve }}</b></td></tr>
+    <tr><td class="info-l">Matricule</td><td class="info-v">{{ matricule }}</td></tr>
+    <tr><td class="info-l">Section</td><td class="info-v">{{ section }}</td></tr>
     {% if nom_pere and nom_pere != '—' %}
-    <tr><td class="lbl">Parent</td><td class="r">{{ nom_pere }}</td></tr>
+    <tr><td class="info-l">Parent</td><td class="info-v">{{ nom_pere }}</td></tr>
     {% endif %}
-    <tr><td class="lbl">Année</td><td class="r">{{ annee_scolaire }}</td></tr>
+    <tr><td class="info-l">Année</td><td class="info-v">{{ annee_scolaire }}</td></tr>
   </table>
 
-  <div class="sep"></div>
+  <hr class="sep">
 
-  <table class="row">
+  <table class="t" cellpadding="0" cellspacing="0">
     {% for label, montant in lignes %}
-    <tr class="line"><td>{{ label }}</td><td class="r">{{ montant|floatformat:0 }}</td></tr>
+    <tr><td class="l">{{ label }}</td><td class="m">{{ montant|fcfa }}</td></tr>
     {% endfor %}
-    <tr class="tot"><td>TOTAL REÇU</td><td class="r">{{ total|floatformat:0 }} FCFA</td></tr>
   </table>
 
-  <table class="row" style="margin-top:4px">
-    <tr><td class="lbl">Mode</td><td class="r">{{ mode_label }}</td></tr>
-    {% for mr in modes_reglement %}<tr><td class="lbl" style="padding-left:8px">↳ {{ mr.mode_label }}</td><td class="r">{{ mr.montant|floatformat:0 }}</td></tr>{% endfor %}
-    <tr><td class="lbl">Caissier</td><td class="r">{{ saisi_par }}</td></tr>
+  <hr class="sep-fort">
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="total-l">TOTAL REÇU</td><td class="total-m">{{ total|fcfa }} F</td></tr>
+  </table>
+  <hr class="sep-fort">
+
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="info-l">Mode</td><td class="info-v">{{ mode_label }}</td></tr>
+    {% for mr in modes_reglement %}
+    <tr><td class="info-l">&nbsp;&nbsp;{{ mr.mode_label }}</td><td class="info-v">{{ mr.montant|fcfa }} F</td></tr>
+    {% endfor %}
+    <tr><td class="info-l">Caissier</td><td class="info-v">{{ saisi_par }}</td></tr>
   </table>
 
-  <div class="sep"></div>
+  <hr class="sep">
 
-  <table class="row">
-    <tr><td class="lbl">Total attendu</td><td class="r">{{ total_attendu|floatformat:0 }}</td></tr>
-    <tr><td class="lbl">Déjà versé (avant)</td><td class="r">{{ deja_paye_avant|floatformat:0 }}</td></tr>
-    <tr><td class="lbl">Versé après</td><td class="r b">{{ total_paye_apres|floatformat:0 }}</td></tr>
-    <tr><td class="lbl b">Reste à payer</td>
-        <td class="r b">{% if reste_apres == 0 %}SOLDÉ{% else %}{{ reste_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="l">Total attendu</td><td class="m">{{ total_attendu|fcfa }} F</td></tr>
+    <tr><td class="l">Déjà versé avant</td><td class="m">{{ deja_paye_avant|fcfa }} F</td></tr>
+    <tr><td class="l">Versé à ce jour</td><td class="m gras">{{ total_paye_apres|fcfa }} F</td></tr>
+  </table>
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="reste-l">Reste à payer</td>
+        <td class="reste-m">{% if reste_apres == 0 %}SOLDÉ{% else %}{{ reste_apres|fcfa }} F{% endif %}</td></tr>
     {% if reliquat_du %}
-    <tr><td class="lbl">Reliquat {{ reliquat_annee }}</td>
-        <td class="r">{% if reliquat_restant_apres == 0 %}SOLDÉ{% else %}{{ reliquat_restant_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
-    <tr><td class="lbl b">Dû total</td>
-        <td class="r b">{% if reste_global_apres == 0 %}SOLDÉ{% else %}{{ reste_global_apres|floatformat:0 }} FCFA{% endif %}</td></tr>
+    <tr><td class="l">Reliquat {{ reliquat_annee }}</td>
+        <td class="m">{% if reliquat_restant_apres == 0 %}SOLDÉ{% else %}{{ reliquat_restant_apres|fcfa }} F{% endif %}</td></tr>
+    <tr><td class="reste-l">Dû total</td>
+        <td class="reste-m">{% if reste_global_apres == 0 %}SOLDÉ{% else %}{{ reste_global_apres|fcfa }} F{% endif %}</td></tr>
     {% endif %}
   </table>
 
-  <div class="sep"></div>
-  <div class="footer">
+  <hr class="sep">
+  <div class="pied">
     Merci de conserver ce reçu.<br>
     {{ date_edition }}
   </div>

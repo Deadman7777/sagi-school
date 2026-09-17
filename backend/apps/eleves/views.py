@@ -2406,26 +2406,16 @@ class CertificatScolariteView(APIView):
             response['Content-Disposition'] = f'attachment; filename="certificat_{safe_name}.docx"'
             return response
 
-        # Personnalisation du certificat : défauts = version standard complète,
-        # surchargés par la config de l'école (Paramètres → Certificat).
-        cfg = {
-            'entete_ministere': True,   # bloc République / Ministère
-            'reference':        True,   # ligne « Réf. N° »
-            'matricule':        True,   # matricule + statut
-            'naissance':        True,   # date et lieu de naissance
-            'parents':          True,   # lignes père / mère
-            'signature_parent': True,   # colonne signature parent/tuteur
-            'cachet':           True,   # zone cachet de l'établissement
-            'mention_validite': True,   # mention de validité en pied
-            'texte_intro':      '',     # remplace le texte d'introduction standard
-            'texte_conclusion': '',     # remplace la conclusion standard
-        }
-        cfg.update(getattr(tenant, 'config_certificat', None) or {})
-
+        # Un seul modèle standard, simple et lisible : plus d'options à cocher.
+        # L'école qui veut sa propre mise en page dépose son modèle Word.
+        fille = eleve.genre == 'F'
         context = {
             'tenant':          tenant,
-            'cfg':             cfg,
             'eleve':           eleve,
+            'classe_nom':      (eleve.classe.nom if eleve.classe_id
+                                else (eleve.section.nom if eleve.section else '')),
+            'ne':              'née' if fille else 'né',
+            'inscrit':         'inscrite' if fille else 'inscrit',
             'section_nom':     eleve.section.nom if eleve.section else '—',
             'annee_scolaire':  exercice.annee_scolaire if exercice else '—',
             'date_edition':    timezone.now(),
@@ -2520,6 +2510,8 @@ class ModeleCertificatView(APIView):
         return ModeleCertificat.objects.filter(tenant=tenant).first()
 
     def _etat(self, modele):
+        import base64
+        from .modele_word import champs_reconnus
         connus = {c for c, _ in CODES_CERTIFICAT}
         return {
             'modele': None if modele is None else {
@@ -2527,6 +2519,10 @@ class ModeleCertificatView(APIView):
                 'date':           modele.updated_at,
                 'codes':          modele.codes,
                 'codes_inconnus': [c for c in modele.codes if c not in connus],
+                # Ce que l'app remplira : codes {…} et blancs reconnus après
+                # « Nom et prénom », « Né(e) le », « Classe »… L'école voit
+                # d'emblée si son document tel quel suffit.
+                'champs_reconnus': champs_reconnus(base64.b64decode(modele.contenu_b64)),
             },
             'codes_disponibles': [{'code': c, 'description': d} for c, d in CODES_CERTIFICAT],
         }

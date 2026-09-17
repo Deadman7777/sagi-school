@@ -12,7 +12,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
-from apps.eleves.modele_word import ModeleInvalide, codes_du_modele, remplir_docx, verifier_docx
+from apps.eleves.modele_word import (ModeleInvalide, champs_reconnus, codes_du_modele, remplir_docx,
+                                    verifier_docx)
 from apps.eleves.models import Eleve, ModeleCertificat, Section
 from apps.paiements.models import Exercice
 from apps.tenants.models import Tenant
@@ -186,3 +187,83 @@ class ModeleCertificatApiTest(APITestCase):
         self.client.force_authenticate(User.objects.create_user(
             'b@b.sn', 'x', nom='B', role='ADMIN_ECOLE', tenant=autre))
         self.assertIsNone(self.client.get('/api/eleves/certificat-modele/').data['modele'])
+
+
+class BlancsSansCodesTest(SimpleTestCase):
+    """Le modèle déposé tel quel : les blancs après les libellés se remplissent."""
+    VALEURS = {'NOM_COMPLET': 'Awa NDIAYE', 'DATE_NAISSANCE': '12/03/2019', 'LIEU_NAISSANCE': 'Rufisque',
+               'CLASSE': 'CI', 'ANNEE_SCOLAIRE': '2026-2027', 'NOM_PERE': 'Ousmane NDIAYE',
+               'NOM_MERE': 'Fatou SOW', 'MATRICULE': '2026-EFA-0001', 'VILLE': 'Rufisque',
+               'DATE_DU_JOUR': '17/09/2026', 'NOM_TUTEUR': ''}
+
+    def _rempli(self, *paras):
+        return texte_de(remplir_docx(docx(''.join(paragraphe(*p) for p in paras)), self.VALEURS))
+
+    def test_formulations_courantes(self):
+        lignes = self._rempli(
+            [run('Nom et prénom(s) : ..............................')],
+            [run('Né(e) le ……………… à ………………')],
+            [run('Fils/Fille de ______________ et de ______________')],
+            [run('est inscrit(e) en classe de ........ pour l\u2019année scolaire ........')],
+            [run('Matricule : .........')],
+            [run('Fait à .............., le ..............')])
+        self.assertEqual(lignes, [
+            'Nom et prénom(s) : Awa NDIAYE',
+            'Né(e) le 12/03/2019 à Rufisque',
+            'Fils/Fille de Ousmane NDIAYE et de Fatou SOW',
+            'est inscrit(e) en classe de CI pour l\u2019année scolaire 2026-2027',
+            'Matricule : 2026-EFA-0001',
+            'Fait à Rufisque, le 17/09/2026'])
+
+    def test_blanc_decoupe_par_word_et_mise_en_forme_conservee(self):
+        xml = remplir_docx(docx(paragraphe(run('Certifie que '), run('.....', gras=True), run('.......'))),
+                           self.VALEURS)
+        self.assertEqual(texte_de(xml), ['Certifie que Awa NDIAYE'])
+        self.assertIn('<w:b/>', zipfile.ZipFile(io.BytesIO(xml)).read('word/document.xml').decode())
+
+    def test_blanc_non_reconnu_ou_sans_valeur_reste_a_la_main(self):
+        lignes = self._rempli([run('Je soussigné ................, Directeur')],
+                              [run('Tuteur : ..........')])
+        self.assertEqual(lignes, ['Je soussigné ................, Directeur', 'Tuteur : ..........'])
+
+    def test_codes_et_blancs_ensemble(self):
+        lignes = self._rempli([run('{NOM_COMPLET}, classe : .......')])
+        self.assertEqual(lignes, ['Awa NDIAYE, classe : CI'])
+
+    def test_une_ponctuation_ordinaire_n_est_pas_un_blanc(self):
+        self.assertEqual(self._rempli([run('Nom... voir plus bas.')]), ['Nom... voir plus bas.'])
+
+    def test_champs_reconnus(self):
+        contenu = docx(paragraphe(run('Nom et prénom : ......')) + paragraphe(run('Né le ...... à ......')))
+        self.assertEqual([c['code'] for c in champs_reconnus(contenu)],
+                         ['NOM_COMPLET', 'DATE_NAISSANCE', 'LIEU_NAISSANCE'])
+
+
+class GabaritsSobresTest(SimpleTestCase):
+    """Ticket 80 mm et certificat standard : lisibles, sans traits qui chevauchent le texte."""
+
+    def test_ticket_montants_lisibles_sans_bordure_de_ligne(self):
+        from django.template.loader import render_to_string
+        html = render_to_string('pdf/recu_ticket.html', {
+            'lignes': [("Frais d'inscription", 16000.0), ('Taekwondo — Kimono', 10000.0)],
+            'total': 26000.0, 'total_attendu': 300000.0, 'deja_paye_avant': 0, 'total_paye_apres': 26000.0,
+            'reste_apres': 274000.0, 'tenant_nom': 'École', 'no_piece': 'REC-1', 'eleve': 'Awa'})
+        # Espace insécable : un montant ne se coupe pas en bout de ligne.
+        self.assertIn('16\u202f000', html)
+        self.assertIn('274\u202f000 F', html)
+        self.assertNotIn('border-bottom', html)
+        self.assertNotIn('{#', html)
+
+    def test_certificat_standard_accorde_au_genre_et_sans_cadre(self):
+        import datetime
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from apps.tenants.models import Tenant
+        eleve = Eleve(nom_complet='Awa NDIAYE', genre='F', date_naissance=datetime.date(2019, 3, 12))
+        html = render_to_string('pdf/certificat_scolarite.html', {
+            'tenant': Tenant(nom='École Test'), 'eleve': eleve, 'classe_nom': 'CI', 'ne': 'née',
+            'inscrit': 'inscrite', 'annee_scolaire': '2026-2027', 'date_edition': timezone.now(),
+            'tenant_ville': 'Rufisque'})
+        self.assertIn('Née le', html)
+        self.assertIn('régulièrement inscrite', html)
+        self.assertNotIn('border', html)

@@ -13,7 +13,17 @@ correction d'orthographe, un changement de police au milieu d'un mot suffisent.
 « COMPLET} ». On recolle donc le texte de chaque paragraphe pour y chercher les
 codes, puis on redistribue le résultat dans les morceaux d'origine, ce qui
 conserve la mise en forme du premier caractère de chaque code.
+
+**Sans codes, les blancs du modèle.** Une école dépose le plus souvent son
+certificat tel qu'elle l'imprime : « Nom et prénom : ................ »,
+« Né(e) le ........ à ........ », « Fait à ........, le ........ ». Lui demander
+d'y placer des codes, c'est lui demander de retoucher son document à chaque
+version. Chaque suite de points, de soulignés ou de points de suspension est
+donc un blanc, et le libellé qui le précède dans le paragraphe dit ce qu'il
+attend. Un blanc dont le libellé n'est pas reconnu, ou dont la valeur manque
+sur la fiche, reste tel quel : il se remplit à la main, comme avant.
 """
+import unicodedata
 import io
 import re
 import zipfile
@@ -49,6 +59,109 @@ def verifier_docx(contenu):
                 raise ModeleInvalide("Ce fichier n'est pas un document Word (.docx).")
     except zipfile.BadZipFile:
         raise ModeleInvalide("Ce fichier n'est pas un document Word (.docx).")
+
+
+# Un blanc : au moins QUATRE points, soulignés ou points de suspension, espaces
+# isolés tolérés (« . . . . »). Trois points sont une ponctuation ordinaire.
+_BLANC = re.compile(r'(?:[._\u2026][ \u00a0]?){4,}')
+
+# Libellé → code, du plus précis au plus général. À égalité de position, la
+# première règle gagne.
+_REGLES = [
+    (r"date de naissance", 'DATE_NAISSANCE'),
+    (r"\bnee?s? ?(\(e\))? ?le\b", 'DATE_NAISSANCE'),
+    (r"lieu de naissance", 'LIEU_NAISSANCE'),
+    (r"date d'inscription|inscrite? le\b", 'DATE_INSCRIPTION'),
+    (r"date d'entree|depuis le\b", 'DATE_ENTREE'),
+    (r"nom et prenoms?|prenoms? et noms?|nom complet|prenoms? nom", 'NOM_COMPLET'),
+    (r"\b(l'eleve|eleve|l'enfant|enfant|certifie que|atteste que)\b", 'NOM_COMPLET'),
+    (r"matricule", 'MATRICULE'),
+    (r"annee scolaire", 'ANNEE_SCOLAIRE'),
+    (r"\bclasse\b|\bniveau\b", 'CLASSE'),
+    (r"\b(fils|fille|enfant) de\b|\bpere\b", 'NOM_PERE'),
+    (r"\bmere\b", 'NOM_MERE'),
+    (r"tuteur", 'NOM_TUTEUR'),
+    (r"\bsexe\b|\bgenre\b", 'SEXE'),
+    (r"fait a\b", 'VILLE'),
+    (r"\bnom\b", 'NOM_COMPLET'),
+]
+_REGLES = [(re.compile(motif), code) for motif, code in _REGLES]
+
+# Ce que la brève liaison entre deux blancs veut dire, selon le blanc précédent :
+# « né le ..... à ..... », « fils de ..... et de ..... », « Fait à ....., le ..... ».
+_SUITES = {
+    ('DATE_NAISSANCE', 'a'): 'LIEU_NAISSANCE',
+    ('NOM_PERE', 'et de'): 'NOM_MERE',
+    ('VILLE', 'le'): 'DATE_DU_JOUR',
+}
+
+LIBELLES_CHAMPS = {
+    'NOM_COMPLET': "Prénom et nom", 'MATRICULE': 'Matricule', 'DATE_NAISSANCE': 'Date de naissance',
+    'LIEU_NAISSANCE': 'Lieu de naissance', 'CLASSE': 'Classe', 'ANNEE_SCOLAIRE': 'Année scolaire',
+    'NOM_PERE': 'Père', 'NOM_MERE': 'Mère', 'NOM_TUTEUR': 'Tuteur', 'SEXE': 'Sexe',
+    'DATE_INSCRIPTION': "Date d'inscription", 'DATE_ENTREE': "Date d'entrée",
+    'VILLE': 'Lieu de délivrance', 'DATE_DU_JOUR': 'Date de délivrance',
+}
+
+
+def _normaliser(texte):
+    sans_accents = unicodedata.normalize('NFKD', texte)
+    sans_accents = ''.join(c for c in sans_accents if not unicodedata.combining(c))
+    return re.sub(r'\s+', ' ', sans_accents.replace('\u2019', "'").lower())
+
+
+def _champ_du_blanc(avant, precedent):
+    """Le code attendu par un blanc, d'après le texte qui le précède."""
+    liaison = re.sub(r'[\s:,;()\-]+', ' ', _normaliser(avant)).strip()
+    if precedent and (precedent, liaison) in _SUITES:
+        return _SUITES[(precedent, liaison)]
+    if liaison in ('le', 'en date du') and precedent is None:
+        return 'DATE_DU_JOUR'
+    proche = _normaliser(avant)[-60:]
+    meilleur, fin_max = None, -1
+    for motif, code in _REGLES:
+        for m in motif.finditer(proche):
+            if m.end() > fin_max:
+                meilleur, fin_max = code, m.end()
+    return meilleur
+
+
+def _blancs(complet, occupes=()):
+    """[(début, fin, code|None)] des blancs d'un paragraphe, hors zones de codes."""
+    trouves, precedent, fin_prec = [], None, 0
+    for m in _BLANC.finditer(complet):
+        debut, fin = m.start(), m.end()
+        while fin > debut and complet[fin - 1] in ' \u00a0':
+            fin -= 1
+        if any(a < fin and debut < b for a, b in occupes):
+            continue
+        code = _champ_du_blanc(complet[fin_prec:debut], precedent)
+        trouves.append((debut, fin, code))
+        precedent, fin_prec = code, fin
+    return trouves
+
+
+def champs_reconnus(contenu):
+    """Ce que l'app remplira dans ce modèle : codes {…} et blancs reconnus.
+
+    [{'code', 'libelle', 'source': 'code'|'blanc'}], sans doublon, dans l'ordre.
+    """
+    vus, champs = set(), []
+    with zipfile.ZipFile(io.BytesIO(contenu)) as z:
+        for nom in z.namelist():
+            if not _PARTIES.match(nom):
+                continue
+            for groupe in _groupes(z.read(nom).decode('utf-8')):
+                texte = ''.join(unescape(m.group(2), _ENTITES) for m in groupe)
+                codes = [(c.start(), c.end(), c.group(1).upper(), 'code') for c in _CODE.finditer(texte)]
+                blancs = [(a, b, code, 'blanc') for a, b, code in
+                          _blancs(texte, [(a, b) for a, b, _, _ in codes]) if code]
+                for _, _, code, source in sorted(codes + blancs):
+                    if code not in vus:
+                        vus.add(code)
+                        champs.append({'code': code, 'source': source,
+                                       'libelle': LIBELLES_CHAMPS.get(code, code)})
+    return champs
 
 
 def codes_du_modele(contenu):
@@ -102,8 +215,15 @@ def _remplir_xml(xml, valeurs):
     for groupe in _groupes(xml):
         textes = [unescape(m.group(2), _ENTITES) for m in groupe]
         complet = ''.join(textes)
-        codes = [c for c in _CODE.finditer(complet) if c.group(1).upper() in valeurs]
-        if not codes:
+        tous_codes = list(_CODE.finditer(complet))
+        # (début, fin, valeur) : les codes connus, puis les blancs reconnus
+        # dont la fiche a la valeur. Un blanc sans valeur reste à remplir à la main.
+        remplacements = [(c.start(), c.end(), str(valeurs[c.group(1).upper()] or ''))
+                         for c in tous_codes if c.group(1).upper() in valeurs]
+        for debut, fin, code in _blancs(complet, [(c.start(), c.end()) for c in tous_codes]):
+            if code and str(valeurs.get(code) or '').strip():
+                remplacements.append((debut, fin, str(valeurs[code])))
+        if not remplacements:
             continue
         # Position de début de chaque morceau dans le texte recollé
         debuts, pos = [], 0
@@ -118,12 +238,11 @@ def _remplir_xml(xml, valeurs):
                     return i, position - debuts[i]
             return 0, 0
 
-        # De droite à gauche : une modification ne décale jamais les codes
-        # restant à traiter, situés avant elle.
-        for c in reversed(codes):
-            valeur = str(valeurs[c.group(1).upper()] or '')
-            i, off_i = morceau(c.start())
-            j, off_j = morceau(c.end(), fin=True)
+        # De droite à gauche : une modification ne décale jamais les zones
+        # restant à traiter, situées avant elle.
+        for debut, fin, valeur in sorted(remplacements, reverse=True):
+            i, off_i = morceau(debut)
+            j, off_j = morceau(fin, fin=True)
             if i == j:
                 textes[i] = textes[i][:off_i] + valeur + textes[i][off_j:]
             else:
