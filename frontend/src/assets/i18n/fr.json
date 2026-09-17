@@ -616,7 +616,13 @@
     "cert_word_aucun_code": "Aucun code trouvé dans ce modèle : le certificat sera identique pour tous les élèves.",
     "cert_word_codes": "Codes disponibles",
     "cert_word_copie": "Copié : collez-le dans votre document Word.",
-    "cert_word_depose": "Modèle Word enregistré"
+    "cert_word_depose": "Modèle Word enregistré",
+    "mode_tarif": "Facturation",
+    "mode_mensuel": "Au mois",
+    "mode_journee": "À la journée",
+    "tarif_demi_journee": "Tarif ½ journée",
+    "tarif_journee": "Tarif journée",
+    "aide_journee": "Le dû naît de l'appel du jour (Élèves → Garderie)."
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -1458,5 +1464,35 @@
     "erreur": "L'opération n'a pas abouti.",
     "etat_pdf": "État (PDF)",
     "releve_pdf": "Relevé du client (PDF)"
+  },
+  "garderie": {
+    "title": "Garderie",
+    "subtitle": "Appel du jour et suivi des enfants gardés à la journée",
+    "onglet_appel": "Appel du jour",
+    "onglet_recap": "Récapitulatif du mois",
+    "date": "Date",
+    "mois": "Mois",
+    "classe": "Classe",
+    "toutes_classes": "Toutes les classes",
+    "aucun_enfant": "Aucun enfant gardé à la journée. Passez une section en « À la journée » et affectez-y les enfants.",
+    "aller_parametres": "Paramètres → Frais Sections",
+    "presents": "{{n}} présent(s)",
+    "tous_journee": "Tous en journée",
+    "tous_absents": "Tous absents",
+    "absent": "Absent",
+    "journee": "journée",
+    "non_enregistre": "Modifications non enregistrées",
+    "enregistrer": "Enregistrer l'appel",
+    "enregistre": "Appel enregistré",
+    "bilan": "{{ajoutes}} ajout(s), {{modifies}} modification(s), {{retires}} retrait(s)",
+    "confirmer_abandon": "L'appel en cours n'est pas enregistré. Changer de date quand même ?",
+    "enfant": "Enfant",
+    "du": "Dû",
+    "verse": "Versé",
+    "reste": "Reste",
+    "total": "Total",
+    "aide_encaisser": "Pour encaisser, cochez le mois au guichet : la famille peut régler au jour, à la semaine ou au mois.",
+    "aller_paiements": "Aller aux paiements",
+    "libelle_guichet": "Garderie (jours de présence)"
   }
 }

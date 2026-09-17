@@ -310,10 +310,21 @@ class PaiementViewSet(viewsets.ModelViewSet):
             # comme pour les frais d'entrée. Deux reçus au même intitulé ne
             # laissaient pas voir que le second achevait le premier.
             mois_entames = _mois_deja_entames(p, mois_regles, paiements_avant, meme_jour)
+            garderie = bool(p.eleve_id and p.eleve.a_la_journee)
             label_mens = ('Reliquat mensualité'
                           if mois_entames and len(mois_entames) == len(mois_regles)
                           else 'Mensualité scolaire')
-            if mois_concernes:
+            if garderie:
+                # Garde à la journée : le reçu dit quels jours il règle, pas
+                # une « mensualité » que la famille n'a jamais eue.
+                from apps.eleves.garderie import detail_du_mois, libelle_detail
+                label_mens = 'Reliquat garderie' if label_mens.startswith('Reliquat') else 'Garderie'
+                details = [f"{_MOIS.get(m, str(m))} : {libelle_detail(detail_du_mois(p.eleve, m))}"
+                           for m in mois_regles if libelle_detail(detail_du_mois(p.eleve, m))]
+                if details:
+                    mois_concernes_garderie = ' ; '.join(details)
+                    label_mens += f' ({mois_concernes_garderie})'
+            elif mois_concernes:
                 label_mens += f' ({mois_concernes})'
             if mois_entames and len(mois_entames) != len(mois_regles):
                 entames = ', '.join(_MOIS.get(m, str(m)) for m in sorted(mois_entames))

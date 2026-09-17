@@ -1470,6 +1470,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             'matricule':      eleve.matricule or '',
             'statut':         eleve.statut,
             'section_nom':    section.nom if section else '',
+            # Garde à la journée : le dû de chaque mois vient des jours de
+            # présence ; l'écran l'intitule « Garderie », pas « Mensualité ».
+            'a_la_journee':   eleve.a_la_journee,
             # Frais d'entrée : « Inscription », ou le mot de l'école pour le
             # renouvellement d'un ancien élève. C'est ce libellé qui titre le
             # champ, le bouton de type de paiement et la ligne du reçu.
@@ -2555,3 +2558,57 @@ class ParcoursElevePDFView(APIView):
         safe_name = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="parcours_{safe_name}.pdf"'
         return response
+
+
+class GarderieAppelView(APIView):
+    """Appel du jour de la garderie à la journée (voir apps/eleves/garderie.py).
+
+    GET  ?date=AAAA-MM-JJ[&classe=<id>] → les enfants et leur présence ce jour
+    POST {date, presences: [{eleve, formule|null}]} → enregistre l'appel
+    """
+    permission_classes = [IsAuthenticated, IsTenantMember]
+
+    @staticmethod
+    def _jour(valeur):
+        import datetime as _dt
+        if not valeur:
+            return _dt.date.today()
+        return _dt.date.fromisoformat(str(valeur)[:10])
+
+    def get(self, request):
+        from .garderie import GarderieErreur, appel_du_jour
+        try:
+            return Response(appel_du_jour(get_tenant(request), self._jour(request.query_params.get('date')),
+                                          request.query_params.get('classe') or None))
+        except ValueError as exc:       # GarderieErreur ou date illisible
+            return Response({'error': str(exc) if isinstance(exc, GarderieErreur) else 'Date invalide.'},
+                            status=400)
+
+    def post(self, request):
+        from .garderie import GarderieErreur, enregistrer_appel
+        try:
+            resultat = enregistrer_appel(get_tenant(request), self._jour(request.data.get('date')),
+                                         request.data.get('presences') or [], auteur=str(request.user))
+        except ValueError as exc:
+            return Response({'error': str(exc) if isinstance(exc, GarderieErreur) else 'Date invalide.'},
+                            status=400)
+        return Response(resultat)
+
+
+class GarderieRecapView(APIView):
+    """Récapitulatif d'un mois : jours, dû, versé, reste par enfant. ?mois=1..12[&classe=]"""
+    permission_classes = [IsAuthenticated, IsTenantMember]
+
+    def get(self, request):
+        from .garderie import GarderieErreur, recap_du_mois
+        try:
+            mois = int(request.query_params.get('mois') or timezone.now().month)
+            if not 1 <= mois <= 12:
+                raise ValueError
+            return Response(recap_du_mois(get_tenant(request), mois,
+                                          request.query_params.get('classe') or None))
+        except GarderieErreur as exc:
+            return Response({'error': str(exc)}, status=400)
+        except (TypeError, ValueError):
+            return Response({'error': 'Mois invalide.'}, status=400)
+

@@ -52,6 +52,9 @@ def precharger(qs):
 
     from apps.paiements.models import Paiement
 
+    from .garderie import PREFETCH_PRESENCES
+    from .models import PresenceGarderie
+
     actif    = Q(paiements__statut='ACTIF')
     organism = actif & Q(paiements__organisme__isnull=False)
 
@@ -61,6 +64,10 @@ def precharger(qs):
         # `pec_organisme` parcourt cette relation, et les propriétés qui en
         # dépendent l'appellent chacune à leur tour.
         'prises_en_charge_organisme__organisme',
+        # Jours de garde des enfants facturés à la journée (vide pour les autres).
+        Prefetch('presences_garderie',
+                 queryset=PresenceGarderie.objects.only('eleve_id', 'date', 'formule', 'montant'),
+                 to_attr=PREFETCH_PRESENCES),
         Prefetch('paiements',
                  queryset=Paiement.objects.filter(statut='ACTIF').only(
                      'eleve_id', 'montant_inscription', 'montant_mensualite',
@@ -114,6 +121,14 @@ def mois_factures(eleve, jusqu_a_la_sortie=True):
         debut = eleve.exercice.date_debut.month
         premier = eleve.exercice.nb_mensualites - nb
         mois = [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
+    if eleve.a_la_journee and eleve.exercice_id:
+        # Garderie à la journée : un jour gardé hors du calendrier des
+        # mensualités (vacances, mois d'été) reste dû. Il ajoute son mois,
+        # remis dans l'ordre de l'année scolaire.
+        from .garderie import mois_avec_presences
+        debut_ex = eleve.exercice.date_debut.month
+        mois = sorted(set(mois) | set(mois_avec_presences(eleve)),
+                      key=lambda m: (m - debut_ex) % 12)
     if jusqu_a_la_sortie:
         mois = _tronquer_a_la_sortie(eleve, mois)
     return mois

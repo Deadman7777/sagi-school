@@ -527,7 +527,7 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
 
           <div class="montants-grid">
             <div class="form-group">
-              <label>Mensualité
+              <label>{{ saisieDonnees()!.a_la_journee ? ('garderie.libelle_guichet' | translate) : 'Mensualité' }}
                 @if (saisieDonnees()!.fees_nets.mensualite > 0) {
                   <span class="fee-hint">Tarif : {{ saisieDonnees()!.fees_nets.mensualite | number:'1.0-0' }}</span>
                 }

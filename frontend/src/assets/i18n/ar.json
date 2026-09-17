@@ -616,7 +616,13 @@
     "cert_word_aucun_code": "لم يُعثر على أي رمز في هذا النموذج: ستكون الشهادة واحدة لجميع التلاميذ.",
     "cert_word_codes": "الرموز المتاحة",
     "cert_word_copie": "تم النسخ: الصقه في مستند Word.",
-    "cert_word_depose": "تم حفظ نموذج Word"
+    "cert_word_depose": "تم حفظ نموذج Word",
+    "mode_tarif": "الفوترة",
+    "mode_mensuel": "شهريًا",
+    "mode_journee": "باليوم",
+    "tarif_demi_journee": "تعريفة نصف اليوم",
+    "tarif_journee": "تعريفة اليوم الكامل",
+    "aide_journee": "ينشأ المستحق من نداء الحضور اليومي (التلاميذ ← الحضانة)."
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",
@@ -1458,5 +1464,35 @@
     "erreur": "لم تنجح العملية.",
     "etat_pdf": "الكشف (PDF)",
     "releve_pdf": "كشف حساب العميل (PDF)"
+  },
+  "garderie": {
+    "title": "الحضانة",
+    "subtitle": "نداء الحضور اليومي ومتابعة الأطفال المفوترين باليوم",
+    "onglet_appel": "نداء اليوم",
+    "onglet_recap": "ملخص الشهر",
+    "date": "التاريخ",
+    "mois": "الشهر",
+    "classe": "القسم",
+    "toutes_classes": "كل الأقسام",
+    "aucun_enfant": "لا يوجد طفل مفوتر باليوم. اجعل قسمًا «باليوم» وأسند إليه الأطفال.",
+    "aller_parametres": "الإعدادات ← رسوم الأقسام",
+    "presents": "{{n}} حاضر",
+    "tous_journee": "الكل يوم كامل",
+    "tous_absents": "الكل غائب",
+    "absent": "غائب",
+    "journee": "يوم",
+    "non_enregistre": "تعديلات غير محفوظة",
+    "enregistrer": "حفظ النداء",
+    "enregistre": "تم حفظ النداء",
+    "bilan": "{{ajoutes}} إضافة، {{modifies}} تعديل، {{retires}} حذف",
+    "confirmer_abandon": "النداء الحالي غير محفوظ. تغيير التاريخ على أي حال؟",
+    "enfant": "الطفل",
+    "du": "المستحق",
+    "verse": "المدفوع",
+    "reste": "الباقي",
+    "total": "المجموع",
+    "aide_encaisser": "للتحصيل، حدّد الشهر في الشباك: يمكن للأسرة الدفع يوميًا أو أسبوعيًا أو شهريًا.",
+    "aller_paiements": "الذهاب إلى المدفوعات",
+    "libelle_guichet": "الحضانة (أيام الحضور)"
   }
 }
