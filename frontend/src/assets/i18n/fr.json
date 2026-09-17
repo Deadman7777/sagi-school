@@ -431,7 +431,9 @@
     "cheque": "Chèque",
     "choisir_mode_ph": "Choisir...",
     "inclure_premier_mois": "Inclure le premier mois ({{mois}}) dans l'inscription",
-    "reste_mois": "reste"
+    "reste_mois": "reste",
+    "premiere_adhesion": "{{service}} : première adhésion (équipement dû)",
+    "premiere_adhesion_aide": "Décochez si l'enfant a déjà adhéré les années passées. Coché et non payé, l'équipement reste dû et sera réclamé aux prochains paiements."
   },
   "parametres": {
     "title": "Paramètres",

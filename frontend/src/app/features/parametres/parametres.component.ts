@@ -1140,7 +1140,7 @@ import { MessageService } from 'primeng/api';
     <p-dialog [header]="'⏱️ ' + ('parametres.formules' | translate) + (sectionFormules ? ' — ' + sectionFormules.nom : '')"
               [(visible)]="formulesDialogVisible" [modal]="true" [style]="{width:'560px', maxWidth:'96vw'}" [draggable]="false">
       <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.formules_aide' | translate }}</p>
-      <div class="compo-row" *ngFor="let f of formulesRows; let i = index">
+      <div class="compo-row quatre" *ngFor="let f of formulesRows; let i = index">
         <input pInputText [(ngModel)]="f.nom" class="w-full" [placeholder]="'parametres.formule_nom' | translate" />
         <p-inputNumber [(ngModel)]="f.frais_mensualite" mode="decimal" [min]="0"
                        styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
@@ -1208,7 +1208,7 @@ import { MessageService } from 'primeng/api';
     <p-dialog [header]="'🧩 ' + ('parametres.service_adhesion' | translate) + (serviceAdhesion ? ' — ' + serviceAdhesion.nom : '')"
               [(visible)]="adhesionDialogVisible" [modal]="true" [style]="{width:'600px', maxWidth:'96vw'}" [draggable]="false">
       <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.service_adhesion_aide' | translate }}</p>
-      <div class="compo-row" *ngFor="let r of adhesionRows; let i = index">
+      <div class="compo-row quatre" *ngFor="let r of adhesionRows; let i = index">
         <input pInputText [(ngModel)]="r.libelle" class="w-full" [placeholder]="'parametres.element_libelle' | translate" />
         <p-inputNumber [(ngModel)]="r.montant" mode="decimal" [min]="0"
                        styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
@@ -1322,6 +1322,12 @@ import { MessageService } from 'primeng/api';
     .compo-link { font-size:11px; color:#00d4aa; cursor:pointer; user-select:none; }
     .compo-link:hover { text-decoration:underline; }
     .compo-row { display:grid; grid-template-columns:1fr 140px 40px; gap:8px; align-items:center; margin-bottom:8px; }
+    /* Ligne à quatre éléments (libellé, montant, case à cocher, poubelle) : la
+       case avait hérité de la colonne de 40 px de la poubelle et disparaissait. */
+    .compo-row.quatre { grid-template-columns:minmax(0,1fr) 130px auto 40px; }
+    .compo-row.quatre .case-service { margin-top:0; }
+    @media (max-width:560px) { .compo-row.quatre { grid-template-columns:minmax(0,1fr) 110px 40px; }
+                               .compo-row.quatre .case-service { grid-column:1 / -1; } }
     .compo-total { margin-top:14px; padding-top:10px; border-top:1px solid var(--border); font-size:13px; color:var(--text-2); text-align:right; }
     .sc-frais.total { grid-column:3/4; }
     .sc-total { font-size:16px; font-weight:700; color:#00d4aa; font-family:monospace; padding:8px 0; }

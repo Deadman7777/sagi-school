@@ -431,7 +431,9 @@
     "cheque": "Cheque",
     "choisir_mode_ph": "Choose...",
     "inclure_premier_mois": "Include the first month ({{mois}}) with enrolment",
-    "reste_mois": "remaining"
+    "reste_mois": "remaining",
+    "premiere_adhesion": "{{service}}: first membership (equipment due)",
+    "premiere_adhesion_aide": "Untick if the child already joined in previous years. Ticked and unpaid, the equipment stays due and will be claimed at the next payments."
   },
   "parametres": {
     "title": "Settings",

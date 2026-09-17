@@ -1538,7 +1538,12 @@ class EleveViewSet(viewsets.ModelViewSet):
         #
         # Échu seulement : réclamer un mois qui n'est pas encore exigible
         # transformerait l'échéancier de l'école en avance obligatoire.
-        arr_entree = round(ech['hors_mensualite']['reste']
+        # Les frais d'adhésion des services restant dus se réclament sous leur
+        # propre nom (« Taekwondo — Kimono ») : les laisser dans le reliquat
+        # d'inscription les encaisserait comme inscription, et le kimono
+        # resterait dû au passage suivant.
+        reste_adhesions = sum(a['reste'] for a in adhesions)
+        arr_entree = round(max(ech['hors_mensualite']['reste'] - reste_adhesions, 0.0)
                            if ech['hors_mensualite'] and ech['hors_mensualite']['echu']
                            else 0.0, 2)
         arr_mois = [
@@ -1551,7 +1556,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             # de l'école pour le renouvellement.
             'entree':  {'libelle': eleve.libelle_frais_entree, 'reste': arr_entree},
             'mois':    arr_mois,
-            'total':   round(arr_entree + sum(m['reste'] for m in arr_mois), 2),
+            # Frais d'adhésion de services encore dus (exigibles dès l'entrée).
+            'adhesions': round(reste_adhesions, 2),
+            'total':   round(arr_entree + reste_adhesions + sum(m['reste'] for m in arr_mois), 2),
         }
 
         return Response({
@@ -1632,6 +1639,18 @@ class EleveViewSet(viewsets.ModelViewSet):
             'mois_ecole':        mois_ecole,
             'services':          services_abonnes,
             'adhesions':         adhesions,
+            # Services dont un élément n'est dû qu'à la première adhésion (kimono) :
+            # le guichet décide, enfant par enfant, s'il est dû. Ce choix est
+            # enregistré sur l'abonnement — un élément dû et non réglé reste
+            # un impayé, comme le reste.
+            'adhesions_premiere_fois': [
+                {'service': str(ab.service_id), 'nom': ab.service.nom,
+                 'premiere_adhesion': ab.premiere_adhesion,
+                 'elements': [{'libelle': el.get('libelle', ''), 'montant': float(el.get('montant') or 0)}
+                              for el in ab.service.composition_adhesion or [] if el.get('premiere_fois')]}
+                for ab in eleve.abonnements.all()
+                if ab.service.actif and any(el.get('premiere_fois') for el in ab.service.composition_adhesion or [])
+            ],
             # Le premier mois facturé se règle avec l'inscription (réglage de
             # l'école ou service qui l'exige) : le guichet le propose alors
             # dans le paiement d'inscription, et le mois passe payé.

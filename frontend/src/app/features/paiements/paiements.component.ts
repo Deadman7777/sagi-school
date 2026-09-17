@@ -496,6 +496,22 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
           </div>
+          <!-- Équipement dû seulement à la première adhésion (kimono) : le
+               guichet décide pour CET enfant. Coché, il est dû — payé ou non ;
+               non payé, il reste un impayé réclamé aux passages suivants. -->
+          @if (saisieDonnees()!.adhesions_premiere_fois?.length) {
+            <div class="premier-mois">
+              @for (ab of saisieDonnees()!.adhesions_premiere_fois; track ab.service) {
+                <label class="premier-mois-case">
+                  <input type="checkbox" [checked]="ab.premiere_adhesion" [disabled]="loadingSaisie()"
+                         (change)="changerPremiereAdhesion(ab, $any($event.target).checked)" />
+                  {{ 'paiements.premiere_adhesion' | translate:{ service: ab.nom } }}
+                  <span class="fee-hint">{{ libelleElementsPremiereFois(ab) }}</span>
+                </label>
+              }
+              <div class="aide-adhesion">{{ 'paiements.premiere_adhesion_aide' | translate }}</div>
+            </div>
+          }
           <!-- Premier mois réglé avec l'inscription : le mois passe payé. -->
           @if (premierMoisProposable(); as pm) {
             <div class="premier-mois">
@@ -1053,6 +1069,7 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
     <!-- === FIN ONGLET CHARGES === -->
   `,
   styles: [`
+    .aide-adhesion { font-size:11px; color:var(--text-3); margin-top:4px; }
     .premier-mois { margin-top:10px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; }
     .premier-mois-case { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); flex-wrap:wrap; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
@@ -1507,6 +1524,35 @@ export class PaiementsComponent implements OnInit {
     return m && m.du && m.reste > 0 ? m : null;
   }
 
+  /** « Kimono 10 000 », pour la case du guichet. */
+  libelleElementsPremiereFois(ab: any): string {
+    return (ab.elements || [])
+      .map((el: any) => `${el.libelle} ${Number(el.montant).toLocaleString('fr-FR')} F`).join(', ');
+  }
+
+  /** Enregistre sur l'abonnement si l'équipement est dû pour cet enfant, puis
+   *  recharge la saisie : le dû, les lignes proposées et le reçu en tiennent
+   *  compte. Le type de paiement et le mode choisis sont conservés. */
+  changerPremiereAdhesion(ab: any, due: boolean) {
+    const eleve = this.eleveSelectionne;
+    if (!eleve) return;
+    this.loadingSaisie.set(true);
+    this.elevesService.updateEleve(eleve.id, { premieres_adhesions: { [ab.service]: due } } as any).subscribe({
+      next: () => this.elevesService.getSaisiePaiement(eleve.id).subscribe({
+        next: data => {
+          this.saisieDonnees.set(data);
+          this.loadingSaisie.set(false);
+          this.appliquerAutoRemplissage(data);
+        },
+        error: () => this.loadingSaisie.set(false),
+      }),
+      error: err => {
+        this.loadingSaisie.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'), detail: this.messageErreur(err) });
+      },
+    });
+  }
+
   togglePremierMois() {
     const premier = this.premierMoisProposable();
     this.form.mois_regles = this.form.inclure_premier_mois && premier ? [premier.num] : [];
@@ -1546,6 +1592,12 @@ export class PaiementsComponent implements OnInit {
     } else {
       retenus = [
         ...mensuels,
+        // Frais d'adhésion encore dus (kimono non réglé à l'inscription) : un
+        // impayé se réclame au passage suivant, sous son nom.
+        ...(data.adhesions || [])
+          .filter((a: any) => a.reste > 0)
+          .map((a: any) => ({ id: 'adh:' + a.cle, nom: `${a.service} — ${a.libelle}`, periodicite: 'UNIQUE',
+                              nature: 'ADHESION', cle: a.cle, tarif: a.montant, du: Math.round(a.reste) })),
         ...tous.filter((s: any) => s.periodicite === 'UNIQUE' && s.mois_unique &&
                                    this.form.mois_regles.includes(s.mois_unique))
                .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE', nature: 'UNIQUE',

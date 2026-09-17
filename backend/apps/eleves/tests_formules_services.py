@@ -198,3 +198,37 @@ class AdhesionServicesTest(Base):
             'nom': 'Judo', 'montant': 5000, 'periodicite': 'MENSUEL',
             'composition_adhesion': [{'libelle': 'Kimono', 'montant': -1}]}, format='json')
         self.assertEqual(r.status_code, 400)
+
+
+class AdhesionAuGuichetTest(AdhesionServicesTest):
+    """Le guichet décide si l'équipement « première adhésion » est dû ; dû et non payé, il reste un impayé."""
+
+    def _saisie(self, e):
+        return self.client.get(f'/api/eleves/{e.id}/saisie-paiement/').data
+
+    def test_le_guichet_voit_et_change_la_premiere_adhesion(self):
+        e = self._inscrit()
+        saisie = self._saisie(e)
+        self.assertEqual([(a['nom'], a['premiere_adhesion'], [x['libelle'] for x in a['elements']])
+                          for a in saisie['adhesions_premiere_fois']], [('Taekwondo', True, ['Kimono'])])
+        r = self.client.patch(f'/api/eleves/{e.id}/', {'premieres_adhesions': {str(self.tkd.id): False}},
+                              format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        saisie = self._saisie(e)
+        self.assertFalse(saisie['adhesions_premiere_fois'][0]['premiere_adhesion'])
+        self.assertEqual([a['libelle'] for a in saisie['adhesions']], ["Droit d'inscription"])
+
+    def test_kimono_du_et_non_paye_reste_un_impaye_a_son_nom(self):
+        e = self._inscrit()
+        cles = {a['libelle']: a['cle'] for a in self._saisie(e)['adhesions']}
+        Paiement.objects.create(
+            tenant=self.tenant, exercice=self.ex, eleve=e, no_piece='INS-3', mode_paiement='ESPECE',
+            statut='ACTIF', montant_inscription=30000, montant_divers=12000,
+            services_regles=[{'nom': "Taekwondo — Droit d'inscription", 'montant': 12000, 'nature': 'ADHESION',
+                              'cle': cles["Droit d'inscription"]}])
+        saisie = self._saisie(e)
+        self.assertEqual({a['libelle']: a['reste'] for a in saisie['adhesions']},
+                         {"Droit d'inscription": 0, 'Kimono': 10000})
+        # Réclamé sous son nom, pas noyé dans le reliquat d'inscription.
+        self.assertEqual((saisie['arrieres']['adhesions'], saisie['arrieres']['entree']['reste']), (10000, 0))
+        self.assertEqual(Eleve.objects.get(pk=e.pk).reste_a_payer, 10000 + 10 * 27000)
