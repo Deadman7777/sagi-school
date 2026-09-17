@@ -616,7 +616,13 @@
     "cert_word_aucun_code": "No code found in this template: the certificate will be the same for every student.",
     "cert_word_codes": "Available codes",
     "cert_word_copie": "Copied: paste it into your Word document.",
-    "cert_word_depose": "Word template saved"
+    "cert_word_depose": "Word template saved",
+    "mode_tarif": "Billing",
+    "mode_mensuel": "Monthly",
+    "mode_journee": "Per day",
+    "tarif_demi_journee": "Half-day rate",
+    "tarif_journee": "Full-day rate",
+    "aide_journee": "Amounts due come from the daily roll call (Students → Day care)."
   },
   "cloture": {
     "title": "Year Closing",
@@ -1502,5 +1508,35 @@
     "aide_dossier": "Signed purchase order, contract, delivery report…",
     "piece_jointe": "Document attached",
     "fichier_trop_gros": "File too large (5 MB max)."
+  },
+  "garderie": {
+    "title": "Day care",
+    "subtitle": "Daily roll call and follow-up of children billed per day",
+    "onglet_appel": "Roll call",
+    "onglet_recap": "Monthly summary",
+    "date": "Date",
+    "mois": "Month",
+    "classe": "Class",
+    "toutes_classes": "All classes",
+    "aucun_enfant": "No child billed per day. Switch a section to \"Per day\" and assign children to it.",
+    "aller_parametres": "Settings → Section fees",
+    "presents": "{{n}} present",
+    "tous_journee": "All full day",
+    "tous_absents": "All absent",
+    "absent": "Absent",
+    "journee": "day",
+    "non_enregistre": "Unsaved changes",
+    "enregistrer": "Save roll call",
+    "enregistre": "Roll call saved",
+    "bilan": "{{ajoutes}} added, {{modifies}} changed, {{retires}} removed",
+    "confirmer_abandon": "The current roll call is not saved. Change date anyway?",
+    "enfant": "Child",
+    "du": "Due",
+    "verse": "Paid",
+    "reste": "Remaining",
+    "total": "Total",
+    "aide_encaisser": "To collect, tick the month at the payment desk: families can pay per day, per week or per month.",
+    "aller_paiements": "Go to payments",
+    "libelle_guichet": "Day care (days attended)"
   }
 }

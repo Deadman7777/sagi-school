@@ -300,7 +300,7 @@ export class ShellComponent {
       'ADMIN_ECOLE':     ['*'],
       'ADMIN_RH':        ['/dashboard', '/rh'],
       'ADMIN_COMPTABLE': ['/dashboard', '/comptabilite', '/fiscal', '/paiements', '/suivi-mensuel', '/gmrf', '/gouvernance'],
-      'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/paiements', '/suivi-mensuel', '/academique'],
+      'ADMIN_SCOLARITE': ['/dashboard', '/eleves', '/garderie', '/paiements', '/suivi-mensuel', '/academique'],
       'LECTEUR':         ['/dashboard'],
     };
     const roleAllowed = acces[role] || [];
@@ -336,6 +336,7 @@ export class ShellComponent {
     const titles: Record<string, string> = {
       '/dashboard':    this.isSuperAdmin() ? 'nav.dashboard' : 'nav.dashboard',
       '/eleves':       'nav.eleves',
+      '/garderie':     'garderie.title',
       '/paiements':    'nav.paiements',
       '/comptabilite': 'nav.comptabilite',
       '/rh': 'nav.rh',

@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ElevesService } from '../../../core/services/eleves.service';
@@ -104,6 +105,12 @@ const MOIS_ANNEE = [
                   [outlined]="onglet() !== 'anciens'"
                   [pTooltip]="'eleves.anciens_aide' | translate"
                   (onClick)="allerOnglet('anciens')" />
+        <!-- Crèche : l'appel du jour des enfants gardés à la journée. Visible
+             seulement si l'école a une section facturée à la journée. -->
+        @if (aDesSectionsAlaJournee()) {
+          <p-button icon="pi pi-calendar-plus" [label]="'garderie.title' | translate" size="small"
+                    severity="secondary" [outlined]="true" (onClick)="ouvrirGarderie()" />
+        }
         <p-button [label]="'eleves.organismes' | translate" size="small"
                   [severity]="onglet() === 'organismes' ? 'primary' : 'secondary'"
                   [outlined]="onglet() !== 'organismes'"
@@ -1846,6 +1853,9 @@ export class ElevesListeComponent implements OnInit {
   private elevesService = inject(ElevesService);
   private msg           = inject(MessageService);
   private auth          = inject(AuthService);
+  private routeur       = inject(Router);
+
+  ouvrirGarderie() { this.routeur.navigate(['/garderie']); }
 
   // Licence Taxawu Daara : les ndongos peuvent être « passagers » (durée en mois)
   estDaara(): boolean {
@@ -1855,6 +1865,7 @@ export class ElevesListeComponent implements OnInit {
   eleves        = signal<Eleve[]>([]);
   elevesFiltres = signal<Eleve[]>([]);
   sections      = signal<any[]>([]);
+  aDesSectionsAlaJournee = computed(() => this.sections().some(s => s.mode_tarif === 'JOURNEE'));
   classes       = signal<any[]>([]);
   statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);

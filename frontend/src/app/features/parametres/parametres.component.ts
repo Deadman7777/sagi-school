@@ -498,11 +498,37 @@ import { MessageService } from 'primeng/api';
                 <span *ngIf="s.composition_inscription?.length"> ({{ s.composition_inscription.length }})</span>
               </a>
             </div>
+            <!-- Au mois (mensualité) ou à la journée (garderie ponctuelle) : dans
+                 le second cas, le dû naît de l'appel du jour, jour par jour. -->
             <div class="sc-frais">
+              <span>{{ 'parametres.mode_tarif' | translate }}</span>
+              <div class="mode-tarif" role="radiogroup" [attr.aria-label]="'parametres.mode_tarif' | translate">
+                <button type="button" role="radio" [attr.aria-checked]="s.mode_tarif !== 'JOURNEE'"
+                        [class.actif]="s.mode_tarif !== 'JOURNEE'" (click)="s.mode_tarif = 'MENSUEL'">
+                  {{ 'parametres.mode_mensuel' | translate }}</button>
+                <button type="button" role="radio" [attr.aria-checked]="s.mode_tarif === 'JOURNEE'"
+                        [class.actif]="s.mode_tarif === 'JOURNEE'" (click)="s.mode_tarif = 'JOURNEE'">
+                  {{ 'parametres.mode_journee' | translate }}</button>
+              </div>
+            </div>
+            <div class="sc-frais" *ngIf="s.mode_tarif !== 'JOURNEE'">
               <span>{{ 'parametres.mensualite_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_mensualite" mode="decimal"
                              [min]="0" styleClass="w-full" inputStyleClass="text-right" />
             </div>
+            <ng-container *ngIf="s.mode_tarif === 'JOURNEE'">
+              <div class="sc-frais">
+                <span>{{ 'parametres.tarif_demi_journee' | translate }}</span>
+                <p-inputNumber [(ngModel)]="s.tarif_demi_journee" mode="decimal"
+                               [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+              </div>
+              <div class="sc-frais">
+                <span>{{ 'parametres.tarif_journee' | translate }}</span>
+                <p-inputNumber [(ngModel)]="s.tarif_journee" mode="decimal"
+                               [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+                <small class="fc-hint">{{ 'parametres.aide_journee' | translate }}</small>
+              </div>
+            </ng-container>
             <!-- Ce que paie un ANCIEN élève de ce niveau à la place de
                  l'inscription. Masqué tant que l'école n'a pas activé le
                  renouvellement : inutile d'encombrer les autres. -->
@@ -1105,6 +1131,10 @@ import { MessageService } from 'primeng/api';
     </p-dialog>
   `,
   styles: [`
+    .mode-tarif { display:flex; gap:4px; }
+    .mode-tarif button { flex:1; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px;
+                         background:var(--surface); color:var(--text-2); cursor:pointer; }
+    .mode-tarif button.actif { background:#00d4aa; border-color:#00d4aa; color:#06281f; font-weight:600; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
     .theme-switch { display:flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:5px 8px; }
     .theme-lbl { font-size:12px; color:var(--text-3); margin-right:2px; }
@@ -1512,6 +1542,9 @@ chargerExercice() {
         frais_uniforme:     +s.frais_uniforme,
         frais_fournitures:  +s.frais_fournitures,
         frais_renouvellement: +(s.frais_renouvellement || 0),
+        mode_tarif:         s.mode_tarif || 'MENSUEL',
+        tarif_demi_journee: +(s.tarif_demi_journee || 0),
+        tarif_journee:      +(s.tarif_journee || 0),
       }));
       this.sections.set(sections);
     }
@@ -1808,7 +1841,16 @@ chargerExercice() {
         this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: s.nom });
         this.saving.set(false);
       },
-      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+      // Le serveur dit ce qui manque (ex. aucun tarif pour une section à la journée).
+      error: err => {
+        const e = err?.error;
+        const detail = e && typeof e === 'object'
+          ? [].concat(...Object.values(e) as any[]).filter(Boolean)[0]
+          : null;
+        this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: detail || this.translate.instant('parametres.sauvegarde_echouee') });
+        this.saving.set(false);
+      }
     });
   }
 

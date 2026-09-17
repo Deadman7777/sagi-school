@@ -21,6 +21,21 @@ class Section(TenantModel):
     frais_renouvellement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     ordre              = models.IntegerField(default=0)
 
+    # ── Facturation à la journée (garderie ponctuelle) ───────────────────
+    # Une crèche accueille, dans la même classe, des enfants au mois et
+    # d'autres à la journée. Pour ceux-là, rien n'est dû d'avance : le dû
+    # naît de chaque jour de présence (voir apps/eleves/garderie.py), et
+    # chaque paiement s'y impute quel que soit le rythme de la famille —
+    # au jour, à la semaine, au mois.
+    MODE_TARIF_CHOICES = [
+        ('MENSUEL', 'Au mois'),
+        ('JOURNEE', 'À la journée'),
+    ]
+    mode_tarif         = models.CharField(max_length=10, choices=MODE_TARIF_CHOICES,
+                                          default='MENSUEL')
+    tarif_demi_journee = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tarif_journee      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
     class Meta:
         db_table = 'sections'
         ordering = ['ordre', 'nom']
@@ -38,6 +53,14 @@ class Section(TenantModel):
                   else Decimal(str(frais_entree)))
         return (entree + self.frais_uniforme +
                 self.frais_fournitures + (self.frais_mensualite * nb_mois))
+
+    @property
+    def a_la_journee(self):
+        return self.mode_tarif == 'JOURNEE'
+
+    def tarif_formule(self, formule):
+        """Le tarif d'une formule de garderie (DEMI_JOURNEE ou JOURNEE)."""
+        return self.tarif_demi_journee if formule == 'DEMI_JOURNEE' else self.tarif_journee
 
     @property
     def total_annuel(self):
@@ -463,12 +486,23 @@ class Eleve(TenantModel):
 
     def du_du_mois(self, mois):
         """Montant dû pour UN mois : celui saisi par l'école s'il existe,
-        sinon le tarif ordinaire. Zéro saisi vaut zéro, pas « non saisi »."""
+        sinon le tarif ordinaire. Zéro saisi vaut zéro, pas « non saisi ».
+
+        Enfant gardé à la journée : le tarif ordinaire du mois est la somme de
+        ses jours de présence, plus ses services mensuels."""
         saisis = self.montants_mois or {}
         cle = str(int(mois))
         if cle in saisis:
             return round(float(saisis[cle] or 0), 2)
+        if self.a_la_journee:
+            from .garderie import du_presences_du_mois
+            return round(du_presences_du_mois(self, int(mois)) + self.du_mensuel_standard, 2)
         return self.du_mensuel_standard
+
+    @property
+    def a_la_journee(self):
+        """Facturé selon ses jours de présence plutôt qu'au mois."""
+        return bool(self.section and self.section.a_la_journee)
 
     @property
     def total_paye(self):
@@ -633,6 +667,39 @@ class Eleve(TenantModel):
     @property
     def niveau_alerte(self):
         return self.situation_alerte()['niveau']
+
+
+class PresenceGarderie(TenantModel):
+    """Un jour de garde d'un enfant facturé à la journée.
+
+    **Le montant est figé à la saisie.** Un tarif révisé en cours d'année ne
+    doit pas réécrire ce que la famille devait pour les jours déjà gardés —
+    ni le reçu qu'elle a peut-être déjà entre les mains.
+
+    Un seul enregistrement par enfant et par jour : l'appel se corrige en
+    changeant la formule ou en retirant la présence, jamais en empilant.
+    """
+    FORMULE_CHOICES = [
+        ('DEMI_JOURNEE', '½ journée'),
+        ('JOURNEE',      'Journée'),
+    ]
+    eleve     = models.ForeignKey(Eleve, on_delete=models.CASCADE, related_name='presences_garderie')
+    date      = models.DateField()
+    formule   = models.CharField(max_length=12, choices=FORMULE_CHOICES)
+    montant   = models.DecimalField(max_digits=12, decimal_places=2)
+    saisi_par = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'presences_garderie'
+        ordering = ['date']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'eleve', 'date'],
+                                    name='uniq_presence_garderie_par_jour'),
+        ]
+        indexes = [models.Index(fields=['tenant', 'date'], name='idx_garderie_jour')]
+
+    def __str__(self):
+        return f"{self.eleve} — {self.date:%d/%m/%Y} ({self.get_formule_display()})"
 
 
 class Service(TenantModel):

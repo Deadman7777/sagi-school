@@ -266,6 +266,8 @@ class SectionSerializer(serializers.ModelSerializer):
     # Ce que paie un ancien élève à la place de l'inscription, quand l'école a
     # activé le renouvellement.
     frais_renouvellement = serializers.FloatField(required=False, default=0)
+    tarif_demi_journee = serializers.FloatField(required=False, default=0, min_value=0)
+    tarif_journee      = serializers.FloatField(required=False, default=0, min_value=0)
 
     class Meta:
         model  = Section
@@ -291,6 +293,17 @@ class SectionSerializer(serializers.ModelSerializer):
                     elements.append({'libelle': libelle, 'montant': montant})
             attrs['composition_inscription'] = elements
             attrs['frais_inscription'] = round(sum(e['montant'] for e in elements), 2)
+
+        # À la journée, le mois ne coûte que ses jours de présence : une
+        # mensualité restée saisie s'y ajouterait à chaque mois, en silence.
+        mode = attrs.get('mode_tarif', getattr(self.instance, 'mode_tarif', 'MENSUEL'))
+        if mode == 'JOURNEE':
+            attrs['frais_mensualite'] = 0
+            demi = attrs.get('tarif_demi_journee', getattr(self.instance, 'tarif_demi_journee', 0))
+            journee = attrs.get('tarif_journee', getattr(self.instance, 'tarif_journee', 0))
+            if not (float(demi or 0) > 0 or float(journee or 0) > 0):
+                raise serializers.ValidationError(
+                    {'tarif_journee': "Indiquez au moins un tarif (½ journée ou journée)."})
         return attrs
 
 class OrganismeSerializer(serializers.ModelSerializer):
