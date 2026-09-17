@@ -15,8 +15,31 @@ export interface LigneDocument {
   montant?: number;
 }
 
+export type EtapePrestation = 'ACOMPTE_ATTENDU' | 'A_DEMARRER' | 'EN_COURS' | 'LIVREE' | 'TERMINEE' | null;
+
+/** Pièce justificative (preuve de paiement, bon de commande…) : le fichier se télécharge à part. */
+export interface Justificatif {
+  id: string;
+  nom: string;
+  type_piece: string;
+  type_libelle: string;
+  mime_type: string;
+  taille: number;
+  observations: string;
+  ajoute_par: string;
+  created_at: string;
+}
+
+export interface Echeance {
+  libelle: string;
+  montant: number;
+  paye: number;
+  etat: 'A_VENIR' | 'A_PAYER' | 'PARTIEL' | 'PAYE';
+}
+
 export interface Recu {
   id: string;
+  justificatifs: Justificatif[];
   numero: string;
   date: string;
   montant: number;
@@ -53,7 +76,17 @@ export interface DocumentCommercial {
   modifiable: boolean;
   prospect: string | null;
   tenant: string | null;
+  /** Acompte exigible à la signature (0 : pas d'acompte), figé à l'émission. */
+  taux_acompte: number;
+  montant_acompte: number;
+  acompte_recu: boolean;
+  /** Suivi d'une facture avec acompte ; null pour les autres pièces. */
+  etape: EtapePrestation;
+  prestation_demarree_le: string | null;
+  prestation_livree_le: string | null;
   /** Présents sur le détail uniquement. */
+  echeancier?: Echeance[];
+  justificatifs?: Justificatif[];
   lignes?: LigneDocument[];
   encaissements?: Recu[];
   derives?: { id: string; type: TypeDocument; numero: string; statut: string; total_ttc: number }[];
@@ -67,6 +100,9 @@ export interface SyntheseFacturation {
   nb_impayees: number;
   en_retard: number;
   nb_en_retard: number;
+  nb_acomptes_attendus: number;
+  acomptes_attendus: number;
+  nb_prestations_en_cours: number;
 }
 
 export interface EcoleCliente {
@@ -97,6 +133,14 @@ export class FacturationService {
   supprimer(id: string) { return this.api.delete<void>(`/facturation/documents/${id}/`); }
   emettre(id: string)   { return this.api.post<DocumentCommercial>(`/facturation/documents/${id}/emettre/`, {}); }
   convertir(id: string) { return this.api.post<DocumentCommercial>(`/facturation/documents/${id}/convertir/`, {}); }
+  /** Acompte reçu → prestation démarrée. */
+  demarrer(id: string, date?: string) {
+    return this.api.post<DocumentCommercial>(`/facturation/documents/${id}/demarrer/`, { date });
+  }
+  /** Prestation livrée → solde exigible. */
+  livrer(id: string, date?: string) {
+    return this.api.post<DocumentCommercial>(`/facturation/documents/${id}/livrer/`, { date });
+  }
   avoir(id: string, motif: string) {
     return this.api.post<DocumentCommercial>(`/facturation/documents/${id}/avoir/`, { motif });
   }
@@ -114,6 +158,14 @@ export class FacturationService {
     return this.api.post<Recu>(`/facturation/encaissements/${id}/annuler/`, { motif });
   }
   pdfRecu(id: string) { return this.api.getBlob(`/facturation/encaissements/${id}/pdf/`); }
+
+  /** `cible` : la facture (`document`) ou le reçu (`encaissement`) ; `contenu` : data URI. */
+  ajouterJustificatif(cible: { document?: string; encaissement?: string },
+                      fichier: { nom: string; contenu: string; type_piece?: string }) {
+    return this.api.post<Justificatif>('/facturation/justificatifs/', { ...cible, ...fichier });
+  }
+  supprimerJustificatif(id: string) { return this.api.delete<void>(`/facturation/justificatifs/${id}/`); }
+  fichierJustificatif(id: string)   { return this.api.getBlob(`/facturation/justificatifs/${id}/fichier/`); }
 
   parametres()                               { return this.api.get<any>('/facturation/parametres/'); }
   modifierParametres(data: Record<string, unknown>) { return this.api.patch<any>('/facturation/parametres/', data); }

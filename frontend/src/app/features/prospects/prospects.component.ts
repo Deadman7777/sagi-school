@@ -15,7 +15,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { Catalogue, Devis, Prospect, ProspectsService, StatsProspects }
+import { Catalogue, Devis, PieceProspect, Prospect, ProspectsService, StatsProspects }
   from '../../core/services/prospects.service';
 import { FacturationService } from '../../core/services/facturation.service';
 import { Router } from '@angular/router';
@@ -278,11 +278,17 @@ import { Router } from '@angular/router';
               <p-button icon="pi pi-trash" [text]="true"
                         size="small" severity="danger" (onClick)="supprimerDevis(d)" />
             }
-            @if (['VALIDE', 'ENVOYE', 'ACCEPTE'].includes(d.statut)) {
+            @if (d.piece) {
+              <!-- Le devis a déjà sa pièce : on l'ouvre plutôt que d'en créer une autre. -->
+              <p-button [label]="(d.piece.numero || ('prospects.brouillon_de' | translate:{ type: d.piece.type })) "
+                        icon="pi pi-arrow-right" iconPos="right" size="small" [text]="true"
+                        (onClick)="ouvrirPiece(d.piece.id)" [pTooltip]="'prospects.ouvrir_piece' | translate" />
+            }
+            @if (['VALIDE', 'ENVOYE', 'ACCEPTE'].includes(d.statut) && !d.piece) {
               <p-button [label]="'prospects.proforma' | translate" size="small" [text]="true"
                         (onClick)="facturerDevis(d, 'PROFORMA')" />
             }
-            @if (d.statut === 'ACCEPTE') {
+            @if (['VALIDE', 'ENVOYE', 'ACCEPTE'].includes(d.statut) && !d.expire && d.piece?.type !== 'FACTURE') {
               <p-button [label]="'prospects.facturer' | translate" size="small" severity="success"
                         (onClick)="facturerDevis(d, 'FACTURE')" />
             }
@@ -294,6 +300,25 @@ import { Router } from '@angular/router';
           <p-button [label]="'prospects.etablir_devis' | translate" icon="pi pi-plus"
                     size="small" [outlined]="true" (onClick)="ouvrirDevis()" />
         </div>
+
+        <!-- ── Facturation : où en sont l'argent et la prestation ──── -->
+        @if (f.documents?.length) {
+          <div class="separator sep-hist">{{ 'prospects.sec_facturation' | translate }}</div>
+          @for (x of f.documents; track x.id) {
+          <div class="devis-ligne">
+            <div class="dv-gauche">
+              <span class="dv-numero mono">{{ x.numero || ('prospects.brouillon_de' | translate:{ type: x.type }) }}</span>
+              <span class="dv-offre">{{ x.type_libelle }}{{ x.objet ? ' · ' + x.objet : '' }}</span>
+            </div>
+            <span class="dv-montant mono">{{ x.total_ttc | number:'1.0-0' }} {{ 'common.fcfa' | translate }}</span>
+            <p-tag [value]="situationPiece(x)" [severity]="severitePiece(x)" />
+            <span class="dv-actions">
+              <p-button icon="pi pi-arrow-right" [text]="true" size="small" (onClick)="ouvrirPiece(x.id)"
+                        [pTooltip]="'prospects.ouvrir_piece' | translate" />
+            </span>
+          </div>
+          }
+        }
 
         <!-- ── Ce que le visiteur a dit à SAMA ─────────────────────── -->
         @if (f.conversations?.length) {
@@ -860,11 +885,43 @@ export class ProspectsComponent implements OnInit {
   /** Le brouillon est établi par le serveur depuis le devis, puis ouvert dans
    *  l'écran Facturation où il se relit et s'émet. */
   facturerDevis(d: Devis, type: 'PROFORMA' | 'FACTURE') {
-    this.facturation.creer({ type, devis: d.id }).subscribe({
-      next: doc => this.router.navigate(['/facturation'], { queryParams: { document: doc.id } }),
+    const creer = () => this.facturation.creer({ type, devis: d.id }).subscribe({
+      next: doc => this.ouvrirPiece(doc.id),
       error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
                                    detail: err?.error?.error || '' }),
     });
+    // Facturer un devis, c'est constater que le client l'a accepté : le serveur
+    // le marque ACCEPTE. On le dit avant plutôt que de le découvrir après.
+    if (type === 'FACTURE' && d.statut !== 'ACCEPTE') {
+      this.confirm.confirm({
+        message: this.translate.instant('prospects.confirmer_facturation', { numero: d.numero }),
+        accept: creer,
+      });
+    } else {
+      creer();
+    }
+  }
+
+  ouvrirPiece(id: string) {
+    this.router.navigate(['/facturation'], { queryParams: { document: id } });
+  }
+
+  situationPiece(x: PieceProspect): string {
+    if (x.statut === 'BROUILLON') return this.translate.instant('facturation.brouillon');
+    if (x.type !== 'FACTURE') return x.statut === 'CONVERTI'
+      ? this.translate.instant('prospects.piece_convertie') : x.type_libelle;
+    if (x.en_retard) return this.translate.instant('facturation.en_retard');
+    if (x.etape) return this.translate.instant('facturation.etape_' + x.etape);
+    return this.translate.instant('facturation.paiement_' + x.statut_paiement);
+  }
+
+  severitePiece(x: PieceProspect): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
+    if (x.statut === 'BROUILLON') return 'warn';
+    if (x.type !== 'FACTURE') return 'secondary';
+    if (x.en_retard) return 'danger';
+    if (x.etape === 'ACOMPTE_ATTENDU') return 'warn';
+    if (x.etape === 'TERMINEE' || x.statut_paiement === 'PAYEE') return 'success';
+    return 'info';
   }
 
   telechargerDevis(d: Devis) {

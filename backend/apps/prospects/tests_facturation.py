@@ -187,13 +187,49 @@ class DepuisDevisProformaEtLicenceTest(TestCase):
                                                 contact_nom='Serigne Mbaye')
         self.devis = etablir(self.prospect, 'PRO', 'ANNUEL', 12, frais_installation=75000)
 
-    def test_facture_refusee_sur_devis_non_accepte(self):
+    def test_facturer_un_devis_envoye_le_marque_accepte(self):
         self.devis.statut = 'ENVOYE'
         self.devis.save()
-        with self.assertRaisesMessage(F.FacturationErreur, 'proforma'):
+        f = F.depuis_devis(self.devis, 'FACTURE')
+        self.devis.refresh_from_db()
+        self.assertEqual((f.type, self.devis.statut), ('FACTURE', 'ACCEPTE'))
+        self.assertTrue(InteractionProspect.objects.filter(
+            prospect=self.prospect, resume__contains='accepté par le prospect').exists())
+
+    def test_une_seule_facture_par_devis(self):
+        self.devis.statut = 'ENVOYE'
+        self.devis.save()
+        brouillon = F.depuis_devis(self.devis, 'FACTURE')
+        self.assertEqual(F.depuis_devis(self.devis, 'FACTURE').pk, brouillon.pk)   # rouvert
+        F.emettre(brouillon)
+        with self.assertRaisesMessage(F.FacturationErreur, 'déjà facturé'):
             F.depuis_devis(self.devis, 'FACTURE')
-        pro = F.depuis_devis(self.devis, 'PROFORMA')
-        self.assertEqual(pro.type, 'PROFORMA')
+
+    def test_devis_expire_ne_se_facture_pas(self):
+        self.devis.statut = 'ENVOYE'
+        self.devis.date_validite = datetime.date.today() - datetime.timedelta(days=1)
+        self.devis.save()
+        with self.assertRaisesMessage(F.FacturationErreur, 'validité'):
+            F.depuis_devis(self.devis, 'FACTURE')
+
+    def test_facturer_un_devis_qui_a_une_proforma_convertit_la_proforma(self):
+        self.devis.statut = 'ENVOYE'
+        self.devis.save()
+        pro = F.emettre(F.depuis_devis(self.devis, 'PROFORMA'))
+        f = F.depuis_devis(self.devis, 'FACTURE')
+        self.assertEqual(f.origine_id, pro.pk)
+        self.assertEqual(f.taux_acompte, pro.taux_acompte)
+
+    def test_prestation_du_devis_propose_l_acompte_de_40(self):
+        self.devis.statut = 'ACCEPTE'
+        self.devis.save()
+        f = F.depuis_devis(self.devis, 'FACTURE')
+        self.assertEqual(f.taux_acompte, 40)
+        self.assertEqual(f.montant_acompte, F.franc(f.total_ttc * Decimal('0.4')))
+        sans_prestation = etablir(self.prospect, 'BASIC', 'ANNUEL', 12)
+        sans_prestation.statut = 'ACCEPTE'
+        sans_prestation.save()
+        self.assertEqual(F.depuis_devis(sans_prestation, 'FACTURE').taux_acompte, 0)
 
     def test_facture_reprend_le_devis_avec_la_remise_sur_sa_ligne(self):
         self.devis.statut = 'ACCEPTE'
@@ -413,3 +449,191 @@ class ReleveEtEtatTest(APITestCase):
         tout = F.contexte_etat(list(DocumentCommercial.objects.all()), '')
         self.assertEqual(tout['totaux']['restant'], F.francs(s['restant']))
         self.assertEqual(tout['totaux']['encaisse'], F.francs(s['encaisse']))
+
+
+class AcompteEtSuiviTest(TestCase):
+    """Facture unique avec échéancier : 40 % à la signature, solde à la livraison."""
+
+    def setUp(self):
+        p = ParametresFacturation.actuels()
+        p.tva_applicable = False
+        p.save()
+        self.prospect = Prospect.objects.create(etablissement='Daara Keur Serigne', ville='Rufisque')
+        self.facture = F.emettre(F.creer_brouillon(
+            'FACTURE', prospect=self.prospect, taux_acompte=40,
+            lignes=_lignes(('Installation et paramétrage', 1, 150000), ('Formation', 1, 100000))))
+
+    def test_acompte_fige_et_pas_d_echeance_avant_livraison(self):
+        self.assertEqual((self.facture.total_ttc, self.facture.montant_acompte), (250000, 100000))
+        self.assertIsNone(self.facture.date_echeance)
+        self.assertEqual(self.facture.etape, 'ACOMPTE_ATTENDU')
+
+    def test_taux_invalide_refuse(self):
+        with self.assertRaises(F.FacturationErreur):
+            F.creer_brouillon('FACTURE', prospect=self.prospect, taux_acompte=100)
+
+    def test_pas_de_demarrage_sans_acompte(self):
+        F.encaisser(self.facture, 60000)
+        with self.assertRaisesMessage(F.FacturationErreur, "n'est pas encore reçu"):
+            F.demarrer_prestation(self.facture)
+
+    def test_cycle_complet_jusqu_a_la_finalisation(self):
+        r1 = F.encaisser(self.facture, 100000, mode='WAVE')
+        self.assertEqual(self.facture.etape, 'A_DEMARRER')
+        self.assertEqual(F.contexte_recu(r1)['nature'], "Règlement de l'acompte")
+        F.demarrer_prestation(self.facture)
+        self.assertEqual(self.facture.etape, 'EN_COURS')
+        F.livrer_prestation(self.facture)
+        self.assertEqual(self.facture.etape, 'LIVREE')
+        self.assertEqual(self.facture.date_echeance,
+                         datetime.date.today() + datetime.timedelta(days=30))
+        r2 = F.encaisser(self.facture, 150000)
+        self.assertEqual(F.contexte_recu(r2)['nature'], 'Règlement du solde')
+        self.assertEqual(self.facture.etape, 'TERMINEE')
+        historique = ' '.join(InteractionProspect.objects.filter(prospect=self.prospect)
+                              .values_list('resume', flat=True))
+        self.assertIn('démarrée', historique)
+        self.assertIn('livrée', historique)
+
+    def test_livraison_exige_le_demarrage(self):
+        F.encaisser(self.facture, 100000)
+        with self.assertRaisesMessage(F.FacturationErreur, 'Démarrez'):
+            F.livrer_prestation(self.facture)
+
+    def test_echeancier_impute_d_abord_l_acompte(self):
+        F.encaisser(self.facture, 130000)
+        acompte, solde = F.echeancier(self.facture)
+        self.assertEqual((acompte['etat'], acompte['paye']), ('PAYE', 100000))
+        self.assertEqual((solde['etat'], solde['paye'], solde['montant']), ('PARTIEL', 30000, 150000))
+        recu = self.facture.encaissements.get()
+        self.assertIn("l'acompte et d'une partie du solde", F.contexte_recu(recu)['nature'])
+
+    def test_proforma_annonce_l_acompte_et_la_facture_le_garde(self):
+        pro = F.emettre(F.creer_brouillon('PROFORMA', prospect=self.prospect, taux_acompte=40,
+                                          lignes=_lignes(('Migration des données', 1, 80000))))
+        self.assertEqual([e['etat'] for e in F.echeancier(pro)], ['A_VENIR', 'A_VENIR'])
+        facture = F.convertir_proforma(pro)
+        self.assertEqual((facture.taux_acompte, facture.montant_acompte), (40, 32000))
+
+    def test_avoir_sans_acompte(self):
+        avoir = F.preparer_avoir(self.facture, motif='Annulation')
+        self.assertEqual((avoir.taux_acompte, avoir.montant_acompte), (0, 0))
+
+    def test_facture_sans_acompte_sans_suivi(self):
+        f = F.emettre(F.creer_brouillon('FACTURE', prospect=self.prospect,
+                                        lignes=_lignes(('Licence', 12, 25000))))
+        self.assertIsNone(f.etape)
+        self.assertEqual(F.echeancier(f), [])
+        with self.assertRaises(F.FacturationErreur):
+            F.demarrer_prestation(f)
+
+    def test_synthese_compte_les_acomptes_attendus(self):
+        F.encaisser(self.facture, 40000)
+        s = F.synthese()
+        self.assertEqual((s['nb_acomptes_attendus'], s['acomptes_attendus']), (1, 60000))
+
+    def test_pdf_facture_et_recu_avec_acompte(self):
+        recu = F.encaisser(self.facture, 100000)
+        html = render_to_string('pdf/document_commercial.html', F.contexte_document(self.facture))
+        self.assertIn('Échéancier de paiement', html)
+        self.assertIn('Acompte 40 %', html)
+        html = render_to_string('pdf/recu_encaissement.html', F.contexte_recu(recu))
+        self.assertIn('Règlement de l&#x27;acompte', html)
+        for gabarit, ctx in (('pdf/document_commercial.html', F.contexte_document(self.facture)),
+                             ('pdf/recu_encaissement.html', F.contexte_recu(recu))):
+            self.assertTrue(F.rendre_pdf(gabarit, ctx).startswith(b'%PDF'))
+
+
+PNG_1PX = ('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4'
+           '2mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
+
+
+class ApiAcompteEtJustificatifsTest(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(email='super@hadygesman.com', password='x', nom='Super',
+                                              role='SUPER_ADMIN')
+        self.client.force_authenticate(self.admin)
+        self.prospect = Prospect.objects.create(etablissement='École Keur Madiara', ville='Mbour')
+
+    def _facture_emise(self):
+        r = self.client.post('/api/facturation/documents/', {
+            'type': 'FACTURE', 'prospect': str(self.prospect.id), 'taux_acompte': 40,
+            'lignes': [{'designation': 'Formation des utilisateurs', 'quantite': 1,
+                        'prix_unitaire': 100000}]}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        r = self.client.post(f"/api/facturation/documents/{r.data['id']}/emettre/")
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.data
+
+    def test_acompte_suivi_et_justificatif_de_paiement(self):
+        d = self._facture_emise()
+        self.assertEqual((d['montant_acompte'], d['etape']), (47200, 'ACOMPTE_ATTENDU'))
+        self.assertEqual(len(d['echeancier']), 2)
+        r = self.client.post(f"/api/facturation/documents/{d['id']}/demarrer/")
+        self.assertEqual(r.status_code, 409)
+        r = self.client.post(f"/api/facturation/documents/{d['id']}/encaisser/",
+                             {'montant': 47200, 'mode': 'ORANGE_MONEY'}, format='json')
+        recu = r.data['recu']
+        self.assertEqual(r.data['facture']['etape'], 'A_DEMARRER')
+
+        r = self.client.post('/api/facturation/justificatifs/', {
+            'encaissement': recu['id'], 'nom': 'capture-orange-money.png', 'contenu': PNG_1PX},
+            format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual((r.data['type_piece'], r.data['mime_type']), ('PREUVE_PAIEMENT', 'image/png'))
+        piece = r.data['id']
+        f = self.client.get(f'/api/facturation/justificatifs/{piece}/fichier/')
+        self.assertEqual((f.status_code, f['Content-Type']), (200, 'image/png'))
+        self.assertTrue(f.content.startswith(b'\x89PNG'))
+        detail = self.client.get(f"/api/facturation/documents/{d['id']}/").data
+        self.assertEqual(detail['encaissements'][0]['justificatifs'][0]['nom'], 'capture-orange-money.png')
+        self.assertNotIn('contenu', detail['encaissements'][0]['justificatifs'][0])
+
+        r = self.client.post(f"/api/facturation/documents/{d['id']}/demarrer/")
+        self.assertEqual((r.status_code, r.data['etape']), (200, 'EN_COURS'))
+        r = self.client.post(f"/api/facturation/documents/{d['id']}/livrer/")
+        self.assertEqual(r.data['etape'], 'LIVREE')
+        suivis = self.client.get('/api/facturation/documents/', {'suivi': 1}).data
+        self.assertEqual([x['id'] for x in suivis], [d['id']])
+
+    def test_justificatif_refuse_format_brouillon_et_orphelin(self):
+        d = self._facture_emise()
+        for data in ({'document': d['id'], 'nom': 'x.exe', 'contenu': 'data:application/x-msdownload;base64,TVo='},
+                     {'nom': 'rien.png', 'contenu': PNG_1PX},
+                     {'document': d['id'], 'nom': 'faux.png', 'contenu': 'pas un fichier'}):
+            r = self.client.post('/api/facturation/justificatifs/', data, format='json')
+            self.assertEqual(r.status_code, 400, data['nom'])
+        brouillon = self.client.post('/api/facturation/documents/', {
+            'type': 'FACTURE', 'prospect': str(self.prospect.id)}, format='json').data
+        r = self.client.post('/api/facturation/justificatifs/', {
+            'document': brouillon['id'], 'nom': 'bc.png', 'contenu': PNG_1PX}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_bon_de_commande_joint_a_la_facture_puis_retire(self):
+        d = self._facture_emise()
+        r = self.client.post('/api/facturation/justificatifs/', {
+            'document': d['id'], 'nom': 'bon-de-commande-signe.png', 'type_piece': 'BON_COMMANDE',
+            'contenu': PNG_1PX}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        r = self.client.delete(f"/api/facturation/justificatifs/{r.data['id']}/")
+        self.assertEqual(r.status_code, 204)
+        self.assertTrue(InteractionProspect.objects.filter(resume__contains='retiré').exists())
+
+    def test_fiche_prospect_montre_la_facture_du_devis_et_les_pieces(self):
+        devis = etablir(self.prospect, 'PRO', 'ANNUEL', 12, frais_installation=100000)
+        devis.statut = 'ENVOYE'
+        devis.save()
+        r = self.client.post('/api/facturation/documents/', {'type': 'FACTURE', 'devis': str(devis.id)},
+                             format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.data['taux_acompte'], 40)
+        fiche = self.client.get(f'/api/prospects/{self.prospect.id}/').data
+        self.assertEqual(fiche['devis'][0]['statut'], 'ACCEPTE')
+        self.assertEqual(fiche['devis'][0]['piece']['id'], r.data['id'])
+        self.assertEqual(fiche['documents'][0]['id'], r.data['id'])
+
+    def test_parametre_taux_acompte_defaut(self):
+        r = self.client.patch('/api/facturation/parametres/', {'taux_acompte_defaut': 30}, format='json')
+        self.assertEqual(r.data['taux_acompte_defaut'], 30)
+        r = self.client.patch('/api/facturation/parametres/', {'taux_acompte_defaut': 120}, format='json')
+        self.assertEqual(r.status_code, 400)

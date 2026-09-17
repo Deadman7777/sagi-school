@@ -67,6 +67,7 @@ imprimable, mais le dit en tête : le client a peut-être déjà l'original.
   {{ emetteur.raison_sociale }} reconnaît avoir reçu de <strong>{{ facture.client_nom }}</strong>
   la somme de <strong>{{ en_lettres }}</strong>, en règlement de la facture
   <strong>N° {{ facture.numero }}</strong> du {{ facture.date_emission|date:"d/m/Y" }}{% if facture.objet %} ({{ facture.objet }}){% endif %}.
+  {% if nature %}<br><strong>{{ nature }}</strong> — acompte de {{ taux_acompte }} % : {{ acompte }}.{% endif %}
 </div>
 
 <table class="montant-bloc">

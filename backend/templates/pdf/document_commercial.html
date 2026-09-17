@@ -58,6 +58,11 @@ Rien n'est calculé ici : tous les montants arrivent mis en forme.
 
   .situation { width:100%; margin-top:8px; border-collapse:collapse; }
   .situation td { padding:4px 8px; font-size:10px; border:1px solid #d1d5db; }
+  table.echeancier { width:100%; border-collapse:collapse; margin-top:8px; }
+  table.echeancier th { background:#e6f4f0; color:#064e3b; padding:5px 8px; font-size:10px; text-align:left; border:1px solid #cfe7df; }
+  table.echeancier th.num { text-align:right; }
+  table.echeancier td { padding:5px 8px; font-size:10.5px; color:#111827; border:1px solid #e5e7eb; }
+  .attente { color:#374151; }
   .paye { color:#047857; font-weight:bold; }
   .du   { color:#b91c1c; font-weight:bold; }
 
@@ -189,6 +194,26 @@ Rien n'est calculé ici : tous les montants arrivent mis en forme.
   à la somme de <strong>{{ en_lettres }}</strong>.
 </div>
 
+{% if echeancier %}
+<div class="section-title">Échéancier de paiement</div>
+<table class="echeancier">
+  <tr>
+    <th style="width:{% if doc.type == 'FACTURE' and doc.statut == 'EMIS' %}50{% else %}75{% endif %}%">Échéance</th>
+    <th style="width:25%" class="num">Montant</th>
+    {% if doc.type == 'FACTURE' and doc.statut == 'EMIS' %}<th style="width:25%">Situation</th>{% endif %}
+  </tr>
+  {% for e in echeancier %}
+  <tr>
+    <td>{{ e.libelle }}</td>
+    <td class="num"><strong>{{ e.montant }}</strong></td>
+    {% if doc.type == 'FACTURE' and doc.statut == 'EMIS' %}
+    <td>{% if e.etat == 'PAYE' %}<span class="paye">Payé</span>{% elif e.etat == 'PARTIEL' %}<span class="du">Partiel : {{ e.paye }}</span>{% else %}<span class="attente">À payer</span>{% endif %}</td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 {% if doc.type == 'FACTURE' and doc.statut == 'EMIS' and doc.statut_paiement != 'A_PAYER' %}
 <table class="situation">
   <tr>
@@ -208,7 +233,8 @@ Rien n'est calculé ici : tous les montants arrivent mis en forme.
 {% if doc.type != 'AVOIR' %}
 <div class="section-title">Conditions de règlement</div>
 <div class="conditions">
-  {% if doc.type == 'FACTURE' %}<strong>Échéance.</strong> {% if doc.date_echeance %}Paiement à effectuer avant le {{ doc.date_echeance|date:"d/m/Y" }}.{% else %}Paiement à réception de facture.{% endif %}<br>{% endif %}
+  {% if echeancier %}<strong>Acompte.</strong> La prestation démarre à réception de l'acompte ; le solde est exigible à sa livraison.<br>{% endif %}
+  {% if doc.type == 'FACTURE' and not echeancier %}<strong>Échéance.</strong> {% if doc.date_echeance %}Paiement à effectuer avant le {{ doc.date_echeance|date:"d/m/Y" }}.{% else %}Paiement à réception de facture.{% endif %}<br>{% endif %}
   {% if doc.type == 'PROFORMA' %}<strong>Validité.</strong> Les prix de cette proforma sont garantis jusqu'au {{ doc.date_validite|date:"d/m/Y"|default:"terme de sa validité" }}.<br>{% endif %}
   <strong>Moyens de paiement acceptés.</strong> {{ modes }}.<br>
   {% if emetteur.coordonnees_paiement %}<strong>Coordonnées de paiement.</strong> {{ emetteur.coordonnees_paiement|linebreaksbr }}<br>{% endif %}

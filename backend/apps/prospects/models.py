@@ -334,6 +334,10 @@ class ParametresFacturation(TimeStampedModel):
 
     delai_paiement_jours   = models.PositiveIntegerField(default=30)
     validite_proforma_jours = models.PositiveIntegerField(default=30)
+    # Procédure interne : installation, paramétrage, formation, migration de
+    # données… se règlent 40 % à la signature. Proposé sur toute facture qui
+    # porte une prestation ; réglable pièce par pièce tant qu'elle est brouillon.
+    taux_acompte_defaut    = models.DecimalField(max_digits=5, decimal_places=2, default=40)
     coordonnees_paiement   = models.TextField(
         blank=True, help_text='Banque, IBAN, numéros Wave / Orange Money…')
     conditions             = models.TextField(blank=True)
@@ -371,6 +375,17 @@ class DocumentCommercial(TimeStampedModel):
     **Tout est recopié.** Le client, les lignes, le taux de TVA : une révision
     tarifaire, un nom corrigé ou un changement de régime fiscal ne réécrivent
     pas une pièce déjà remise.
+
+    **L'acompte est un échéancier, pas une seconde facture.** Une prestation
+    (installation, formation, migration…) se facture une fois, à la signature ;
+    la pièce porte « acompte X % exigible à la signature » et « solde à la
+    finalisation ». Chaque paiement donne un reçu, imputé d'abord sur l'acompte.
+    Le montant de l'acompte est figé à l'émission avec le reste de la pièce.
+
+    **Une facture avec acompte se suit jusqu'au bout** : acompte attendu →
+    prestation à démarrer → en cours → livrée → terminée (livrée et soldée). On
+    ne démarre pas avant d'avoir reçu l'acompte : c'est la procédure d'entrée
+    d'un client. Le solde devient exigible à la livraison.
     """
 
     TYPE_CHOICES = [
@@ -426,6 +441,12 @@ class DocumentCommercial(TimeStampedModel):
     total_ht    = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     montant_tva = models.DecimalField(max_digits=14, decimal_places=0, default=0)
     total_ttc   = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+
+    # ── Acompte et suivi de la prestation ────────────────────────────────
+    taux_acompte    = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # 0 : pas d'acompte
+    montant_acompte = models.DecimalField(max_digits=14, decimal_places=0, default=0)
+    prestation_demarree_le = models.DateField(null=True, blank=True)
+    prestation_livree_le   = models.DateField(null=True, blank=True)
 
     motif        = models.TextField(blank=True)   # avoir : pourquoi
     conditions   = models.TextField(blank=True)
@@ -487,6 +508,26 @@ class DocumentCommercial(TimeStampedModel):
         return (self.statut_paiement in ('A_PAYER', 'PARTIELLE')
                 and self.date_echeance is not None and self.date_echeance < date.today())
 
+    @property
+    def avec_acompte(self):
+        return self.type in ('PROFORMA', 'FACTURE') and self.montant_acompte > 0
+
+    @property
+    def acompte_recu(self):
+        """Les paiements sont imputés d'abord sur l'acompte."""
+        return self.avec_acompte and self.montant_encaisse >= self.montant_acompte
+
+    @property
+    def etape(self):
+        """Où en est une facture avec acompte ; None pour les autres pièces."""
+        if self.type != 'FACTURE' or self.statut != 'EMIS' or not self.avec_acompte:
+            return None
+        if self.prestation_livree_le:
+            return 'TERMINEE' if self.solde <= 0 else 'LIVREE'
+        if self.prestation_demarree_le:
+            return 'EN_COURS'
+        return 'A_DEMARRER' if self.acompte_recu else 'ACOMPTE_ATTENDU'
+
 
 class LigneDocument(TimeStampedModel):
     """Une ligne de pièce. Un prix unitaire négatif porte une remise : elle
@@ -533,3 +574,47 @@ class Encaissement(TimeStampedModel):
 
     def __str__(self):
         return f"{self.numero} — {self.montant} F"
+
+
+class JustificatifFacturation(TimeStampedModel):
+    """Une pièce justificative numérique : preuve d'un paiement (capture Wave
+    ou Orange Money, avis de virement, chèque scanné) ou pièce du dossier d'une
+    facture (bon de commande signé, contrat).
+
+    Stockée en base64 dans la base, comme la GED des écoles : elle part avec les
+    sauvegardes, sans stockage de fichiers à part. Cette GED-là est propre à
+    HADY GESMAN, qui n'est pas une école et n'a donc pas de tenant.
+    """
+    TYPE_CHOICES = [
+        ('PREUVE_PAIEMENT', 'Preuve de paiement'),
+        ('BORDEREAU',       'Avis de virement / bordereau'),
+        ('CHEQUE',          'Chèque scanné'),
+        ('BON_COMMANDE',    'Bon de commande signé'),
+        ('CONTRAT',         'Contrat signé'),
+        ('PV_LIVRAISON',    'Procès-verbal de livraison'),
+        ('AUTRE',           'Autre pièce'),
+    ]
+
+    document     = models.ForeignKey(DocumentCommercial, null=True, blank=True,
+                                     on_delete=models.PROTECT, related_name='justificatifs')
+    encaissement = models.ForeignKey(Encaissement, null=True, blank=True,
+                                     on_delete=models.PROTECT, related_name='justificatifs')
+    type_piece   = models.CharField(max_length=20, choices=TYPE_CHOICES, default='PREUVE_PAIEMENT')
+    nom          = models.CharField(max_length=200)
+    mime_type    = models.CharField(max_length=100, blank=True)
+    taille       = models.PositiveIntegerField(default=0)     # octets décodés
+    contenu      = models.TextField()                         # data URI base64
+    observations = models.CharField(max_length=250, blank=True)
+    ajoute_par   = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'facturation_justificatifs'
+        ordering = ['created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(document__isnull=False) | models.Q(encaissement__isnull=False),
+                name='justificatif_rattache'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_type_piece_display()} — {self.nom}"

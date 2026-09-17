@@ -88,6 +88,7 @@ def _prospect_dict(p, complet=False):
         'interactions':   [_interaction_dict(i) for i in p.interactions.all()],
         'conversations':  _conversations_sama(p),
         'devis':          [_devis_resume(d) for d in p.devis.all()],
+        'documents':      [_document_resume(d) for d in p.documents.all()],
     })
     return base
 
@@ -107,6 +108,38 @@ def _devis_resume(d):
         'date_validite': d.date_validite,
         'expire':        d.expire,
         'modifiable':    d.modifiable,
+        # La pièce la plus avancée issue du devis : la facture si elle existe,
+        # sinon la proforma. L'écran montre alors la pièce plutôt que les boutons.
+        'piece':         _piece_du_devis(d),
+    }
+
+
+def _piece_du_devis(devis):
+    pieces = [x for x in devis.documents.all() if x.type in ('FACTURE', 'PROFORMA')]
+    pieces.sort(key=lambda x: (x.type == 'FACTURE', x.statut != 'BROUILLON', x.created_at))
+    if not pieces:
+        return None
+    x = pieces[-1]
+    return {'id': str(x.id), 'type': x.type, 'numero': x.numero, 'statut': x.statut}
+
+
+def _document_resume(d):
+    """Une pièce de facturation vue depuis la fiche : où en est l'argent, et
+    la prestation quand il y a un acompte."""
+    return {
+        'id':              str(d.id),
+        'type':            d.type,
+        'type_libelle':    d.get_type_display(),
+        'numero':          d.numero,
+        'statut':          d.statut,
+        'objet':           d.objet,
+        'date_emission':   d.date_emission,
+        'total_ttc':       int(d.total_ttc),
+        'solde':           int(d.solde),
+        'statut_paiement': d.statut_paiement,
+        'en_retard':       d.en_retard,
+        'etape':           d.etape,
+        'montant_acompte': int(d.montant_acompte),
     }
 
 
@@ -163,7 +196,7 @@ class ProspectViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         prospect = Prospect.objects.filter(pk=pk).prefetch_related(
-            'interactions', 'devis').select_related('tenant_converti').first()
+            'interactions', 'devis__documents', 'documents').select_related('tenant_converti').first()
         if not prospect:
             return Response({'error': 'Prospect introuvable.'}, status=404)
         return Response(_prospect_dict(prospect, complet=True))
