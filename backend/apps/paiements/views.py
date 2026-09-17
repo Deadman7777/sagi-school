@@ -325,6 +325,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
                     mois_concernes_garderie = ' ; '.join(details)
                     label_mens += f' ({mois_concernes_garderie})'
             elif mois_concernes:
+                # Crèche : la formule du premier mois réglé dit ce que la famille paie.
+                formule = p.eleve.formule_du_mois(mois_regles[0]) if (p.eleve_id and mois_regles) else None
+                if formule is not None:
+                    label_mens += f' — {formule.nom}'
                 label_mens += f' ({mois_concernes})'
             if mois_entames and len(mois_entames) != len(mois_regles):
                 entames = ', '.join(_MOIS.get(m, str(m)) for m in sorted(mois_entames))

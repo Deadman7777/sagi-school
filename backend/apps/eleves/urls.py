@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import (EleveViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSet,
+from .views import (EleveViewSet, FormuleSectionViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSet,
                     SectionViewSet, ServiceViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
                     ElevesListePDFView, SituationElevePDFView, FicheElevePDFView,
@@ -10,6 +10,7 @@ from .views import (EleveViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSe
 router = DefaultRouter()
 router.register('sections', SectionViewSet, basename='section')
 router.register('services', ServiceViewSet, basename='service')
+router.register('formules', FormuleSectionViewSet, basename='formule-section')
 router.register('organismes', OrganismeViewSet, basename='organisme')
 router.register('bourses', PriseEnChargeOrganismeViewSet, basename='bourse')
 router.register('liste', EleveViewSet, basename='eleve')

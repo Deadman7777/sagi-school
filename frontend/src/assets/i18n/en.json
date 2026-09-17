@@ -370,7 +370,17 @@
     "certificat_titre": "School certificate",
     "certificat_word": "School's Word template",
     "certificat_pdf": "Standard certificate (PDF)",
-    "certificat_erreur": "Unable to generate the certificate."
+    "certificat_erreur": "Unable to generate the certificate.",
+    "changer_formule": "Change plan",
+    "formule": "Plan",
+    "premiere_adhesion": "{{service}}: first membership (equipment due)",
+    "formules_historique": "Plan history",
+    "nouvelle_formule": "New plan",
+    "a_partir_de": "Starting from",
+    "formule_initiale_requise": "First choose the student's plan on their record.",
+    "changer_formule_aide": "Earlier months keep their rate; the new monthly fee applies from the chosen month.",
+    "formule_changee": "Plan changed",
+    "formule_obligatoire": "Choose the student's plan."
   },
   "paiements": {
     "title": "Payment Entry",
@@ -419,7 +429,9 @@
     "free_money": "Free Money",
     "virement": "Bank transfer",
     "cheque": "Cheque",
-    "choisir_mode_ph": "Choose..."
+    "choisir_mode_ph": "Choose...",
+    "inclure_premier_mois": "Include the first month ({{mois}}) with enrolment",
+    "reste_mois": "remaining"
   },
   "parametres": {
     "title": "Settings",
@@ -622,7 +634,18 @@
     "mode_journee": "Per day",
     "tarif_demi_journee": "Half-day rate",
     "tarif_journee": "Full-day rate",
-    "aide_journee": "Amounts due come from the daily roll call (Students → Day care)."
+    "aide_journee": "Amounts due come from the daily roll call (Students → Day care).",
+    "formules": "Plans",
+    "mensualite_selon_formule": "Monthly fee depends on the child's plan",
+    "formules_aide": "Same enrolment, monthly fee depends on the plan (e.g. 8am-1pm, 8am-5pm). A plan used by students is deactivated instead of deleted.",
+    "formule_nom": "Name (e.g. 8am-5pm)",
+    "formule_active": "Active",
+    "ajouter_formule": "Add a plan",
+    "service_adhesion": "Membership fees",
+    "service_adhesion_composer": "Compose",
+    "service_premier_mois": "1st month paid at enrolment",
+    "service_adhesion_aide": "Paid when the child joins the service (registration, equipment…). Tick \"1st membership\" for an item due only the first year (e.g. kimono).",
+    "premiere_fois": "1st membership"
   },
   "cloture": {
     "title": "Year Closing",

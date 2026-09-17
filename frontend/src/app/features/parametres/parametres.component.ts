@@ -1,3 +1,4 @@
+import { forkJoin, of } from 'rxjs';
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -514,7 +515,14 @@ import { MessageService } from 'primeng/api';
             <div class="sc-frais" *ngIf="s.mode_tarif !== 'JOURNEE'">
               <span>{{ 'parametres.mensualite_frais' | translate }}</span>
               <p-inputNumber [(ngModel)]="s.frais_mensualite" mode="decimal"
-                             [min]="0" styleClass="w-full" inputStyleClass="text-right" />
+                             [min]="0" styleClass="w-full" inputStyleClass="text-right"
+                             [disabled]="formulesActives(s).length > 0" />
+              <!-- Crèche : plusieurs formules horaires, chacune sa mensualité. -->
+              <a class="compo-link" (click)="ouvrirFormules(s)">
+                ⏱️ {{ 'parametres.formules' | translate }}
+                <span *ngIf="formulesActives(s).length"> ({{ formulesActives(s).length }})</span>
+              </a>
+              <small class="fc-hint" *ngIf="formulesActives(s).length">{{ 'parametres.mensualite_selon_formule' | translate }}</small>
             </div>
             <ng-container *ngIf="s.mode_tarif === 'JOURNEE'">
               <div class="sc-frais">
@@ -580,6 +588,17 @@ import { MessageService } from 'primeng/api';
               <span>{{ 'parametres.service_periodicite' | translate }}</span>
               <p-select appendTo="body" [options]="periodiciteOptions" [(ngModel)]="sv.periodicite"
                         optionLabel="label" optionValue="value" styleClass="w-full" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.service_adhesion' | translate }}</span>
+              <a class="compo-link" (click)="ouvrirAdhesion(sv)">
+                🧩 {{ 'parametres.service_adhesion_composer' | translate }}
+                <span *ngIf="sv.composition_adhesion?.length"> ({{ sv.composition_adhesion.length }})</span>
+              </a>
+              <label class="case-service" *ngIf="sv.periodicite === 'MENSUEL'">
+                <input type="checkbox" [(ngModel)]="sv.premier_mois_a_inscription" />
+                {{ 'parametres.service_premier_mois' | translate }}
+              </label>
             </div>
             <div class="sc-frais" *ngIf="sv.periodicite === 'UNIQUE'">
               <span>{{ 'parametres.service_periode' | translate }}</span>
@@ -1110,6 +1129,52 @@ import { MessageService } from 'primeng/api';
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog formules d'une section (crèche : 08H-13H, 08H-17H…) -->
+    <p-dialog [header]="'⏱️ ' + ('parametres.formules' | translate) + (sectionFormules ? ' — ' + sectionFormules.nom : '')"
+              [(visible)]="formulesDialogVisible" [modal]="true" [style]="{width:'560px', maxWidth:'96vw'}" [draggable]="false">
+      <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.formules_aide' | translate }}</p>
+      <div class="compo-row" *ngFor="let f of formulesRows; let i = index">
+        <input pInputText [(ngModel)]="f.nom" class="w-full" [placeholder]="'parametres.formule_nom' | translate" />
+        <p-inputNumber [(ngModel)]="f.frais_mensualite" mode="decimal" [min]="0"
+                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+        <label class="case-service" [title]="'parametres.service_actif' | translate">
+          <input type="checkbox" [(ngModel)]="f.actif" /> {{ 'parametres.formule_active' | translate }}
+        </label>
+        <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                  (onClick)="retirerFormule(i)" />
+      </div>
+      <p-button [label]="'parametres.ajouter_formule' | translate" icon="pi pi-plus"
+                severity="secondary" size="small" (onClick)="formulesRows.push({ nom: '', frais_mensualite: 0, actif: true })" />
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="formulesDialogVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="enregistrerFormules()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog frais d'adhésion d'un service (droit d'inscription, kimono…) -->
+    <p-dialog [header]="'🧩 ' + ('parametres.service_adhesion' | translate) + (serviceAdhesion ? ' — ' + serviceAdhesion.nom : '')"
+              [(visible)]="adhesionDialogVisible" [modal]="true" [style]="{width:'600px', maxWidth:'96vw'}" [draggable]="false">
+      <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.service_adhesion_aide' | translate }}</p>
+      <div class="compo-row" *ngFor="let r of adhesionRows; let i = index">
+        <input pInputText [(ngModel)]="r.libelle" class="w-full" [placeholder]="'parametres.element_libelle' | translate" />
+        <p-inputNumber [(ngModel)]="r.montant" mode="decimal" [min]="0"
+                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+        <label class="case-service">
+          <input type="checkbox" [(ngModel)]="r.premiere_fois" /> {{ 'parametres.premiere_fois' | translate }}
+        </label>
+        <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                  (onClick)="adhesionRows.splice(i, 1)" />
+      </div>
+      <p-button [label]="'parametres.ajouter_element' | translate" icon="pi pi-plus"
+                severity="secondary" size="small" (onClick)="adhesionRows.push({ libelle: '', montant: 0, premiere_fois: false })" />
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="adhesionDialogVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success"
+                  [loading]="saving()" (onClick)="validerAdhesion()" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Dialog changer mot de passe -->
     <p-dialog [header]="'🔑 ' + ('parametres.changer_mdp_titre' | translate)" [(visible)]="mdpDialogVisible"
               [modal]="true" [style]="{width:'380px'}" [draggable]="false">
@@ -1131,6 +1196,7 @@ import { MessageService } from 'primeng/api';
     </p-dialog>
   `,
   styles: [`
+    .case-service { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); margin-top:6px; white-space:nowrap; }
     .mode-tarif { display:flex; gap:4px; }
     .mode-tarif button { flex:1; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px;
                          background:var(--surface); color:var(--text-2); cursor:pointer; }
@@ -1330,6 +1396,79 @@ export class ParametresComponent implements OnInit {
     if (rows.length) this.sectionCompo.frais_inscription = rows.reduce((t, r) => t + r.montant, 0);
     this.compositionDialogVisible = false;
     this.sauvegarderSection(this.sectionCompo);
+  }
+
+  // ── Formules d'une section ──────────────────────────────────────────
+  formulesDialogVisible = false;
+  sectionFormules: any = null;
+  formulesRows: { id?: string; nom: string; frais_mensualite: number; actif: boolean }[] = [];
+  private formulesRetirees: string[] = [];
+
+  formulesActives(s: any): any[] {
+    return (s.formules || []).filter((f: any) => f.actif);
+  }
+
+  ouvrirFormules(s: any) {
+    this.sectionFormules = s;
+    this.formulesRows = (s.formules || []).map((f: any) => ({ ...f, frais_mensualite: +f.frais_mensualite }));
+    if (!this.formulesRows.length) this.formulesRows.push({ nom: '', frais_mensualite: 0, actif: true });
+    this.formulesRetirees = [];
+    this.formulesDialogVisible = true;
+  }
+
+  retirerFormule(i: number) {
+    const [f] = this.formulesRows.splice(i, 1);
+    if (f?.id) this.formulesRetirees.push(f.id);
+  }
+
+  /** Crée, modifie et supprime les formules, puis recharge les sections. Une
+   *  formule déjà suivie par des élèves ne se supprime pas : le serveur le dit. */
+  enregistrerFormules() {
+    const section = this.sectionFormules;
+    const appels = [
+      ...this.formulesRetirees.map(id => this.api.delete<any>(`/eleves/formules/${id}/`)),
+      ...this.formulesRows.filter(f => (f.nom || '').trim()).map((f, ordre) => {
+        const corps = { section: section.id, nom: f.nom.trim(), frais_mensualite: +f.frais_mensualite || 0,
+                        actif: f.actif, ordre };
+        return f.id ? this.api.patch<any>(`/eleves/formules/${f.id}/`, corps)
+                    : this.api.post<any>('/eleves/formules/', corps);
+      }),
+    ];
+    this.saving.set(true);
+    forkJoin(appels.length ? appels : [of(null)]).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.formulesDialogVisible = false;
+        this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: section.nom });
+        this.chargerSections();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: err?.error?.error || this.translate.instant('parametres.sauvegarde_echouee') });
+        this.chargerSections();
+      },
+    });
+  }
+
+  // ── Frais d'adhésion d'un service ───────────────────────────────────
+  adhesionDialogVisible = false;
+  serviceAdhesion: any = null;
+  adhesionRows: { libelle: string; montant: number; premiere_fois: boolean }[] = [];
+
+  ouvrirAdhesion(sv: any) {
+    this.serviceAdhesion = sv;
+    this.adhesionRows = (sv.composition_adhesion || []).map((e: any) => ({ ...e }));
+    if (!this.adhesionRows.length) this.adhesionRows.push({ libelle: '', montant: 0, premiere_fois: false });
+    this.adhesionDialogVisible = true;
+  }
+
+  validerAdhesion() {
+    this.serviceAdhesion.composition_adhesion = this.adhesionRows
+      .filter(r => (r.libelle || '').trim())
+      .map(r => ({ libelle: r.libelle.trim(), montant: +r.montant || 0, premiere_fois: !!r.premiere_fois }));
+    this.adhesionDialogVisible = false;
+    this.sauvegarderService(this.serviceAdhesion);
   }
 
   periodiciteOptions = [
@@ -1927,7 +2066,13 @@ chargerExercice() {
         this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: sv.nom });
         this.saving.set(false);
       },
-      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+      error: err => {
+        const e = err?.error;
+        const detail = e && typeof e === 'object' ? [].concat(...Object.values(e) as any[]).filter(Boolean)[0] : null;
+        this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: detail || this.translate.instant('parametres.sauvegarde_echouee') });
+        this.saving.set(false);
+      }
     });
   }
 

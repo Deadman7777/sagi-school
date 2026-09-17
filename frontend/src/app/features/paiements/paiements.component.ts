@@ -496,6 +496,22 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
           </div>
+          <!-- Premier mois réglé avec l'inscription : le mois passe payé. -->
+          @if (premierMoisProposable(); as pm) {
+            <div class="premier-mois">
+              <label class="premier-mois-case">
+                <input type="checkbox" [(ngModel)]="form.inclure_premier_mois" (ngModelChange)="togglePremierMois()" />
+                {{ 'paiements.inclure_premier_mois' | translate:{ mois: pm.label } }}
+                <span class="fee-hint">{{ 'paiements.reste_mois' | translate }} {{ pm.reste | number:'1.0-0' }}</span>
+              </label>
+              @if (form.inclure_premier_mois) {
+                <div class="form-group">
+                  <label>{{ saisieDonnees()!.formule_nom ? ('Mensualité — ' + saisieDonnees()!.formule_nom) : 'Mensualité' }} ({{ pm.label }})</label>
+                  <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
+                </div>
+              }
+            </div>
+          }
         }
 
         @if (typePaiement === 'MENSUALITE') {
@@ -1037,6 +1053,8 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
     <!-- === FIN ONGLET CHARGES === -->
   `,
   styles: [`
+    .premier-mois { margin-top:10px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; }
+    .premier-mois-case { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); flex-wrap:wrap; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
@@ -1281,9 +1299,14 @@ export class PaiementsComponent implements OnInit {
     // `du` = ce que le service coûte dans ce contexte (tarif × mois cochés pour
     // un service mensuel) ; `montant` = ce qu'on en encaisse. Deux champs, parce
     // que ce sont deux choses : un versement partiel les sépare.
-    services:            [] as { id: string; nom: string; periodicite: string;
-                                 tarif: number; du: number; montant: number;
+    // `nature` : MENSUEL (solde des mois), UNIQUE ou ADHESION (frais d'adhésion
+    // d'un service : droit d'inscription, kimono…), qui soldent la ligne hors
+    // mensualité. `cle` identifie un élément d'adhésion d'un reçu à l'autre.
+    services:            [] as { id: string; nom: string; periodicite: string; nature: string;
+                                 cle?: string; tarif: number; du: number; montant: number;
                                  inclus: boolean }[],
+    // Premier mois réglé avec l'inscription (réglage de l'école ou service qui l'exige).
+    inclure_premier_mois: false,
     mode_paiement:       '',
     // Paiement multi-mode : un même règlement réparti sur plusieurs modes.
     multi_mode:          false,
@@ -1440,8 +1463,13 @@ export class PaiementsComponent implements OnInit {
     if (this.typePaiement === 'INSCRIPTION') {
       this.form.montant_mensualite   = 0;
       this.form.montant_cantine      = 0;
-      this.form.mois_regles          = [];
+      // Premier mois à régler avec l'inscription : proposé coché, et c'est ce
+      // mois-là que le paiement désigne — il passe payé sur la fiche.
+      const premier = this.premierMoisProposable();
+      this.form.inclure_premier_mois = !!premier;
+      this.form.mois_regles          = premier ? [premier.num] : [];
     } else {
+      this.form.inclure_premier_mois = false;
       // Tous les mois ÉCHUS non soldés, pas seulement le premier : un reliquat
       // se réclame au passage suivant, il ne s'oublie pas jusqu'à ce que la
       // famille repasse. Le caissier peut décocher ce qu'elle ne règle pas.
@@ -1471,6 +1499,21 @@ export class PaiementsComponent implements OnInit {
                       + (Number(this.form.montant_divers) || 0);
   }
 
+  /** Le premier mois, s'il se règle à l'inscription et reste dû. */
+  premierMoisProposable(): any | null {
+    const d = this.saisieDonnees();
+    if (!d?.premier_mois_a_inscription || !d.premier_mois) return null;
+    const m = (d.mois_ecole || []).find((x: any) => x.num === d.premier_mois);
+    return m && m.du && m.reste > 0 ? m : null;
+  }
+
+  togglePremierMois() {
+    const premier = this.premierMoisProposable();
+    this.form.mois_regles = this.form.inclure_premier_mois && premier ? [premier.num] : [];
+    this.construireServices();
+    this.proposerLeResteDu();
+  }
+
   // Services abonnés proposés selon le contexte du paiement :
   // - UNIQUE « à l'inscription » (mois_unique null) → uniquement en type INSCRIPTION
   // - UNIQUE « mois X » → uniquement si le mois X fait partie des mois réglés
@@ -1481,20 +1524,31 @@ export class PaiementsComponent implements OnInit {
     const inclusAvant = new Map((this.form.services || []).map(s => [s.id, s.inclus]));
     const tous = data.services || [];
     let retenus: any[];
+    const nb = this.form.mois_regles.length;
+    const mensuels = tous.filter((s: any) => s.periodicite === 'MENSUEL')
+      .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'MENSUEL', nature: 'MENSUEL',
+                          tarif: s.montant || 0, du: Math.round((s.montant || 0) * nb) }));
     if (this.typePaiement === 'INSCRIPTION') {
-      retenus = tous
-        .filter((s: any) => s.periodicite === 'UNIQUE' && !s.mois_unique)
-        .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE',
-                            tarif: s.montant || 0, du: Math.round(s.montant || 0) }));
-    } else {
-      const nb = this.form.mois_regles.length;
       retenus = [
-        ...tous.filter((s: any) => s.periodicite === 'MENSUEL')
-               .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'MENSUEL',
-                                   tarif: s.montant || 0, du: Math.round((s.montant || 0) * nb) })),
+        ...tous
+          .filter((s: any) => s.periodicite === 'UNIQUE' && !s.mois_unique)
+          .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE', nature: 'UNIQUE',
+                              tarif: s.montant || 0, du: Math.round(s.montant || 0) })),
+        // Frais d'adhésion des services choisis, élément par élément, pour ce
+        // qu'il en reste à régler : ils figurent tels quels sur le reçu.
+        ...(data.adhesions || [])
+          .filter((a: any) => a.reste > 0)
+          .map((a: any) => ({ id: 'adh:' + a.cle, nom: `${a.service} — ${a.libelle}`, periodicite: 'UNIQUE',
+                              nature: 'ADHESION', cle: a.cle, tarif: a.montant, du: Math.round(a.reste) })),
+        // Premier mois inclus : les services mensuels de ce mois aussi.
+        ...(nb ? mensuels : []),
+      ];
+    } else {
+      retenus = [
+        ...mensuels,
         ...tous.filter((s: any) => s.periodicite === 'UNIQUE' && s.mois_unique &&
                                    this.form.mois_regles.includes(s.mois_unique))
-               .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE',
+               .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'UNIQUE', nature: 'UNIQUE',
                                    tarif: s.montant || 0, du: Math.round(s.montant || 0) })),
       ];
     }
@@ -1559,12 +1613,11 @@ export class PaiementsComponent implements OnInit {
       .reduce((a, m) => a + Math.max((Number(m.montant) || 0) - svc, 0), 0);
   }
 
-  /** Dû des services proposés dans ce contexte. En mensualité, seuls les
-   *  services PONCTUELS s'ajoutent : celui des mensuels est déjà dans le dû du
-   *  mois. */
+  /** Dû des services proposés dans ce contexte, hors mensuels : celui des
+   *  mensuels est déjà dans le dû du mois. */
   private servicesProposesDus(): number {
     return (this.form.services || [])
-      .filter(s => this.typePaiement === 'INSCRIPTION' || s.periodicite === 'UNIQUE')
+      .filter(s => s.nature !== 'MENSUEL')
       .reduce((a, s) => a + (Number(s.du) || 0), 0);
   }
 
@@ -1578,12 +1631,15 @@ export class PaiementsComponent implements OnInit {
       const b = d.fees_bruts || {}, n = d.fees_nets || {},
             p = d.deja_paye  || {}, r = d.reste     || {};
       const somme = (o: any) => (o.inscription || 0) + (o.uniforme || 0) + (o.fournitures || 0);
+      // Premier mois inclus dans l'inscription : son dû s'ajoute à l'échéance.
+      const premier = this.moisChoisis();
+      const mois = (cle: string) => premier.reduce((a, m) => a + (Number(m[cle]) || 0), 0);
       return {
-        brut:  Math.round(somme(b) + svc),
-        pec:   d.pec?.inscription?.pec || 0,
-        net:   Math.round(somme(n) + svc),
-        verse: Math.round(somme(p)),
-        reste: Math.round(somme(r) + svc),
+        brut:  Math.round(somme(b) + svc + mois('du_brut')),
+        pec:   Math.round((d.pec?.inscription?.pec || 0) + mois('pec')),
+        net:   Math.round(somme(n) + svc + mois('montant')),
+        verse: Math.round(somme(p) + mois('verse')),
+        reste: Math.round(somme(r) + svc + mois('reste')),
       };
     }
     const mois = this.moisChoisis();
@@ -1647,7 +1703,10 @@ export class PaiementsComponent implements OnInit {
    *  d'une école à l'autre (« Renouvellement », « Réinscription »…) et aucun
    *  article ne leur va à tous. */
   libelleEcheance(): string {
-    if (this.typePaiement === 'INSCRIPTION') return this.libelleEntree();
+    if (this.typePaiement === 'INSCRIPTION') {
+      const mois = this.moisChoisis().map(m => m.label);
+      return mois.length ? `${this.libelleEntree()} + ${mois.join(', ')}` : this.libelleEntree();
+    }
     const noms = this.moisChoisis().map(m => m.label);
     return noms.length ? noms.join(', ') : 'ce paiement';
   }
@@ -1700,7 +1759,14 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_inscription = prendre(r.inscription || 0);
       this.form.montant_uniforme    = prendre(r.uniforme    || 0);
       this.form.montant_fournitures = prendre(r.fournitures || 0);
-      for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
+      for (const s of this.form.services) {
+        if (s.nature !== 'MENSUEL') s.montant = s.inclus ? prendre(s.du) : 0;
+      }
+      // Premier mois inclus : la mensualité, puis les services de ce mois.
+      this.form.montant_mensualite = this.form.mois_regles.length ? prendre(this.duMensualite()) : 0;
+      for (const s of this.form.services) {
+        if (s.nature === 'MENSUEL') s.montant = s.inclus ? prendre(s.du) : 0;
+      }
       this.form.montant_inscription += reste;
     } else {
       // L'ÉCHÉANCE DU MOIS D'ABORD, le reliquat avec ce qui dépasse.
@@ -1749,7 +1815,7 @@ export class PaiementsComponent implements OnInit {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
       montant_reliquat: 0,
-      mois_regles: [], services: [], mode_paiement: this.form.mode_paiement || '',
+      mois_regles: [], services: [], inclure_premier_mois: false, mode_paiement: this.form.mode_paiement || '',
       multi_mode: false, modes_reglement: [], observations: '',
       // Le payeur n'est PAS conservé d'une saisie à l'autre, contrairement au
       // mode : enchaîner deux reçus et attribuer le second à l'organisme par
@@ -1845,7 +1911,8 @@ export class PaiementsComponent implements OnInit {
       montant_divers:      Number(this.form.montant_divers || 0) + servicesTotal,
       montant_reliquat:    Number(this.form.montant_reliquat || 0),
       mois_regles:         this.form.mois_regles,
-      services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant) })),
+      services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant), nature: s.nature,
+                                                ...(s.cle ? { cle: s.cle } : {}) })),
       mode_paiement:       this.form.multi_mode ? 'MIXTE' : this.form.mode_paiement,
       modes_reglement:     this.form.multi_mode
         ? this.form.modes_reglement.map(m => ({ mode: m.mode, montant: Number(m.montant) }))

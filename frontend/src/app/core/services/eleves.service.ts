@@ -53,7 +53,11 @@ export class ElevesService {
     return this.api.post<Eleve>('/eleves/', data);
   }
 
-  updateEleve(id: string, data: Partial<Eleve>) {
+  /** Changement de formule daté : les mois avant `mois_debut` gardent leur tarif. */
+  changerFormule(id: string, formule: string, mois_debut: number) {
+    return this.api.post<Eleve>(`/eleves/${id}/changer-formule/`, { formule, mois_debut });
+  }
+    updateEleve(id: string, data: Partial<Eleve>) {
     return this.api.patch<Eleve>(`/eleves/${id}/`, data);
   }
 

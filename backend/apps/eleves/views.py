@@ -8,11 +8,12 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import (Eleve, Organisme, PriseEnChargeOrganisme, Section,
-                     Service)
+from .models import (Eleve, FormuleEleve, FormuleSection, Organisme, PriseEnChargeOrganisme,
+                     Section, Service)
 from .parcours import STATUTS_SORTIE
+from .echeancier import parts_services
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (EleveSerializer, OrganismeSerializer,
+from .serializers import (EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
 from django.db.models import Max
@@ -41,6 +42,29 @@ class SectionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
+
+
+class FormuleSectionViewSet(viewsets.ModelViewSet):
+    """Formules d'une section (?section=<id>). Une formule déjà attribuée ne se
+    supprime pas : on la désactive, l'historique des élèves y renvoie."""
+    serializer_class   = FormuleSectionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = FormuleSection.objects.filter(tenant=get_tenant(self.request))
+        if section := self.request.query_params.get('section'):
+            qs = qs.filter(section_id=section)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def destroy(self, request, *args, **kwargs):
+        formule = self.get_object()
+        if formule.eleves.exists():
+            return Response({'error': "Des élèves ont suivi cette formule : désactivez-la plutôt "
+                                      "que de la supprimer."}, status=409)
+        return super().destroy(request, *args, **kwargs)
 
 
 class ServiceViewSet(viewsets.ModelViewSet):
@@ -273,7 +297,7 @@ class EleveViewSet(viewsets.ModelViewSet):
             # l'alerte de chaque fiche vient désormais de l'échéancier.
             'tenant', 'section', 'exercice', 'reliquat_exercice_origine'
         ).prefetch_related(
-            'paiements', 'abonnements__service',
+            'paiements', 'abonnements__service', 'formules_eleve__formule',
             # Sans ce prefetch, part_organisme déclenche une requête par élève.
             'prises_en_charge_organisme__organisme',
             # Les paiements actifs, sous le nom que l'échéancier va chercher.
@@ -1290,6 +1314,36 @@ class EleveViewSet(viewsets.ModelViewSet):
             'taux_prise_en_charge': float(e.taux_prise_en_charge or 0),
         } for e in qs])
 
+    @action(detail=True, methods=['post'], url_path='changer-formule')
+    def changer_formule(self, request, pk=None):
+        """Changement de formule DATÉ : {formule, mois_debut (1..12)}.
+
+        Les mois avant `mois_debut` gardent leur formule et leur tarif ; les
+        suivants passent à la nouvelle. Changer à nouveau le même mois remplace
+        le changement précédent.
+        """
+        eleve = self.get_object()
+        formule = FormuleSection.objects.filter(id=request.data.get('formule'), tenant=eleve.tenant,
+                                                section_id=eleve.section_id).first()
+        if formule is None:
+            return Response({'error': "Choisissez une formule de la section de l'élève."}, status=400)
+        try:
+            mois = int(request.data.get('mois_debut'))
+        except (TypeError, ValueError):
+            mois = 0
+        if not 1 <= mois <= 12:
+            return Response({'error': 'Mois invalide.'}, status=400)
+        if not eleve._formules_datees():
+            return Response({'error': "Choisissez d'abord la formule de l'élève sur sa fiche."}, status=400)
+        from .echeancier import mois_factures
+        if mois not in mois_factures(eleve, jusqu_a_la_sortie=False):
+            return Response({'error': "Ce mois n'est pas facturé à cet élève."}, status=400)
+        FormuleEleve.objects.update_or_create(
+            tenant=eleve.tenant, eleve=eleve, mois_debut=mois,
+            defaults={'formule': formule, 'saisi_par': str(request.user)})
+        eleve = self.get_queryset().get(pk=eleve.pk)
+        return Response(self.get_serializer(eleve).data)
+
     @action(detail=True, methods=['get'], url_path='saisie-paiement')
     def saisie_paiement(self, request, pk=None):
         """Données pré-calculées pour le formulaire de saisie de paiement.
@@ -1318,7 +1372,8 @@ class EleveViewSet(viewsets.ModelViewSet):
         # deuxième jeu de champs sur le paiement, le reçu et le grand livre.
         fees_bruts = {
             'inscription': eleve.frais_entree,
-            'mensualite':  float(section.frais_mensualite)  if section else 0,
+            # Tarif de la formule en vigueur ce mois-ci (crèche), sinon de la section.
+            'mensualite':  eleve.mensualite_brute_du_mois(None) if section else 0,
             'uniforme':    float(section.frais_uniforme)    if section else 0,
             'fournitures': float(section.frais_fournitures) if section else 0,
         }
@@ -1381,9 +1436,25 @@ class EleveViewSet(viewsets.ModelViewSet):
                 'periodicite': ab.service.periodicite,
                 # UNIQUE : None = dû à l'inscription, 1..12 = mois calendaire
                 'mois_unique': ab.service.mois_unique,
+                'premier_mois_a_inscription': ab.service.premier_mois_a_inscription,
             }
             for ab in eleve.abonnements.all() if ab.service.actif
         ]
+
+        # ── Frais d'adhésion des services (droit d'inscription, kimono…) ────
+        # Chaque élément se reconnaît sur les reçus par sa clé : ce qui en a
+        # déjà été réglé se déduit, élément par élément.
+        deja_adhesion = {}
+        if exercice:
+            for regles in Paiement.objects.filter(eleve=eleve, exercice=exercice, statut='ACTIF') \
+                                          .values_list('services_regles', flat=True):
+                for ligne in regles or []:
+                    if ligne.get('nature') == 'ADHESION' and ligne.get('cle'):
+                        deja_adhesion[ligne['cle']] = (deja_adhesion.get(ligne['cle'], 0.0)
+                                                       + float(ligne.get('montant') or 0))
+        adhesions = [{**a, 'paye': round(deja_adhesion.get(a['cle'], 0.0), 2),
+                      'reste': round(max(a['montant'] - deja_adhesion.get(a['cle'], 0.0), 0.0), 2)}
+                     for a in eleve.adhesions_services()]
 
         # ── Mois de l'année scolaire : le dû, le versé et le reste, mois par mois
         # Ces trois montants viennent de l'ÉCHÉANCIER, qui fait déjà foi sur la
@@ -1395,7 +1466,6 @@ class EleveViewSet(viewsets.ModelViewSet):
         nb_dus     = eleve.nb_mensualites_dues
         ech        = construire_echeancier(eleve)
         par_mois   = {ligne['mois']: ligne for ligne in ech['lignes']}
-        pec_mois   = eleve.montant_pec_mensualite_mensuel
         mois_ecole = []
         if exercice:
             nb_total = exercice.nb_mensualites
@@ -1412,7 +1482,7 @@ class EleveViewSet(viewsets.ModelViewSet):
                     # La réduction ne s'applique qu'aux mois au tarif ordinaire :
                     # un montant saisi à la main POUR ce mois est le dû final,
                     # il ne se laisse pas réduire une seconde fois.
-                    pec   = 0.0 if (ligne is None or ligne['montant_saisi']) else pec_mois
+                    pec   = 0.0 if (ligne is None or ligne['montant_saisi']) else eleve.pec_du_mois(mo)
                     mois_ecole.append({
                         'num':     mo,
                         'annee':   ligne['annee'] if ligne else y,
@@ -1541,6 +1611,13 @@ class EleveViewSet(viewsets.ModelViewSet):
             'nb_mensualites_dues': nb_dus,
             'mois_ecole':        mois_ecole,
             'services':          services_abonnes,
+            'adhesions':         adhesions,
+            # Le premier mois facturé se règle avec l'inscription (réglage de
+            # l'école ou service qui l'exige) : le guichet le propose alors
+            # dans le paiement d'inscription, et le mois passe payé.
+            'premier_mois_a_inscription': eleve.premier_mois_a_inscription,
+            'premier_mois': ech['lignes'][0]['mois'] if ech['lignes'] else None,
+            'formule_nom': eleve.formule_actuelle.nom if eleve.formule_actuelle else '',
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
         })
@@ -1652,10 +1729,14 @@ class SuiviMensuelView(APIView):
             cell['uniforme']    += float(p.montant_uniforme    or 0)
             cell['fournitures'] += float(p.montant_fournitures or 0)
             cell['cantine']     += float(p.montant_cantine     or 0)
-            # services itemisés (inclus dans montant_divers) + divers manuel résiduel
-            svc           = sum(float(s.get('montant') or 0) for s in (p.services_regles or []))
-            divers_manuel = max(0.0, float(p.montant_divers or 0) - svc)
+            # services itemisés (inclus dans montant_divers) + divers manuel résiduel.
+            # Les frais d'adhésion restent au mois du paiement ; seuls les
+            # services mensuels se ventilent sur les mois réglés.
+            svc_mois, svc_hors = parts_services(p.services_regles)
+            divers_manuel = max(0.0, float(p.montant_divers or 0) - svc_mois - svc_hors)
             cell['divers'] += divers_manuel
+            cell['services'] += svc_hors
+            svc = svc_mois
             # mensualité + services ventilés par mois concerné (anticipation)
             mm   = float(p.montant_mensualite or 0)
             mois = [int(x) for x in (p.mois_regles or [])]

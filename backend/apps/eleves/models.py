@@ -365,11 +365,70 @@ class Eleve(TenantModel):
 
     @property
     def montant_pec_mensualite_mensuel(self):
-        """Réduction sur une mensualité (montant mensuel) — voir ci-dessus."""
+        """Réduction sur une mensualité (montant mensuel) — voir ci-dessus.
+        Celle du mois en cours quand la formule de l'enfant a changé."""
+        return self.pec_du_mois(None)
+
+    # ── Formule (crèche : 08H-13H, 08H-17H…) ─────────────────────────────
+    # Une section peut proposer plusieurs formules, chacune avec sa mensualité.
+    # L'enfant en change en cours d'année : le changement est DATÉ
+    # (`FormuleEleve.mois_debut`), et chaque mois est facturé au tarif de la
+    # formule en vigueur ce mois-là. Changer la section d'un élève recalculait
+    # toute l'année, mois passés compris : c'est exactement ce qu'on évite.
+    def _formules_datees(self):
+        """Les formules de la fiche, dans l'ordre de l'année scolaire."""
+        cache = getattr(self, '_formules_cache', None)
+        if cache is None:
+            if not self.pk or not self.section_id:
+                cache = []
+            else:
+                lignes = [f for f in self.formules_eleve.all()
+                          if f.formule.section_id == self.section_id]
+                debut = self.exercice.date_debut.month if self.exercice_id else 1
+                cache = sorted(lignes, key=lambda f: (f.mois_debut - debut) % 12)
+            self._formules_cache = cache
+        return cache
+
+    def formule_du_mois(self, mois=None):
+        """La formule en vigueur pour le mois `mois` (None : aujourd'hui)."""
+        lignes = self._formules_datees()
+        if not lignes:
+            return None
+        debut = self.exercice.date_debut.month if self.exercice_id else 1
+        if mois is None:
+            import datetime as _dt
+            aujourdhui = _dt.date.today()
+            if self.exercice_id and aujourdhui > self.exercice.date_fin:
+                return lignes[-1].formule
+            mois = aujourdhui.month
+            if self.exercice_id and aujourdhui < self.exercice.date_debut:
+                mois = debut
+        rang = (int(mois) - debut) % 12
+        choisie = lignes[0]
+        for ligne in lignes:
+            if (ligne.mois_debut - debut) % 12 <= rang:
+                choisie = ligne
+        return choisie.formule
+
+    @property
+    def formule_actuelle(self):
+        return self.formule_du_mois(None)
+
+    def mensualite_brute_du_mois(self, mois=None):
+        """Tarif du mois avant prise en charge : celui de la formule en vigueur,
+        sinon la mensualité de la section."""
         if not self.section:
             return 0.0
-        return round(min(float(self.pec_mensualite or 0),
-                         float(self.section.frais_mensualite)), 2)
+        formule = self.formule_du_mois(mois)
+        if formule is not None:
+            return float(formule.frais_mensualite)
+        return float(self.section.frais_mensualite)
+
+    def pec_du_mois(self, mois=None):
+        """Prise en charge du mois, plafonnée au tarif de ce mois."""
+        if not self.section:
+            return 0.0
+        return round(min(float(self.pec_mensualite or 0), self.mensualite_brute_du_mois(mois)), 2)
 
     @property
     def nb_mensualites_dues(self):
@@ -399,7 +458,11 @@ class Eleve(TenantModel):
 
     @property
     def montant_pec_annuel(self):
-        """Total annuel pris en charge (inscription + mensualités dues × réduction mensualité)."""
+        """Total annuel pris en charge (inscription + mensualités dues × réduction mensualité).
+        Mois par mois quand la formule a changé : la réduction se plafonne au tarif du mois."""
+        if self._formules_datees():
+            return round(self.montant_pec_inscription
+                         + sum(self.pec_du_mois(m) for m in self.mois_factures), 2)
         return round(self.montant_pec_inscription +
                      self.montant_pec_mensualite_mensuel * self.nb_mensualites_dues, 2)
 
@@ -408,16 +471,19 @@ class Eleve(TenantModel):
         """Total annuel brut sans prise en charge (mensualité × nb de mensualités dues)."""
         if not self.section:
             return 0.0
+        if self._formules_datees():
+            fixes = (self.frais_entree + float(self.section.frais_uniforme)
+                     + float(self.section.frais_fournitures))
+            return round(fixes + sum(self.mensualite_brute_du_mois(m) for m in self.mois_factures), 2)
         return float(self.section.total_annuel_pour(self.nb_mensualites_dues,
                                                     frais_entree=self.frais_entree))
 
     @property
     def frais_mensualite_effectif(self):
-        """Mensualité réelle après prise en charge."""
+        """Mensualité réelle après prise en charge (formule du mois en cours)."""
         if not self.section:
             return 0.0
-        base = float(self.section.frais_mensualite)
-        return round(max(base - self.montant_pec_mensualite_mensuel, 0.0), 2)
+        return round(max(self.mensualite_brute_du_mois(None) - self.pec_du_mois(None), 0.0), 2)
 
     @property
     def montant_services_annuel(self):
@@ -429,7 +495,36 @@ class Eleve(TenantModel):
         for ab in self.abonnements.all():
             s = ab.service
             total += float(s.montant) * (nb_mois if s.periodicite == 'MENSUEL' else 1)
+        total += sum(a['montant'] for a in self.adhesions_services())
         return round(total, 2)
+
+    def adhesions_services(self):
+        """Frais d'adhésion dus pour les services choisis : droit d'inscription au
+        service, équipement… Un élément « première adhésion seulement » (le
+        kimono) n'est dû que si l'enfant n'avait pas suivi ce service une année
+        précédente (`EleveService.premiere_adhesion`)."""
+        dus = []
+        for ab in self.abonnements.all():
+            s = ab.service
+            for el in s.composition_adhesion or []:
+                if el.get('premiere_fois') and not ab.premiere_adhesion:
+                    continue
+                montant = float(el.get('montant') or 0)
+                if montant <= 0:
+                    continue
+                libelle = str(el.get('libelle') or '').strip()
+                dus.append({'service_id': str(s.id), 'service': s.nom, 'libelle': libelle,
+                            'montant': montant, 'cle': f'{s.id}:{libelle}',
+                            'premiere_fois': bool(el.get('premiere_fois'))})
+        return dus
+
+    @property
+    def premier_mois_a_inscription(self):
+        """Le premier mois se règle à l'inscription : réglage de l'école, ou
+        exigence d'un service choisi (« premier mois payé d'avance »)."""
+        if getattr(self.tenant, 'premier_mois_a_inscription', False):
+            return True
+        return any(ab.service.premier_mois_a_inscription for ab in self.abonnements.all())
 
     # ── Montants attendus / payés ─────────────────────────────────────────
     @property
@@ -460,15 +555,17 @@ class Eleve(TenantModel):
 
         Les frais d'entrée sont l'inscription pour un nouvel élève, le
         renouvellement pour un ancien quand l'école en pratique un."""
+        adhesions = sum(a['montant'] for a in self.adhesions_services())
         if not self.section:
             return round(sum(float(ab.service.montant or 0)
                              for ab in self.abonnements.all()
-                             if ab.service.periodicite != 'MENSUEL'), 2)
+                             if ab.service.periodicite != 'MENSUEL') + adhesions, 2)
         total = max(self.frais_entree - self.montant_pec_inscription, 0.0)
         total += float(self.section.frais_uniforme)
         total += float(self.section.frais_fournitures)
         total += sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
                      if ab.service.periodicite != 'MENSUEL')
+        total += adhesions
         return round(total, 2)
 
     @property
@@ -497,6 +594,11 @@ class Eleve(TenantModel):
         if self.a_la_journee:
             from .garderie import du_presences_du_mois
             return round(du_presences_du_mois(self, int(mois)) + self.du_mensuel_standard, 2)
+        if self._formules_datees():
+            mensuel = sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+                          if ab.service.periodicite == 'MENSUEL')
+            net = max(self.mensualite_brute_du_mois(mois) - self.pec_du_mois(mois), 0.0)
+            return round(net + mensuel, 2)
         return self.du_mensuel_standard
 
     @property
@@ -669,6 +771,48 @@ class Eleve(TenantModel):
         return self.situation_alerte()['niveau']
 
 
+class FormuleSection(TenantModel):
+    """Une formule d'une section : même inscription, mensualité propre.
+
+    Crèche : 08H-13H à 30 000, 08H-17H à 40 000, 08H-19H à 55 000, dans la même
+    classe. Une section sans formule garde sa mensualité unique.
+    """
+    section          = models.ForeignKey(Section, on_delete=models.CASCADE, related_name='formules')
+    nom              = models.CharField(max_length=100)
+    frais_mensualite = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ordre            = models.IntegerField(default=0)
+    actif            = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'formules_section'
+        ordering = ['ordre', 'nom']
+
+    def __str__(self):
+        return f"{self.section.nom} — {self.nom}"
+
+
+class FormuleEleve(TenantModel):
+    """La formule d'un enfant à partir d'un mois de l'année scolaire.
+
+    La première ligne vaut depuis le début ; chaque ligne suivante est un
+    changement, qui ne touche que les mois à partir du sien.
+    """
+    eleve      = models.ForeignKey(Eleve, on_delete=models.CASCADE, related_name='formules_eleve')
+    formule    = models.ForeignKey(FormuleSection, on_delete=models.PROTECT, related_name='eleves')
+    mois_debut = models.PositiveSmallIntegerField()     # 1..12
+    saisi_par  = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'formules_eleve'
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'eleve', 'mois_debut'],
+                                    name='uniq_formule_eleve_par_mois'),
+        ]
+
+    def __str__(self):
+        return f"{self.eleve} → {self.formule.nom} (mois {self.mois_debut})"
+
+
 class PresenceGarderie(TenantModel):
     """Un jour de garde d'un enfant facturé à la journée.
 
@@ -716,6 +860,14 @@ class Service(TenantModel):
     # None = dû à l'inscription ; 1..12 = dû au mois calendaire indiqué.
     mois_unique = models.PositiveSmallIntegerField(null=True, blank=True)
     actif       = models.BooleanField(default=True)
+    # Frais d'adhésion au service, dus à l'inscription de l'enfant au service :
+    # [{"libelle": "Droit d'inscription", "montant": 12000, "premiere_fois": false},
+    #  {"libelle": "Kimono", "montant": 10000, "premiere_fois": true}]
+    # `premiere_fois` : seulement si l'enfant n'a pas suivi ce service une
+    # année précédente (l'équipement déjà acheté ne se rachète pas).
+    composition_adhesion = models.JSONField(default=list, blank=True)
+    # Le premier mois du service se paie d'avance, avec l'inscription.
+    premier_mois_a_inscription = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'services'
@@ -729,6 +881,10 @@ class EleveService(TenantModel):
     """Abonnement d'un élève à un service optionnel."""
     eleve   = models.ForeignKey(Eleve, on_delete=models.CASCADE, related_name='abonnements')
     service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name='abonnements')
+    # Première fois que l'enfant suit ce service : décidé à l'abonnement d'après
+    # ses fiches des années précédentes, corrigeable par l'école. Figé, pour
+    # qu'une fiche ancienne supprimée ne fasse pas réapparaître un kimono dû.
+    premiere_adhesion = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'eleve_services'

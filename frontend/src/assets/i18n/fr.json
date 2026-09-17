@@ -370,7 +370,17 @@
     "certificat_titre": "Certificat de scolarité",
     "certificat_word": "Modèle Word de l'établissement",
     "certificat_pdf": "Certificat standard (PDF)",
-    "certificat_erreur": "Impossible de générer le certificat."
+    "certificat_erreur": "Impossible de générer le certificat.",
+    "changer_formule": "Changer de formule",
+    "formule": "Formule",
+    "premiere_adhesion": "{{service}} : première adhésion (équipement dû)",
+    "formules_historique": "Formules successives",
+    "nouvelle_formule": "Nouvelle formule",
+    "a_partir_de": "À partir de",
+    "formule_initiale_requise": "Choisissez d'abord la formule de l'élève sur sa fiche.",
+    "changer_formule_aide": "Les mois précédents gardent leur tarif ; la nouvelle mensualité s'applique à partir du mois choisi.",
+    "formule_changee": "Formule changée",
+    "formule_obligatoire": "Choisissez la formule de l'élève."
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -419,7 +429,9 @@
     "free_money": "Free Money",
     "virement": "Virement",
     "cheque": "Chèque",
-    "choisir_mode_ph": "Choisir..."
+    "choisir_mode_ph": "Choisir...",
+    "inclure_premier_mois": "Inclure le premier mois ({{mois}}) dans l'inscription",
+    "reste_mois": "reste"
   },
   "parametres": {
     "title": "Paramètres",
@@ -622,7 +634,18 @@
     "mode_journee": "À la journée",
     "tarif_demi_journee": "Tarif ½ journée",
     "tarif_journee": "Tarif journée",
-    "aide_journee": "Le dû naît de l'appel du jour (Élèves → Garderie)."
+    "aide_journee": "Le dû naît de l'appel du jour (Élèves → Garderie).",
+    "formules": "Formules",
+    "mensualite_selon_formule": "Mensualité selon la formule de l'enfant",
+    "formules_aide": "Même inscription, mensualité selon la formule (ex. 08H-13H, 08H-17H). Une formule suivie par des élèves se désactive au lieu de se supprimer.",
+    "formule_nom": "Nom (ex. 08H-17H)",
+    "formule_active": "Active",
+    "ajouter_formule": "Ajouter une formule",
+    "service_adhesion": "Frais d'adhésion",
+    "service_adhesion_composer": "Composer",
+    "service_premier_mois": "1er mois payé à l'inscription",
+    "service_adhesion_aide": "Payés à l'inscription de l'enfant au service (droit d'inscription, équipement…). Cochez « 1re adhésion » pour un élément dû seulement la première année (ex. kimono).",
+    "premiere_fois": "1re adhésion"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

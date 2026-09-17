@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import (Eleve, EleveService, Organisme,
+from .models import (Eleve, EleveService, FormuleEleve, FormuleSection, Organisme,
                      PriseEnChargeOrganisme, Section, Service)
 
 # Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
@@ -27,7 +27,49 @@ class ServiceSerializer(serializers.ModelSerializer):
                                 getattr(self.instance, 'periodicite', 'MENSUEL'))
         if periodicite != 'UNIQUE':
             attrs['mois_unique'] = None
+            if 'composition_adhesion' not in attrs and self.instance is None:
+                attrs['composition_adhesion'] = []
+        else:
+            # Le premier mois d'avance ne concerne qu'un service mensuel.
+            attrs['premier_mois_a_inscription'] = False
+        if 'composition_adhesion' in attrs:
+            elements = []
+            for el in attrs['composition_adhesion'] or []:
+                libelle = str((el or {}).get('libelle', '')).strip()[:100]
+                try:
+                    montant = float((el or {}).get('montant', 0) or 0)
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError({'composition_adhesion': f'Montant invalide pour « {libelle} ».'})
+                if not libelle:
+                    continue
+                if montant < 0:
+                    raise serializers.ValidationError({'composition_adhesion': f'« {libelle} » : montant négatif.'})
+                elements.append({'libelle': libelle, 'montant': montant,
+                                 'premiere_fois': bool(el.get('premiere_fois'))})
+            libelles = [e['libelle'].lower() for e in elements]
+            if len(set(libelles)) != len(libelles):
+                raise serializers.ValidationError({'composition_adhesion': 'Deux éléments portent le même libellé.'})
+            attrs['composition_adhesion'] = elements
         return attrs
+
+
+class FormuleSectionSerializer(serializers.ModelSerializer):
+    frais_mensualite = serializers.FloatField(min_value=0)
+    nb_eleves = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = FormuleSection
+        fields = ['id', 'section', 'nom', 'frais_mensualite', 'ordre', 'actif', 'nb_eleves']
+
+    def get_nb_eleves(self, obj):
+        return obj.eleves.values('eleve').distinct().count()
+
+    def validate_section(self, section):
+        request = self.context.get('request')
+        from core.tenant import get_tenant
+        if request is not None and section.tenant_id != get_tenant(request).id:
+            raise serializers.ValidationError('Section inconnue.')
+        return section
 
 
 class EleveSerializer(serializers.ModelSerializer):
@@ -41,6 +83,11 @@ class EleveSerializer(serializers.ModelSerializer):
     montant_pec_annuel           = serializers.ReadOnlyField()
     montant_services_annuel      = serializers.ReadOnlyField()
     abonnements                  = serializers.SerializerMethodField()
+    # Pour chaque service : première adhésion ou non (kimono dû ou pas).
+    abonnements_detail           = serializers.SerializerMethodField()
+    # Formule en vigueur ce mois-ci, et l'historique des changements datés.
+    formule                      = serializers.SerializerMethodField()
+    formules_historique          = serializers.SerializerMethodField()
     total_paye                   = serializers.SerializerMethodField()
     reste_a_payer                = serializers.SerializerMethodField()
     niveau_alerte                = serializers.SerializerMethodField()
@@ -218,28 +265,99 @@ class EleveSerializer(serializers.ModelSerializer):
         return [str(ab.service_id) for ab in obj.abonnements.all()]
 
     def _sync_abonnements(self, eleve):
-        """Crée/supprime les abonnements selon la liste 'abonnements' (IDs de services) en entrée."""
+        """Crée/supprime les abonnements selon la liste 'abonnements' (IDs de services) en entrée.
+
+        À la création d'un abonnement, `premiere_adhesion` vaut vrai sauf si une
+        fiche d'une année précédente du même enfant suivait déjà ce service.
+        `premieres_adhesions` ({service_id: bool}) permet à l'école de corriger.
+        """
         ids = self.initial_data.get('abonnements', None)
-        if ids is None:
-            return
-        wanted   = {str(i) for i in ids}
+        corrections = self.initial_data.get('premieres_adhesions') or {}
         existing = {str(ab.service_id): ab for ab in eleve.abonnements.all()}
-        for sid in wanted - set(existing):
-            svc = Service.objects.filter(id=sid, tenant=eleve.tenant).first()
-            if svc:
-                EleveService.objects.create(tenant=eleve.tenant, eleve=eleve, service=svc)
-        for sid in set(existing) - wanted:
-            existing[sid].delete()
+        if ids is not None:
+            wanted = {str(i) for i in ids}
+            deja_suivis = None
+            for sid in wanted - set(existing):
+                svc = Service.objects.filter(id=sid, tenant=eleve.tenant).first()
+                if not svc:
+                    continue
+                if deja_suivis is None:
+                    deja_suivis = services_deja_suivis(eleve)
+                existing[sid] = EleveService.objects.create(
+                    tenant=eleve.tenant, eleve=eleve, service=svc,
+                    premiere_adhesion=sid not in deja_suivis)
+            for sid in set(existing) - wanted:
+                existing.pop(sid).delete()
+        for sid, valeur in corrections.items():
+            ab = existing.get(str(sid))
+            if ab is not None and ab.premiere_adhesion != bool(valeur):
+                ab.premiere_adhesion = bool(valeur)
+                ab.save(update_fields=['premiere_adhesion', 'updated_at'])
+
+    def _sync_formule(self, eleve, section_changee):
+        """Formule choisie sur la fiche (`formule` : id).
+
+        Sans historique, ou avec une seule ligne, c'est le choix initial : il
+        vaut pour toute l'année. Un changement en cours d'année passe par
+        l'action datée « changer de formule », jamais par ici — sinon on
+        réécrirait les mois passés.
+        """
+        if section_changee:
+            eleve.formules_eleve.exclude(formule__section_id=eleve.section_id).delete()
+        if 'formule' not in self.initial_data:
+            return
+        fid = self.initial_data.get('formule')
+        lignes = list(eleve.formules_eleve.all())
+        if not fid:
+            if len(lignes) <= 1:
+                eleve.formules_eleve.all().delete()
+            return
+        formule = FormuleSection.objects.filter(id=fid, tenant=eleve.tenant,
+                                                section_id=eleve.section_id).first()
+        if formule is None:
+            raise serializers.ValidationError({'formule': "Cette formule n'appartient pas à la section de l'élève."})
+        if len(lignes) > 1:
+            return
+        from .echeancier import mois_factures
+        mois = mois_factures(eleve, jusqu_a_la_sortie=False)
+        debut = mois[0] if mois else (eleve.exercice.date_debut.month if eleve.exercice_id else 1)
+        if lignes:
+            ligne = lignes[0]
+            ligne.formule, ligne.mois_debut = formule, debut
+            ligne.save(update_fields=['formule', 'mois_debut', 'updated_at'])
+        else:
+            FormuleEleve.objects.create(tenant=eleve.tenant, eleve=eleve, formule=formule,
+                                        mois_debut=debut)
 
     def create(self, validated_data):
         eleve = super().create(validated_data)
         self._sync_abonnements(eleve)
+        self._sync_formule(eleve, section_changee=False)
         return eleve
 
     def update(self, instance, validated_data):
+        ancienne_section = instance.section_id
         eleve = super().update(instance, validated_data)
         self._sync_abonnements(eleve)
+        self._sync_formule(eleve, section_changee=eleve.section_id != ancienne_section)
         return eleve
+
+    def get_abonnements_detail(self, obj):
+        return [{'service': str(ab.service_id), 'nom': ab.service.nom,
+                 'premiere_adhesion': ab.premiere_adhesion,
+                 'a_des_frais_premiere_fois': any(el.get('premiere_fois')
+                                                  for el in ab.service.composition_adhesion or [])}
+                for ab in obj.abonnements.all()]
+
+    def get_formule(self, obj):
+        f = obj.formule_actuelle
+        return str(f.id) if f else None
+
+    def get_formules_historique(self, obj):
+        return [{'formule': str(l.formule_id), 'nom': l.formule.nom, 'mois_debut': l.mois_debut,
+                 'mois_libelle': _NOMS_MOIS.get(l.mois_debut, str(l.mois_debut)),
+                 'mensualite': float(l.formule.frais_mensualite)}
+                for l in obj._formules_datees()]
 
     def get_total_paye(self, obj):
         if hasattr(obj, 'total_paye_sql') and obj.total_paye_sql is not None:
@@ -257,8 +375,21 @@ class EleveSerializer(serializers.ModelSerializer):
         # Délègue au modèle pour cohérence avec le dashboard
         return obj.niveau_alerte
 
+def services_deja_suivis(eleve):
+    """Ids des services que l'enfant suivait sur une fiche d'une année précédente."""
+    from .parcours import fiches_du_meme_eleve
+    debut = eleve.exercice.date_debut if eleve.exercice_id else None
+    suivis = set()
+    for fiche in fiches_du_meme_eleve(eleve):
+        if fiche.id == eleve.id or (debut and fiche.exercice.date_debut >= debut):
+            continue
+        suivis |= {str(ab.service_id) for ab in fiche.abonnements.all()}
+    return suivis
+
+
 class SectionSerializer(serializers.ModelSerializer):
     total_annuel = serializers.ReadOnlyField()
+    formules = FormuleSectionSerializer(many=True, read_only=True)
     frais_inscription  = serializers.FloatField(required=False, default=0)
     frais_mensualite   = serializers.FloatField(required=False, default=0)
     frais_uniforme     = serializers.FloatField(required=False, default=0)

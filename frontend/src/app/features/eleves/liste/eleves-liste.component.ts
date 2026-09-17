@@ -326,6 +326,10 @@ const MOIS_ANNEE = [
                             severity="secondary" pTooltip="Prise en charge" (onClick)="ouvrirPriseEnCharge(eleve)" />
                   <p-button icon="pi pi-bookmark" [rounded]="true" [text]="true"
                             severity="help" pTooltip="Services / Activités" (onClick)="ouvrirServices(eleve)" />
+                  @if (formulesDeSection(eleve.section).length) {
+                    <p-button icon="pi pi-clock" [rounded]="true" [text]="true" severity="info"
+                              [pTooltip]="'eleves.changer_formule' | translate" (onClick)="ouvrirChangementFormule(eleve)" />
+                  }
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
                             severity="contrast" pTooltip="Corriger le déjà payé (reprise)"
                             (onClick)="ouvrirReprise(eleve)" />
@@ -1268,6 +1272,16 @@ const MOIS_ANNEE = [
                     optionLabel="nom" optionValue="id" (onChange)="onSectionChange()"
                     [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
+        <!-- Crèche : la formule horaire fixe la mensualité. Un changement en
+             cours d'année passe par « Changer de formule » (daté). -->
+        @if (formulesDeSection(nouvelEleve.section).length && !(editId && historiqueFormule().length > 1)) {
+          <div class="form-group">
+            <label>{{ 'eleves.formule' | translate }} *</label>
+            <p-select appendTo="body" [options]="formulesDeSection(nouvelEleve.section)" [(ngModel)]="nouvelEleve.formule"
+                      optionLabel="libelle" optionValue="id"
+                      [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
+          </div>
+        }
         @if (classesSection().length) {
           <div class="form-group">
             <label>{{ 'eleves.classe' | translate }} *</label>
@@ -1531,10 +1545,53 @@ const MOIS_ANNEE = [
         <ng-template #aucunService>
           <div style="color:var(--text-3);font-size:13px">{{ 'eleves.services_aucun' | translate }}</div>
         </ng-template>
+        <!-- Équipement dû seulement à la première adhésion (kimono) : décidé
+             d'après les années précédentes, corrigeable ici. -->
+        @for (ab of adhesionsCorrigeables(); track ab.service) {
+          <label class="case-adhesion">
+            <input type="checkbox" [(ngModel)]="premieresAdhesions[ab.service]" />
+            {{ 'eleves.premiere_adhesion' | translate:{ service: ab.nom } }}
+          </label>
+        }
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogServicesVisible=false" />
         <p-button [label]="'common.enregistrer' | translate" severity="success" [loading]="saving()" (onClick)="sauvegarderServices()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- ════════════════════ CHANGEMENT DE FORMULE (daté) ════════════════════ -->
+    <p-dialog [header]="('eleves.changer_formule' | translate) + (eleveFormule ? ' — ' + eleveFormule.nom_complet : '')"
+              [(visible)]="dialogFormuleVisible" [modal]="true" [style]="{ width: '480px', maxWidth: '95vw' }" [draggable]="false">
+      @if (eleveFormule) {
+        <div class="form-grid">
+          @if (eleveFormule.formules_historique?.length) {
+            <div class="form-group full">
+              <label>{{ 'eleves.formules_historique' | translate }}</label>
+              @for (h of eleveFormule.formules_historique; track h.mois_debut) {
+                <div class="histo-formule">{{ h.mois_libelle }} → <strong>{{ h.nom }}</strong> ({{ h.mensualite | number:'1.0-0' }} FCFA)</div>
+              }
+            </div>
+          } @else {
+            <div class="form-group full"><small class="aide-formule">{{ 'eleves.formule_initiale_requise' | translate }}</small></div>
+          }
+          <div class="form-group">
+            <label>{{ 'eleves.nouvelle_formule' | translate }} *</label>
+            <p-select appendTo="body" [options]="formulesDeSection(eleveFormule.section)" [(ngModel)]="formFormule.formule"
+                      optionLabel="libelle" optionValue="id" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>{{ 'eleves.a_partir_de' | translate }} *</label>
+            <p-select appendTo="body" [options]="moisExercice(eleveFormule)" [(ngModel)]="formFormule.mois_debut"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+          <div class="form-group full"><small class="aide-formule">{{ 'eleves.changer_formule_aide' | translate }}</small></div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogFormuleVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success" [loading]="saving()"
+                  [disabled]="!eleveFormule?.formules_historique?.length" (onClick)="enregistrerChangementFormule()" />
       </ng-template>
     </p-dialog>
 
@@ -1608,6 +1665,9 @@ const MOIS_ANNEE = [
     <app-import-eleves-dialog [(visible)]="dialogImportVisible" (importe)="chargerEleves()" />
   `,
   styles: [`
+    .case-adhesion { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2); margin-top:10px; }
+    .histo-formule { font-size:13px; color:var(--text-2); padding:2px 0; }
+    .aide-formule { font-size:11px; color:var(--text-3); }
     /* Assez large pour « Par matricule seul » sans pousser les boutons
        d'export hors de la barre. */
     :host ::ng-deep .tri-select { min-width:170px; }
@@ -2067,6 +2127,64 @@ export class ElevesListeComponent implements OnInit {
     // Réinitialise la classe ; pré-sélectionne si la section n'a qu'une classe
     const cs = this.classesSection();
     this.nouvelEleve.classe = cs.length === 1 ? cs[0].id : undefined;
+    // Une formule appartient à sa section.
+    const fs = this.formulesDeSection(this.nouvelEleve.section);
+    this.nouvelEleve.formule = fs.length === 1 ? fs[0].id : null;
+  }
+
+  // ── Formules (crèche) ────────────────────────────────────────────────
+  formulesDeSection(sectionId: string | null | undefined): { id: string; libelle: string }[] {
+    const section = this.sections().find(s => s.id === sectionId);
+    return (section?.formules || [])
+      .filter((f: any) => f.actif)
+      .map((f: any) => ({ id: f.id, libelle: `${f.nom} — ${Number(f.frais_mensualite).toLocaleString('fr-FR')} FCFA` }));
+  }
+
+  /** Historique de l'élève en cours d'édition (plus d'une ligne : la formule
+   *  ne se change plus sur la fiche, mais par un changement daté). */
+  historiqueFormule() {
+    const e = this.eleves().find(x => x.id === this.editId);
+    return e?.formules_historique || [];
+  }
+
+  dialogFormuleVisible = false;
+  eleveFormule: Eleve | null = null;
+  formFormule: { formule: string | null; mois_debut: number | null } = { formule: null, mois_debut: null };
+
+  ouvrirChangementFormule(eleve: Eleve) {
+    this.eleveFormule = eleve;
+    this.formFormule = { formule: null, mois_debut: new Date().getMonth() + 1 };
+    this.dialogFormuleVisible = true;
+  }
+
+  /** Les mois de l'année scolaire de la fiche, dans l'ordre. */
+  moisExercice(eleve: Eleve): { label: string; value: number }[] {
+    const ex = this.exercices().find((x: any) => x.id === (eleve as any).exercice);
+    const debut = ex?.date_debut ? Number(String(ex.date_debut).slice(5, 7)) : 9;
+    return Array.from({ length: 12 }, (_, i) => {
+      const m = ((debut - 1 + i) % 12) + 1;
+      const nom = new Date(2000, m - 1, 1).toLocaleDateString(this.translate.currentLang || 'fr', { month: 'long' });
+      return { label: nom.charAt(0).toUpperCase() + nom.slice(1), value: m };
+    });
+  }
+
+  enregistrerChangementFormule() {
+    const e = this.eleveFormule;
+    if (!e || !this.formFormule.formule || !this.formFormule.mois_debut) return;
+    this.saving.set(true);
+    this.elevesService.changerFormule(e.id, this.formFormule.formule, this.formFormule.mois_debut).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogFormuleVisible = false;
+        this.msg.add({ severity: 'success', summary: this.translate.instant('eleves.formule_changee'), detail: e.nom_complet });
+        this.chargerEleves();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: err?.error?.error || this.translate.instant('common.erreur') });
+      },
+    });
   }
 
   chargerServices() {
@@ -2078,14 +2196,26 @@ export class ElevesListeComponent implements OnInit {
   ouvrirServices(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.formServices = [...(eleve.abonnements || [])];
+    this.premieresAdhesions = Object.fromEntries(
+      (eleve.abonnements_detail || []).map(ab => [ab.service, ab.premiere_adhesion]));
     this.dialogServicesVisible = true;
+  }
+
+  premieresAdhesions: Record<string, boolean> = {};
+
+  /** Abonnements existants dont un élément n'est dû qu'à la première adhésion. */
+  adhesionsCorrigeables() {
+    const e = this.eleveSelectionne();
+    return (e?.abonnements_detail || [])
+      .filter(ab => ab.a_des_frais_premiere_fois && this.formServices.includes(ab.service));
   }
 
   sauvegarderServices() {
     const e = this.eleveSelectionne();
     if (!e) return;
     this.saving.set(true);
-    this.elevesService.updateEleve(e.id, { abonnements: this.formServices } as any).subscribe({
+    this.elevesService.updateEleve(e.id, { abonnements: this.formServices,
+                                          premieres_adhesions: this.premieresAdhesions } as any).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: e.nom_complet });
         this.dialogServicesVisible = false;
@@ -3038,6 +3168,7 @@ export class ElevesListeComponent implements OnInit {
       etat_sante:       eleve.etat_sante || 'SAIN',
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
+      formule:          eleve.formule ?? null,
       reliquat_anterieur: Number(eleve.reliquat_anterieur || 0),
       reliquat_note:      eleve.reliquat_note || '',
     };
@@ -3056,6 +3187,13 @@ export class ElevesListeComponent implements OnInit {
     if (!this.nouvelEleve.section) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.section_classe_obligatoire') });
+      return;
+    }
+    // Formule requise quand la section en propose (crèche).
+    if (this.formulesDeSection(this.nouvelEleve.section).length && !this.nouvelEleve.formule
+        && !(this.editId && this.historiqueFormule().length > 1)) {
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('common.attention'),
+                     detail: this.translate.instant('eleves.formule_obligatoire') });
       return;
     }
     // Classe requise uniquement si la section possède des classes

@@ -71,6 +71,11 @@ export interface Eleve {
   taux_prise_en_charge: number;
   // Services optionnels (IDs de services auxquels l'élève est abonné)
   abonnements: string[];
+  /** Pour chaque service : première adhésion (équipement dû) ou non. */
+  abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean }[];
+  /** Formule en vigueur ce mois-ci (crèche), et ses changements datés. */
+  formule?: string | null;
+  formules_historique?: { formule: string; nom: string; mois_debut: number; mois_libelle: string; mensualite: number }[];
   // Montants calculés (read-only depuis le backend)
   total_theorique: number;
   total_attendu: number;

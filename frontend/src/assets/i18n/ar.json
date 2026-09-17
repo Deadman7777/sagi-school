@@ -370,7 +370,17 @@
     "certificat_titre": "شهادة مدرسية",
     "certificat_word": "نموذج Word الخاص بالمؤسسة",
     "certificat_pdf": "الشهادة العادية (PDF)",
-    "certificat_erreur": "تعذّر إنشاء الشهادة."
+    "certificat_erreur": "تعذّر إنشاء الشهادة.",
+    "changer_formule": "تغيير الصيغة",
+    "formule": "الصيغة",
+    "premiere_adhesion": "{{service}}: أول انخراط (التجهيزات مستحقة)",
+    "formules_historique": "الصيغ المتتالية",
+    "nouvelle_formule": "الصيغة الجديدة",
+    "a_partir_de": "ابتداءً من",
+    "formule_initiale_requise": "اختر أولًا صيغة التلميذ في بطاقته.",
+    "changer_formule_aide": "تحتفظ الأشهر السابقة بتعريفتها؛ ويُطبَّق القسط الجديد ابتداءً من الشهر المختار.",
+    "formule_changee": "تم تغيير الصيغة",
+    "formule_obligatoire": "اختر صيغة التلميذ."
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
@@ -419,7 +429,9 @@
     "free_money": "فري موني",
     "virement": "تحويل بنكي",
     "cheque": "شيك",
-    "choisir_mode_ph": "اختر..."
+    "choisir_mode_ph": "اختر...",
+    "inclure_premier_mois": "إدراج الشهر الأول ({{mois}}) مع التسجيل",
+    "reste_mois": "الباقي"
   },
   "parametres": {
     "title": "الإعدادات",
@@ -622,7 +634,18 @@
     "mode_journee": "باليوم",
     "tarif_demi_journee": "تعريفة نصف اليوم",
     "tarif_journee": "تعريفة اليوم الكامل",
-    "aide_journee": "ينشأ المستحق من نداء الحضور اليومي (التلاميذ ← الحضانة)."
+    "aide_journee": "ينشأ المستحق من نداء الحضور اليومي (التلاميذ ← الحضانة).",
+    "formules": "الصيغ",
+    "mensualite_selon_formule": "القسط الشهري حسب صيغة الطفل",
+    "formules_aide": "نفس التسجيل، والقسط الشهري حسب الصيغة (مثل 8-13، 8-17). الصيغة التي يتبعها تلاميذ تُعطَّل بدل حذفها.",
+    "formule_nom": "الاسم (مثل 8-17)",
+    "formule_active": "مفعّلة",
+    "ajouter_formule": "إضافة صيغة",
+    "service_adhesion": "رسوم الانخراط",
+    "service_adhesion_composer": "تكوين",
+    "service_premier_mois": "الشهر الأول يُدفع عند التسجيل",
+    "service_adhesion_aide": "تُدفع عند انخراط الطفل في الخدمة (رسوم التسجيل، التجهيزات…). حدّد «أول انخراط» لعنصر مستحق في السنة الأولى فقط (مثل الكيمونو).",
+    "premiere_fois": "أول انخراط"
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",

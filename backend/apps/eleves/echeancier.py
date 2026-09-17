@@ -61,6 +61,8 @@ def precharger(qs):
     # `tenant` : l'échéancier y lit le réglage d'exigibilité de chaque mois.
     return qs.select_related('tenant', 'section', 'exercice', 'classe').prefetch_related(
         'abonnements__service',
+        # Formule de chaque mois (crèche) : lue par du_du_mois pour chaque ligne.
+        'formules_eleve__formule',
         # `pec_organisme` parcourt cette relation, et les propriétés qui en
         # dépendent l'appellent chacune à leur tour.
         'prises_en_charge_organisme__organisme',
@@ -149,7 +151,7 @@ def _tronquer_a_la_sortie(eleve, mois):
     tenant = eleve.tenant
     entree = eleve.date_entree or eleve.date_inscription or eleve.exercice.date_debut
     a_inscription = set()
-    if getattr(tenant, 'premier_mois_a_inscription', False):
+    if eleve.premier_mois_a_inscription:
         a_inscription.add(mois[0])
     if getattr(tenant, 'dernier_mois_a_inscription', False):
         a_inscription.add(mois[-1])
@@ -205,6 +207,29 @@ def date_exigibilite(tenant, annee, mois):
         annee, mois = (annee + 1, 1) if mois == 12 else (annee, mois + 1)
 
     return datetime.date(annee, mois, min(jour, _dernier_jour(annee, mois)))
+
+
+# Nature d'une ligne de `Paiement.services_regles`. Une ligne sans nature (reçus
+# antérieurs) est traitée comme avant : part mensuelle.
+NATURES_HORS_MENSUALITE = ('ADHESION', 'UNIQUE')
+
+
+def parts_services(services_regles):
+    """(part mensuelle, part hors mensualité) des services d'un paiement.
+
+    Les frais d'adhésion d'un service (droit d'inscription, kimono) et les
+    services à paiement unique soldent la ligne « hors mensualité » ; les
+    services mensuels soldent leurs mois. Les confondre faisait passer un
+    kimono payé pour une mensualité réglée d'avance.
+    """
+    mensuel = hors = 0.0
+    for ligne in services_regles or []:
+        montant = float(ligne.get('montant') or 0)
+        if ligne.get('nature') in NATURES_HORS_MENSUALITE:
+            hors += montant
+        else:
+            mensuel += montant
+    return round(mensuel, 2), round(hors, 2)
 
 
 def _services(eleve):
@@ -283,11 +308,12 @@ def construire_echeancier(eleve, today=None):
         paye_hors += (float(p.montant_inscription or 0)
                       + float(p.montant_uniforme or 0)
                       + float(p.montant_fournitures or 0))
-        svc = sum(float(s.get('montant') or 0) for s in (p.services_regles or []))
+        svc_mois, svc_hors = parts_services(p.services_regles)
+        svc = svc_mois + svc_hors
         divers_manuel = max(0.0, float(p.montant_divers or 0) - svc)
-        paye_hors += divers_manuel + float(p.montant_cantine or 0)
+        paye_hors += divers_manuel + float(p.montant_cantine or 0) + svc_hors
 
-        montant_mois = float(p.montant_mensualite or 0) + svc
+        montant_mois = float(p.montant_mensualite or 0) + svc_mois
         designes = [int(x) for x in (p.mois_regles or []) if int(x) in lignes]
         total_mensuel += montant_mois
         parts_mensuelles.append(
@@ -359,7 +385,8 @@ def construire_echeancier(eleve, today=None):
     entree = eleve.date_entree or eleve.date_inscription or exercice.date_debut
     a_inscription = set()
     if mois:
-        if getattr(tenant, 'premier_mois_a_inscription', False):
+        # Réglage de l'école, ou service choisi dont le premier mois se paie d'avance.
+        if eleve.premier_mois_a_inscription:
             a_inscription.add(mois[0])
         if getattr(tenant, 'dernier_mois_a_inscription', False):
             a_inscription.add(mois[-1])
