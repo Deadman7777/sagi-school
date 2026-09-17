@@ -110,12 +110,24 @@ class PaiementViewSet(viewsets.ModelViewSet):
         # n'appartient pas à l'année. Le contrôle ne se déclenche que si le
         # client a EXPLICITEMENT envoyé une date : sans elle, le modèle pose
         # « aujourd'hui » et la saisie courante reste exactement ce qu'elle était.
+        # Les familles ANTICIPENT : dans une école qui ouvre le 1er octobre,
+        # l'inscription se règle dès septembre, parfois en juillet. Refuser ces
+        # encaissements obligeait à antidater le reçu ou à ne pas le saisir.
+        # Un paiement d'avance est donc accepté (jusqu'à trois mois avant la
+        # rentrée) et rattaché au PREMIER mois de l'année, pas à celui où
+        # l'argent est entré (voir mois_de_rattachement). Après la fin de
+        # l'année, en revanche, il n'appartient plus à cet exercice.
         date_saisie = serializer.validated_data.get('date_paiement')
-        if date_saisie and not (exercice.date_debut <= date_saisie <= exercice.date_fin):
-            raise ValidationError(
-                f"Le {date_saisie:%d/%m/%Y} est hors de l'exercice "
-                f"{exercice.annee_scolaire} "
-                f"({exercice.date_debut:%d/%m/%Y} — {exercice.date_fin:%d/%m/%Y}).")
+        if date_saisie:
+            from .dates import AVANCE_MAX_MOIS, plus_tot_accepte
+            if date_saisie > exercice.date_fin:
+                raise ValidationError(
+                    f"Le {date_saisie:%d/%m/%Y} est postérieur à la fin de l'exercice "
+                    f"{exercice.annee_scolaire} ({exercice.date_fin:%d/%m/%Y}).")
+            if date_saisie < plus_tot_accepte(exercice):
+                raise ValidationError(
+                    f"Le {date_saisie:%d/%m/%Y} précède de plus de {AVANCE_MAX_MOIS} mois la rentrée "
+                    f"({exercice.date_debut:%d/%m/%Y}) de l'exercice {exercice.annee_scolaire}.")
 
         # Numéro de reçu : séquence NUMÉRIQUE de l'école. Un Max() alphabétique
         # rendait « REP-0005 » supérieur à « REC-0100 » — voir numerotation.py.

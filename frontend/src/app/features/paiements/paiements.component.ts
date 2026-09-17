@@ -715,7 +715,8 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
                           appendTo="body" [showIcon]="true" [showClear]="true"
                           placeholder="Aujourd'hui" styleClass="w-full" />
             <small class="payeur-aide">
-              Laissez vide pour aujourd'hui. La date doit tomber dans l'exercice de la fiche.
+              Laissez vide pour aujourd'hui. Un paiement d'avance, avant la rentrée, est accepté :
+              il compte sur le premier mois de l'année scolaire.
             </small>
           </div>
 

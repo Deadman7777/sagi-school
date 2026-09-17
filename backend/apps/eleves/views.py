@@ -1802,8 +1802,11 @@ class SuiviMensuelView(APIView):
                 'date_paiement', 'montant_inscription', 'montant_mensualite',
                 'montant_uniforme', 'montant_fournitures', 'montant_cantine',
                 'montant_divers', 'mois_regles', 'services_regles'):
-            d  = p.date_paiement
-            dk = (d.year, d.month)
+            # Paiement d'avance (avant la rentrée) : il compte sur le premier
+            # mois de l'année, sinon il tomberait dans un mois hors calendrier
+            # et disparaîtrait du suivi.
+            from apps.paiements.dates import mois_de_rattachement
+            dk = mois_de_rattachement(exercice, p.date_paiement)
             cell = par_mois[dk]
             cell['inscription'] += float(p.montant_inscription or 0)
             cell['uniforme']    += float(p.montant_uniforme    or 0)

@@ -186,13 +186,17 @@ def caisse_du_mois(tenant, exercice, annee, mois):
     il solde août. Les deux chiffres ont un sens, ils ne doivent pas se
     confondre.
     """
+    from .dates import est_premier_mois
     debut = datetime.date(annee, mois, 1)
     fin = (datetime.date(annee + 1, 1, 1) if mois == 12
            else datetime.date(annee, mois + 1, 1))
-    entrees = Paiement.objects.filter(
-        tenant=tenant, exercice=exercice, statut='ACTIF',
-        date_paiement__gte=debut, date_paiement__lt=fin,
-    ).aggregate(t=Sum('montant_inscription') + Sum('montant_mensualite')
+    encaissements = Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF',
+                                            date_paiement__lt=fin)
+    # Premier mois de l'année : les paiements d'avance (avant la rentrée) y
+    # entrent aussi — c'est bien de la trésorerie de cette année scolaire.
+    if not est_premier_mois(exercice, annee, mois):
+        encaissements = encaissements.filter(date_paiement__gte=debut)
+    entrees = encaissements.aggregate(t=Sum('montant_inscription') + Sum('montant_mensualite')
                 + Sum('montant_uniforme') + Sum('montant_fournitures')
                 + Sum('montant_cantine') + Sum('montant_divers')
                 + Sum('montant_reliquat'))['t'] or 0
