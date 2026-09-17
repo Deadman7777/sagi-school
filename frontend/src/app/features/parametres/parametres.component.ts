@@ -1106,7 +1106,7 @@ import { MessageService } from 'primeng/api';
         <input pInputText [(ngModel)]="r.libelle" class="w-full"
                [placeholder]="'parametres.element_libelle' | translate" />
         <p-inputNumber [(ngModel)]="r.montant" mode="decimal" [min]="0"
-                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+                       styleClass="compo-montant" [fluid]="true" inputStyleClass="text-right" placeholder="0" />
         <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
                   (onClick)="retirerCompoRow(i)" />
       </div>
@@ -1130,7 +1130,7 @@ import { MessageService } from 'primeng/api';
       <div class="compo-row quatre" *ngFor="let f of formulesRows; let i = index">
         <input pInputText [(ngModel)]="f.nom" class="w-full" [placeholder]="'parametres.formule_nom' | translate" />
         <p-inputNumber [(ngModel)]="f.frais_mensualite" mode="decimal" [min]="0"
-                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+                       styleClass="compo-montant" [fluid]="true" inputStyleClass="text-right" placeholder="0" />
         <label class="case-service" [title]="'parametres.service_actif' | translate">
           <input type="checkbox" [(ngModel)]="f.actif" /> {{ 'parametres.formule_active' | translate }}
         </label>
@@ -1198,7 +1198,7 @@ import { MessageService } from 'primeng/api';
       <div class="compo-row quatre" *ngFor="let r of adhesionRows; let i = index">
         <input pInputText [(ngModel)]="r.libelle" class="w-full" [placeholder]="'parametres.element_libelle' | translate" />
         <p-inputNumber [(ngModel)]="r.montant" mode="decimal" [min]="0"
-                       styleClass="compo-montant" inputStyleClass="text-right" placeholder="0" />
+                       styleClass="compo-montant" [fluid]="true" inputStyleClass="text-right" placeholder="0" />
         <label class="case-service">
           <input type="checkbox" [(ngModel)]="r.premiere_fois" /> {{ 'parametres.premiere_fois' | translate }}
         </label>
@@ -1312,6 +1312,11 @@ import { MessageService } from 'primeng/api';
     .compo-row { display:grid; grid-template-columns:1fr 140px 40px; gap:8px; align-items:center; margin-bottom:8px; }
     /* Ligne à quatre éléments (libellé, montant, case à cocher, poubelle) : la
        case avait hérité de la colonne de 40 px de la poubelle et disparaissait. */
+    /* Le champ montant PrimeNG a une largeur naturelle (~200 px) et un position:relative :
+       sans « fluid » il débordait de sa colonne et se dessinait PAR-DESSUS la case
+       « 1re adhésion » qui le suit. Chaque cellule reste dans sa colonne. */
+    .compo-row > * { min-width:0; }
+    .compo-row .case-service { position:relative; z-index:1; }
     .compo-row.quatre { grid-template-columns:minmax(0,1fr) 130px auto 40px; }
     .compo-row.quatre .case-service { margin-top:0; }
     @media (max-width:560px) { .compo-row.quatre { grid-template-columns:minmax(0,1fr) 110px 40px; }
