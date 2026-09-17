@@ -645,7 +645,19 @@
     "service_adhesion_composer": "Composer",
     "service_premier_mois": "1er mois payé à l'inscription",
     "service_adhesion_aide": "Payés à l'inscription de l'enfant au service (droit d'inscription, équipement…). Cochez « 1re adhésion » pour un élément dû seulement la première année (ex. kimono).",
-    "premiere_fois": "1re adhésion"
+    "premiere_fois": "1re adhésion",
+    "regrouper_formules": "Regrouper des sections en formules",
+    "regrouper_aide_courte": "Une section par horaire ? Regroupez-les en formules d'une seule section.",
+    "regrouper_aide": "Chaque section cochée devient une formule de la section cible, et ses élèves y passent avec leur tarif. Les années clôturées ne sont pas touchées. Simulez d'abord : le dû de chaque élève doit rester identique.",
+    "regrouper_cible": "Section qui portera les formules",
+    "regrouper_eleves": "élève(s) passeront dans",
+    "regrouper_differences": "{{n}} élève(s) verraient leur dû changer (frais d'entrée différents).",
+    "regrouper_forcer": "J'accepte ces changements de dû",
+    "regrouper_identique": "Le dû de chaque élève reste identique.",
+    "regrouper_sections_videes": "Sections désormais vides, à supprimer si elles ne servent plus : {{noms}}",
+    "regrouper_simuler": "Simuler",
+    "regrouper_appliquer": "Appliquer",
+    "regrouper_fait": "Sections regroupées"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -1560,6 +1572,11 @@
     "total": "Total",
     "aide_encaisser": "Pour encaisser, cochez le mois au guichet : la famille peut régler au jour, à la semaine ou au mois.",
     "aller_paiements": "Aller aux paiements",
-    "libelle_guichet": "Garderie (jours de présence)"
+    "libelle_guichet": "Garderie (jours de présence)",
+    "onglet_reprise": "Reprise",
+    "montant": "Montant",
+    "reclasser": "Reclasser en garderie",
+    "reclasse": "Paiement reclassé",
+    "reprise_aide": "Passages encaissés en « Frais divers » avant la garderie à la journée. Faites d'abord l'appel des jours concernés (onglet Appel, date passée), puis reclassez chaque montant sur son mois : le reçu garde son total, les jours passent payés."
   }
 }

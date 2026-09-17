@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
@@ -24,6 +24,17 @@ interface EnfantAppel {
   hors_periode: boolean;
 }
 
+interface LigneReprise {
+  paiement: string;
+  no_piece: string;
+  date: string;
+  eleve: string;
+  nom_complet: string;
+  divers: number;
+  observations: string;
+  mois_propose: number | null;
+}
+
 interface LigneRecap {
   eleve: string;
   nom_complet: string;
@@ -46,7 +57,7 @@ interface LigneRecap {
 @Component({
   selector: 'app-garderie',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, FormsModule, RouterLink, ButtonModule, ToastModule, TranslateModule],
+  imports: [DatePipe, DecimalPipe, FormsModule, RouterLink, ButtonModule, ToastModule, TranslateModule],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -62,10 +73,43 @@ interface LigneRecap {
         <button type="button" role="tab" [attr.aria-selected]="onglet() === 'recap'"
                 [class.actif]="onglet() === 'recap'" (click)="ouvrirRecap()">
           {{ 'garderie.onglet_recap' | translate }}</button>
+        @if (aReprendre().length) {
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'reprise'"
+                  [class.actif]="onglet() === 'reprise'" (click)="onglet.set('reprise')">
+            {{ 'garderie.onglet_reprise' | translate }} ({{ aReprendre().length }})</button>
+        }
       </div>
     </div>
 
-    <div class="filtres">
+    @if (onglet() === 'reprise') {
+      <p class="aide">{{ 'garderie.reprise_aide' | translate }}</p>
+      <div class="liste">
+        @for (l of aReprendre(); track l.paiement) {
+          <div class="ligne">
+            <div class="nom">
+              <div class="bold">{{ l.nom_complet }}</div>
+              <div class="sous">{{ l.no_piece }} · {{ l.date | date:'dd/MM/yyyy' }}{{ l.observations ? ' · ' + l.observations : '' }}</div>
+            </div>
+            <div class="reprise-actions">
+              <label class="champ">
+                <span>{{ 'garderie.montant' | translate }}</span>
+                <input type="number" min="1" [max]="l.divers" [(ngModel)]="l.montant" />
+              </label>
+              <label class="champ">
+                <span>{{ 'garderie.mois' | translate }}</span>
+                <select [(ngModel)]="l.mois">
+                  @for (m of moisOptions; track m) { <option [ngValue]="m">{{ nomMois(m) }}</option> }
+                </select>
+              </label>
+              <p-button size="small" icon="pi pi-check" [label]="'garderie.reclasser' | translate"
+                        [loading]="saving()" (onClick)="reclasser(l)" />
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <div class="filtres" [hidden]="onglet() === 'reprise'">
       @if (onglet() === 'appel') {
         <label class="champ">
           <span>{{ 'garderie.date' | translate }}</span>
@@ -232,6 +276,8 @@ interface LigneRecap {
     .sous { font-size:11px; color:var(--text-3); }
     .rouge { color:#ef4444; }
     .aide { font-size:12px; color:var(--text-3); margin-top:10px; }
+    .reprise-actions { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
+    .reprise-actions .champ input, .reprise-actions .champ select { min-width:110px; }
   `],
 })
 export class GarderieComponent implements OnInit {
@@ -243,7 +289,7 @@ export class GarderieComponent implements OnInit {
   readonly aujourdhui = this.isoLocal(new Date());
   readonly moisOptions = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
 
-  onglet = signal<'appel' | 'recap'>('appel');
+  onglet = signal<'appel' | 'recap' | 'reprise'>('appel');
   date = signal(this.aujourdhui);
   mois = signal(new Date().getMonth() + 1);
   classe = signal('');
@@ -266,7 +312,32 @@ export class GarderieComponent implements OnInit {
     return this.enfants().some(e => (this.origine.get(e.eleve) ?? null) !== e.formule);
   });
 
+  aReprendre = signal<(LigneReprise & { montant: number; mois: number })[]>([]);
+
+  chargerReprise() {
+    this.api.get<LigneReprise[]>('/eleves/garderie/reprise/').subscribe({
+      next: lignes => this.aReprendre.set(lignes.map(l => ({ ...l, montant: l.divers, mois: l.mois_propose || this.mois() }))),
+      error: () => this.aReprendre.set([]),
+    });
+  }
+
+  reclasser(l: LigneReprise & { montant: number; mois: number }) {
+    this.saving.set(true);
+    this.api.post<any>('/eleves/garderie/reprise/', { paiement: l.paiement, mois: l.mois, montant: l.montant }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('garderie.reclasse'), detail: l.no_piece });
+        this.chargerReprise();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'), detail: this.message(err) });
+      },
+    });
+  }
+
   ngOnInit() {
+    this.chargerReprise();
     this.eleves.getClasses().subscribe({
       next: res => this.classes.set((res as any).results || res || []),
       error: () => {},

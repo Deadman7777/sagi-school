@@ -43,6 +43,26 @@ class SectionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
 
+    @action(detail=False, methods=['post'], url_path='regrouper-formules')
+    def regrouper_formules(self, request):
+        """Reprise : des sections deviennent les formules d'une section cible.
+
+        {cible, formules: [{section, nom}], appliquer: bool, forcer: bool} —
+        sans `appliquer`, simulation (voir apps/eleves/reprise_formules.py).
+        """
+        from core.permissions import IsAdminEcole
+        from .reprise_formules import RepriseErreur, regrouper_en_formules
+        if not IsAdminEcole().has_permission(request, self):
+            return Response({'error': "Réservé à la direction de l'école."}, status=403)
+        d = request.data
+        try:
+            rapport = regrouper_en_formules(get_tenant(request), d.get('cible'), d.get('formules') or [],
+                                            appliquer=bool(d.get('appliquer')), forcer=bool(d.get('forcer')),
+                                            auteur=str(request.user))
+        except RepriseErreur as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response(rapport)
+
 
 class FormuleSectionViewSet(viewsets.ModelViewSet):
     """Formules d'une section (?section=<id>). Une formule déjà attribuée ne se
@@ -2692,4 +2712,34 @@ class GarderieRecapView(APIView):
             return Response({'error': str(exc)}, status=400)
         except (TypeError, ValueError):
             return Response({'error': 'Mois invalide.'}, status=400)
+
+
+class GarderieRepriseView(APIView):
+    """Reprise des passages de garderie saisis en « Frais divers ».
+
+    GET  → paiements des enfants à la journée qui portent encore des frais divers
+    POST {paiement, mois, montant?} → reclasse ce montant en garderie du mois
+    """
+    permission_classes = [IsAuthenticated, IsTenantMember]
+
+    def get(self, request):
+        from .reprise_formules import paiements_garderie_a_reclasser
+        return Response(paiements_garderie_a_reclasser(get_tenant(request)))
+
+    def post(self, request):
+        from core.permissions import IsAdminEcole
+        from .reprise_formules import RepriseErreur, reclasser_paiement_garderie
+        if not IsAdminEcole().has_permission(request, self):
+            return Response({'error': "Réservé à la direction de l'école."}, status=403)
+        try:
+            p = reclasser_paiement_garderie(get_tenant(request), request.data.get('paiement'),
+                                            request.data.get('mois'), request.data.get('montant'),
+                                            auteur=str(request.user))
+        except RepriseErreur as exc:
+            return Response({'error': str(exc)}, status=400)
+        except (TypeError, ValueError):
+            return Response({'error': 'Montant invalide.'}, status=400)
+        return Response({'paiement': str(p.id), 'no_piece': p.no_piece,
+                         'montant_divers': float(p.montant_divers),
+                         'montant_mensualite': float(p.montant_mensualite), 'mois_regles': p.mois_regles})
 

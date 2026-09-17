@@ -5,7 +5,7 @@ from .views import (EleveViewSet, FormuleSectionViewSet, OrganismeViewSet, Prise
                     CertificatScolariteView, PriseEnChargeStatsView,
                     ElevesListePDFView, SituationElevePDFView, FicheElevePDFView,
                     ParcoursElevePDFView, ModeleCertificatView,
-                    GarderieAppelView, GarderieRecapView)
+                    GarderieAppelView, GarderieRecapView, GarderieRepriseView)
 
 router = DefaultRouter()
 router.register('sections', SectionViewSet, basename='section')
@@ -20,6 +20,7 @@ urlpatterns = [
     # Avant les routes « <eleve_id>/… » : « garderie » n'est pas un élève.
     path('garderie/appel/', GarderieAppelView.as_view()),
     path('garderie/recap/', GarderieRecapView.as_view()),
+    path('garderie/reprise/', GarderieRepriseView.as_view()),
     path('suivi-mensuel/', SuiviMensuelView.as_view()),
     path('export-pdf/', ElevesListePDFView.as_view()),
     path('prises-en-charge/stats/', PriseEnChargeStatsView.as_view()),

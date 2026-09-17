@@ -645,7 +645,19 @@
     "service_adhesion_composer": "Compose",
     "service_premier_mois": "1st month paid at enrolment",
     "service_adhesion_aide": "Paid when the child joins the service (registration, equipment…). Tick \"1st membership\" for an item due only the first year (e.g. kimono).",
-    "premiere_fois": "1st membership"
+    "premiere_fois": "1st membership",
+    "regrouper_formules": "Merge sections into plans",
+    "regrouper_aide_courte": "One section per schedule? Merge them into plans of a single section.",
+    "regrouper_aide": "Each ticked section becomes a plan of the target section, and its students move with their rate. Closed years are untouched. Simulate first: each student's amount due must stay the same.",
+    "regrouper_cible": "Section that will hold the plans",
+    "regrouper_eleves": "student(s) will move to",
+    "regrouper_differences": "{{n}} student(s) would see their amount due change (different entry fees).",
+    "regrouper_forcer": "I accept these changes",
+    "regrouper_identique": "Each student's amount due stays the same.",
+    "regrouper_sections_videes": "Sections now empty, delete them if no longer used: {{noms}}",
+    "regrouper_simuler": "Simulate",
+    "regrouper_appliquer": "Apply",
+    "regrouper_fait": "Sections merged"
   },
   "cloture": {
     "title": "Year Closing",
@@ -1560,6 +1572,11 @@
     "total": "Total",
     "aide_encaisser": "To collect, tick the month at the payment desk: families can pay per day, per week or per month.",
     "aller_paiements": "Go to payments",
-    "libelle_guichet": "Day care (days attended)"
+    "libelle_guichet": "Day care (days attended)",
+    "onglet_reprise": "Migration",
+    "montant": "Amount",
+    "reclasser": "Reclassify as day care",
+    "reclasse": "Payment reclassified",
+    "reprise_aide": "Visits collected as \"Miscellaneous\" before per-day billing. First take the roll call for those days (Roll call tab, past date), then reclassify each amount to its month: the receipt keeps its total and the days become paid."
   }
 }

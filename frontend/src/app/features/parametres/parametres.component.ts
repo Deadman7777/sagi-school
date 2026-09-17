@@ -473,6 +473,13 @@ import { MessageService } from 'primeng/api';
         </div>
       </div>
 
+      <!-- Reprise : une école partie avec une section par formule horaire. -->
+      <div class="regroupement-bar" *ngIf="sectionsAuMois().length > 1">
+        <span>{{ 'parametres.regrouper_aide_courte' | translate }}</span>
+        <p-button icon="pi pi-sitemap" size="small" severity="secondary" [outlined]="true"
+                  [label]="'parametres.regrouper_formules' | translate" (onClick)="ouvrirRegroupement()" />
+      </div>
+
       <div class="sections-list">
         <div class="section-card" *ngFor="let s of sections(); let i = index">
           <div class="sc-head">
@@ -1152,6 +1159,51 @@ import { MessageService } from 'primeng/api';
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog reprise : regrouper des sections en formules d'une section -->
+    <p-dialog [header]="'🧩 ' + ('parametres.regrouper_formules' | translate)"
+              [(visible)]="regroupementVisible" [modal]="true" [style]="{width:'640px', maxWidth:'96vw'}" [draggable]="false">
+      <p style="font-size:12px;color:var(--text-3);margin:0 0 12px">{{ 'parametres.regrouper_aide' | translate }}</p>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>{{ 'parametres.regrouper_cible' | translate }}</label>
+        <p-select appendTo="body" [options]="sectionsAuMois()" [(ngModel)]="regroupement.cible"
+                  optionLabel="nom" optionValue="id" styleClass="w-full" (onChange)="rapportRegroupement = null" />
+      </div>
+      <div class="regroup-ligne" *ngFor="let l of regroupement.lignes">
+        <label class="case-service">
+          <input type="checkbox" [(ngModel)]="l.inclus" (ngModelChange)="rapportRegroupement = null" />
+          {{ l.section_nom }} <span class="fc-hint">({{ l.mensualite | number:'1.0-0' }} F)</span>
+        </label>
+        <input pInputText [(ngModel)]="l.nom" [disabled]="!l.inclus" (ngModelChange)="rapportRegroupement = null"
+               [placeholder]="'parametres.formule_nom' | translate" />
+      </div>
+
+      <div class="regroup-rapport" *ngIf="rapportRegroupement as r">
+        <div><strong>{{ r.nb_eleves }}</strong> {{ 'parametres.regrouper_eleves' | translate }} « {{ r.cible }} »</div>
+        <div *ngFor="let f of r.formules">• {{ f.nom }} — {{ f.mensualite | number:'1.0-0' }} F ({{ f.nb_eleves }})</div>
+        <div class="regroup-alerte" *ngFor="let e of r.ecarts_frais">⚠️ {{ e }}</div>
+        <ng-container *ngIf="r.differences.length; else identique">
+          <div class="regroup-alerte">⚠️ {{ 'parametres.regrouper_differences' | translate:{ n: r.differences.length } }}</div>
+          <div class="fc-hint" *ngFor="let d of r.differences.slice(0, 8)">
+            {{ d.nom_complet }} : {{ d.avant | number:'1.0-0' }} → {{ d.apres | number:'1.0-0' }} F</div>
+          <label class="case-service">
+            <input type="checkbox" [(ngModel)]="regroupement.forcer" /> {{ 'parametres.regrouper_forcer' | translate }}
+          </label>
+        </ng-container>
+        <ng-template #identique><div class="regroup-ok">✓ {{ 'parametres.regrouper_identique' | translate }}</div></ng-template>
+        <div class="fc-hint" *ngIf="r.applique && r.sections_videes.length">
+          {{ 'parametres.regrouper_sections_videes' | translate:{ noms: r.sections_videes.join(', ') } }}</div>
+      </div>
+
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="regroupementVisible=false" />
+        <p-button [label]="'parametres.regrouper_simuler' | translate" severity="secondary" [outlined]="true"
+                  [loading]="saving()" (onClick)="lancerRegroupement(false)" />
+        <p-button [label]="'parametres.regrouper_appliquer' | translate" severity="success" [loading]="saving()"
+                  [disabled]="!rapportRegroupement || rapportRegroupement.applique || (rapportRegroupement.differences.length && !regroupement.forcer)"
+                  (onClick)="lancerRegroupement(true)" />
+      </ng-template>
+    </p-dialog>
+
     <!-- Dialog frais d'adhésion d'un service (droit d'inscription, kimono…) -->
     <p-dialog [header]="'🧩 ' + ('parametres.service_adhesion' | translate) + (serviceAdhesion ? ' — ' + serviceAdhesion.nom : '')"
               [(visible)]="adhesionDialogVisible" [modal]="true" [style]="{width:'600px', maxWidth:'96vw'}" [draggable]="false">
@@ -1196,6 +1248,14 @@ import { MessageService } from 'primeng/api';
     </p-dialog>
   `,
   styles: [`
+    .regroupement-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+      font-size:12px; color:var(--text-3); margin:0 0 12px; }
+    .regroup-ligne { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:center; margin-bottom:6px; }
+    @media (max-width:560px) { .regroup-ligne { grid-template-columns:1fr; } }
+    .regroup-rapport { margin-top:12px; padding:10px 12px; border:1px solid var(--border); border-radius:8px;
+      font-size:13px; color:var(--text-2); display:flex; flex-direction:column; gap:4px; }
+    .regroup-alerte { color:#f59e0b; }
+    .regroup-ok { color:#10b981; }
     .case-service { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); margin-top:6px; white-space:nowrap; }
     .mode-tarif { display:flex; gap:4px; }
     .mode-tarif button { flex:1; padding:6px 8px; font-size:12px; border:1px solid var(--border); border-radius:6px;
@@ -1447,6 +1507,51 @@ export class ParametresComponent implements OnInit {
         this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
                        detail: err?.error?.error || this.translate.instant('parametres.sauvegarde_echouee') });
         this.chargerSections();
+      },
+    });
+  }
+
+  // ── Reprise : regrouper des sections en formules ────────────────────
+  regroupementVisible = false;
+  regroupement: { cible: string | null; forcer: boolean;
+                  lignes: { section: string; section_nom: string; mensualite: number; nom: string; inclus: boolean }[] }
+    = { cible: null, forcer: false, lignes: [] };
+  rapportRegroupement: any = null;
+
+  sectionsAuMois(): any[] {
+    return this.sections().filter((s: any) => s.mode_tarif !== 'JOURNEE' && !(s.formules || []).length);
+  }
+
+  ouvrirRegroupement() {
+    const sections = this.sectionsAuMois();
+    this.regroupement = {
+      cible: sections[0]?.id || null, forcer: false,
+      lignes: sections.map((s: any) => ({ section: s.id, section_nom: s.nom, mensualite: +s.frais_mensualite,
+                                          nom: s.nom, inclus: false })),
+    };
+    this.rapportRegroupement = null;
+    this.regroupementVisible = true;
+  }
+
+  /** Simulation d'abord (rien n'est écrit), puis application du même calcul. */
+  lancerRegroupement(appliquer: boolean) {
+    const formules = this.regroupement.lignes.filter(l => l.inclus).map(l => ({ section: l.section, nom: l.nom }));
+    this.saving.set(true);
+    this.api.post<any>('/eleves/sections/regrouper-formules/', {
+      cible: this.regroupement.cible, formules, appliquer, forcer: this.regroupement.forcer,
+    }).subscribe({
+      next: r => {
+        this.saving.set(false);
+        this.rapportRegroupement = r;
+        if (r.applique) {
+          this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.regrouper_fait'), detail: r.cible });
+          this.chargerSections();
+        }
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: err?.error?.error || this.translate.instant('parametres.sauvegarde_echouee') });
       },
     });
   }
