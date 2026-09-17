@@ -12,6 +12,7 @@ from .models import (Eleve, FormuleEleve, FormuleSection, Organisme, PriseEnChar
                      Section, Service)
 from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services
+from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
 from .serializers import (EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
@@ -99,7 +100,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
 
 def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
-                              groupe='classe'):
+                              groupe='classe', ordre='alpha'):
     """Contexte d'une liste d'élèves SANS aucune donnée financière.
 
     Une liste de classe circule : elle est affichée, photocopiée, passée entre
@@ -139,7 +140,7 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
         'date_entree':    e.date_entree or e.date_inscription,
         'classe':         e.classe.nom if e.classe else '—',
         'section':        e.section.nom if e.section else '—',
-    } for e in trier(qs, groupe)]
+    } for e in trier(qs, groupe, ordre)]
 
     # Sur une liste d'UNE classe, la colonne serait la même valeur répétée ;
     # sur la liste globale, c'est l'information qui manque. Même raisonnement
@@ -244,7 +245,7 @@ class OrganismeViewSet(viewsets.ModelViewSet):
                 'couvert':      round(couvert, 2),
                 'recu':         round(recu, 2),
                 'reste':        round(max(couvert - recu, 0.0), 2),
-                'eleves':       sorted(eleves, key=lambda e: e['nom_complet']),
+                'eleves':       sorted(eleves, key=lambda e: cle_nom(e['nom_complet'])),
             })
 
         lignes.sort(key=lambda l: l['reste'], reverse=True)
@@ -800,7 +801,8 @@ class EleveViewSet(viewsets.ModelViewSet):
         # l'ancienneté, que `trier` applique de toute façon.
         contexte = contexte_liste_nominative(
             tenant, exercice, request.query_params.get('classe'),
-            groupe=request.query_params.get('tri', 'matricule'))
+            groupe=request.query_params.get('tri', 'ecole'),
+            ordre=request.query_params.get('ordre', 'alpha'))
         titre = contexte['classe']
         html = render_to_string('pdf/liste_classe.html', contexte)
         buf = BytesIO()
@@ -2066,7 +2068,7 @@ class PriseEnChargeStatsView(APIView):
 
         # ── Détail par élève ──────────────────────────────────────────────
         detail = []
-        for e in sorted(eleves_pec, key=lambda x: x.nom_complet):
+        for e in sorted(eleves_pec, key=lambda x: cle_nom(x.nom_complet)):
             paye  = pmt_pec.get(e.id, 0.0)
             reste = round(float(e.total_attendu) - paye, 2)
             detail.append({
@@ -2146,13 +2148,15 @@ class ElevesListePDFView(APIView):
         # Ordre de sortie choisi par l'école : ses sections dans SON ordre,
         # ses classes, ou toute l'école en un seul fil d'ancienneté.
         groupe = request.query_params.get('tri') or 'section'
+        # Alphabétique par défaut (nom de famille) ; « matricule » = ancienneté.
+        ordre = request.query_params.get('ordre') or 'alpha'
 
         if request.query_params.get('financier') in ('0', 'false', 'False', 'non'):
             contexte = contexte_liste_nominative(
                 tenant, exercice,
                 request.query_params.get('classe'),
                 request.query_params.get('section'),
-                groupe=groupe)
+                groupe=groupe, ordre=ordre)
             html = render_to_string('pdf/liste_classe.html', contexte)
             buf = BytesIO()
             if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
@@ -2201,7 +2205,7 @@ class ElevesListePDFView(APIView):
         # lire ligne à ligne l'un en face de l'autre.
         from .tri import trier
 
-        for e in trier(qs, groupe):
+        for e in trier(qs, groupe, ordre):
             attendu = float(e.total_attendu)
             paye    = float(e.total_paye_sql or 0)
             reste   = round(max(0.0, attendu - paye), 0)

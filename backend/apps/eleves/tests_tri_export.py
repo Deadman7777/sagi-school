@@ -117,7 +117,7 @@ class TriGroupeTest(TriBase):
         self._eleve('Tahfiiz ancien', '2019-CSE-0009', section=self.tahfiiz)
         self._eleve('Demi',           '2015-CSE-0001', section=self.demi)
 
-        noms = [e.nom_complet for e in trier(Eleve.objects.all(), 'section')]
+        noms = [e.nom_complet for e in trier(Eleve.objects.all(), 'section', 'matricule')]
 
         self.assertEqual(noms, ['Tahfiiz ancien', 'Tahfiiz récent', 'Demi'])
 
@@ -307,3 +307,63 @@ class TriDansLePdfTest(TriBase):
         self.assertIn('2026-CSE-0001', html)
         self.assertIn('Matricule', html)
         self.assertTrue(ElevesListePDFView)
+
+
+class TriAlphabetiqueTest(TriBase):
+    """Ordre alphabétique d'une liste d'école : NOM DE FAMILLE, puis prénoms.
+
+    Le cas rapporté (sept. 2026) : « Nom (A → Z) » rangeait par prénom, et
+    l'export PDF ignorait ce choix — la liste paraissait mélangée.
+    """
+
+    def test_cle_nom_de_famille_en_fin_et_en_majuscules(self):
+        from apps.eleves.tri import cle_nom, libelle_tri
+        self.assertEqual(cle_nom('Moustapha GUEYE')[:2], ('GUEYE', 'MOUSTAPHA'))
+        self.assertEqual(cle_nom('Mame Diarra BA')[:2], ('BA', 'MAME DIARRA'))
+        self.assertEqual(cle_nom('Cheikh Ahmed Tidiane SY SALL')[:2], ('SY SALL', 'CHEIKH AHMED TIDIANE'))
+        self.assertEqual(cle_nom('Mame A. DIOP')[:2], ('DIOP', 'MAME A.'))       # initiale ≠ nom
+        self.assertEqual(cle_nom('moussa diop')[:2], ('DIOP', 'MOUSSA'))         # sans majuscules
+        self.assertEqual(cle_nom('AWA NDIAYE')[:2], ('NDIAYE', 'AWA'))           # tout en majuscules
+        self.assertEqual(cle_nom('Ndèye DIÈYE')[:2], ('DIEYE', 'NDEYE'))         # accents ignorés
+        self.assertEqual(libelle_tri('Moustapha GUEYE'), 'GUEYE MOUSTAPHA')
+
+    def test_toute_l_ecole_par_nom_de_famille(self):
+        self._eleve('Awa NDIAYE',      '2020-CSE-0001')
+        self._eleve('Babacar BA',      '2026-CSE-0001')
+        self._eleve('Moustapha GUEYE', '2019-CSE-0001')
+        self._eleve('Aminata GUEYE',   '2025-CSE-0001')
+        noms = [e.nom_complet for e in trier(Eleve.objects.all(), 'ecole', 'alpha')]
+        self.assertEqual(noms, ['Babacar BA', 'Aminata GUEYE', 'Moustapha GUEYE', 'Awa NDIAYE'])
+
+    def test_par_classe_puis_alphabetique(self):
+        ce2 = Classe.objects.create(tenant=self.tenant, nom='CE2', ordre=1)
+        cm1 = Classe.objects.create(tenant=self.tenant, nom='CM1', ordre=2)
+        self._eleve('Zeynab SOW',  '2019-CSE-0001', classe=cm1)
+        self._eleve('Ali DIOP',    '2026-CSE-0002', classe=cm1)
+        self._eleve('Omar WADE',   '2018-CSE-0001', classe=ce2)
+        self._eleve('Fatou CISSE', '2026-CSE-0003', classe=ce2)
+        noms = [e.nom_complet for e in trier(Eleve.objects.all(), 'classe')]
+        self.assertEqual(noms, ['Fatou CISSE', 'Omar WADE', 'Ali DIOP', 'Zeynab SOW'])
+
+    def test_ancien_parametre_matricule_garde_l_anciennete(self):
+        self._eleve('Babacar BA',  '2026-CSE-0001')
+        self._eleve('Awa NDIAYE',  '2020-CSE-0001')
+        noms = [e.nom_complet for e in trier(Eleve.objects.all(), 'matricule')]
+        self.assertEqual(noms, ['Awa NDIAYE', 'Babacar BA'])
+
+    def test_les_exports_suivent_l_ordre_alphabetique(self):
+        from apps.eleves.views import contexte_liste_nominative
+        self._eleve('Awa NDIAYE', '2020-CSE-0001')
+        self._eleve('Babacar BA', '2026-CSE-0001')
+        contexte = contexte_liste_nominative(self.tenant, self.ex, groupe='ecole', ordre='alpha')
+        self.assertEqual([e['nom_complet'] for e in contexte['eleves']], ['Babacar BA', 'Awa NDIAYE'])
+        for url in ('/api/eleves/export-pdf/?financier=0&tri=classe&ordre=alpha',
+                    '/api/eleves/export-pdf/?tri=ecole&ordre=matricule'):
+            r = self.client.get(url)
+            self.assertEqual(r.status_code, 200, r.content[:300])
+
+    def test_l_api_fournit_la_cle_de_tri_de_l_ecran(self):
+        self._eleve('Moustapha GUEYE', '2019-CSE-0001')
+        r = self.client.get('/api/eleves/')
+        donnees = r.data['results'] if isinstance(r.data, dict) else r.data
+        self.assertEqual(donnees[0]['nom_tri'], 'GUEYE MOUSTAPHA')

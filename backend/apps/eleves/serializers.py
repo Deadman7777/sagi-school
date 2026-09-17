@@ -82,6 +82,9 @@ class EleveSerializer(serializers.ModelSerializer):
     montant_pec_mensualite_mensuel = serializers.ReadOnlyField()
     montant_pec_annuel           = serializers.ReadOnlyField()
     montant_services_annuel      = serializers.ReadOnlyField()
+    # « GUEYE Moustapha » : clé du tri alphabétique à l'écran, la même que celle
+    # des listes PDF (apps/eleves/tri.py) — deux tris séparés divergeraient.
+    nom_tri                      = serializers.SerializerMethodField()
     abonnements                  = serializers.SerializerMethodField()
     # Pour chaque service : première adhésion ou non (kimono dû ou pas).
     abonnements_detail           = serializers.SerializerMethodField()
@@ -348,6 +351,10 @@ class EleveSerializer(serializers.ModelSerializer):
                  'a_des_frais_premiere_fois': any(el.get('premiere_fois')
                                                   for el in ab.service.composition_adhesion or [])}
                 for ab in obj.abonnements.all()]
+
+    def get_nom_tri(self, obj):
+        from .tri import libelle_tri
+        return libelle_tri(obj.nom_complet)
 
     def get_formule(self, obj):
         f = obj.formule_actuelle

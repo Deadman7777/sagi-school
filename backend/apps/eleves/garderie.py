@@ -107,7 +107,7 @@ def enfants_a_la_journee(tenant, exercice, classe_id=None):
         tenant=tenant, exercice=exercice, section__mode_tarif='JOURNEE'))
     if classe_id:
         qs = qs.filter(classe_id=classe_id)
-    return qs.select_related('section', 'classe').order_by('nom_complet')
+    return qs.select_related('section', 'classe')
 
 
 def _verifier_date(exercice, jour):
@@ -125,7 +125,9 @@ def appel_du_jour(tenant, jour, classe_id=None):
     """Les enfants à la journée et leur présence ce jour-là."""
     exercice = exercice_courant(tenant)
     _verifier_date(exercice, jour)
-    enfants = list(enfants_a_la_journee(tenant, exercice, classe_id))
+    from .tri import cle_nom
+    # Ordre alphabétique d'une liste d'école : nom de famille, puis prénoms.
+    enfants = sorted(enfants_a_la_journee(tenant, exercice, classe_id), key=lambda e: cle_nom(e.nom_complet))
     presences = {p.eleve_id: p for p in PresenceGarderie.objects.filter(
         tenant=tenant, date=jour, eleve__in=enfants)}
     lignes = []
@@ -209,7 +211,9 @@ def recap_du_mois(tenant, mois, classe_id=None):
     exercice = exercice_courant(tenant)
     if exercice is None:
         raise GarderieErreur("Aucun exercice ouvert.")
-    enfants = precharger(enfants_a_la_journee(tenant, exercice, classe_id))
+    from .tri import cle_nom
+    enfants = sorted(precharger(enfants_a_la_journee(tenant, exercice, classe_id)),
+                     key=lambda e: cle_nom(e.nom_complet))
     lignes = []
     for e in enfants:
         detail = detail_du_mois(e, mois)

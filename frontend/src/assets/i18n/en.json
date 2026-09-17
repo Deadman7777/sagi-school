@@ -362,8 +362,8 @@
     "mois_montant": "Amount due for",
     "mois_montant_aide": "Leave empty for the standard fee. Enter a reduced amount for a month started mid-way, or 0 if the month is already covered by the registration fee.",
     "mois_montant_refuse": "Monthly amounts not saved",
-    "tri_export": "List order",
-    "tri_export_aide": "Order of students in PDF lists. In every case students are arranged by registration number, oldest first.",
+    "tri_export": "PDF list order",
+    "tri_export_aide": "Order of students in PDF lists (names and financial). Alphabetical = family name, then first names; seniority = student number, oldest first.",
     "tri_section": "By section",
     "tri_classe": "By class",
     "tri_matricule": "By registration number only",
@@ -380,7 +380,13 @@
     "formule_initiale_requise": "First choose the student's plan on their record.",
     "changer_formule_aide": "Earlier months keep their rate; the new monthly fee applies from the chosen month.",
     "formule_changee": "Plan changed",
-    "formule_obligatoire": "Choose the student's plan."
+    "formule_obligatoire": "Choose the student's plan.",
+    "tri_classe_alpha": "By class — alphabetical",
+    "tri_section_alpha": "By section — alphabetical",
+    "tri_ecole_alpha": "Whole school — alphabetical",
+    "tri_classe_matricule": "By class — seniority",
+    "tri_section_matricule": "By section — seniority",
+    "tri_ecole_matricule": "Whole school — seniority"
   },
   "paiements": {
     "title": "Payment Entry",

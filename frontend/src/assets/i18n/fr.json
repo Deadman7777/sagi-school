@@ -362,8 +362,8 @@
     "mois_montant": "Montant dû pour",
     "mois_montant_aide": "Laissez vide pour le tarif ordinaire. Saisissez un montant réduit pour un mois entamé en cours de route, ou 0 si le mois est déjà réglé dans les frais d'inscription.",
     "mois_montant_refuse": "Montants mensuels non enregistrés",
-    "tri_export": "Ordre de la liste",
-    "tri_export_aide": "Ordre des élèves dans les listes PDF. Dans tous les cas, les élèves sont rangés par matricule, du plus ancien au plus récent.",
+    "tri_export": "Ordre des listes PDF",
+    "tri_export_aide": "Ordre des élèves dans les listes PDF (nominative et financière). Alphabétique = nom de famille, puis prénoms ; ancienneté = matricule, du plus ancien au plus récent.",
     "tri_section": "Par section",
     "tri_classe": "Par classe",
     "tri_matricule": "Par matricule seul",
@@ -380,7 +380,13 @@
     "formule_initiale_requise": "Choisissez d'abord la formule de l'élève sur sa fiche.",
     "changer_formule_aide": "Les mois précédents gardent leur tarif ; la nouvelle mensualité s'applique à partir du mois choisi.",
     "formule_changee": "Formule changée",
-    "formule_obligatoire": "Choisissez la formule de l'élève."
+    "formule_obligatoire": "Choisissez la formule de l'élève.",
+    "tri_classe_alpha": "Par classe — alphabétique",
+    "tri_section_alpha": "Par section — alphabétique",
+    "tri_ecole_alpha": "Toute l'école — alphabétique",
+    "tri_classe_matricule": "Par classe — ancienneté",
+    "tri_section_matricule": "Par section — ancienneté",
+    "tri_ecole_matricule": "Toute l'école — ancienneté"
   },
   "paiements": {
     "title": "Saisie des Paiements",

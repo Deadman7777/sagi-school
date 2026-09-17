@@ -1937,12 +1937,18 @@ export class ElevesListeComponent implements OnInit {
   // Regroupement des listes exportées. « section » par défaut : c'est
   // l'ordre historique du document, aucune école ne voit ses listes changer
   // sans l'avoir demandé.
-  triExport = 'section';
+  // « groupe:ordre » — groupe : classe, section ou ecole ; ordre : alpha (nom de
+  // famille) ou matricule (ancienneté). Alphabétique par classe par défaut.
+  triExport = 'classe:alpha';
   get optionsTri() {
+    const t = (cle: string) => this.translate.instant(cle);
     return [
-      { value: 'section',   label: this.translate.instant('eleves.tri_section') },
-      { value: 'classe',    label: this.translate.instant('eleves.tri_classe') },
-      { value: 'matricule', label: this.translate.instant('eleves.tri_matricule') },
+      { value: 'classe:alpha',      label: t('eleves.tri_classe_alpha') },
+      { value: 'section:alpha',     label: t('eleves.tri_section_alpha') },
+      { value: 'ecole:alpha',       label: t('eleves.tri_ecole_alpha') },
+      { value: 'classe:matricule',  label: t('eleves.tri_classe_matricule') },
+      { value: 'section:matricule', label: t('eleves.tri_section_matricule') },
+      { value: 'ecole:matricule',   label: t('eleves.tri_ecole_matricule') },
     ];
   }
 
@@ -2394,8 +2400,10 @@ export class ElevesListeComponent implements OnInit {
   // Tri côté client : on copie avant de trier pour ne pas muter le tableau
   // du signal source (this.eleves()).
   private trier(data: Eleve[]): Eleve[] {
+    // Nom de famille puis prénoms : la clé vient du serveur, la même que celle
+    // des listes PDF. Comparer « Prénom NOM » tel quel rangeait par prénom.
     const parNom  = (a: Eleve, b: Eleve) =>
-      (a.nom_complet || '').localeCompare(b.nom_complet || '', 'fr', { sensitivity: 'base' });
+      (a.nom_tri || a.nom_complet || '').localeCompare(b.nom_tri || b.nom_complet || '', 'fr', { sensitivity: 'base' });
     const parDate = (a: Eleve, b: Eleve) =>
       (a.date_inscription || '').localeCompare(b.date_inscription || '');
     const copie = [...data];
@@ -2859,7 +2867,8 @@ export class ElevesListeComponent implements OnInit {
    */
   exporterListePDF(financier = true) {
     this.exportant.set(true);
-    const params: Record<string, string> = { tri: this.triExport };
+    const [groupe, ordre] = this.triExport.split(':');
+    const params: Record<string, string> = { tri: groupe, ordre: ordre || 'alpha' };
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
     if (this.exerciceSel)  params['exercice'] = this.exerciceSel;
     if (financier) {

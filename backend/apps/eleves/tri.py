@@ -6,20 +6,64 @@ demi-pension et un externat veut voir ses groupes dans SON ordre, pas dans
 l'ordre alphabétique. Le choix appartient donc à l'école (`Section.ordre`,
 `Classe.ordre`), et l'export se contente de l'appliquer.
 
-À l'intérieur d'un groupe, une seule règle : le MATRICULE croissant, du plus
-ancien au plus récent. C'est l'ordre d'ancienneté — le matricule promo
-(`AAAA-CODE-NNNN`) porte l'année d'entrée puis le rang — et c'est celui dans
-lequel une école cherche un élève sur une feuille.
+À l'intérieur d'un groupe, deux ordres possibles :
+
+- **alphabétique** (par défaut) : NOM DE FAMILLE, puis prénoms. Les écoles
+  écrivent « Prénom NOM » (« Moustapha GUEYE ») : trier le texte tel quel
+  rangeait les élèves par PRÉNOM, et une liste de classe paraissait mélangée.
+  Le nom de famille est la suite de mots en MAJUSCULES qui termine le nom ; à
+  défaut, le dernier mot. Accents et casse ne comptent pas (« Ndèye » = « NDEYE »).
+- **ancienneté** : le MATRICULE croissant, du plus ancien au plus récent — le
+  matricule promo (`AAAA-CODE-NNNN`) porte l'année d'entrée puis le rang.
 
 Un module à part parce que les deux exports (financier et nominatif) doivent
 trier de la même façon : deux tris séparés finiraient par diverger, et les
 deux documents cesseraient d'être comparables ligne à ligne.
 """
 import re
+import unicodedata
 
-# Regroupements proposés. `matricule` = pas de regroupement du tout : toute
-# l'école dans un seul fil d'ancienneté.
-GROUPES = ('section', 'classe', 'matricule')
+# Regroupements proposés. `ecole` = pas de regroupement : toute l'école dans une
+# seule liste. `matricule` (ancienne valeur) = toute l'école, par ancienneté.
+GROUPES = ('section', 'classe', 'ecole', 'matricule')
+ORDRES = ('alpha', 'matricule')
+
+
+def _sans_accents(texte):
+    decompose = unicodedata.normalize('NFKD', texte or '')
+    return ''.join(c for c in decompose if not unicodedata.combining(c)).upper().strip()
+
+
+def _en_majuscules(mot):
+    lettres = [c for c in mot if c.isalpha()]
+    # Deux lettres au moins : une initiale (« Mame A. DIOP ») n'est pas un nom.
+    return len(lettres) >= 2 and all(c.isupper() for c in lettres)
+
+
+def cle_nom(nom_complet):
+    """(nom de famille, prénoms, nom complet) sans accents ni casse.
+
+    « Mame Diarra BA » → ('BA', 'MAME DIARRA', …) ; « moussa diop » → ('DIOP',
+    'MOUSSA', …) ; « AWA NDIAYE », tout en majuscules → dernier mot.
+    """
+    mots = (nom_complet or '').split()
+    if not mots:
+        return ('', '', '')
+    debut = len(mots)
+    while debut > 0 and _en_majuscules(mots[debut - 1]):
+        debut -= 1
+    if debut == 0 or debut == len(mots):
+        famille, prenoms = mots[-1:], mots[:-1]
+    else:
+        famille, prenoms = mots[debut:], mots[:debut]
+    return (_sans_accents(' '.join(famille)), _sans_accents(' '.join(prenoms)),
+            _sans_accents(nom_complet))
+
+
+def libelle_tri(nom_complet):
+    """« GUEYE Moustapha » : la clé alphabétique, lisible, pour l'écran."""
+    famille, prenoms, _ = cle_nom(nom_complet)
+    return f'{famille} {prenoms}'.strip()
 
 
 def _naturel(texte):
@@ -72,13 +116,22 @@ def cle_groupe(eleve, groupe):
     return (0, objet.ordre or 0, (objet.nom or '').upper())
 
 
-def trier(eleves, groupe='section'):
-    """Ordonne des élèves pour un export : groupe de l'école, puis ancienneté.
+def trier(eleves, groupe='section', ordre='alpha'):
+    """Ordonne des élèves pour un export : groupe de l'école, puis ordre choisi.
 
-    `groupe` vaut 'section', 'classe' ou 'matricule' (aucun regroupement).
-    Une valeur inconnue est traitée comme 'matricule' plutôt que de refuser
+    `groupe` : 'section', 'classe' ou 'ecole' (aucun regroupement) ;
+    `ordre` : 'alpha' (nom de famille, prénoms) ou 'matricule' (ancienneté).
+    L'ancienne valeur `groupe='matricule'` vaut « toute l'école, par
+    ancienneté ». Une valeur inconnue prend le défaut plutôt que de refuser
     l'export : un paramètre fautif ne doit pas priver l'école de sa liste.
     """
+    if groupe == 'matricule':
+        groupe, ordre = 'ecole', 'matricule'
     if groupe not in GROUPES:
-        groupe = 'matricule'
+        groupe = 'ecole'
+    if ordre not in ORDRES:
+        ordre = 'alpha'
+    if ordre == 'alpha':
+        return sorted(eleves, key=lambda e: (cle_groupe(e, groupe), cle_nom(e.nom_complet),
+                                             cle_matricule(e)))
     return sorted(eleves, key=lambda e: (cle_groupe(e, groupe), cle_matricule(e)))

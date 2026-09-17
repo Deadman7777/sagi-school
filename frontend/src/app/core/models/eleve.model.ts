@@ -70,6 +70,8 @@ export interface Eleve {
   taux_pec_mensualite: number;
   taux_prise_en_charge: number;
   // Services optionnels (IDs de services auxquels l'élève est abonné)
+  /** « GUEYE Moustapha » : clé du tri alphabétique (nom de famille, prénoms). */
+  nom_tri?: string;
   abonnements: string[];
   /** Pour chaque service : première adhésion (équipement dû) ou non. */
   abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean }[];
