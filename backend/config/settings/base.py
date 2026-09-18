@@ -82,6 +82,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.TenantMiddleware',  # notre middleware multi-tenant
+    # Aucune reponse d'API ne doit etre resservie depuis un cache : voir
+    # core/middleware.py. Pose en dernier pour couvrir toutes les vues.
+    'core.middleware.ApiSansCacheMiddleware',
 ]
 
 TEMPLATES = [

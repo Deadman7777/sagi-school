@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -2242,10 +2242,28 @@ export class ElevesListeComponent implements OnInit {
       });
   }
 
+  /** Relit le réglage quand l'écran redevient visible.
+   *
+   *  Le bouton Garderie dépend d'un réglage qui se change dans un AUTRE
+   *  module : sans cela, il fallait recharger l'application pour le voir
+   *  apparaître — impossible sur un poste local. */
+  @HostListener('document:visibilitychange')
+  auRetourSurLEcran() {
+    if (document.visibilityState === 'visible') this.chargerGardeSoir();
+  }
+
   private chargerGardeSoir() {
     this.elevesService.reglagesGardeSoir().subscribe({
       next: r => this.gardeSoirActive.set(!!r?.actif),
-      error: () => {},
+      // Un échec n'est pas un « non » : l'avaler faisait disparaître le
+      // bouton sans rien dire, et une panne ressemblait à un réglage.
+      error: err => this.msg.add({
+        severity: 'warn',
+        summary: this.translate.instant('garderie.title'),
+        detail: err?.error?.error || err?.error?.detail
+                || this.translate.instant('common.erreur_chargement'),
+        life: 6000,
+      }),
     });
   }
 

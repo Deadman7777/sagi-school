@@ -768,7 +768,8 @@
     "champ_requis": "Champ requis",
     "exporter": "Exporter",
     "modifier": "Modifier",
-    "echec": "Échec"
+    "echec": "Échec",
+    "erreur_chargement": "Réglage illisible : l'écran peut être incomplet."
   },
   "auth": {
     "email": "Email",

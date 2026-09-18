@@ -768,7 +768,8 @@
     "champ_requis": "Required field",
     "exporter": "Export",
     "modifier": "Edit",
-    "echec": "Failed"
+    "echec": "Failed",
+    "erreur_chargement": "Setting could not be read: this screen may be incomplete."
   },
   "auth": {
     "email": "Email",

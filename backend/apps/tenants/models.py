@@ -1,6 +1,9 @@
 import datetime
 from django.db import models
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 from core.models import TimeStampedModel
+from core.tenant import oublier_tenant
 
 
 class Tenant(TimeStampedModel):
@@ -167,3 +170,11 @@ class Tenant(TimeStampedModel):
 
     def __str__(self):
         return self.nom
+
+
+# Le tenant est mis en cache 5 minutes par requête (core/tenant.py) : sans cet
+# oubli, un réglage enregistré restait invisible jusqu'à l'expiration — l'école
+# modifiait une échéance, changeait d'écran, et retrouvait l'ancienne valeur.
+@receiver([post_save, post_delete], sender=Tenant)
+def _oublier_le_tenant_en_cache(sender, instance, **kwargs):
+    oublier_tenant(str(instance.id))

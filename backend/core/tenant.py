@@ -41,9 +41,25 @@ def _resolve_tenant(request):
     return None
 
 
+def cle_cache_tenant(tenant_id):
+    return f'tenant_{tenant_id}'
+
+
+def oublier_tenant(tenant_id):
+    """Jette la copie en cache d'une école.
+
+    L'objet Tenant mis en cache porte TOUS les réglages de l'école (échéance,
+    garde du soir, rappels…). Sans cet oubli, un réglage enregistré restait
+    invisible jusqu'à 5 minutes : la vue relisait la copie d'avant, l'écran
+    affichait l'ancienne valeur, et l'utilisateur croyait sa saisie perdue.
+    Appelé à chaque save() d'une école — voir apps/tenants/models.py.
+    """
+    cache.delete(cle_cache_tenant(tenant_id))
+
+
 def _fetch_tenant(tenant_id):
     """Lookup tenant (cache 5 min) sans crasher si l'ID est invalide."""
-    cache_key = f'tenant_{tenant_id}'
+    cache_key = cle_cache_tenant(tenant_id)
     tenant = cache.get(cache_key)
     if tenant is not None:
         return tenant

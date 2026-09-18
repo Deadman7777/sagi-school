@@ -46,7 +46,11 @@ if getattr(settings, 'FRONTEND_DIR', None):
         index = os.path.join(FRONTEND, 'index.html')
         if os.path.exists(index):
             with open(index, 'rb') as f:
-                return HttpResponse(f.read(), content_type='text/html')
+                reponse = HttpResponse(f.read(), content_type='text/html')
+            # Jamais en cache : index.html reference des chunks hashes qui
+            # changent a chaque mise a jour. Meme regle que nginx cote cloud.
+            reponse['Cache-Control'] = 'no-cache, must-revalidate'
+            return reponse
         return HttpResponse(
             f'index.html non trouvé — chemin testé: {index}', status=404
         )
