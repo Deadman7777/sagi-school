@@ -1833,10 +1833,10 @@ const MOIS_ANNEE = [
     .success { color:#10b981; }
     .danger  { color:#ef4444; }
     .empty-msg { text-align:center; padding:40px; color:var(--text-3); }
-    /* Les actions passent à la ligne : huit boutons sur une seule ligne
-       poussaient le tableau hors de l'écran. */
-    .btn-row { display:flex; flex-wrap:wrap; gap:2px; justify-content:flex-end; max-width:190px; }
-    @media (max-width: 900px) { .btn-row { max-width:120px; } }
+    /* Une SEULE ligne horizontale : sur deux lignes, chaque ligne du tableau
+       doublait de hauteur. Rien n'est caché pour autant — la carte du tableau
+       défile horizontalement (.table-card, overflow-x:auto). */
+    .btn-row { display:flex; flex-wrap:nowrap; gap:2px; justify-content:flex-end; white-space:nowrap; }
     .text-right { text-align:right; }
 
     /* Fiche */
