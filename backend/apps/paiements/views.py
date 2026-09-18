@@ -142,6 +142,15 @@ class PaiementViewSet(viewsets.ModelViewSet):
                                     serializer.validated_data.get('montant_reliquat')):
             raise ValidationError(err)
 
+        # Sans précision de l'appelant, la part accessoire est celle des services
+        # itemisés (cantine, activités) : ils ne relèvent pas du service éducatif.
+        donnees = serializer.validated_data
+        if not donnees.get('part_accessoire'):
+            services = sum(float((l or {}).get('montant') or 0)
+                           for l in (donnees.get('services_regles') or []))
+            if services:
+                donnees['part_accessoire'] = services
+
         paiement = serializer.save(
             tenant=tenant,
             exercice=exercice,
@@ -180,7 +189,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
             montant, float(paiement.total_exercice), ventilation, libelle,
             organisme=bool(paiement.organisme_id),
             # Espèces d'un service extra : elles entrent dans SA caisse.
-            caisse=paiement.caisse)
+            caisse=paiement.caisse,
+            # Services extra : produits accessoires (758), pas 706.
+            part_accessoire=float(paiement.part_accessoire or 0))
 
         for e in ecritures:
             JournalEntry.objects.create(
@@ -632,7 +643,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
         ecritures_new = lignes_paiement(nouveau_total, part_exercice,
                                         ventilation, libelle_new,
                                         organisme=bool(nouveau.organisme_id),
-                                        caisse=nouveau.caisse)
+                                        caisse=nouveau.caisse,
+                                        part_accessoire=float(nouveau.part_accessoire or 0))
         for e in ecritures_new:
             JournalEntry.objects.create(
                 tenant=tenant, exercice=exercice,

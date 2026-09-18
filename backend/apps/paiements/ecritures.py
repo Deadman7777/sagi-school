@@ -13,7 +13,18 @@ from apps.comptabilite.tresorerie import lignes_tresorerie
 COMPTE_CREANCE_ORGANISME = '4112'
 
 
-def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False, caisse=None):
+# Produits : le 706 est réservé à l'ACTIVITÉ PRINCIPALE (le service éducatif —
+# inscription, réinscription, mensualités). Les services extra — garderie à la
+# journée, garde du soir, cantine, activités — sont des produits accessoires :
+# ils vont au 758 « Produits divers d'exploitation ». Les mélanger gonflait le
+# chiffre d'affaires de la scolarité et faussait la lecture du compte de
+# résultat (décision CEO, 17/09/2026).
+COMPTE_PRODUIT_SCOLARITE  = '706'
+COMPTE_PRODUIT_ACCESSOIRE = '758'
+
+
+def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False, caisse=None,
+                    part_accessoire=0):
     """Rend les lignes d'écriture d'un règlement d'élève.
 
     `part_exercice` = frais de l'année en cours → constatation de la créance
@@ -37,13 +48,23 @@ def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False,
     ecritures = []
     ordre = 1
     if part_exercice > 0 and not organisme:
-        ecritures += [
-            dict(ordre=1, no_compte='411', debit=part_exercice, credit=0,
-                 libelle=f"Créance scolarité — {libelle}"),
-            dict(ordre=2, no_compte='706', debit=0, credit=part_exercice,
-                 libelle=f"Créance scolarité — {libelle}"),
-        ]
-        ordre = 3
+        # Part accessoire (services extra) plafonnée à la part de l'année :
+        # un reliquat d'année antérieure ne constate aucun produit ici.
+        accessoire = min(max(float(part_accessoire or 0), 0.0), float(part_exercice))
+        scolarite = round(float(part_exercice) - accessoire, 2)
+        ecritures.append(dict(ordre=1, no_compte='411', debit=part_exercice, credit=0,
+                              libelle=f"Créance scolarité — {libelle}"))
+        ordre = 2
+        if scolarite > 0:
+            ecritures.append(dict(ordre=ordre, no_compte=COMPTE_PRODUIT_SCOLARITE,
+                                  debit=0, credit=scolarite,
+                                  libelle=f"Créance scolarité — {libelle}"))
+            ordre += 1
+        if accessoire > 0:
+            ecritures.append(dict(ordre=ordre, no_compte=COMPTE_PRODUIT_ACCESSOIRE,
+                                  debit=0, credit=accessoire,
+                                  libelle=f"Produits accessoires (services) — {libelle}"))
+            ordre += 1
 
     compte_creance = COMPTE_CREANCE_ORGANISME if organisme else '411'
     tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre, caisse=caisse)

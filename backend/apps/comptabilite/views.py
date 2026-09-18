@@ -203,6 +203,7 @@ PLAN_COMPTABLE = {
     '75':    'Autres produits',
     '751':   'Redevances et recettes diverses',
     '758':   'Produits divers d\'exploitation',
+    '7581':  'Garderie et services extrascolaires',
     '77':    'Revenus financiers',
     '771':   'Intérêts de dépôts et prêts',
     '78':    'Transferts de charges',

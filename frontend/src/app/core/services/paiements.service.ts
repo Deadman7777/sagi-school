@@ -29,6 +29,9 @@ export interface Paiement {
   organisme?: string | null;
   // Caisse qui reçoit les espèces (garderie, cantine…). null = caisse principale.
   caisse?: string | null;
+  // Part du règlement qui porte sur des services extra : elle va au compte de
+  // produits divers (758) et non au 706 du service éducatif.
+  part_accessoire?: number;
   caisse_nom?: string;
   organisme_nom?: string;
   total?: number;

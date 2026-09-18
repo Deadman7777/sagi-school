@@ -118,7 +118,9 @@ class GarderieTest(APITestCase):
         self.assertEqual(self._ligne(self.awa, dernier)['du'], 5000)
 
     def test_appel_refuse_un_jour_a_venir_et_un_enfant_au_mois(self):
-        demain = self.AUJOURDHUI + datetime.timedelta(days=1)
+        # La date est relue ICI : figée au chargement du module, elle devenait
+        # « aujourd'hui » quand la suite tournait à cheval sur minuit.
+        demain = datetime.date.today() + datetime.timedelta(days=1)
         self.assertEqual(self._appel(demain, (self.awa, 'JOURNEE')).status_code, 400)
         r = self._appel(self.jours[0], (self.modou, 'JOURNEE'))
         self.assertEqual(r.status_code, 400)

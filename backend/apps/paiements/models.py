@@ -82,6 +82,11 @@ class Paiement(TenantModel):
     # Détail des services optionnels réglés dans ce paiement (itemisation reçu).
     # Ex. [{"nom": "Cantine", "montant": 10000}]. Le montant est inclus dans montant_divers.
     services_regles     = models.JSONField(default=list, blank=True)
+    # Part du règlement qui porte sur des SERVICES EXTRA (garderie, garde du
+    # soir, cantine, activités). Elle ne s'ajoute pas au total : c'est une
+    # ventilation du montant déjà saisi, qui décide du compte de produit —
+    # 758 « Produits divers » au lieu du 706, réservé au service éducatif.
+    part_accessoire     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     # Caisse qui reçoit les espèces de ce règlement (garderie, cantine…).
     # Vide = la caisse principale (571). Les autres modes gardent leur compte :
     # un versement Wave n'entre pas dans une caisse en espèces.

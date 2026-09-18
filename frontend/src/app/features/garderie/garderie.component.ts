@@ -490,6 +490,9 @@ export class GarderieComponent implements OnInit {
     this.api.post<any>('/paiements/paiements/', {
       eleve: e.eleve, montant_mensualite: e.montant, mois_regles: [e.mois],
       mode_paiement: e.mode, caisse: e.caisse || null,
+      // Garderie et garde du soir : produits accessoires (758), pas le 706 du
+      // service éducatif.
+      part_accessoire: e.montant,
     }).subscribe({
       next: r => {
         this.saving.set(false);
