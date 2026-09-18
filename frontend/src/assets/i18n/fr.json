@@ -392,7 +392,11 @@
     "profession_mere": "Profession de la mère",
     "residence_mere": "Résidence de la mère",
     "attitudes": "Attitudes particulières à signaler chez l'enfant",
-    "attitudes_ph": "Ex. très timide, ne mange pas seul, peur du bruit…"
+    "attitudes_ph": "Ex. très timide, ne mange pas seul, peur du bruit…",
+    "onglet_liste": "Liste des élèves",
+    "onglet_pec": "Prise en charge",
+    "onglet_pec_aide": "Voir les prises en charge sociales",
+    "documents": "Documents"
   },
   "paiements": {
     "title": "Saisie des Paiements",

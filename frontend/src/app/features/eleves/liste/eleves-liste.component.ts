@@ -90,59 +90,71 @@ const MOIS_ANNEE = [
         <h2 class="page-title">{{ 'eleves.title' | translate }}</h2>
         <span class="page-sub">{{ eleves().length }} élèves</span>
       </div>
-      <div style="display:flex;gap:8px">
-        <p-button label="Liste élèves" size="small"
-                  [severity]="onglet() === 'liste' ? 'primary' : 'secondary'"
-                  [outlined]="onglet() !== 'liste'"
-                  (onClick)="allerOnglet('liste')" />
-        <p-button label="Prise en charge" size="small"
-                  [severity]="onglet() === 'prise_en_charge' ? 'primary' : 'secondary'"
-                  [outlined]="onglet() !== 'prise_en_charge'"
-                  pTooltip="Voir les prises en charge sociales"
-                  (onClick)="allerOnglet('prise_en_charge')" />
-        <p-button [label]="'eleves.anciens' | translate" size="small"
-                  [severity]="onglet() === 'anciens' ? 'primary' : 'secondary'"
-                  [outlined]="onglet() !== 'anciens'"
-                  [pTooltip]="'eleves.anciens_aide' | translate"
-                  (onClick)="allerOnglet('anciens')" />
-        <!-- Crèche : l'appel du jour des enfants gardés à la journée. Visible
-             seulement si l'école a une section facturée à la journée. -->
-        @if (aDesSectionsAlaJournee() || gardeSoirActive()) {
-          <p-button icon="pi pi-calendar-plus" [label]="'garderie.title' | translate" size="small"
-                    severity="secondary" [outlined]="true" (onClick)="ouvrirGarderie()" />
+      <div class="entete-actions">
+        <!-- Ligne 1 : les vues du module. Un groupe, pour qu'on voie d'un coup
+             d'œil où l'on est. -->
+        <div class="onglets-eleves" role="tablist">
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'liste'"
+                  [class.actif]="onglet() === 'liste'" (click)="allerOnglet('liste')">
+            {{ 'eleves.onglet_liste' | translate }}</button>
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'prise_en_charge'"
+                  [class.actif]="onglet() === 'prise_en_charge'" (click)="allerOnglet('prise_en_charge')"
+                  [pTooltip]="'eleves.onglet_pec_aide' | translate">
+            {{ 'eleves.onglet_pec' | translate }}</button>
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'anciens'"
+                  [class.actif]="onglet() === 'anciens'" (click)="allerOnglet('anciens')"
+                  [pTooltip]="'eleves.anciens_aide' | translate">
+            {{ 'eleves.anciens' | translate }}</button>
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'organismes'"
+                  [class.actif]="onglet() === 'organismes'" (click)="allerOnglet('organismes')"
+                  [pTooltip]="'eleves.organismes_aide' | translate">
+            {{ 'eleves.organismes' | translate }}</button>
+        </div>
+
+        <!-- Ligne 2 : ce qu'on FAIT. Les documents sont regroupés : quatre
+             boutons de plus sur une seule ligne en faisaient disparaître. -->
+        <div class="actions-eleves">
+          @if (aDesSectionsAlaJournee() || gardeSoirActive()) {
+            <p-button icon="pi pi-calendar-plus" [label]="'garderie.title' | translate" size="small"
+                      severity="secondary" [outlined]="true" (onClick)="ouvrirGarderie()" />
+          }
+          <p-button icon="pi pi-print" [label]="'eleves.documents' | translate" size="small"
+                    severity="secondary" [outlined]="true" [loading]="exportant()"
+                    (onClick)="documentsVisible.set(!documentsVisible())" />
+          <p-button icon="pi pi-file-import" [label]="'eleves.import_btn' | translate"
+                    severity="info" size="small" [outlined]="true"
+                    [pTooltip]="'eleves.import_titre' | translate" [disabled]="estAnneeCloturee()"
+                    (onClick)="dialogImportVisible = true" />
+          <p-button icon="pi pi-history" [label]="'eleves.saisie_impayes' | translate"
+                    severity="warn" size="small" [outlined]="true"
+                    [pTooltip]="'eleves.saisie_impayes_aide' | translate" [disabled]="estAnneeCloturee()"
+                    (onClick)="ouvrirSaisieImpayes()" />
+          <p-button icon="pi pi-plus" label="{{ 'eleves.nouveau' | translate }}" severity="success"
+                    size="small" pTooltip="Inscrire un nouvel élève" [disabled]="estAnneeCloturee()"
+                    (onClick)="ouvrirDialog()" />
+        </div>
+
+        <!-- Documents : l'ordre des listes et les deux exports, dépliés à la
+             demande plutôt qu'étalés en permanence. -->
+        @if (documentsVisible()) {
+          <div class="panneau-documents">
+            <label class="doc-ordre">
+              <span>{{ 'eleves.tri_export' | translate }}</span>
+              <p-select [options]="optionsTri" [(ngModel)]="triExport" optionLabel="label"
+                        optionValue="value" size="small" appendTo="body" styleClass="tri-select"
+                        [pTooltip]="'eleves.tri_export_aide' | translate"
+                        [ariaLabel]="'eleves.tri_export' | translate" />
+            </label>
+            <p-button icon="pi pi-file-pdf" [label]="'eleves.export_financier' | translate"
+                      severity="danger" size="small"
+                      [pTooltip]="'eleves.export_financier_aide' | translate"
+                      [loading]="exportant()" (onClick)="exporterListePDF()" />
+            <p-button icon="pi pi-users" [label]="'eleves.export_nominatif' | translate"
+                      severity="secondary" size="small" [outlined]="true"
+                      [pTooltip]="'eleves.export_nominatif_aide' | translate"
+                      [loading]="exportant()" (onClick)="exporterListePDF(false)" />
+          </div>
         }
-        <p-button [label]="'eleves.organismes' | translate" size="small"
-                  [severity]="onglet() === 'organismes' ? 'primary' : 'secondary'"
-                  [outlined]="onglet() !== 'organismes'"
-                  [pTooltip]="'eleves.organismes_aide' | translate"
-                  (onClick)="allerOnglet('organismes')" />
-        <!-- L'ordre des listes exportées appartient à l'école : ses sections
-             dans SON ordre (réglé dans Paramètres), ses classes, ou toute
-             l'école en un seul fil d'ancienneté. Dans tous les cas les élèves
-             sont rangés par matricule, du plus ancien au plus récent. -->
-        <p-select [options]="optionsTri" [(ngModel)]="triExport" optionLabel="label"
-                  optionValue="value" size="small" styleClass="tri-select"
-                  [pTooltip]="'eleves.tri_export_aide' | translate"
-                  [ariaLabel]="'eleves.tri_export' | translate" />
-        <p-button icon="pi pi-file-pdf" [label]="'eleves.export_financier' | translate"
-                  severity="danger" size="small"
-                  [pTooltip]="'eleves.export_financier_aide' | translate"
-                  [loading]="exportant()" (onClick)="exporterListePDF()" />
-        <p-button icon="pi pi-users" [label]="'eleves.export_nominatif' | translate"
-                  severity="secondary" size="small" [outlined]="true"
-                  [pTooltip]="'eleves.export_nominatif_aide' | translate"
-                  [loading]="exportant()" (onClick)="exporterListePDF(false)" />
-        <p-button icon="pi pi-file-import" [label]="'eleves.import_btn' | translate"
-                  severity="info" size="small"
-                  [pTooltip]="'eleves.import_titre' | translate" [disabled]="estAnneeCloturee()"
-                  (onClick)="dialogImportVisible = true" />
-        <p-button icon="pi pi-history" [label]="'eleves.saisie_impayes' | translate"
-                  severity="warn" size="small"
-                  [pTooltip]="'eleves.saisie_impayes_aide' | translate" [disabled]="estAnneeCloturee()"
-                  (onClick)="ouvrirSaisieImpayes()" />
-        <p-button label="{{ 'eleves.nouveau' | translate }}" severity="success"
-                  pTooltip="Inscrire un nouvel élève" [disabled]="estAnneeCloturee()"
-                  (onClick)="ouvrirDialog()" />
       </div>
     </div>
 
@@ -1269,10 +1281,8 @@ const MOIS_ANNEE = [
     </p-dialog>
 
     <!-- ══════════════════════ DIALOG NOUVEL ÉLÈVE ══════════════════════ -->
-    <!-- Large et responsive : la fiche porte bien plus de champs qu'avant
-         (professions, résidences, attitudes, champs de l'école). -->
     <p-dialog [header]="(editId ? 'eleves.modifier' : 'eleves.nouveau') | translate" [(visible)]="dialogVisible"
-              [modal]="true" [style]="{width:'780px', maxWidth:'96vw'}" [draggable]="false">
+              [modal]="true" [style]="{width:'480px', maxWidth:'96vw'}" [draggable]="false">
       <div class="form-grid">
         <div class="form-group full">
           <label>{{ 'eleves.nom_complet' | translate }} *</label>
@@ -1733,7 +1743,20 @@ const MOIS_ANNEE = [
     /* Assez large pour « Par matricule seul » sans pousser les boutons
        d'export hors de la barre. */
     :host ::ng-deep .tri-select { min-width:170px; }
-    .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+    .page-header { display:flex; justify-content:space-between; align-items:flex-start;
+                   gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    /* La barre du haut tient sur deux lignes et RETOURNE À LA LIGNE : onze
+       boutons alignés de force en faisaient disparaître la moitié. */
+    .entete-actions { display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex:1; min-width:0; }
+    .onglets-eleves { display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
+    .onglets-eleves button { border:1px solid var(--border); background:var(--surface); color:var(--text-2);
+                             border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; min-height:36px; }
+    .onglets-eleves button.actif { background:#00d4aa; border-color:#00d4aa; color:#06281f; font-weight:600; }
+    .actions-eleves { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+    .panneau-documents { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; justify-content:flex-end;
+                         background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px; }
+    .doc-ordre { display:flex; flex-direction:column; gap:4px; font-size:11px; color:var(--text-2);
+                 text-transform:uppercase; letter-spacing:.4px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
 
@@ -1923,7 +1946,7 @@ const MOIS_ANNEE = [
     @media (max-width: 640px) { .mois-grille { grid-template-columns:repeat(2, 1fr); } }
 
     /* Formulaires */
-    .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     @media (max-width: 560px) { .form-grid { grid-template-columns:1fr; } }
     .form-grid > * { min-width:0; }
     .form-group { display:flex; flex-direction:column; gap:5px; }
@@ -1995,6 +2018,8 @@ export class ElevesListeComponent implements OnInit {
   eleves        = signal<Eleve[]>([]);
   elevesFiltres = signal<Eleve[]>([]);
   sections      = signal<any[]>([]);
+  /** Panneau « Documents » : replié par défaut. */
+  documentsVisible = signal(false);
   aDesSectionsAlaJournee = computed(() => this.sections().some(s => s.mode_tarif === 'JOURNEE'));
   // L'écran Garderie sert aussi à la garde du soir : une école qui n'a pas de
   // section à la journée doit pouvoir l'ouvrir.

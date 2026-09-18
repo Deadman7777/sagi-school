@@ -392,7 +392,11 @@
     "profession_mere": "Mother's occupation",
     "residence_mere": "Mother's residence",
     "attitudes": "Particular behaviours to report",
-    "attitudes_ph": "E.g. very shy, does not eat alone, afraid of noise…"
+    "attitudes_ph": "E.g. very shy, does not eat alone, afraid of noise…",
+    "onglet_liste": "Student list",
+    "onglet_pec": "Support",
+    "onglet_pec_aide": "View social support",
+    "documents": "Documents"
   },
   "paiements": {
     "title": "Payment Entry",
