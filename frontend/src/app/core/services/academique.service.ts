@@ -45,6 +45,12 @@ export class AcademiqueService {
   getBulletinPdf(eleveId: string, trimestre: string, annee: string, programme?: string | null) {
     return this.api.getBlob(`/academique/bulletin-pdf/${eleveId}/${trimestre}/`, { annee, programme });
   }
+  /** Tous les bulletins d'une classe en un document, deux par feuille A4. */
+  getBulletinsClassePdf(classeId: string, trimestre: string, annee: string,
+                        programme?: string | null) {
+    return this.api.getBlobReponse(`/academique/bulletins-classe/${classeId}/${trimestre}/`,
+                                   { annee, programme });
+  }
   getFichePedagogique(eleveId: string, programme?: string | null, annee?: string) {
     return this.api.get<any>(`/academique/fiche-pedagogique/${eleveId}/`, { programme, annee });
   }

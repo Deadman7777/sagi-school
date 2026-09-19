@@ -867,7 +867,11 @@
     "programme_AR": "Programme arabe",
     "tous_programmes": "Tous les programmes",
     "nom_ar": "Libellé en arabe (bulletin du programme arabe)",
-    "note_max_aide": "Barème de la matière : 5, 20, 60… au choix de l'établissement."
+    "note_max_aide": "Barème de la matière : 5, 20, 60… au choix de l'établissement.",
+    "bulletins_classe": "Bulletins de la classe",
+    "bulletins_classe_aide": "Tous les bulletins de la classe en un document, deux par feuille A4.",
+    "bulletins_classe_vide": "Aucun bulletin à éditer : calculez d'abord les moyennes, ou aucun élève de cette classe n'a de note sur la période.",
+    "bulletins_classe_sans_notes": "{{nb}} élève(s) sans aucune note sur la période : aucun bulletin n'a été édité pour eux."
   },
   "comptabilite": {
     "title": "Comptabilité SYSCOHADA",

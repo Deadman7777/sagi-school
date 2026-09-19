@@ -867,7 +867,11 @@
     "programme_AR": "Arabic curriculum",
     "tous_programmes": "All curricula",
     "nom_ar": "Arabic label (Arabic curriculum report card)",
-    "note_max_aide": "Grading scale for this subject: 5, 20, 60… as the school decides."
+    "note_max_aide": "Grading scale for this subject: 5, 20, 60… as the school decides.",
+    "bulletins_classe": "Class report cards",
+    "bulletins_classe_aide": "Every report card of the class in one file, two per A4 sheet.",
+    "bulletins_classe_vide": "Nothing to print: compute the averages first, or no student in this class has a mark for the period.",
+    "bulletins_classe_sans_notes": "{{nb}} student(s) have no marks for the period: no report card was issued for them."
   },
   "comptabilite": {
     "title": "SYSCOHADA Accounting",
