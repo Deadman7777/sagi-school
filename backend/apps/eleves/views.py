@@ -610,6 +610,10 @@ class EleveViewSet(viewsets.ModelViewSet):
         a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
         reprises, montant_reprise = 0, 0.0
         impayes, montant_impaye = 0, 0.0
+        # Fratries : deux lignes portant la même valeur dans « Famille »
+        # entrent dans le même foyer. Résolu une fois par libellé, sinon cinq
+        # frères créeraient cinq familles homonymes.
+        familles_import = {}
         with transaction.atomic():
             attributeur = Attributeur(tenant, exercice)
             for ligne in a_creer:
@@ -619,6 +623,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                     date_entree=data.get('date_inscription'))
                 eleve = Eleve.objects.create(
                     tenant=tenant, exercice=exercice, **identite, **data,
+                    famille=self._famille_import(tenant, ligne.get('famille'),
+                                                 familles_import, data),
                 )
                 if ligne['montant_reprise'] > 0:
                     paiement = creer_paiement_reprise(
@@ -644,6 +650,41 @@ class EleveViewSet(viewsets.ModelViewSet):
                          'reprises': reprises, 'montant_reprise': montant_reprise,
                          'impayes_anterieurs': impayes,
                          'montant_impaye_anterieur': round(montant_impaye, 2)})
+
+    @staticmethod
+    def _famille_import(tenant, libelle, cache, data):
+        """Le foyer désigné par la colonne « Famille » d'une ligne d'import.
+
+        Le libellé est ce que l'école a tapé : un code déjà attribué
+        (« FAM-0007 ») ou un nom (« Famille NDIAYE »). On réutilise la famille
+        existante avant d'en créer une — sinon un deuxième import ferait
+        doublon et la fratrie se retrouverait coupée en deux.
+        """
+        from .models import Famille, ResponsableFamille
+
+        libelle = (libelle or '').strip()
+        if not libelle:
+            return None
+        if libelle in cache:
+            return cache[libelle]
+
+        famille = (Famille.objects.filter(tenant=tenant, code__iexact=libelle).first()
+                   or Famille.objects.filter(tenant=tenant, nom__iexact=libelle).first())
+        if famille is None:
+            famille = Famille.objects.create(tenant=tenant, nom=libelle)
+            # Le contact de la première ligne rencontrée : l'école a saisi les
+            # parents dans son fichier, autant ne pas la faire recommencer.
+            nom = data.get('nom_pere') or data.get('nom_tuteur') or data.get('nom_mere') or ''
+            tel = (data.get('telephone_pere') or data.get('telephone_tuteur')
+                   or data.get('telephone_mere') or '')
+            if nom or tel:
+                lien = ('PERE' if data.get('nom_pere') or data.get('telephone_pere')
+                        else 'TUTEUR' if data.get('nom_tuteur') or data.get('telephone_tuteur')
+                        else 'MERE')
+                ResponsableFamille.objects.create(tenant=tenant, famille=famille, nom=nom,
+                                                  lien=lien, telephone=tel, principal=True)
+        cache[libelle] = famille
+        return famille
 
     @action(detail=True, methods=['get', 'post'], url_path='corriger-reprise')
     def corriger_reprise(self, request, pk=None):
@@ -2958,6 +2999,74 @@ class FamilleViewSet(viewsets.ModelViewSet):
         if not exercice:
             return Response({'error': "Aucun exercice ouvert."}, status=400)
         return Response(situation_famille(self.get_object(), exercice))
+
+    @action(detail=False, methods=['get'], url_path='fratries-probables')
+    def fratries_probables_action(self, request):
+        """Les fratries que l'école peut regrouper d'un coup.
+
+        Une école qui arrive avec deux mille fiches ne va pas créer ses
+        familles une par une : on lui propose les groupes déduits des numéros
+        de parents, à elle de valider.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import fratries_probables
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'groupes': [], 'nb': 0, 'nb_eleves': 0})
+        groupes = fratries_probables(tenant, exercice)
+        return Response({
+            'groupes':   groupes,
+            'nb':        len(groupes),
+            # Ce que l'école économise en saisie si elle accepte tout.
+            'nb_eleves': sum(g['nb'] for g in groupes),
+        })
+
+    @action(detail=False, methods=['post'])
+    def regrouper(self, request):
+        """Crée d'un coup les familles validées par l'école.
+
+        Un élève déjà rattaché est ignoré plutôt que déplacé : l'écran peut
+        être rechargé, revalidé deux fois, sans jamais défaire un regroupement
+        que l'école a corrigé à la main entre-temps.
+        """
+        from core.models import log_audit
+
+        from .models import ResponsableFamille
+
+        tenant  = get_tenant(request)
+        groupes = request.data.get('groupes') or []
+        if not groupes:
+            return Response({'error': "Aucun groupe à créer."}, status=400)
+
+        creees, rattaches, ignores = [], 0, 0
+        for groupe in groupes:
+            ids = groupe.get('eleve_ids') or []
+            libres = list(Eleve.objects.filter(tenant=tenant, id__in=ids,
+                                               famille__isnull=True))
+            ignores += len(ids) - len(libres)
+            if not libres:
+                continue
+            famille = Famille.objects.create(
+                tenant=tenant, nom=(groupe.get('nom') or 'Famille').strip())
+            contact = groupe.get('contact') or {}
+            if contact.get('nom') or contact.get('telephone'):
+                ResponsableFamille.objects.create(
+                    tenant=tenant, famille=famille, nom=contact.get('nom') or '',
+                    lien=contact.get('lien') or 'PERE',
+                    telephone=contact.get('telephone') or '', principal=True)
+            Eleve.objects.filter(tenant=tenant, id__in=[e.id for e in libres]).update(
+                famille=famille)
+            rattaches += len(libres)
+            creees.append({'id': str(famille.id), 'code': famille.code,
+                           'nom': famille.nom, 'nb': len(libres)})
+
+        log_audit(request, 'CREATION', 'Famille', '',
+                  f'{len(creees)} famille(s) créée(s), {rattaches} élève(s) rattaché(s)')
+        return Response({'familles': creees, 'nb_familles': len(creees),
+                         'nb_eleves': rattaches, 'nb_ignores': ignores})
 
     @action(detail=True, methods=['post'])
     def rattacher(self, request, pk=None):

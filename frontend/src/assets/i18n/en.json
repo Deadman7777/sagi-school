@@ -770,7 +770,8 @@
     "exporter": "Export",
     "modifier": "Edit",
     "echec": "Failed",
-    "erreur_chargement": "Setting could not be read: this screen may be incomplete."
+    "erreur_chargement": "Setting could not be read: this screen may be incomplete.",
+    "chargement": "Loading…"
   },
   "auth": {
     "email": "Email",
@@ -1706,6 +1707,19 @@
     "erreur_enregistrement": "Saving the family failed.",
     "erreur_suppression": "Deleting the family failed.",
     "erreur_situation": "Could not load the family's situation.",
-    "erreur_rattachement": "Attaching failed."
+    "erreur_rattachement": "Attaching failed.",
+    "regrouper": "Group siblings",
+    "regrouper_aide": "Suggest families from the guardian phone numbers already on file. Nothing is created without your approval.",
+    "regrouper_resume": "{{nb}} likely sibling group(s), {{nbEleves}} students. Uncheck what you do not want, edit the names if needed.",
+    "creer_cochees": "Create checked families",
+    "sure": "Same surname",
+    "a_verifier": "Check this one",
+    "a_verifier_aide": "These students share a phone number but not the same surname: blended family, or two households sharing one phone.",
+    "aucune_fratrie": "No sibling group detected.",
+    "aucune_fratrie_aide": "Matching is based on guardian phone numbers: at least two unattached students must share one. You can still create a family by hand.",
+    "regroupement_fait": "{{nb}} family(ies) created.",
+    "regroupement_detail": "{{nb}} student(s) attached. Students already in a family were not moved.",
+    "erreur_fratries": "Could not compute likely sibling groups.",
+    "erreur_regroupement": "Creating the families failed."
   }
 }

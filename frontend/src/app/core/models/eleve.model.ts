@@ -371,3 +371,20 @@ export interface SituationFamille {
   total_paye: number;
   reste_a_payer: number;
 }
+
+
+/** Une fratrie déduite des numéros de parents, que l'école doit valider.
+ *  Le rapprochement se fait sur le TÉLÉPHONE et jamais sur le seul nom :
+ *  rapprocher tous les NDIAYE d'une école ferait une famille de quarante
+ *  enfants sans lien entre eux. */
+export interface FratrieProbable {
+  cle: string;
+  nom_propose: string;
+  /** SURE = un seul nom de famille dans le groupe. A_VERIFIER = plusieurs
+   *  (famille recomposée, ou deux foyers qui se partagent un numéro). */
+  confiance: 'SURE' | 'A_VERIFIER';
+  noms_famille: string[];
+  contact: { nom: string; telephone: string; lien: string };
+  eleves: { id: string; nom_complet: string; matricule: string; classe: string }[];
+  nb: number;
+}

@@ -4,7 +4,8 @@ import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
-         SuiviOrganisme, Famille, SituationFamille } from '../models/eleve.model';
+         SuiviOrganisme, Famille, SituationFamille,
+         FratrieProbable } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -293,6 +294,21 @@ export class ElevesService {
   rattacherALaFamille(id: string, eleveIds: string[], detacher = false) {
     return this.api.post<{ nb: number; famille: string }>(
       `/eleves/familles/${id}/rattacher/`, { eleve_ids: eleveIds, detacher });
+  }
+
+  /** Les fratries que l'école peut regrouper d'un coup. Rien n'est créé :
+   *  elle valide ce qu'elle veut. */
+  getFratriesProbables() {
+    return this.api.get<{ groupes: FratrieProbable[]; nb: number; nb_eleves: number }>(
+      '/eleves/familles/fratries-probables/');
+  }
+
+  /** Crée les familles validées. Un élève déjà rattaché est ignoré, jamais
+   *  déplacé : l'écran peut être revalidé sans défaire une correction. */
+  regrouperFratries(groupes: { nom: string; eleve_ids: string[];
+                               contact?: { nom: string; telephone: string; lien: string } }[]) {
+    return this.api.post<{ nb_familles: number; nb_eleves: number; nb_ignores: number }>(
+      '/eleves/familles/regrouper/', { groupes });
   }
 
   getSections() {

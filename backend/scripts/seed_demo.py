@@ -211,12 +211,46 @@ def creer_eleves(tenant, exercice, sections, classes):
                 date_entree=DEBUT, date_inscription=DEBUT,
                 annee_entree=ANNEE, statut='INSCRIT'))
 
+    _creer_des_fratries(eleves)
     Eleve.objects.bulk_create(eleves)
     for _, classe in classes:
         classe.effectif = EFFECTIFS[classe.nom]
         classe.save(update_fields=['effectif'])
     journal(f'{len(eleves)} élèves inscrits')
     return list(Eleve.objects.filter(exercice=exercice).order_by('numero'))
+
+
+def _creer_des_fratries(eleves):
+    """Donne des frères et sœurs à quelques élèves, comme dans une vraie école.
+
+    Les parents étaient tirés au sort pour chaque enfant : la démo n'avait donc
+    pas une seule fratrie, alors qu'aucune école n'en manque — et le
+    regroupement des familles n'y montrait rien du tout.
+
+    Une fratrie, c'est le même père, le même numéro et le même patronyme, mais
+    des classes différentes : c'est précisément ce que l'école voit sur le
+    terrain, et ce qui justifie de ne plus saisir cinq fois les mêmes
+    coordonnées.
+    """
+    familles = [(5, 'Ousmane Ndiaye'), (4, 'Modou Fall'), (3, 'Cheikh Diop'),
+                (2, 'Abdoulaye Sow'), (2, 'Ibrahima Ba')]
+    disponibles = list(eleves)
+    random.shuffle(disponibles)
+    for combien, pere in familles:
+        if len(disponibles) < combien:
+            break
+        patronyme = pere.split()[-1]
+        numero = _telephone()
+        mere = f'{random.choice(PRENOMS_F)} {patronyme}'
+        numero_mere = _telephone()
+        for _ in range(combien):
+            enfant = disponibles.pop()
+            prenom = enfant.nom_complet.split()[0]
+            enfant.nom_complet = f'{prenom} {patronyme}'
+            enfant.nom_pere = pere
+            enfant.telephone_pere = numero
+            enfant.nom_mere = mere
+            enfant.telephone_mere = numero_mere
 
 
 # ─── 5. Le personnel ────────────────────────────────────────────────────────

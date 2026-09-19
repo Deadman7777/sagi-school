@@ -770,7 +770,8 @@
     "exporter": "Exporter",
     "modifier": "Modifier",
     "echec": "Échec",
-    "erreur_chargement": "Réglage illisible : l'écran peut être incomplet."
+    "erreur_chargement": "Réglage illisible : l'écran peut être incomplet.",
+    "chargement": "Chargement…"
   },
   "auth": {
     "email": "Email",
@@ -1706,6 +1707,19 @@
     "erreur_enregistrement": "L'enregistrement de la famille a échoué.",
     "erreur_suppression": "La suppression de la famille a échoué.",
     "erreur_situation": "Impossible de charger la situation de la famille.",
-    "erreur_rattachement": "Le rattachement a échoué."
+    "erreur_rattachement": "Le rattachement a échoué.",
+    "regrouper": "Regrouper les fratries",
+    "regrouper_aide": "Proposer les familles à partir des numéros de parents déjà saisis. Rien n'est créé sans votre validation.",
+    "regrouper_resume": "{{nb}} fratrie(s) probable(s), soit {{nbEleves}} élèves. Décochez ce que vous ne voulez pas créer, corrigez les noms si besoin.",
+    "creer_cochees": "Créer les familles cochées",
+    "sure": "Même nom",
+    "a_verifier": "À vérifier",
+    "a_verifier_aide": "Ces élèves partagent un numéro mais pas le même nom de famille : famille recomposée, ou deux foyers qui se partagent un téléphone.",
+    "aucune_fratrie": "Aucune fratrie détectée.",
+    "aucune_fratrie_aide": "Le rapprochement se fait sur le téléphone des parents : il faut qu'au moins deux élèves non encore rattachés partagent un numéro. Vous pouvez toujours créer une famille à la main.",
+    "regroupement_fait": "{{nb}} famille(s) créée(s).",
+    "regroupement_detail": "{{nb}} élève(s) rattaché(s). Les élèves déjà membres d'une famille n'ont pas été déplacés.",
+    "erreur_fratries": "Impossible de calculer les fratries probables.",
+    "erreur_regroupement": "La création des familles a échoué."
   }
 }

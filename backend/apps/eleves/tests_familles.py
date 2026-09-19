@@ -23,7 +23,10 @@ from apps.tenants.models import Tenant
 from apps.users.models import User
 
 
-class FamilleTest(APITestCase):
+class BaseFamille(APITestCase):
+    """Décor commun aux deux lots. Sans test : une classe de tests dont on
+    hérite rejoue toute sa batterie dans chaque descendante."""
+
     def setUp(self):
         self.tenant = Tenant.objects.create(nom='École du Cap', code_etablissement='CAP')
         self.user = User.objects.create_user('dir@cap.sn', 'x', nom='Dir',
@@ -47,6 +50,8 @@ class FamilleTest(APITestCase):
                                     nom_complet=nom, famille=famille,
                                     date_inscription=datetime.date(2026, 1, 1), **kwargs)
 
+
+class FamilleTest(BaseFamille):
     # ── Le groupe ────────────────────────────────────────────────────────
     def test_le_code_est_attribue_et_se_suit(self):
         premiere = self._famille('Famille NDIAYE')
@@ -207,3 +212,197 @@ class FamilleTest(APITestCase):
         ligne = (r.data['results'] if 'results' in r.data else r.data)[0]
         self.assertEqual(ligne['nb_enfants'], 3)
         self.assertEqual(ligne['contact']['telephone'], '770000001')
+
+
+class RegroupementTest(BaseFamille):
+    """Regrouper l'existant — lot 2.
+
+    Une école qui arrive avec deux mille fiches ne créera pas ses familles une
+    par une. On lui propose les groupes déduits des numéros de parents ; elle
+    valide.
+
+    Ce que ces tests rendent impossible :
+    - un rapprochement sur le seul nom (tous les NDIAYE d'une école) ;
+    - une fratrie coupée en deux parce que c'est la mère qui relie trois
+      enfants et le père les deux autres ;
+    - un regroupement qui déplace un élève déjà rattaché à une autre famille ;
+    - une fratrie qui se défait au passage à l'année suivante.
+    """
+
+    def _fratrie(self, noms, **contacts):
+        return [self._eleve(nom, **contacts) for nom in noms]
+
+    def test_le_meme_numero_rapproche_la_fratrie(self):
+        from apps.eleves.familles import fratries_probables
+
+        self._fratrie(['Awa NDIAYE', 'Moussa NDIAYE', 'Fatou NDIAYE'],
+                      nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        self._eleve('Sans lien DIOP', nom_pere='Modou DIOP', telephone_pere='76 000 11 22')
+
+        groupes = fratries_probables(self.tenant, self.ex)
+        self.assertEqual(len(groupes), 1)
+        self.assertEqual(groupes[0]['nb'], 3)
+        self.assertEqual(groupes[0]['confiance'], 'SURE')
+        self.assertEqual(groupes[0]['nom_propose'], 'Famille NDIAYE')
+        self.assertEqual(groupes[0]['contact']['nom'], 'Ousmane NDIAYE')
+
+    def test_le_numero_est_reconnu_quelle_que_soit_son_ecriture(self):
+        """« +221 77 123 45 67 », « 77-123-45-67 » et « 77 123 45 67 » sont le
+        même numéro. Comparer les chaînes telles quelles ne rapprochait rien."""
+        from apps.eleves.familles import cle_telephone, fratries_probables
+
+        self.assertEqual(cle_telephone('+221 77 123 45 67'), cle_telephone('77 123 45 67'))
+        self.assertEqual(cle_telephone('77-123-45-67'), cle_telephone('771234567'))
+        # Deux numéros sur la fiche : c'est le premier qui compte.
+        self.assertEqual(cle_telephone('77 123 45 67 / 76 011 82 29'),
+                         cle_telephone('77 123 45 67'))
+        # Un reliquat de saisie n'est pas un numéro : rapprocher là-dessus
+        # fusionnerait des familles sans aucun lien.
+        self.assertIsNone(cle_telephone('77'))
+        self.assertIsNone(cle_telephone('----'))
+
+        self._eleve('Awa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='+221 77 123 45 67')
+        self._eleve('Moussa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77-123-45-67')
+        groupes = fratries_probables(self.tenant, self.ex)
+        self.assertEqual(len(groupes), 1)
+        self.assertEqual(groupes[0]['nb'], 2)
+
+    def test_la_fratrie_reliee_par_deux_parents_reste_entiere(self):
+        """Le père relie deux enfants, la mère trois, et le père est aussi sur
+        l'une des trois fiches : c'est UN foyer, pas deux."""
+        from apps.eleves.familles import fratries_probables
+
+        self._eleve('Awa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        self._eleve('Moussa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        self._eleve('Fatou NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67',
+                    nom_mere='Awa DIOP', telephone_mere='76 555 22 11')
+        self._eleve('Ibrahima NDIAYE', nom_mere='Awa DIOP', telephone_mere='76 555 22 11')
+        self._eleve('Aminata NDIAYE', nom_mere='Awa DIOP', telephone_mere='76 555 22 11')
+
+        groupes = fratries_probables(self.tenant, self.ex)
+        self.assertEqual(len(groupes), 1)
+        self.assertEqual(groupes[0]['nb'], 5)
+
+    def test_le_seul_nom_ne_rapproche_personne(self):
+        """Sans numéro commun, deux NDIAYE restent deux familles.
+
+        Rapprocher sur le patronyme constituerait, dans une école sénégalaise,
+        une famille de quarante enfants sans lien entre eux.
+        """
+        from apps.eleves.familles import fratries_probables
+
+        self._eleve('Awa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77 111 11 11')
+        self._eleve('Moussa NDIAYE', nom_pere='Cheikh NDIAYE', telephone_pere='77 222 22 22')
+        self.assertEqual(fratries_probables(self.tenant, self.ex), [])
+
+    def test_noms_differents_sur_un_meme_numero_demandent_verification(self):
+        from apps.eleves.familles import fratries_probables
+
+        self._eleve('Awa NDIAYE', nom_tuteur='Oncle SECK', telephone_tuteur='77 123 45 67')
+        self._eleve('Moussa FALL', nom_tuteur='Oncle SECK', telephone_tuteur='77 123 45 67')
+        groupe = fratries_probables(self.tenant, self.ex)[0]
+        self.assertEqual(groupe['confiance'], 'A_VERIFIER')
+        self.assertEqual(groupe['noms_famille'], ['FALL', 'NDIAYE'])
+
+    def test_un_eleve_deja_rattache_n_est_plus_propose(self):
+        from apps.eleves.familles import fratries_probables
+
+        famille = self._famille()
+        self._eleve('Awa NDIAYE', famille=famille,
+                    nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        self._eleve('Moussa NDIAYE', nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        # Un seul élève libre sur ce numéro : plus de groupe à proposer.
+        self.assertEqual(fratries_probables(self.tenant, self.ex), [])
+
+    # ── Validation par l'école ───────────────────────────────────────────
+    def test_l_ecole_valide_et_les_familles_sont_creees(self):
+        enfants = self._fratrie(['Awa NDIAYE', 'Moussa NDIAYE', 'Fatou NDIAYE'],
+                                nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        r = self.client.get('/api/eleves/familles/fratries-probables/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nb'], 1)
+        self.assertEqual(r.data['nb_eleves'], 3)
+
+        groupe = r.data['groupes'][0]
+        r = self.client.post('/api/eleves/familles/regrouper/', {'groupes': [{
+            'nom': groupe['nom_propose'],
+            'contact': groupe['contact'],
+            'eleve_ids': [e['id'] for e in groupe['eleves']]}]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nb_familles'], 1)
+        self.assertEqual(r.data['nb_eleves'], 3)
+
+        famille = Famille.objects.get(nom='Famille NDIAYE')
+        self.assertEqual(famille.eleves.count(), 3)
+        self.assertEqual(famille.responsable_principal.nom, 'Ousmane NDIAYE')
+        self.assertEqual(famille.responsable_principal.telephone, '77 123 45 67')
+        # Et le contact des fiches suit, sans qu'on ait touché aux élèves.
+        for enfant in enfants:
+            enfant.refresh_from_db()
+            self.assertEqual(contact_effectif(enfant)['origine'], 'FAMILLE')
+
+    def test_revalider_deux_fois_ne_deplace_personne(self):
+        """L'écran peut être rechargé et revalidé : un élève déjà rattaché est
+        ignoré, jamais déplacé — sinon une correction faite à la main entre
+        deux passages serait défaite en silence."""
+        deja = self._famille('Famille corrigée à la main')
+        garde = self._eleve('Awa NDIAYE', famille=deja,
+                            nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+        libre = self._eleve('Moussa NDIAYE',
+                            nom_pere='Ousmane NDIAYE', telephone_pere='77 123 45 67')
+
+        r = self.client.post('/api/eleves/familles/regrouper/', {'groupes': [{
+            'nom': 'Famille NDIAYE',
+            'contact': {'nom': 'Ousmane NDIAYE', 'telephone': '77 123 45 67', 'lien': 'PERE'},
+            'eleve_ids': [str(garde.id), str(libre.id)]}]}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['nb_eleves'], 1)
+        self.assertEqual(r.data['nb_ignores'], 1)
+        garde.refresh_from_db()
+        self.assertEqual(garde.famille_id, deja.id)
+
+    def test_un_groupe_entierement_deja_rattache_ne_cree_pas_de_famille_vide(self):
+        deja = self._famille()
+        eleve = self._eleve('Awa NDIAYE', famille=deja)
+        avant = Famille.objects.count()
+        r = self.client.post('/api/eleves/familles/regrouper/', {'groupes': [
+            {'nom': 'Famille NDIAYE', 'eleve_ids': [str(eleve.id)]}]}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(Famille.objects.count(), avant)
+
+    # ── D'une année sur l'autre ──────────────────────────────────────────
+    def test_la_famille_suit_l_eleve_a_la_reinscription(self):
+        """Sans cela, toute la fratrie se défait à chaque passage d'exercice et
+        l'école doit regrouper de nouveau chaque année."""
+        from apps.paiements.report_reliquats import reporter_reliquats
+
+        famille = self._famille()
+        self._eleve('Awa NDIAYE', famille=famille)
+        suivant = Exercice.objects.create(tenant=self.tenant, annee_scolaire='2027',
+                                          date_debut=datetime.date(2027, 1, 1),
+                                          date_fin=datetime.date(2027, 12, 31))
+        reporter_reliquats(self.ex, suivant)
+        nouvelle = Eleve.objects.get(exercice=suivant, nom_complet='Awa NDIAYE')
+        self.assertEqual(nouvelle.famille_id, famille.id)
+
+    # ── Import Excel ─────────────────────────────────────────────────────
+    def test_la_colonne_famille_de_l_import_regroupe_les_freres(self):
+        """Deux lignes portant le même libellé entrent dans le même foyer —
+        une seule famille créée, pas une par ligne."""
+        from apps.eleves.views import EleveViewSet
+
+        cache = {}
+        premier = EleveViewSet._famille_import(
+            self.tenant, 'Famille NDIAYE', cache,
+            {'nom_pere': 'Ousmane NDIAYE', 'telephone_pere': '77 123 45 67'})
+        second = EleveViewSet._famille_import(
+            self.tenant, 'Famille NDIAYE', cache, {'nom_pere': 'Ousmane NDIAYE'})
+        self.assertEqual(premier.id, second.id)
+        self.assertEqual(premier.responsable_principal.telephone, '77 123 45 67')
+
+        # Un deuxième import qui cite le code déjà attribué retombe sur la
+        # même famille : sinon la fratrie se couperait en deux.
+        encore = EleveViewSet._famille_import(self.tenant, premier.code, {}, {})
+        self.assertEqual(encore.id, premier.id)
+        # Colonne vide : rien n'est créé, l'école regroupera d'un clic.
+        self.assertIsNone(EleveViewSet._famille_import(self.tenant, '', {}, {}))

@@ -9,13 +9,15 @@ import { InputTextModule } from 'primeng/inputtext';
 import { TextareaModule } from 'primeng/textarea';
 import { SelectModule } from 'primeng/select';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { CheckboxModule } from 'primeng/checkbox';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { Famille, ResponsableFamille, SituationFamille } from '../../../core/models/eleve.model';
+import { Famille, FratrieProbable, ResponsableFamille,
+         SituationFamille } from '../../../core/models/eleve.model';
 import { ElevesService } from '../../../core/services/eleves.service';
 
 /**
@@ -39,7 +41,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
-            MultiSelectModule, ToastModule, TooltipModule, ConfirmDialogModule,
+            MultiSelectModule, CheckboxModule, ToastModule, TooltipModule, ConfirmDialogModule,
             TranslateModule],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -53,6 +55,13 @@ import { ElevesService } from '../../../core/services/eleves.service';
       <p-button icon="pi pi-search" size="small" severity="secondary" [outlined]="true"
                 (onClick)="charger()" [ariaLabel]="'familles.recherche' | translate" />
       <span class="espace"></span>
+      <!-- Une école qui arrive avec deux mille fiches ne créera pas ses
+           familles une par une : on lui propose les groupes déduits des
+           numéros de parents, à elle de valider. -->
+      <p-button icon="pi pi-sitemap" [label]="'familles.regrouper' | translate" size="small"
+                severity="info" [outlined]="true"
+                [pTooltip]="'familles.regrouper_aide' | translate"
+                (onClick)="ouvrirRegroupement()" />
       <p-button icon="pi pi-plus" [label]="'familles.nouvelle' | translate" size="small"
                 severity="success" (onClick)="ouvrirDialog()" />
     </div>
@@ -209,6 +218,55 @@ import { ElevesService } from '../../../core/services/eleves.service';
         </div>
       }
     </p-dialog>
+
+    <!-- ══ REGROUPEMENT ASSISTÉ ══
+         Rien n'est créé tant que l'école n'a pas validé : fusionner deux
+         familles homonymes sans lien est très difficile à défaire. -->
+    <p-dialog [(visible)]="regroupementVisible" [modal]="true" [style]="{ width: '900px' }"
+              [header]="'familles.regrouper' | translate">
+      @if (chargementFratries()) {
+        <p class="aide">{{ 'common.chargement' | translate }}</p>
+      } @else if (fratries().length === 0) {
+        <div class="vide">
+          <p>{{ 'familles.aucune_fratrie' | translate }}</p>
+          <p class="aide">{{ 'familles.aucune_fratrie_aide' | translate }}</p>
+        </div>
+      } @else {
+        <p class="aide">{{ 'familles.regrouper_resume' | translate:
+                           { nb: fratries().length, nbEleves: totalEleves() } }}</p>
+
+        @for (g of fratries(); track g.cle) {
+          <div class="groupe">
+            <div class="groupe-tete">
+              <p-checkbox [(ngModel)]="coches" [value]="g.cle" [inputId]="'g-' + g.cle" />
+              <input pInputText [(ngModel)]="noms[g.cle]" class="nom-groupe" />
+              @if (g.confiance === 'A_VERIFIER') {
+                <p-tag severity="warn" [value]="'familles.a_verifier' | translate"
+                       [pTooltip]="'familles.a_verifier_aide' | translate" />
+              } @else {
+                <p-tag severity="success" [value]="'familles.sure' | translate" />
+              }
+              <span class="contact-groupe">
+                {{ g.contact.nom }} · {{ g.contact.telephone }}
+              </span>
+            </div>
+            <div class="enfants">
+              @for (e of g.eleves; track e.id) {
+                <span class="puce">{{ e.nom_complet }}<span class="cl">{{ e.classe }}</span></span>
+              }
+            </div>
+          </div>
+        }
+      }
+
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" [text]="true"
+                  (onClick)="regroupementVisible = false" />
+        <p-button [label]="'familles.creer_cochees' | translate" severity="success"
+                  [disabled]="coches.length === 0" [loading]="creation()"
+                  (onClick)="creerFamilles()" />
+      </ng-template>
+    </p-dialog>
   `,
   styles: [`
     .barre-familles { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
@@ -240,6 +298,14 @@ import { ElevesService } from '../../../core/services/eleves.service';
     .vert { color:var(--green-600); } .rouge { color:var(--red-600); }
     .ligne-rattacher { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .ligne-rattacher .select-eleves { min-width:320px; }
+    .groupe { border:1px solid var(--surface-300); border-radius:8px; padding:10px 12px;
+              margin-bottom:10px; }
+    .groupe-tete { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .nom-groupe { min-width:220px; font-weight:600; }
+    .contact-groupe { font-size:.82rem; color:var(--text-color-secondary); }
+    .enfants { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+    .puce { background:var(--surface-100); border-radius:12px; padding:2px 10px; font-size:.82rem; }
+    .puce .cl { color:var(--text-color-secondary); margin-left:6px; font-size:.74rem; }
     @media (max-width: 640px) {
       .form-grid { grid-template-columns:1fr; }
       .champ-recherche { min-width:0; flex:1 1 100%; }
@@ -263,8 +329,18 @@ export class FamillesComponent implements OnInit {
    *  par mégarde. */
   elevesLibres  = signal<{ id: string; nom_complet: string }[]>([]);
 
+  fratries          = signal<FratrieProbable[]>([]);
+  chargementFratries = signal(false);
+  creation          = signal(false);
+
   recherche = '';
   aRattacher: string[] = [];
+  /** Groupes cochés, et le nom que l'école leur donne : elle corrige souvent
+   *  « Famille NDIAYE » en « Famille Ousmane NDIAYE » quand deux foyers du
+   *  même patronyme se côtoient dans l'école. */
+  coches: string[] = [];
+  noms: Record<string, string> = {};
+  regroupementVisible = false;
   dialogVisible = false;
   situationVisible = false;
   form: Partial<Famille> = { nom: '', adresse: '' };
@@ -407,6 +483,53 @@ export class FamillesComponent implements OnInit {
     });
     this.chargerElevesLibres();
     this.charger();
+  }
+
+  // ── Regroupement assisté ──────────────────────────────────────────────
+  totalEleves() { return this.fratries().reduce((t, g) => t + g.nb, 0); }
+
+  ouvrirRegroupement() {
+    this.regroupementVisible = true;
+    this.chargementFratries.set(true);
+    this.fratries.set([]);
+    this.coches = [];
+    this.noms = {};
+    this.eleves.getFratriesProbables().subscribe({
+      next: r => {
+        this.fratries.set(r.groupes);
+        // Tout est coché d'avance SAUF ce qui demande vérification : l'école
+        // ne doit pas créer sans regarder une famille dont les enfants ne
+        // portent pas le même nom.
+        this.coches = r.groupes.filter(g => g.confiance === 'SURE').map(g => g.cle);
+        r.groupes.forEach(g => (this.noms[g.cle] = g.nom_propose));
+        this.chargementFratries.set(false);
+      },
+      error: () => { this.chargementFratries.set(false); this.erreur('familles.erreur_fratries'); },
+    });
+  }
+
+  creerFamilles() {
+    const groupes = this.fratries()
+      .filter(g => this.coches.includes(g.cle))
+      .map(g => ({ nom: (this.noms[g.cle] || g.nom_propose).trim(),
+                   contact: g.contact,
+                   eleve_ids: g.eleves.map(e => e.id) }));
+    if (groupes.length === 0) return;
+
+    this.creation.set(true);
+    this.eleves.regrouperFratries(groupes).subscribe({
+      next: r => {
+        this.creation.set(false);
+        this.regroupementVisible = false;
+        this.charger();
+        this.msg.add({ severity: 'success', life: 7000,
+                       summary: this.translate.instant('familles.regroupement_fait',
+                                                       { nb: r.nb_familles }),
+                       detail: this.translate.instant('familles.regroupement_detail',
+                                                      { nb: r.nb_eleves }) });
+      },
+      error: () => { this.creation.set(false); this.erreur('familles.erreur_regroupement'); },
+    });
   }
 
   private erreur(cle: string) {

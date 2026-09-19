@@ -33,6 +33,10 @@ COLONNES = {
     'nom_tuteur':       'Nom du tuteur',
     'telephone_tuteur': 'Téléphone tuteur',
     'lien_tuteur':      'Lien tuteur',
+    # Fratrie : deux frères portant la même valeur entrent dans la même
+    # famille. Facultatif — une école qui laisse la colonne vide regroupe
+    # ensuite d'un clic depuis l'onglet Familles.
+    'famille':          'Famille (nom ou code)',
     'etat_sante':       'État de santé (Sain/Suivi/Chronique)',
     'observations_sante': 'Situation sanitaire',
     'date_inscription': "Date d'inscription (JJ/MM/AAAA)",
@@ -83,6 +87,9 @@ _SYNONYMES = {
     'tel tuteur':         'telephone_tuteur',
     'lien tuteur':        'lien_tuteur',
     'lien de parente':    'lien_tuteur',
+    'famille':            'famille',
+    'code famille':       'famille',
+    'foyer':              'famille',
     'etat de sante':      'etat_sante',
     'sante':              'etat_sante',
     'situation sanitaire':'observations_sante',
@@ -598,6 +605,7 @@ def analyser(fichier, tenant, exercice):
         if wa:
             avert.append(f'Impayé antérieur : {wa}')
         origine_impaye = _texte(brut.get('origine_impaye'))[:120]
+        famille_libelle = _texte(brut.get('famille'))[:200]
 
         statut = 'ERREUR' if erreurs else 'OK'
         cle_doublon = (_norm(nom), date_naiss)
@@ -659,6 +667,7 @@ def analyser(fichier, tenant, exercice):
             'reprise': reprise_payload,
             'impaye_anterieur': round(impaye_ant, 2),
             'origine_impaye':   origine_impaye,
+            'famille':          famille_libelle,
             'data': data,
         })
 
