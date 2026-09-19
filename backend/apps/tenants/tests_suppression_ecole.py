@@ -8,8 +8,9 @@ import datetime
 from django.core.management import call_command
 from rest_framework.test import APITestCase
 
-from apps.comptabilite.models import JournalEntry
-from apps.eleves.models import Eleve, Organisme, Section
+from apps.comptabilite.models import CaisseEncaissement, JournalEntry
+from apps.eleves.models import (Eleve, FormuleEleve, FormuleSection, Organisme,
+                                PriseEnChargeOrganisme, Section)
 from apps.gmrf.models import Financement, TypeFinancement
 from apps.licences.models import Licence
 from apps.paiements.models import Exercice, Paiement
@@ -29,8 +30,17 @@ def ecole_complete(nom):
     eleve = Eleve.objects.create(tenant=t, exercice=ex, section=section, nom_complet='Awa',
                                  date_inscription=datetime.date(2026, 1, 1))
     etat = Organisme.objects.create(tenant=t, nom='État', type='ETAT')
+    # Tous les liens PROTECT de l'école : chacun a bloqué, ou peut bloquer,
+    # la suppression. Celui des boursiers a fait échouer une bascule en cloud
+    # le 19/09/2026 — la liste était écrite à la main et ne le connaissait pas.
+    PriseEnChargeOrganisme.objects.create(tenant=t, eleve=eleve, organisme=etat, exercice=ex,
+                                          montant_mensualite=5000)
+    formule = FormuleSection.objects.create(tenant=t, section=section, nom='3 jours',
+                                            frais_mensualite=6000)
+    FormuleEleve.objects.create(tenant=t, eleve=eleve, formule=formule, mois_debut=1)
+    caisse = CaisseEncaissement.objects.create(tenant=t, nom='Garderie', no_compte='5716')
     Paiement.objects.create(tenant=t, exercice=ex, eleve=eleve, no_piece='REC-1', mode_paiement='ESPECE',
-                            montant_mensualite=10000, organisme=etat, statut='ACTIF')
+                            montant_mensualite=10000, organisme=etat, caisse=caisse, statut='ACTIF')
     tf = TypeFinancement.objects.create(tenant=t, code='DON', libelle='Don')
     Financement.objects.create(tenant=t, reference='F-1', type_financement=tf, libelle='Don', montant=1000)
     JournalEntry.objects.create(tenant=t, exercice=ex, no_piece='X', date_ecriture=datetime.date(2026, 1, 2),
