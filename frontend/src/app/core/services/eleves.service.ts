@@ -4,7 +4,7 @@ import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
-         SuiviOrganisme } from '../models/eleve.model';
+         SuiviOrganisme, Famille, SituationFamille } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -266,6 +266,33 @@ export class ElevesService {
                            refuses: { nom_complet?: string; motif: string }[];
                            resume: ResumeImpayesAnterieurs }>(
       '/eleves/impayes-anterieurs/', { lignes });
+  }
+
+  // ── Familles (fratries) ─────────────────────────────────────────────
+  /** Toujours un TABLEAU, quelle que soit la pagination du serveur — même
+   *  précaution que pour les organismes, où un `{count, results}` non
+   *  normalisé laissait des écrans vides sans erreur visible. */
+  getFamilles(q?: string) {
+    return this.api.get<Famille[] | PaginatedResponse<Famille>>('/eleves/familles/',
+                                                                q ? { search: q } : undefined)
+      .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
+  creerFamille(f: Partial<Famille>)  { return this.api.post<Famille>('/eleves/familles/', f); }
+  majFamille(id: string, f: Partial<Famille>) {
+    return this.api.patch<Famille>(`/eleves/familles/${id}/`, f);
+  }
+  supprimerFamille(id: string) { return this.api.delete<void>(`/eleves/familles/${id}/`); }
+
+  /** Ce que la famille doit et a payé, tous enfants confondus. */
+  getSituationFamille(id: string) {
+    return this.api.get<SituationFamille>(`/eleves/familles/${id}/situation/`);
+  }
+
+  /** Rattache (ou détache) des élèves depuis la fiche de la famille : c'est
+   *  là que l'école voit la fratrie, plutôt que d'ouvrir cinq fiches. */
+  rattacherALaFamille(id: string, eleveIds: string[], detacher = false) {
+    return this.api.post<{ nb: number; famille: string }>(
+      `/eleves/familles/${id}/rattacher/`, { eleve_ids: eleveIds, detacher });
   }
 
   getSections() {

@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import (ChampFicheViewSet, EleveViewSet, FormuleSectionViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSet,
+from .views import (ChampFicheViewSet, EleveViewSet, FamilleViewSet, FormuleSectionViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSet,
                     SectionViewSet, ServiceViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
                     ElevesListePDFView, SituationElevePDFView, FicheElevePDFView,
@@ -14,6 +14,8 @@ router.register('services', ServiceViewSet, basename='service')
 router.register('formules', FormuleSectionViewSet, basename='formule-section')
 router.register('champs', ChampFicheViewSet, basename='champ-fiche')
 router.register('organismes', OrganismeViewSet, basename='organisme')
+# Avant la route racine, qui capte tout ce qui n'est pas déclaré au-dessus.
+router.register('familles', FamilleViewSet, basename='famille')
 router.register('bourses', PriseEnChargeOrganismeViewSet, basename='bourse')
 router.register('liste', EleveViewSet, basename='eleve')
 router.register('', EleveViewSet, basename='eleve-root')

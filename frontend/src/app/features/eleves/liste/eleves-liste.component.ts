@@ -22,11 +22,12 @@ import { TooltipModule } from 'primeng/tooltip';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { CheckboxModule } from 'primeng/checkbox';
 import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
+import { FamillesComponent } from '../familles/familles.component';
 
 /** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
 type LigneImpayeEditable = LigneImpayeAnterieur & { montant0: number; note0: string };
 
-type OngletEleves = 'liste' | 'prise_en_charge' | 'anciens' | 'organismes';
+type OngletEleves = 'liste' | 'prise_en_charge' | 'anciens' | 'organismes' | 'familles';
 
 interface PecForm {
   prise_en_charge: string | null;
@@ -66,7 +67,8 @@ const MOIS_ANNEE = [
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
-            TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent],
+            TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent,
+            FamillesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -109,6 +111,10 @@ const MOIS_ANNEE = [
                   [class.actif]="onglet() === 'organismes'" (click)="allerOnglet('organismes')"
                   [pTooltip]="'eleves.organismes_aide' | translate">
             {{ 'eleves.organismes' | translate }}</button>
+          <button type="button" role="tab" [attr.aria-selected]="onglet() === 'familles'"
+                  [class.actif]="onglet() === 'familles'" (click)="allerOnglet('familles')"
+                  [pTooltip]="'familles.onglet_aide' | translate">
+            {{ 'familles.onglet' | translate }}</button>
         </div>
 
         <!-- Ligne 2 : ce qu'on FAIT. Les documents sont regroupés : quatre
@@ -359,6 +365,13 @@ const MOIS_ANNEE = [
     <!-- ══════════════════════ ONGLET ANCIENS ÉLÈVES ══════════════════════ -->
     <!-- Base historique : indépendante de l'exercice affiché, on doit y
          retrouver un diplômé de 2019 comme un transféré de l'an dernier. -->
+
+    <!-- ══ ONGLET FAMILLES ══
+         Une fratrie, un interlocuteur, une situation. Regrouper ne change
+         aucun montant : le dû reste calculé fiche par fiche. -->
+    @if (onglet() === 'familles') {
+      <app-familles />
+    }
 
     <!-- ══ ONGLET ORGANISMES PAYEURS ══
          Une bourse ne réduit pas le dû, elle en change le débiteur. Ce

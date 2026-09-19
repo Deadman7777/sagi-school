@@ -8,13 +8,14 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import (ChampFiche, Eleve, FormuleEleve, FormuleSection, Organisme,
+from .models import (ChampFiche, Eleve, Famille, FormuleEleve, FormuleSection, Organisme,
                      PriseEnChargeOrganisme, Section, Service)
 from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (ChampFicheSerializer, EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
+from .serializers import (ChampFicheSerializer, EleveSerializer, FamilleSerializer,
+                          FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
 from django.db.models import Max
@@ -2899,3 +2900,85 @@ class GardeSoirView(APIView):
         n, _ = GardeSoir.objects.filter(tenant=get_tenant(request), pk=request.query_params.get('id')).delete()
         return Response(status=204 if n else 404)
 
+
+
+class FamilleViewSet(viewsets.ModelViewSet):
+    """Les foyers payeurs : une fratrie, un interlocuteur, une situation.
+
+    Regrouper ne change aucun montant — le dû reste calculé fiche par fiche.
+    Ce que l'école y gagne : un seul jeu de coordonnées à tenir à jour, le
+    total de ce que la famille doit, et un seul rappel au lieu de cinq.
+    """
+    serializer_class   = FamilleSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends    = [filters.SearchFilter]
+    search_fields      = ['nom', 'code', 'responsables__nom', 'responsables__telephone']
+
+    def get_queryset(self):
+        return (Famille.objects.filter(tenant=get_tenant(self.request))
+                .prefetch_related('responsables')
+                # Le compte d'enfants est affiché sur chaque ligne : sans
+                # annotation, la liste fait une requête par famille.
+                .annotate(nb_enfants_sql=Count('eleves', distinct=True))
+                # Tri explicite : l'annotate ajoute un GROUP BY qui annule
+                # l'ordre du Meta aux yeux du paginateur, et deux pages
+                # successives se mettent à répéter ou omettre des lignes.
+                .order_by('nom'))
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprimer une famille ne supprime jamais ses élèves.
+
+        Le SET_NULL du modèle détache les fiches, qui retrouvent leurs
+        contacts individuels. On le dit explicitement plutôt que de laisser
+        l'école le découvrir : cinq enfants qui « perdent leur famille » sans
+        prévenir ressemblent à une perte de données.
+        """
+        from core.models import log_audit
+
+        famille = self.get_object()
+        nb = famille.eleves.count()
+        reponse = super().destroy(request, *args, **kwargs)
+        if nb:
+            log_audit(request, 'SUPPRESSION', 'Famille', famille.id,
+                      f'{famille.nom} — {nb} élève(s) détaché(s)')
+        return reponse
+
+    @action(detail=True, methods=['get'])
+    def situation(self, request, pk=None):
+        """Ce que la famille doit et a payé, enfant par enfant."""
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import situation_famille
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        return Response(situation_famille(self.get_object(), exercice))
+
+    @action(detail=True, methods=['post'])
+    def rattacher(self, request, pk=None):
+        """Rattache des élèves à cette famille (ou les en détache).
+
+        L'école regroupe depuis la fiche de la famille, où elle voit déjà la
+        fratrie : rouvrir cinq fiches élèves pour cocher cinq fois la même
+        case est précisément la corvée que ce lot supprime.
+        """
+        from core.models import log_audit
+
+        famille = self.get_object()
+        tenant  = get_tenant(request)
+        ids     = request.data.get('eleve_ids') or []
+        detacher = bool(request.data.get('detacher'))
+        if not ids:
+            return Response({'error': "Aucun élève indiqué."}, status=400)
+
+        qs = Eleve.objects.filter(tenant=tenant, id__in=ids)
+        nb = qs.update(famille=None if detacher else famille)
+        log_audit(request, 'MODIFICATION', 'Famille', famille.id,
+                  f"{nb} élève(s) {'détaché(s) de' if detacher else 'rattaché(s) à'} "
+                  f'{famille.nom}')
+        return Response({'nb': nb, 'famille': famille.nom})

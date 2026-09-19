@@ -316,3 +316,58 @@ export interface SuiviOrganisme {
   eleves: { eleve_id: string; matricule: string; nom_complet: string;
             reference: string; couvert: number; recu: number; reste: number }[];
 }
+
+
+/** Une personne qui répond de la famille : père, mère, tuteur…
+ *  Une liste et non deux champs figés : les parents séparés règlent chacun
+ *  pour une partie des enfants, et l'école doit pouvoir noter qui a payé. */
+export interface ResponsableFamille {
+  id?: string;
+  nom: string;
+  lien: 'PERE' | 'MERE' | 'TUTEUR' | 'AUTRE';
+  lien_libelle?: string;
+  telephone: string;
+  telephone2?: string;
+  email?: string;
+  profession?: string;
+  residence?: string;
+  /** Celui que l'école appelle. Un seul par famille. */
+  principal: boolean;
+}
+
+/** Le foyer payeur, commun à une fratrie.
+ *  Regrouper ne change AUCUN montant : le dû reste calculé fiche par fiche.
+ *  Ce que l'école y gagne, c'est un seul jeu de coordonnées à tenir à jour,
+ *  le total de ce que la famille doit, et un seul rappel au lieu de cinq. */
+export interface Famille {
+  id: string;
+  code: string;
+  nom: string;
+  adresse: string;
+  observations: string;
+  actif: boolean;
+  responsables: ResponsableFamille[];
+  nb_enfants: number;
+  contact: { nom: string; telephone: string; lien: string } | null;
+}
+
+/** Ce que la famille doit et a payé, enfant par enfant. */
+export interface SituationFamille {
+  famille_id: string;
+  code: string;
+  nom: string;
+  nb_enfants: number;
+  enfants: {
+    eleve_id: string;
+    matricule: string;
+    nom_complet: string;
+    classe: string;
+    statut: string;
+    total_attendu: number;
+    total_paye: number;
+    reste_a_payer: number;
+  }[];
+  total_attendu: number;
+  total_paye: number;
+  reste_a_payer: number;
+}

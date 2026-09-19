@@ -49,6 +49,7 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
     quitté l'établissement au titre de la scolarité de l'année.
     """
     from .echeancier import construire_echeancier, precharger
+    from .familles import contact_effectif
     from .models import Eleve
     from .parcours import STATUTS_SORTIE
 
@@ -56,7 +57,11 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
     lignes = []
     qs = precharger(
         Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
-        .exclude(statut__in=STATUTS_SORTIE))
+        .exclude(statut__in=STATUTS_SORTIE)
+        # Le contact passe par la famille et ses responsables : sans ce
+        # préchargement, une école de 500 élèves ajoute un millier de
+        # requêtes à l'écran des rappels.
+        .select_related('famille').prefetch_related('famille__responsables'))
 
     for eleve in qs:
         ech = construire_echeancier(eleve, today=today)
@@ -66,17 +71,23 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
         if synth['total_exigible_famille'] < seuil:
             continue
         retard_mois = [l for l in ech['lignes'] if l['echu'] and l['reste'] > 0]
+        contact = contact_effectif(eleve)
         lignes.append({
             'eleve_id':    str(eleve.id),
             'matricule':   eleve.matricule or '',
             'nom_complet': eleve.nom_complet,
             'classe':      eleve.classe.nom if eleve.classe_id else (
                            eleve.section.nom if eleve.section else ''),
-            # Le tuteur d'abord : c'est lui qu'on appelle quand il est renseigné.
-            'contact':     (eleve.telephone_tuteur or eleve.telephone_pere
-                            or eleve.telephone_mere or ''),
-            'contact_nom': (eleve.nom_tuteur or eleve.nom_pere
-                            or eleve.nom_mere or ''),
+            # Qui appeler : une seule réponse, rendue par contact_effectif
+            # (le responsable de la famille quand la fratrie est regroupée,
+            # sinon le tuteur, le père, la mère).
+            'contact':     contact['telephone'],
+            'contact_nom': contact['nom'],
+            # De quel côté vient ce numéro : l'école voit tout de suite les
+            # fiches restées sur un contact individuel.
+            'contact_origine': contact['origine'],
+            'famille_id':   str(eleve.famille_id) if eleve.famille_id else None,
+            'famille_nom':  eleve.famille.nom if eleve.famille_id else '',
             'nb_mois_retard':   len(retard_mois),
             'mois_retard':      [l['nom'] for l in retard_mois],
             'retards':          synth['retards_famille'],
