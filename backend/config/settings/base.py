@@ -145,6 +145,13 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-tenant-id',        # ← c'est ça qui manquait
 ]
+
+# En-têtes que le navigateur a le droit de LIRE dans la réponse. Sans cette
+# liste, l'édition des bulletins par classe ne peut pas dire à l'école
+# combien d'élèves sont restés sans bulletin faute de notes.
+CORS_EXPOSE_HEADERS = [
+    'x-sans-notes',
+]
 # JWT
 from datetime import timedelta
 

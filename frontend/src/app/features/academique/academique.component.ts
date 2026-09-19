@@ -291,6 +291,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         }
         <p-button [label]="'🔢 ' + ('academique.calculer_moyennes' | translate)" severity="success"
                   [loading]="calculant()" (onClick)="calculerMoyennes()" />
+        <!-- Toute la classe en un document, deux bulletins par feuille : une
+             classe de 40 élèves tenait sur 40 feuilles et 40 clics. -->
+        <p-button [label]="'🖨️ ' + ('academique.bulletins_classe' | translate)" severity="secondary"
+                  [outlined]="true" [loading]="editionClasse()" [disabled]="!classeResultats"
+                  [pTooltip]="'academique.bulletins_classe_aide' | translate"
+                  (onClick)="telechargerBulletinsClasse()" />
       </div>
 
       <!-- Résultats -->
@@ -885,6 +891,7 @@ export class AcademiqueComponent implements OnInit {
   /** Barèmes les plus courants, proposés en raccourci. La saisie reste libre :
    *  un établissement note sur 5, un autre sur 60, et la liste fermée à 10/20
    *  les obligeait à convertir à la main. */
+  editionClasse = signal(false);
   baremesCourants = [5, 10, 15, 20, 30, 40, 50, 60, 100];
   formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20, programme: 'FR' };
   formTypeEval: any = { id: null, nom: '', nom_ar: '', poids: 1 };
@@ -1329,6 +1336,44 @@ export class AcademiqueComponent implements OnInit {
       next: (blob: Blob) => this.enregistrer(blob, `bulletin_${programme ? programme + '_' : ''}${trimestre}_${annee}.pdf`),
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
+    });
+  }
+
+  /** Édite en une fois les bulletins de la classe sélectionnée. */
+  telechargerBulletinsClasse() {
+    if (!this.classeResultats || !this.trimestreResultats) {
+      this.msg.add({ severity: 'warn',
+                     summary: this.translate.instant('academique.classe_filter'),
+                     detail: this.translate.instant('academique.bulletins_classe_aide') });
+      return;
+    }
+    this.editionClasse.set(true);
+    const annee     = this._getAnneeScolaire();
+    const trimestre = this.trimestreResultats;
+    const programme = this.prog(this.programmeResultats);
+    const nom = this.classes().find(c => c.id === this.classeResultats)?.nom || 'classe';
+    this.acad.getBulletinsClassePdf(this.classeResultats, trimestre, annee, programme).subscribe({
+      next: (reponse) => {
+        this.enregistrer(reponse.body as Blob, `bulletins_${nom}_${trimestre}_${annee}.pdf`);
+        this.editionClasse.set(false);
+        // Les élèves sans aucune note n'ont pas de bulletin : l'école doit
+        // l'apprendre ici, pas en comptant les feuilles à la sortie.
+        const sansNotes = Number(reponse.headers.get('X-Sans-Notes') || 0);
+        if (sansNotes > 0) {
+          this.msg.add({ severity: 'info', life: 8000,
+                         summary: this.translate.instant('academique.bulletins_classe'),
+                         detail: this.translate.instant('academique.bulletins_classe_sans_notes',
+                                                        { nb: sansNotes }) });
+        }
+      },
+      // Le motif vient du serveur : « aucun élève n'a de note sur la période »
+      // n'est pas une panne, et l'utilisateur doit savoir lequel des deux c'est.
+      error: (err) => {
+        this.editionClasse.set(false);
+        this.msg.add({ severity: 'error', summary: 'Erreur PDF',
+                       detail: this.translate.instant('academique.bulletins_classe_vide'),
+                       life: 7000 });
+      },
     });
   }
 

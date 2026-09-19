@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import (ChampFiche, Eleve, EleveService, FormuleEleve, FormuleSection, Organisme,
-                     PriseEnChargeOrganisme, Section, Service)
+from .models import (BaremeFratrie, ChampFiche, Eleve, EleveService, Famille, FormuleEleve,
+                     FormuleSection, Organisme, PriseEnChargeOrganisme, ResponsableFamille,
+                     Section, Service)
 
 # Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
 # dans l'autre sens (nom → numéro) : deux tables homonymes seraient un piège.
@@ -151,6 +152,15 @@ def valider_champs_perso(tenant, valeurs, existantes=None, partiel=False):
 class EleveSerializer(serializers.ModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)
     classe_nom                   = serializers.SerializerMethodField()
+    # Fratrie : le nom du foyer et le contact réellement joignable. Le contact
+    # vient de contact_effectif() et de nulle part ailleurs — c'est ce qui
+    # garantit que la fiche, l'écran des rappels et le SMS donnent le même
+    # numéro pour le même enfant.
+    famille_nom                  = serializers.CharField(source='famille.nom', read_only=True,
+                                                         default='')
+    famille_code                 = serializers.CharField(source='famille.code', read_only=True,
+                                                         default='')
+    contact                      = serializers.SerializerMethodField()
     date_inscription_libelle     = serializers.ReadOnlyField()
     total_theorique              = serializers.ReadOnlyField()
     total_attendu                = serializers.ReadOnlyField()
@@ -336,6 +346,10 @@ class EleveSerializer(serializers.ModelSerializer):
                 {'reliquat_anterieur':
                  f"Montant inférieur aux {deja:,.0f} FCFA déjà encaissés sur cet "
                  "impayé antérieur. Annulez d'abord les encaissements concernés."})
+
+    def get_contact(self, obj):
+        from .familles import contact_effectif
+        return contact_effectif(obj)
 
     def get_classe_nom(self, obj):
         return obj.classe.nom if obj.classe_id else ''
@@ -592,4 +606,122 @@ class PriseEnChargeOrganismeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Indiquez au moins un montant pris en charge, ou cochez les "
                 "services : sinon l'organisme ne doit rien pour cet élève.")
+        return attrs
+
+
+class ResponsableFamilleSerializer(serializers.ModelSerializer):
+    lien_libelle = serializers.CharField(source='get_lien_display', read_only=True)
+
+    class Meta:
+        model  = ResponsableFamille
+        fields = '__all__'
+        extra_kwargs = {
+            'tenant':  {'required': False, 'read_only': True},
+            'famille': {'required': False},
+        }
+
+
+class FamilleSerializer(serializers.ModelSerializer):
+    # Saisis avec la famille : créer le foyer puis ses responsables en deux
+    # écrans obligerait l'école à enregistrer une famille sans personne à
+    # appeler, ce que ce regroupement est justement censé éviter.
+    responsables = ResponsableFamilleSerializer(many=True, required=False)
+    nb_enfants   = serializers.SerializerMethodField()
+    contact      = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Famille
+        fields = '__all__'
+        extra_kwargs = {
+            'tenant': {'required': False, 'read_only': True},
+            # Attribué par l'école à l'enregistrement (FAM-0001) : une saisie
+            # libre finirait en doublon, et le code est unique par tenant.
+            'code':   {'required': False, 'read_only': True},
+        }
+
+    def get_nb_enfants(self, obj):
+        # Annoté par la vue sur la liste : sinon une requête par famille.
+        if hasattr(obj, 'nb_enfants_sql'):
+            return obj.nb_enfants_sql
+        return obj.eleves.count()
+
+    def get_contact(self, obj):
+        responsable = obj.responsable_principal
+        if responsable is None:
+            return None
+        return {'nom': responsable.nom, 'telephone': responsable.telephone,
+                'lien': responsable.get_lien_display()}
+
+    def create(self, validated_data):
+        responsables = validated_data.pop('responsables', [])
+        famille = Famille.objects.create(**validated_data)
+        self._enregistrer_responsables(famille, responsables)
+        return famille
+
+    def update(self, instance, validated_data):
+        responsables = validated_data.pop('responsables', None)
+        for champ, valeur in validated_data.items():
+            setattr(instance, champ, valeur)
+        instance.save()
+        if responsables is not None:
+            # Remplacement en bloc : l'écran envoie la liste complète, et un
+            # responsable retiré à l'écran doit disparaître de la base.
+            instance.responsables.all().delete()
+            self._enregistrer_responsables(instance, responsables)
+        return instance
+
+    def _enregistrer_responsables(self, famille, responsables):
+        """Écrit les responsables en garantissant un seul principal.
+
+        La contrainte de base refuse deux principaux pour une même famille :
+        sans arbitrage ici, une saisie où l'école coche deux fois se solderait
+        par une 500 au lieu d'un enregistrement.
+        """
+        principal_pris = False
+        for donnees in responsables:
+            donnees.pop('famille', None)
+            donnees.pop('tenant', None)
+            voulu = donnees.pop('principal', False)
+            principal = bool(voulu) and not principal_pris
+            principal_pris = principal_pris or principal
+            ResponsableFamille.objects.create(famille=famille, tenant=famille.tenant,
+                                              principal=principal, **donnees)
+        # Personne de désigné : le premier saisi devient le contact, sinon
+        # l'école se retrouve avec une famille que rien ne permet d'appeler.
+        if not principal_pris:
+            premier = famille.responsables.first()
+            if premier is not None:
+                premier.principal = True
+                premier.save(update_fields=['principal'])
+
+
+class BaremeFratrieSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = BaremeFratrie
+        fields = '__all__'
+        extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def validate(self, attrs):
+        """Un pourcentage au-delà de 100 % rendrait un dû négatif, et un rang
+        à zéro ne désigne aucun enfant."""
+        rang = attrs.get('rang', getattr(self.instance, 'rang', 0))
+        if not rang or int(rang) < 1:
+            raise serializers.ValidationError(
+                "Le rang commence à 1 (l'aîné) ; le 2e enfant porte le rang 2.")
+        for champ_forme, champ_valeur, libelle in (
+                ('forme_inscription', 'valeur_inscription', "l'inscription"),
+                ('forme_mensualite',  'valeur_mensualite',  'la mensualité')):
+            forme = attrs.get(champ_forme, getattr(self.instance, champ_forme, 'POURCENTAGE'))
+            valeur = float(attrs.get(champ_valeur,
+                                     getattr(self.instance, champ_valeur, 0)) or 0)
+            if valeur < 0:
+                raise serializers.ValidationError(
+                    f"La réduction sur {libelle} ne peut pas être négative.")
+            if forme == 'POURCENTAGE' and valeur > 100:
+                # Pas de « % » dans le texte : DRF passe le message dans un
+                # formatage pour-cent et « % : » y lève un ValueError, qui
+                # remonte en 500 au lieu du 400 attendu.
+                raise serializers.ValidationError(
+                    f"La réduction sur {libelle} dépasse cent pour cent : une "
+                    f"remise supérieure au tarif rendrait l'élève créditeur.")
         return attrs

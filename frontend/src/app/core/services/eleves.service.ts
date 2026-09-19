@@ -4,7 +4,9 @@ import { ApiService } from './api.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
-         SuiviOrganisme } from '../models/eleve.model';
+         SuiviOrganisme, Famille, SituationFamille,
+         FratrieProbable, BaremeFratrie, ApercuBareme,
+         RepartitionVersement } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -266,6 +268,87 @@ export class ElevesService {
                            refuses: { nom_complet?: string; motif: string }[];
                            resume: ResumeImpayesAnterieurs }>(
       '/eleves/impayes-anterieurs/', { lignes });
+  }
+
+  // ── Familles (fratries) ─────────────────────────────────────────────
+  /** Toujours un TABLEAU, quelle que soit la pagination du serveur — même
+   *  précaution que pour les organismes, où un `{count, results}` non
+   *  normalisé laissait des écrans vides sans erreur visible. */
+  getFamilles(q?: string) {
+    return this.api.get<Famille[] | PaginatedResponse<Famille>>('/eleves/familles/',
+                                                                q ? { search: q } : undefined)
+      .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
+  creerFamille(f: Partial<Famille>)  { return this.api.post<Famille>('/eleves/familles/', f); }
+  majFamille(id: string, f: Partial<Famille>) {
+    return this.api.patch<Famille>(`/eleves/familles/${id}/`, f);
+  }
+  supprimerFamille(id: string) { return this.api.delete<void>(`/eleves/familles/${id}/`); }
+
+  /** Ce que la famille doit et a payé, tous enfants confondus. */
+  getSituationFamille(id: string) {
+    return this.api.get<SituationFamille>(`/eleves/familles/${id}/situation/`);
+  }
+
+  /** Rattache (ou détache) des élèves depuis la fiche de la famille : c'est
+   *  là que l'école voit la fratrie, plutôt que d'ouvrir cinq fiches. */
+  rattacherALaFamille(id: string, eleveIds: string[], detacher = false) {
+    return this.api.post<{ nb: number; famille: string }>(
+      `/eleves/familles/${id}/rattacher/`, { eleve_ids: eleveIds, detacher });
+  }
+
+  /** Les fratries que l'école peut regrouper d'un coup. Rien n'est créé :
+   *  elle valide ce qu'elle veut. */
+  getFratriesProbables() {
+    return this.api.get<{ groupes: FratrieProbable[]; nb: number; nb_eleves: number }>(
+      '/eleves/familles/fratries-probables/');
+  }
+
+  /** Crée les familles validées. Un élève déjà rattaché est ignoré, jamais
+   *  déplacé : l'écran peut être revalidé sans défaire une correction. */
+  regrouperFratries(groupes: { nom: string; eleve_ids: string[];
+                               contact?: { nom: string; telephone: string; lien: string } }[]) {
+    return this.api.post<{ nb_familles: number; nb_eleves: number; nb_ignores: number }>(
+      '/eleves/familles/regrouper/', { groupes });
+  }
+
+  // ── Réduction fratrie ───────────────────────────────────────────────
+  getBaremeFratrie() {
+    return this.api.get<BaremeFratrie[] | PaginatedResponse<BaremeFratrie>>(
+      '/eleves/bareme-fratrie/')
+      .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
+  creerLigneBareme(l: Partial<BaremeFratrie>) {
+    return this.api.post<BaremeFratrie>('/eleves/bareme-fratrie/', l);
+  }
+  majLigneBareme(id: string, l: Partial<BaremeFratrie>) {
+    return this.api.patch<BaremeFratrie>(`/eleves/bareme-fratrie/${id}/`, l);
+  }
+  supprimerLigneBareme(id: string) {
+    return this.api.delete<void>(`/eleves/bareme-fratrie/${id}/`);
+  }
+
+  /** Ce que le barème changerait pour cette famille. N'écrit rien. */
+  apercuBareme(familleId: string) {
+    return this.api.get<ApercuBareme>(`/eleves/familles/${familleId}/apercu-bareme/`);
+  }
+  appliquerBareme(familleId: string) {
+    return this.api.post<ApercuBareme>(`/eleves/familles/${familleId}/appliquer-bareme/`, {});
+  }
+
+  // ── Encaissement groupé ─────────────────────────────────────────────
+  /** Propose la répartition d'un versement, le plus ancien dû d'abord.
+   *  N'encaisse rien. */
+  repartirVersement(familleId: string, montant: number) {
+    return this.api.post<RepartitionVersement>(
+      `/eleves/familles/${familleId}/repartir/`, { montant });
+  }
+
+  /** Le reçu unique d'un versement groupé, édité APRÈS les règlements : il
+   *  ne promet que ce que la caisse a réellement reçu. */
+  recuGroupe(familleId: string, reference: string, taille: 'A5' | 'A4' = 'A5') {
+    return this.api.getBlob(`/eleves/familles/${familleId}/recu-groupe/`,
+                            { reference, taille });
   }
 
   getSections() {

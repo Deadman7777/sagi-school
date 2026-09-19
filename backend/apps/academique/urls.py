@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import (BulletinPDFView, NiveauScolaireViewSet, ClasseViewSet, TypeEvaluationViewSet,
+from .views import (BulletinPDFView, BulletinsClassePDFView, NiveauScolaireViewSet, ClasseViewSet, TypeEvaluationViewSet,
                     MatiereViewSet, EvaluationViewSet, NoteViewSet,
                     MoteurCalculView, BulletinView, AnalysePerformanceView,
                     BulletinsHistoriqueView, FichePedagogiqueView)
@@ -17,6 +17,8 @@ urlpatterns = router.urls + [
     path('calculer/',                        MoteurCalculView.as_view()),
     path('bulletin/<str:eleve_id>/<str:trimestre>/', BulletinView.as_view()),
     path('bulletin-pdf/<str:eleve_id>/<str:trimestre>/', BulletinPDFView.as_view()),
+    # Tous les bulletins d'une classe, deux par feuille A4.
+    path('bulletins-classe/<str:classe_id>/<str:trimestre>/', BulletinsClassePDFView.as_view()),
     path('analyse/',                         AnalysePerformanceView.as_view()),
     path('historique-bulletins/',            BulletinsHistoriqueView.as_view()),
     path('fiche-pedagogique/<str:eleve_id>/',     FichePedagogiqueView.as_view()),

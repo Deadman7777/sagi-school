@@ -28,6 +28,21 @@ class PaiementSerializer(serializers.ModelSerializer):
     organisme_nom = serializers.CharField(source='organisme.nom', read_only=True,
                                           default='')
 
+    def validate_payeur(self, payeur):
+        """Le payeur d'un règlement appartient à l'école qui encaisse.
+
+        Même précaution que pour la caisse : un identifiant venu d'ailleurs
+        rattacherait le versement d'une famille à une autre école.
+        """
+        if payeur is None:
+            return payeur
+        from core.tenant import get_tenant
+        request = self.context.get('request')
+        tenant = get_tenant(request) if request else None
+        if tenant and payeur.tenant_id != tenant.id:
+            raise serializers.ValidationError("Ce responsable n'appartient pas à l'école.")
+        return payeur
+
     def validate_caisse(self, caisse):
         """Une caisse d'une AUTRE école n'existe pas pour ce règlement."""
         if caisse is None:

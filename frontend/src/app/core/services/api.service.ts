@@ -54,4 +54,11 @@ export class ApiService {
     return this.http.get(`${this.base}${path}`,
                          { responseType: 'blob', params: toHttpParams(params) });
   }
+  /** Comme getBlob, mais rend la réponse entière : certains PDF portent une
+   *  information dans leurs en-têtes (combien d'élèves sont restés de côté). */
+  getBlobReponse(path: string, params?: ParamsRecord) {
+    return this.http.get(`${this.base}${path}`,
+                         { responseType: 'blob', observe: 'response',
+                           params: toHttpParams(params) });
+  }
 }

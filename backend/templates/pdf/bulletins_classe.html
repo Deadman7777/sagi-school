@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* ── PAGE A4 + marges réduites ── */
+  /* Chaque bulletin est rendu sur une DEMI-feuille A4 (210 x 148,5 mm).
+     La vue empile ensuite deux de ces demi-pages par feuille : la largeur
+     reste celle d'une A4, seule la hauteur est contrainte, donc le tableau
+     des notes garde exactement la mise en page du bulletin à l'unité. */
+  @page { size: 210mm 148.5mm; margin: 5mm 8mm; }
+
+  /* Tout est d'un cran plus serré que le bulletin à l'unité : ici le
+     bulletin dispose d'une demi-feuille, pas d'une feuille. */
+  body { font-family: Arial, sans-serif; font-size: 7pt; color: #1a1a1a; margin: 0; }
+
+  /* Le bulletin ne se coupe jamais entre 2 pages.
+     Pour l'impression "2 pages par feuille", 2 bulletins courts tiennent sur 1 A4. */
+  .bulletin { page-break-inside: avoid; }
+
+  /* ── EN-TÊTE ── */
+  .rep-line  { text-align: center; font-size: 6.5pt; color: #555; margin-bottom: 1pt; }
+  .school-name { text-align: center; font-size: 9pt; font-weight: bold; color: #1a3c5e; margin-bottom: 1pt; }
+  .school-sub  { text-align: center; font-size: 6.5pt; color: #555; margin-bottom: 2pt; }
+  .titre-bul   { text-align: center; font-size: 9pt; font-weight: bold; color: #1a3c5e; margin-bottom: 2pt; }
+  .sep-line    { border-bottom: 1.5pt solid #1a3c5e; margin-bottom: 2pt; }
+
+  /* ── TABLEAUX GÉNÉRAUX ── */
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .mb4 { margin-bottom: 2pt; }
+
+  /* ── INFO ÉLÈVE ── */
+  .tbl-info td { border: 0.75pt solid #b0bec5; padding: 1pt 4pt; font-size: 6.5pt; }
+  .lbl { color: #374151; font-size: 6pt; }
+  .val { font-weight: bold; color: #1a1a1a; }
+
+  /* ── STATS CLASSE ── */
+  .tbl-stats td { border: 0.75pt solid #90a4ae; padding: 1.5pt; text-align: center; background-color: #e8f0fe; }
+  .stat-val { font-size: 9pt; font-weight: bold; color: #1a3c5e; }
+  .stat-lbl { font-size: 5.5pt; color: #546e7a; }
+
+  /* ── TABLEAU NOTES ──
+     Toutes les cellules du corps sont centrées par défaut (notes, moy, pts, rg).
+     MATIÈRE et APPRÉC. sont remises à gauche via .left. */
+  .tbl-notes thead td { background-color: #1a3c5e; color: white; padding: 2pt 2pt;
+                        font-size: 6pt; font-weight: bold; text-align: center;
+                        border: 0.5pt solid #3a5a7e; }
+  .tbl-notes thead td.left { text-align: left; padding-left: 4pt; }
+  .tbl-notes tbody td { padding: 0.8pt 2pt; border: 0.5pt solid #dee2e6; font-size: 6.5pt;
+                        vertical-align: middle; text-align: center; }
+  .tbl-notes tbody td.left { text-align: left; padding-left: 4pt; }
+  .tbl-notes tbody tr.pair td { background-color: #f8f9fa; }
+  .tbl-notes tfoot td { background-color: #dce8ff; font-weight: bold; padding: 1pt 2pt;
+                        border: 0.5pt solid #b0c4de; border-top: 1.5pt solid #1a3c5e;
+                        font-size: 7pt; text-align: center; }
+  .tbl-notes tfoot td.left { text-align: left; padding-left: 4pt; }
+
+  .moy-val { font-weight: bold; color: #1a3c5e; }
+  .rang-txt { font-weight: bold; color: #7b3a00; font-size: 6.5pt; }
+  .mat-nom  { font-weight: bold; font-size: 6.5pt; }
+  .col-app  { font-size: 6.5pt; }
+
+  /* ── APPRÉCIATIONS ── */
+  .ap-ex  { color: #1b5e20; font-weight: bold; }
+  .ap-tb  { color: #0d47a1; font-weight: bold; }
+  .ap-bi  { color: #1565c0; }
+  .ap-ab  { color: #e65100; }
+  .ap-pa  { color: #bf360c; }
+  .ap-in  { color: #b71c1c; }
+
+  /* ── MENTION ── */
+  .mention-pos { border: 1pt solid #1565c0; padding: 2pt 5pt; margin-bottom: 2pt; background-color: #e3f2fd; }
+  .mention-neg { border: 1pt solid #e65100; padding: 2pt 5pt; margin-bottom: 2pt; background-color: #fff3e0; }
+  .final-pos   { border: 1pt solid #2e7d32; padding: 2pt 5pt; margin-bottom: 2pt; background-color: #e8f5e9; }
+  .final-neg   { border: 1pt solid #c62828; padding: 2pt 5pt; margin-bottom: 2pt; background-color: #ffebee; }
+  .mention-title { font-size: 6.5pt; font-weight: bold; text-transform: uppercase;
+                   letter-spacing: 0.3pt; margin-bottom: 2pt; }
+  .mention-text  { font-size: 8pt; font-weight: bold; color: #1a1a1a; }
+
+  /* ── SIGNATURES (compactes) ── */
+  .tbl-sig td { width: 33%; text-align: center; padding: 5pt 6pt 1pt; font-size: 6.5pt; }
+  .sig-line { border-top: 0.75pt solid #6b7280; padding-top: 3pt; color: #444; }
+
+  /* ── PIED ── */
+  .footer { font-size: 5.5pt; color: #6b7280; text-align: center; margin-top: 2pt;
+            border-top: 0.5pt solid #ddd; padding-top: 2pt; }
+
+/* ── UN BULLETIN PAR DEMI-PAGE ───────────────────────────────────────
+     Une classe de 40 élèves consommait 40 feuilles. On imprime deux
+     bulletins par feuille, mais pas en les empilant dans une page A4 : sous
+     xhtml2pdf « page-break-inside: avoid » n'est pas respecté et un bulletin
+     de dix matières se coupait en plein milieu, à cheval sur deux feuilles.
+     Chaque bulletin occupe donc sa propre demi-page, et l'assemblage deux
+     par feuille se fait sur le PDF (voir BulletinsClassePDFView).
+     ------------------------------------------------------------------ */
+  .saut { page-break-after: always; }
+</style>
+</head>
+<body>
+
+{% for corps in bulletins %}
+  <div{% if not forloop.last %} class="saut"{% endif %}>{{ corps|safe }}</div>
+{% endfor %}
+
+</body>
+</html>

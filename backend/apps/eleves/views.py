@@ -8,13 +8,15 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import (ChampFiche, Eleve, FormuleEleve, FormuleSection, Organisme,
-                     PriseEnChargeOrganisme, Section, Service)
+from .models import (BaremeFratrie, ChampFiche, Eleve, Famille, FormuleEleve, FormuleSection,
+                     Organisme, PriseEnChargeOrganisme, Section, Service)
 from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (ChampFicheSerializer, EleveSerializer, FormuleSectionSerializer, OrganismeSerializer,
+from .serializers import (BaremeFratrieSerializer, ChampFicheSerializer, EleveSerializer,
+                          FamilleSerializer,
+                          FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
 from django.db.models import Max
@@ -609,6 +611,10 @@ class EleveViewSet(viewsets.ModelViewSet):
         a_creer  = [l for l in rapport['lignes'] if l['statut'] == 'OK']
         reprises, montant_reprise = 0, 0.0
         impayes, montant_impaye = 0, 0.0
+        # Fratries : deux lignes portant la même valeur dans « Famille »
+        # entrent dans le même foyer. Résolu une fois par libellé, sinon cinq
+        # frères créeraient cinq familles homonymes.
+        familles_import = {}
         with transaction.atomic():
             attributeur = Attributeur(tenant, exercice)
             for ligne in a_creer:
@@ -618,6 +624,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                     date_entree=data.get('date_inscription'))
                 eleve = Eleve.objects.create(
                     tenant=tenant, exercice=exercice, **identite, **data,
+                    famille=self._famille_import(tenant, ligne.get('famille'),
+                                                 familles_import, data),
                 )
                 if ligne['montant_reprise'] > 0:
                     paiement = creer_paiement_reprise(
@@ -643,6 +651,41 @@ class EleveViewSet(viewsets.ModelViewSet):
                          'reprises': reprises, 'montant_reprise': montant_reprise,
                          'impayes_anterieurs': impayes,
                          'montant_impaye_anterieur': round(montant_impaye, 2)})
+
+    @staticmethod
+    def _famille_import(tenant, libelle, cache, data):
+        """Le foyer désigné par la colonne « Famille » d'une ligne d'import.
+
+        Le libellé est ce que l'école a tapé : un code déjà attribué
+        (« FAM-0007 ») ou un nom (« Famille NDIAYE »). On réutilise la famille
+        existante avant d'en créer une — sinon un deuxième import ferait
+        doublon et la fratrie se retrouverait coupée en deux.
+        """
+        from .models import Famille, ResponsableFamille
+
+        libelle = (libelle or '').strip()
+        if not libelle:
+            return None
+        if libelle in cache:
+            return cache[libelle]
+
+        famille = (Famille.objects.filter(tenant=tenant, code__iexact=libelle).first()
+                   or Famille.objects.filter(tenant=tenant, nom__iexact=libelle).first())
+        if famille is None:
+            famille = Famille.objects.create(tenant=tenant, nom=libelle)
+            # Le contact de la première ligne rencontrée : l'école a saisi les
+            # parents dans son fichier, autant ne pas la faire recommencer.
+            nom = data.get('nom_pere') or data.get('nom_tuteur') or data.get('nom_mere') or ''
+            tel = (data.get('telephone_pere') or data.get('telephone_tuteur')
+                   or data.get('telephone_mere') or '')
+            if nom or tel:
+                lien = ('PERE' if data.get('nom_pere') or data.get('telephone_pere')
+                        else 'TUTEUR' if data.get('nom_tuteur') or data.get('telephone_tuteur')
+                        else 'MERE')
+                ResponsableFamille.objects.create(tenant=tenant, famille=famille, nom=nom,
+                                                  lien=lien, telephone=tel, principal=True)
+        cache[libelle] = famille
+        return famille
 
     @action(detail=True, methods=['get', 'post'], url_path='corriger-reprise')
     def corriger_reprise(self, request, pk=None):
@@ -1259,12 +1302,21 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         from .rappels import eleves_a_rappeler, fenetre_rappel
 
+        from .rappels import groupes_a_rappeler
+
         tenant = get_tenant(request)
         exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({'fenetre': fenetre_rappel(tenant), 'lignes': [],
-                             'nb': 0, 'total_exigible': 0})
-        return Response(eleves_a_rappeler(tenant, exercice))
+                             'nb': 0, 'nb_messages': 0, 'total_exigible': 0})
+        detail = eleves_a_rappeler(tenant, exercice)
+        # Le nombre de MESSAGES à côté du nombre d'élèves : c'est ce que
+        # l'école va payer, et l'écart entre les deux chiffres est tout le
+        # bénéfice du regroupement des fratries.
+        groupes = groupes_a_rappeler(tenant, exercice)
+        return Response({**detail,
+                         'nb_messages': groupes['nb_messages'],
+                         'groupes': groupes['groupes']})
 
     @action(detail=False, methods=['post'], url_path='rappels/envoyer')
     def envoyer_rappels_action(self, request):
@@ -2899,3 +2951,315 @@ class GardeSoirView(APIView):
         n, _ = GardeSoir.objects.filter(tenant=get_tenant(request), pk=request.query_params.get('id')).delete()
         return Response(status=204 if n else 404)
 
+
+
+class FamilleViewSet(viewsets.ModelViewSet):
+    """Les foyers payeurs : une fratrie, un interlocuteur, une situation.
+
+    Regrouper ne change aucun montant — le dû reste calculé fiche par fiche.
+    Ce que l'école y gagne : un seul jeu de coordonnées à tenir à jour, le
+    total de ce que la famille doit, et un seul rappel au lieu de cinq.
+    """
+    serializer_class   = FamilleSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends    = [filters.SearchFilter]
+    search_fields      = ['nom', 'code', 'responsables__nom', 'responsables__telephone']
+
+    def get_queryset(self):
+        return (Famille.objects.filter(tenant=get_tenant(self.request))
+                .prefetch_related('responsables')
+                # Le compte d'enfants est affiché sur chaque ligne : sans
+                # annotation, la liste fait une requête par famille.
+                .annotate(nb_enfants_sql=Count('eleves', distinct=True))
+                # Tri explicite : l'annotate ajoute un GROUP BY qui annule
+                # l'ordre du Meta aux yeux du paginateur, et deux pages
+                # successives se mettent à répéter ou omettre des lignes.
+                .order_by('nom'))
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprimer une famille ne supprime jamais ses élèves.
+
+        Le SET_NULL du modèle détache les fiches, qui retrouvent leurs
+        contacts individuels. On le dit explicitement plutôt que de laisser
+        l'école le découvrir : cinq enfants qui « perdent leur famille » sans
+        prévenir ressemblent à une perte de données.
+        """
+        from core.models import log_audit
+
+        famille = self.get_object()
+        nb = famille.eleves.count()
+        reponse = super().destroy(request, *args, **kwargs)
+        if nb:
+            log_audit(request, 'SUPPRESSION', 'Famille', famille.id,
+                      f'{famille.nom} — {nb} élève(s) détaché(s)')
+        return reponse
+
+    @action(detail=True, methods=['get'])
+    def situation(self, request, pk=None):
+        """Ce que la famille doit et a payé, enfant par enfant."""
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import situation_famille
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        return Response(situation_famille(self.get_object(), exercice))
+
+    @action(detail=False, methods=['get'], url_path='fratries-probables')
+    def fratries_probables_action(self, request):
+        """Les fratries que l'école peut regrouper d'un coup.
+
+        Une école qui arrive avec deux mille fiches ne va pas créer ses
+        familles une par une : on lui propose les groupes déduits des numéros
+        de parents, à elle de valider.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import fratries_probables
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'groupes': [], 'nb': 0, 'nb_eleves': 0})
+        groupes = fratries_probables(tenant, exercice)
+        return Response({
+            'groupes':   groupes,
+            'nb':        len(groupes),
+            # Ce que l'école économise en saisie si elle accepte tout.
+            'nb_eleves': sum(g['nb'] for g in groupes),
+        })
+
+    @action(detail=False, methods=['post'])
+    def regrouper(self, request):
+        """Crée d'un coup les familles validées par l'école.
+
+        Un élève déjà rattaché est ignoré plutôt que déplacé : l'écran peut
+        être rechargé, revalidé deux fois, sans jamais défaire un regroupement
+        que l'école a corrigé à la main entre-temps.
+        """
+        from core.models import log_audit
+
+        from .models import ResponsableFamille
+
+        tenant  = get_tenant(request)
+        groupes = request.data.get('groupes') or []
+        if not groupes:
+            return Response({'error': "Aucun groupe à créer."}, status=400)
+
+        creees, rattaches, ignores = [], 0, 0
+        for groupe in groupes:
+            ids = groupe.get('eleve_ids') or []
+            libres = list(Eleve.objects.filter(tenant=tenant, id__in=ids,
+                                               famille__isnull=True))
+            ignores += len(ids) - len(libres)
+            if not libres:
+                continue
+            famille = Famille.objects.create(
+                tenant=tenant, nom=(groupe.get('nom') or 'Famille').strip())
+            contact = groupe.get('contact') or {}
+            if contact.get('nom') or contact.get('telephone'):
+                ResponsableFamille.objects.create(
+                    tenant=tenant, famille=famille, nom=contact.get('nom') or '',
+                    lien=contact.get('lien') or 'PERE',
+                    telephone=contact.get('telephone') or '', principal=True)
+            Eleve.objects.filter(tenant=tenant, id__in=[e.id for e in libres]).update(
+                famille=famille)
+            rattaches += len(libres)
+            creees.append({'id': str(famille.id), 'code': famille.code,
+                           'nom': famille.nom, 'nb': len(libres)})
+
+        log_audit(request, 'CREATION', 'Famille', '',
+                  f'{len(creees)} famille(s) créée(s), {rattaches} élève(s) rattaché(s)')
+        return Response({'familles': creees, 'nb_familles': len(creees),
+                         'nb_eleves': rattaches, 'nb_ignores': ignores})
+
+    @action(detail=True, methods=['get'], url_path='apercu-bareme')
+    def apercu_bareme_action(self, request, pk=None):
+        """Ce que le barème fratrie changerait pour cette famille.
+
+        Rien n'est écrit : les rangs bougent dès qu'un enfant arrive ou part,
+        et l'école doit voir ce qui se déplace avant de valider.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import apercu_bareme
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        return Response(apercu_bareme(self.get_object(), exercice))
+
+    @action(detail=True, methods=['post'], url_path='appliquer-bareme')
+    def appliquer_bareme_action(self, request, pk=None):
+        """Applique le barème à la famille : écrit la prise en charge FRATRIE.
+
+        `get_exercice` est appelé SANS la requête : c'est une écriture, elle
+        ne doit jamais atterrir sur un exercice clôturé qu'on consultait.
+        """
+        from apps.comptabilite.views import get_exercice
+        from core.models import log_audit
+
+        from .familles import appliquer_bareme
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        famille = self.get_object()
+        rapport = appliquer_bareme(famille, exercice)
+        if rapport['nb_applique']:
+            log_audit(request, 'MODIFICATION', 'Famille', famille.id,
+                      f"Barème fratrie appliqué — {rapport['nb_applique']} fiche(s)")
+        return Response(rapport)
+
+    @action(detail=True, methods=['post'])
+    def repartir(self, request, pk=None):
+        """Propose la répartition d'un versement entre les enfants.
+
+        N'encaisse rien : l'école modifie la proposition, puis chaque ligne
+        part par le chemin habituel d'un règlement, avec ses écritures. Ce
+        n'est pas une coquetterie — dupliquer ici la constatation comptable
+        aurait donné deux façons d'écrire un encaissement, et la seconde
+        aurait fini par diverger de la première.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import repartir_versement
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        try:
+            montant = float(request.data.get('montant') or 0)
+        except (TypeError, ValueError):
+            montant = 0
+        if montant <= 0:
+            return Response({'error': "Indiquez le montant versé."}, status=400)
+        return Response(repartir_versement(self.get_object(), exercice, montant))
+
+    @action(detail=True, methods=['get'], url_path='recu-groupe')
+    def recu_groupe(self, request, pk=None):
+        """Le reçu unique d'un versement groupé, à partir de sa référence.
+
+        Le reçu est édité APRÈS les règlements, sur ce qui a réellement été
+        encaissé : si l'un des règlements a échoué, le papier remis à la
+        famille ne promet pas ce que la caisse n'a pas reçu.
+        """
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from xhtml2pdf import pisa
+
+        from apps.paiements.models import Paiement
+
+        tenant  = get_tenant(request)
+        famille = self.get_object()
+        reference = (request.query_params.get('reference') or '').strip()
+        if not reference:
+            return HttpResponse("Référence du versement manquante.", status=400)
+
+        paiements = list(Paiement.objects.filter(
+            tenant=tenant, reference_groupe=reference, statut='ACTIF')
+            .select_related('eleve', 'eleve__classe', 'eleve__section', 'payeur')
+            .order_by('eleve__nom_complet'))
+        if not paiements:
+            return HttpResponse("Aucun règlement pour cette référence.", status=404)
+
+        lignes = []
+        for paiement in paiements:
+            # Les montants du détail s'écrivent comme ceux de la colonne
+            # (sans séparateur) : deux formats dans le même reçu se lisent
+            # comme deux chiffres différents.
+            postes = []
+            if paiement.montant_reliquat:
+                postes.append(f'impayé antérieur {paiement.montant_reliquat:.0f}')
+            if paiement.montant_inscription:
+                postes.append(f'{paiement.eleve.libelle_frais_entree.lower()} '
+                              f'{paiement.montant_inscription:.0f}')
+            if paiement.montant_mensualite:
+                mois = paiement.mois_regles or []
+                postes.append(f'mensualités {paiement.montant_mensualite:.0f}'
+                              + (f' ({len(mois)} mois)' if mois else ''))
+            eleve = paiement.eleve
+            lignes.append({
+                'nom_complet': eleve.nom_complet,
+                'classe': eleve.classe.nom if eleve.classe_id else (
+                          eleve.section.nom if eleve.section else ''),
+                'no_piece': paiement.no_piece,
+                'detail': ', '.join(postes) or 'règlement',
+                'montant': float(paiement.total),
+            })
+
+        modes = sorted({p.get_mode_paiement_display() for p in paiements})
+        contexte = {
+            'tenant':  tenant,
+            'famille': famille,
+            'lignes':  lignes,
+            'total':   round(sum(l['montant'] for l in lignes), 2),
+            'date':    paiements[0].date_paiement,
+            'payeur':  paiements[0].payeur.nom if paiements[0].payeur_id else '',
+            'modes':   ', '.join(modes),
+            # Les huit premiers caractères suffisent à retrouver le versement
+            # et tiennent sur une ligne de reçu.
+            'reference_courte': f'VERSEMENT {str(reference)[:8].upper()}',
+            'aujourdhui': timezone.localdate(),
+            'page_size': 'A4 portrait' if (
+                request.query_params.get('taille') or 'A5').upper() == 'A4' else 'A5 portrait',
+        }
+        html_str = render_to_string('pdf/recu_famille.html', contexte)
+        buffer = BytesIO()
+        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+            return HttpResponse('Erreur génération du reçu.', status=500)
+        reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        reponse['Content-Disposition'] = (
+            f'inline; filename="recu_{famille.code}_{str(reference)[:8]}.pdf"')
+        return reponse
+
+    @action(detail=True, methods=['post'])
+    def rattacher(self, request, pk=None):
+        """Rattache des élèves à cette famille (ou les en détache).
+
+        L'école regroupe depuis la fiche de la famille, où elle voit déjà la
+        fratrie : rouvrir cinq fiches élèves pour cocher cinq fois la même
+        case est précisément la corvée que ce lot supprime.
+        """
+        from core.models import log_audit
+
+        famille = self.get_object()
+        tenant  = get_tenant(request)
+        ids     = request.data.get('eleve_ids') or []
+        detacher = bool(request.data.get('detacher'))
+        if not ids:
+            return Response({'error': "Aucun élève indiqué."}, status=400)
+
+        qs = Eleve.objects.filter(tenant=tenant, id__in=ids)
+        nb = qs.update(famille=None if detacher else famille)
+        log_audit(request, 'MODIFICATION', 'Famille', famille.id,
+                  f"{nb} élève(s) {'détaché(s) de' if detacher else 'rattaché(s) à'} "
+                  f'{famille.nom}')
+        return Response({'nb': nb, 'famille': famille.nom})
+
+
+class BaremeFratrieViewSet(viewsets.ModelViewSet):
+    """Le barème de réduction accordé aux frères et sœurs.
+
+    Une ligne par rang. Ce barème ne calcule aucun dû : il produit la prise en
+    charge des fiches, que le calcul unique du dû déduit ensuite.
+    """
+    serializer_class   = BaremeFratrieSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return BaremeFratrie.objects.filter(tenant=get_tenant(self.request)).order_by('rang')
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))

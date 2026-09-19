@@ -86,6 +86,10 @@ class Eleve(TenantModel):
         ('ORPHELIN',        'Orphelin'),
         ('HANDICAP',        'Handicap'),
         ('FAMILLE_DEMUNIE', 'Famille démunie'),
+        # Réduction accordée aux frères et sœurs. C'est bien une REMISE et non
+        # une créance sur un tiers : l'école y renonce, personne ne la paie —
+        # d'où sa place ici plutôt que du côté des organismes payeurs.
+        ('FRATRIE',         'Réduction fratrie'),
         ('AUTRE',           'Autre'),
     ]
     TYPE_PEC_CHOICES = [
@@ -136,6 +140,22 @@ class Eleve(TenantModel):
     genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance        = models.DateField(null=True, blank=True)
     lieu_naissance        = models.CharField(max_length=200, blank=True)
+    # ── Famille (fratrie) ─────────────────────────────────────────────────
+    # Le foyer payeur, partagé par les frères et sœurs. Facultatif et le
+    # restera : les écoles déjà en service ont des milliers de fiches sans
+    # famille, et l'import Excel ne la connaît pas. Tant qu'il est vide, tout
+    # se comporte exactement comme avant.
+    #
+    # Les champs parents ci-dessous ne disparaissent pas pour autant : ils
+    # portent les données déjà saisies, et un enfant confié a parfois un
+    # contact propre. Pour savoir QUI appeler, il n'existe qu'une réponse,
+    # rendue par `contact_effectif()` (apps/eleves/familles.py) — jamais une
+    # lecture directe de ces champs, sinon deux écrans donneraient deux
+    # numéros différents pour le même enfant.
+    famille               = models.ForeignKey('Famille', null=True, blank=True,
+                                              on_delete=models.SET_NULL,
+                                              related_name='eleves',
+                                              help_text='Foyer payeur commun à la fratrie')
     nom_pere              = models.CharField(max_length=200, blank=True)
     telephone_pere        = models.CharField(max_length=20, blank=True)
     profession_pere       = models.CharField(max_length=150, blank=True)
@@ -1195,3 +1215,167 @@ class ModeleCertificat(TenantModel):
 
     def __str__(self):
         return f"{self.tenant} — {self.nom_fichier}"
+
+
+class Famille(TenantModel):
+    """Le foyer qui paie, commun à une fratrie.
+
+    Mr NDIAYE a cinq enfants dans l'école, à cinq niveaux différents. Sans ce
+    regroupement, ses coordonnées sont retapées cinq fois — et divergent : un
+    numéro à jour sur une fiche, périmé sur les quatre autres. L'école ne sait
+    pas ce que la famille lui doit au total, et le module de rappels envoie
+    cinq SMS au même numéro le même jour.
+
+    La famille est délibérément HORS exercice, contrairement à la fiche élève
+    qui est annuelle : le père reste le même d'une année sur l'autre. Au
+    renouvellement, la nouvelle fiche hérite de la famille de la précédente et
+    l'école ne regroupe qu'une fois.
+
+    Ce n'est PAS un `Organisme` : un organisme est un tiers qui DOIT de
+    l'argent à l'école (une bourse est une créance). La famille est le
+    débiteur normal de la scolarité — la regrouper ne change aucun montant.
+    """
+    code = models.CharField(max_length=20, blank=True,
+                            help_text='Identifiant de la famille (FAM-0001)')
+    # Le nom du foyer, tel que l'école le prononce : « Famille NDIAYE ».
+    # Séparé des responsables, car une famille recomposée peut porter un nom
+    # qui n'est celui d'aucun des deux parents.
+    nom          = models.CharField(max_length=200)
+    adresse      = models.TextField(blank=True)
+    observations = models.TextField(blank=True)
+    actif        = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'familles'
+        ordering = ['nom']
+        constraints = [
+            # Séquentiel généré PAR école : unique par tenant, jamais
+            # globalement — sinon la première famille d'une nouvelle école
+            # (FAM-0001) entre en collision avec celle d'une école existante.
+            models.UniqueConstraint(fields=['tenant', 'code'],
+                                    name='uniq_code_famille_par_tenant'),
+        ]
+
+    def __str__(self):
+        return self.nom
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            from .familles import prochain_code_famille
+            self.code = prochain_code_famille(self.tenant)
+        super().save(*args, **kwargs)
+
+    @property
+    def responsable_principal(self):
+        """Celui qu'on appelle. À défaut de principal désigné, le premier
+        responsable saisi : une famille sans contact joignable ne sert à rien."""
+        responsables = list(self.responsables.all())
+        for r in responsables:
+            if r.principal:
+                return r
+        return responsables[0] if responsables else None
+
+
+class ResponsableFamille(TenantModel):
+    """Une personne qui répond de la famille : père, mère, tuteur…
+
+    Une table et non deux champs figés sur la famille : les parents séparés
+    règlent chacun pour une partie des enfants, et l'école doit pouvoir noter
+    qui a payé (voir Paiement.payeur). Une famille peut aussi n'avoir qu'un
+    seul responsable, ou trois.
+    """
+    LIEN_CHOICES = [
+        ('PERE',   'Père'),
+        ('MERE',   'Mère'),
+        ('TUTEUR', 'Tuteur'),
+        ('AUTRE',  'Autre'),
+    ]
+    famille    = models.ForeignKey(Famille, on_delete=models.CASCADE,
+                                   related_name='responsables')
+    nom        = models.CharField(max_length=200)
+    lien       = models.CharField(max_length=10, choices=LIEN_CHOICES, default='PERE')
+    telephone  = models.CharField(max_length=20, blank=True)
+    telephone2 = models.CharField(max_length=20, blank=True)
+    email      = models.EmailField(blank=True)
+    profession = models.CharField(max_length=150, blank=True)
+    residence  = models.CharField(max_length=200, blank=True)
+    # Celui que l'école appelle et qui reçoit les rappels. Un seul par
+    # famille : deux « principaux » rouvriraient la question « qui appeler ? »
+    # que ce regroupement est censé fermer.
+    principal  = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'responsables_famille'
+        ordering = ['-principal', 'nom']
+        constraints = [
+            models.UniqueConstraint(fields=['famille'], condition=models.Q(principal=True),
+                                    name='un_seul_principal_par_famille'),
+        ]
+
+    def __str__(self):
+        return f'{self.nom} ({self.get_lien_display()})'
+
+
+class BaremeFratrie(TenantModel):
+    """Ce que l'école accorde au 2e, 3e, 4e… enfant d'une même famille.
+
+    Une ligne par rang, avec sa forme : l'école raisonne tantôt en pourcentage
+    (« le 3e à moitié prix »), tantôt en montant (« 5 000 F de moins par
+    mois »), et parfois différemment sur l'inscription et sur les mensualités.
+    Imposer une seule forme aurait obligé la moitié des écoles à convertir
+    leur barème à la main à chaque changement de tarif.
+
+    La ligne du rang le plus élevé vaut pour tous les rangs au-dessus : une
+    école qui écrit « 4e et suivants » saisit une ligne 4, pas une ligne par
+    enfant supplémentaire.
+
+    Ce barème ne calcule aucun dû. Il PRODUIT la prise en charge des fiches
+    (`pec_inscription`, `pec_mensualite`, motif FRATRIE) — le dû continue de
+    se calculer en un seul endroit, « frais − prise en charge ». Un troisième
+    terme réservé aux fratries aurait fini par diverger des deux autres.
+    """
+    FORME_CHOICES = [
+        ('POURCENTAGE', 'Pourcentage'),
+        ('MONTANT',     'Montant fixe (FCFA)'),
+    ]
+    # 2 = deuxième enfant de la famille. Le rang 1 (l'aîné) peut être saisi :
+    # quelques écoles accordent déjà une remise dès le premier enfant.
+    rang = models.PositiveSmallIntegerField(
+        help_text="Rang de l'enfant dans la famille (2 = deuxième enfant)")
+    forme_inscription = models.CharField(max_length=12, choices=FORME_CHOICES,
+                                         default='POURCENTAGE')
+    valeur_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    forme_mensualite  = models.CharField(max_length=12, choices=FORME_CHOICES,
+                                         default='POURCENTAGE')
+    valeur_mensualite = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'baremes_fratrie'
+        ordering = ['rang']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'rang'],
+                                    name='uniq_bareme_fratrie_par_rang'),
+        ]
+
+    def __str__(self):
+        return f'Rang {self.rang}'
+
+    def reduction(self, forme, valeur, tarif):
+        """Montant de la remise sur un tarif donné, plafonné à ce tarif.
+
+        Le plafond n'est pas cosmétique : une remise supérieure au tarif
+        rendrait un dû négatif, et l'élève apparaîtrait créditeur.
+        """
+        tarif = float(tarif or 0)
+        valeur = float(valeur or 0)
+        if tarif <= 0 or valeur <= 0:
+            return 0.0
+        montant = tarif * valeur / 100 if forme == 'POURCENTAGE' else valeur
+        return round(min(montant, tarif), 2)
+
+    def sur_inscription(self, tarif):
+        return self.reduction(self.forme_inscription, self.valeur_inscription, tarif)
+
+    def sur_mensualite(self, tarif):
+        return self.reduction(self.forme_mensualite, self.valeur_mensualite, tarif)

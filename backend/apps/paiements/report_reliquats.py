@@ -44,6 +44,10 @@ CHAMPS_IDENTITE = (
     'date_naissance', 'lieu_naissance',
     'nom_pere', 'telephone_pere', 'nom_mere', 'telephone_mere',
     'nom_tuteur', 'telephone_tuteur', 'lien_tuteur',
+    # La famille suit l'enfant : le foyer payeur ne change pas d'une année sur
+    # l'autre, et l'école n'a à regrouper qu'une fois. Sans cette ligne, toute
+    # la fratrie se défait à chaque passage d'exercice.
+    'famille',
     'etat_sante', 'observations_sante',
     'statut',
     'prise_en_charge', 'obs_prise_en_charge',

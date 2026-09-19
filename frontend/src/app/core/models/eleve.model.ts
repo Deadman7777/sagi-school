@@ -316,3 +316,141 @@ export interface SuiviOrganisme {
   eleves: { eleve_id: string; matricule: string; nom_complet: string;
             reference: string; couvert: number; recu: number; reste: number }[];
 }
+
+
+/** Une personne qui répond de la famille : père, mère, tuteur…
+ *  Une liste et non deux champs figés : les parents séparés règlent chacun
+ *  pour une partie des enfants, et l'école doit pouvoir noter qui a payé. */
+export interface ResponsableFamille {
+  id?: string;
+  nom: string;
+  lien: 'PERE' | 'MERE' | 'TUTEUR' | 'AUTRE';
+  lien_libelle?: string;
+  telephone: string;
+  telephone2?: string;
+  email?: string;
+  profession?: string;
+  residence?: string;
+  /** Celui que l'école appelle. Un seul par famille. */
+  principal: boolean;
+}
+
+/** Le foyer payeur, commun à une fratrie.
+ *  Regrouper ne change AUCUN montant : le dû reste calculé fiche par fiche.
+ *  Ce que l'école y gagne, c'est un seul jeu de coordonnées à tenir à jour,
+ *  le total de ce que la famille doit, et un seul rappel au lieu de cinq. */
+export interface Famille {
+  id: string;
+  code: string;
+  nom: string;
+  adresse: string;
+  observations: string;
+  actif: boolean;
+  responsables: ResponsableFamille[];
+  nb_enfants: number;
+  contact: { nom: string; telephone: string; lien: string } | null;
+}
+
+/** Ce que la famille doit et a payé, enfant par enfant. */
+export interface SituationFamille {
+  famille_id: string;
+  code: string;
+  nom: string;
+  nb_enfants: number;
+  enfants: {
+    eleve_id: string;
+    matricule: string;
+    nom_complet: string;
+    classe: string;
+    statut: string;
+    total_attendu: number;
+    total_paye: number;
+    reste_a_payer: number;
+  }[];
+  total_attendu: number;
+  total_paye: number;
+  reste_a_payer: number;
+}
+
+
+/** Une fratrie déduite des numéros de parents, que l'école doit valider.
+ *  Le rapprochement se fait sur le TÉLÉPHONE et jamais sur le seul nom :
+ *  rapprocher tous les NDIAYE d'une école ferait une famille de quarante
+ *  enfants sans lien entre eux. */
+export interface FratrieProbable {
+  cle: string;
+  nom_propose: string;
+  /** SURE = un seul nom de famille dans le groupe. A_VERIFIER = plusieurs
+   *  (famille recomposée, ou deux foyers qui se partagent un numéro). */
+  confiance: 'SURE' | 'A_VERIFIER';
+  noms_famille: string[];
+  contact: { nom: string; telephone: string; lien: string };
+  eleves: { id: string; nom_complet: string; matricule: string; classe: string }[];
+  nb: number;
+}
+
+
+/** Une ligne du barème de réduction fratrie : ce que l'école accorde au 2e,
+ *  3e, 4e… enfant. La ligne du rang le plus élevé vaut pour tous les rangs
+ *  au-dessus (« 4e et suivants » = une seule ligne).
+ *
+ *  Ce barème ne calcule aucun dû : il PRODUIT la prise en charge des fiches,
+ *  que le calcul unique du dû déduit ensuite. */
+export interface BaremeFratrie {
+  id?: string;
+  rang: number;
+  forme_inscription: 'POURCENTAGE' | 'MONTANT';
+  valeur_inscription: number;
+  forme_mensualite: 'POURCENTAGE' | 'MONTANT';
+  valeur_mensualite: number;
+  actif: boolean;
+}
+
+/** Ce que le barème changerait pour une famille, avant d'écrire quoi que ce
+ *  soit : les rangs bougent dès qu'un enfant arrive ou part. */
+export interface ApercuBareme {
+  famille_id: string;
+  nom: string;
+  bareme_defini: boolean;
+  lignes: {
+    eleve_id: string;
+    nom_complet: string;
+    classe: string;
+    rang: number;
+    actuel: { inscription: number; mensualite: number; motif: string };
+    propose: { inscription: number; mensualite: number };
+    change: boolean;
+    /** Prise en charge d'un autre motif (orphelin, handicap…) : jamais
+     *  écrasée par le barème, l'école tranche. */
+    protege: boolean;
+  }[];
+  nb_change: number;
+  nb_protege: number;
+  nb_applique?: number;
+}
+
+
+/** Proposition de répartition d'un versement entre les enfants d'une famille.
+ *  Rien n'est encaissé : chaque ligne devient ensuite un règlement normal,
+ *  écrit par le chemin habituel, avec ses écritures. */
+export interface RepartitionVersement {
+  famille_id: string;
+  nom: string;
+  montant: number;
+  lignes: {
+    eleve_id: string;
+    nom_complet: string;
+    classe: string;
+    montant_reliquat: number;
+    montant_inscription: number;
+    montant_mensualite: number;
+    mois_regles: number[];
+    detail: { libelle: string; montant: number }[];
+    total: number;
+  }[];
+  reparti: number;
+  /** Ce que le versement dépasse des échéances échues : avance sur les mois
+   *  à venir, ou monnaie à rendre — l'école décide. */
+  non_impute: number;
+  nb_enfants: number;
+}

@@ -49,6 +49,7 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
     quitté l'établissement au titre de la scolarité de l'année.
     """
     from .echeancier import construire_echeancier, precharger
+    from .familles import contact_effectif
     from .models import Eleve
     from .parcours import STATUTS_SORTIE
 
@@ -56,7 +57,11 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
     lignes = []
     qs = precharger(
         Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
-        .exclude(statut__in=STATUTS_SORTIE))
+        .exclude(statut__in=STATUTS_SORTIE)
+        # Le contact passe par la famille et ses responsables : sans ce
+        # préchargement, une école de 500 élèves ajoute un millier de
+        # requêtes à l'écran des rappels.
+        .select_related('famille').prefetch_related('famille__responsables'))
 
     for eleve in qs:
         ech = construire_echeancier(eleve, today=today)
@@ -66,17 +71,23 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
         if synth['total_exigible_famille'] < seuil:
             continue
         retard_mois = [l for l in ech['lignes'] if l['echu'] and l['reste'] > 0]
+        contact = contact_effectif(eleve)
         lignes.append({
             'eleve_id':    str(eleve.id),
             'matricule':   eleve.matricule or '',
             'nom_complet': eleve.nom_complet,
             'classe':      eleve.classe.nom if eleve.classe_id else (
                            eleve.section.nom if eleve.section else ''),
-            # Le tuteur d'abord : c'est lui qu'on appelle quand il est renseigné.
-            'contact':     (eleve.telephone_tuteur or eleve.telephone_pere
-                            or eleve.telephone_mere or ''),
-            'contact_nom': (eleve.nom_tuteur or eleve.nom_pere
-                            or eleve.nom_mere or ''),
+            # Qui appeler : une seule réponse, rendue par contact_effectif
+            # (le responsable de la famille quand la fratrie est regroupée,
+            # sinon le tuteur, le père, la mère).
+            'contact':     contact['telephone'],
+            'contact_nom': contact['nom'],
+            # De quel côté vient ce numéro : l'école voit tout de suite les
+            # fiches restées sur un contact individuel.
+            'contact_origine': contact['origine'],
+            'famille_id':   str(eleve.famille_id) if eleve.famille_id else None,
+            'famille_nom':  eleve.famille.nom if eleve.famille_id else '',
             'nb_mois_retard':   len(retard_mois),
             'mois_retard':      [l['nom'] for l in retard_mois],
             'retards':          synth['retards_famille'],
@@ -90,6 +101,60 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
         'lignes':         lignes,
         'nb':             len(lignes),
         'total_exigible': round(sum(l['total_exigible'] for l in lignes), 2),
+    }
+
+
+def groupes_a_rappeler(tenant, exercice, today=None, seuil=1.0):
+    """Les DESTINATAIRES à relancer, et non les élèves.
+
+    Un père de cinq enfants recevait cinq SMS le même jour, à la même heure,
+    sur le même numéro. L'école payait cinq segments et passait pour
+    désorganisée auprès de la famille qu'elle relance — exactement ce qui
+    décrédibilise les rappels suivants.
+
+    Un groupe = une famille VALIDÉE par l'école (voir le regroupement des
+    fratries), jamais un simple numéro partagé : deux foyers peuvent se
+    partager un téléphone, et leur écrire « vos 3 enfants » serait faux. Les
+    élèves sans famille restent donc un message chacun, comme avant.
+
+    Le numéro entre aussi dans la clé : une famille dont aucun responsable ne
+    porte de téléphone retombe sur les contacts des fiches, qui peuvent
+    différer d'un enfant à l'autre — on n'écrirait pas au bon parent.
+    """
+    detail = eleves_a_rappeler(tenant, exercice, today, seuil)
+    groupes, index = [], {}
+    for ligne in detail['lignes']:
+        cle = (ligne['famille_id'], ligne['contact']) if ligne['famille_id'] else \
+              ('eleve', ligne['eleve_id'])
+        groupe = index.get(cle)
+        if groupe is None:
+            groupe = {
+                'famille_id':     ligne['famille_id'],
+                'famille_nom':    ligne['famille_nom'],
+                'contact':        ligne['contact'],
+                'contact_nom':    ligne['contact_nom'],
+                'eleves':         [],
+                'total_exigible': 0.0,
+            }
+            index[cle] = groupe
+            groupes.append(groupe)
+        groupe['eleves'].append(ligne)
+        groupe['total_exigible'] = round(groupe['total_exigible'] + ligne['total_exigible'], 2)
+
+    for groupe in groupes:
+        groupe['nb_eleves'] = len(groupe['eleves'])
+        # Nom porté par le message quand le groupe ne compte qu'un enfant :
+        # une famille dont un seul enfant est en retard reçoit le rappel
+        # nominatif habituel, pas « vos 1 enfants ».
+        groupe['nom_complet'] = groupe['eleves'][0]['nom_complet']
+    groupes.sort(key=lambda g: g['total_exigible'], reverse=True)
+    return {
+        'fenetre':        detail['fenetre'],
+        'groupes':        groupes,
+        # Ce que l'école va réellement payer, et pour combien d'élèves.
+        'nb_messages':    len(groupes),
+        'nb_eleves':      len(detail['lignes']),
+        'total_exigible': detail['total_exigible'],
     }
 
 
@@ -108,9 +173,17 @@ def composer_message(tenant, ligne, today=None):
     """
     today = today or datetime.date.today()
     gabarit = (getattr(tenant, 'rappel_message', '') or '').strip() or MESSAGE_DEFAUT
+    # Une fratrie reçoit UN message : « la scolarite de vos 4 enfants… ». On
+    # réutilise le gabarit de l'école au lieu d'en réclamer un second — celle
+    # qui a écrit le sien n'a rien à reconfigurer, et « {eleve} » garde un
+    # sens dans les deux cas. Les prénoms ne sont pas listés : cinq noms
+    # complets feraient basculer le SMS sur un segment de plus, facturé.
+    nb_enfants = ligne.get('nb_eleves', 1)
     valeurs = {
         'ecole':   tenant.nom,
-        'eleve':   ligne['nom_complet'],
+        'eleve':   (ligne['nom_complet'] if nb_enfants <= 1
+                    else f'vos {nb_enfants} enfants'),
+        'nb':      nb_enfants,
         'montant': f"{ligne['total_exigible']:,.0f}".replace(',', ' '),
         'mois':    f"{today.month:02d}/{today.year}",
         'limite':  f"{int(getattr(tenant, 'rappel_jour_limite', 10) or 10)}",
@@ -196,31 +269,49 @@ def envoyer_rappels(tenant, exercice, today=None, forcer=False):
     rapport = {'envoyes': 0, 'simules': 0, 'echecs': 0, 'ignores': 0,
                'lignes': [], 'fenetre': fenetre, 'reel': reel, 'periode': periode}
 
-    for ligne in eleves_a_rappeler(tenant, exercice, today)['lignes']:
-        if ligne['eleve_id'] in {str(i) for i in deja}:
-            rapport['ignores'] += 1
+    deja_ids = {str(i) for i in deja}
+    rapport['nb_eleves'] = 0
+    for groupe in groupes_a_rappeler(tenant, exercice, today)['groupes']:
+        # Les enfants déjà prévenus ce mois-ci sortent du groupe : le verrou
+        # mensuel reste par élève, sinon un enfant inscrit en cours de mois
+        # ferait repartir un message à toute la fratrie.
+        restants = [l for l in groupe['eleves'] if l['eleve_id'] not in deja_ids]
+        rapport['ignores'] += len(groupe['eleves']) - len(restants)
+        if not restants:
             continue
-        if not ligne['contact']:
-            rapport['ignores'] += 1
-            rapport['lignes'].append({**ligne, 'statut': 'SANS_CONTACT'})
+        if not groupe['contact']:
+            rapport['ignores'] += len(restants)
+            rapport['lignes'].append({**groupe, 'statut': 'SANS_CONTACT'})
             continue
 
-        message = composer_message(tenant, ligne, today)
+        envoi = {**groupe, 'eleves': restants, 'nb_eleves': len(restants),
+                 'nom_complet': restants[0]['nom_complet'],
+                 'total_exigible': round(sum(l['total_exigible'] for l in restants), 2)}
+        message = composer_message(tenant, envoi, today)
         if reel:
-            succes, detail = _envoyer_sms(tenant, ligne['contact'], message)
+            succes, detail = _envoyer_sms(tenant, groupe['contact'], message)
             statut = 'ENVOYE' if succes else 'ECHEC'
         else:
             statut, detail = 'SIMULE', 'Mode simulation — aucun envoi réel.'
 
+        # Une trace PAR ÉLÈVE, pour un seul message : c'est elle qui porte le
+        # verrou mensuel, et l'historique doit répondre « cet enfant a-t-il
+        # été relancé ? » autant que « qu'a reçu ce parent ? ».
         # L'échec est tracé comme le succès : sans cela, une passerelle en
-        # panne ferait retenter le même élève à chaque passage de la journée.
-        RappelEnvoye.objects.create(
-            tenant=tenant, eleve_id=ligne['eleve_id'], periode=periode,
-            canal='SMS', destinataire=ligne['contact'], message=message,
-            montant=ligne['total_exigible'], statut=statut, detail=detail[:500])
+        # panne ferait retenter la même famille à chaque passage de la journée.
+        RappelEnvoye.objects.bulk_create([
+            RappelEnvoye(tenant=tenant, eleve_id=ligne['eleve_id'], periode=periode,
+                         canal='SMS', destinataire=groupe['contact'], message=message,
+                         montant=ligne['total_exigible'], statut=statut,
+                         detail=detail[:500])
+            for ligne in restants])
 
+        # Les compteurs comptent des MESSAGES, pas des élèves : c'est ce que
+        # l'école paie, et annoncer dix envois pour quatre SMS fausserait sa
+        # prévision de coût.
         rapport['envoyes' if statut == 'ENVOYE' else
                 'simules' if statut == 'SIMULE' else 'echecs'] += 1
-        rapport['lignes'].append({**ligne, 'statut': statut, 'detail': detail})
+        rapport['nb_eleves'] += len(restants)
+        rapport['lignes'].append({**envoi, 'statut': statut, 'detail': detail})
 
     return rapport

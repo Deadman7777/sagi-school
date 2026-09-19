@@ -601,6 +601,163 @@ class BulletinView(APIView):
         }
         return Response(data)
 
+
+def _appreciation(moy, note_max):
+    ratio = float(moy) / float(note_max) * 20
+    if ratio >= 18: return 'Excellent'
+    if ratio >= 16: return 'Très Bien'
+    if ratio >= 14: return 'Bien'
+    if ratio >= 12: return 'Assez Bien'
+    if ratio >= 10: return 'Passable'
+    if ratio >= 8:  return 'Insuffisant'
+    return 'Très Insuffisant'
+
+
+def _decision(moy, note_max, trimestre='T1', est_finale=None):
+    return BulletinPDFView().get_decision(moy, note_max, trimestre, est_finale)
+
+
+def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
+    """Contexte de rendu d'UN bulletin, ou None si l'élève n'a aucune note.
+
+    Extrait de la vue le 19/09/2026 pour servir aussi à l'édition par
+    classe. Deux constructions séparées du même bulletin auraient fini par
+    diverger : l'école aurait imprimé deux documents différents pour un même
+    élève selon le bouton utilisé.
+    """
+    situation = situation_periode(tenant, eleve, trimestre, annee, programme)
+    if situation is None:
+        return None
+
+    bulletins_list = situation['lignes']
+    total_points   = situation['total_points']
+    total_coef     = situation['total_coef']
+    moy_generale   = situation['moy_generale']
+    # note_max de référence : niveau si défini, sinon note_max de la matière (niveau nullable)
+    m0 = bulletins_list[0].matiere
+    niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
+    note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
+
+    from collections import defaultdict
+
+    # ── Détail des notes individuelles par matière ────────────────────
+    matiere_ids = [b.matiere_id for b in bulletins_list]
+    # Devoirs (poids faible) en premier, Composition (poids fort) en dernier
+    evals_for_pdf = list(Evaluation.objects.filter(
+        matiere_id__in=matiere_ids, trimestre=trimestre, tenant=tenant
+    ).select_related('type_eval').order_by('type_eval__poids', 'id'))
+
+    evals_par_matiere: dict = defaultdict(list)
+    for ev in evals_for_pdf:
+        evals_par_matiere[str(ev.matiere_id)].append(ev)
+
+    notes_eleve = list(Note.objects.filter(
+        eleve=eleve, evaluation__in=evals_for_pdf, tenant=tenant
+    ))
+    notes_par_eval: dict = {str(n.evaluation_id): n for n in notes_eleve}
+
+    # ── Colonnes d'évaluation dynamiques (union, ordonnées par poids) ──
+    # Ex. 2 Devoirs + 1 Composition → colonnes [Devoir 1, Devoir 2, Composition].
+    # Chaque matière remplit les cases qu'elle possède, les autres = «—».
+    type_info: dict = {}            # tnom -> {'poids': float, 'max': int}
+    matiere_evals_ordered: dict = {}  # matiere_id -> [(ev, tnom, idx)]
+    for mid, evs in evals_par_matiere.items():
+        counts: dict = {}
+        ordered = []
+        for ev in evs:
+            t = ev.type_eval.nom
+            counts[t] = counts.get(t, 0) + 1
+            ordered.append((ev, t, counts[t]))
+            info = type_info.setdefault(t, {'poids': float(ev.type_eval.poids), 'max': 0})
+            info['max']   = max(info['max'], counts[t])
+            info['poids'] = min(info['poids'], float(ev.type_eval.poids))
+        matiere_evals_ordered[mid] = ordered
+
+    eval_columns = []   # [{'key': (tnom, idx), 'label': str, 'width': int}]
+    for tnom, info in sorted(type_info.items(), key=lambda x: (x[1]['poids'], x[0])):
+        for i in range(1, info['max'] + 1):
+            label = f"{tnom} {i}" if info['max'] > 1 else tnom
+            eval_columns.append({'key': (tnom, i), 'label': label})
+
+    # Largeur des colonnes d'évaluation : 37% partagé, en ENTIERS.
+    # xhtml2pdf (table-layout:fixed) gère mal les % fractionnaires → colonnes écrasées.
+    # On distribue 37 en entiers (reliquat sur les 1ères). Template fixe : 20+6+37+12+8+6+11=100.
+    ESPACE_EVAL = 34
+    nb = max(1, len(eval_columns))
+    base_w = ESPACE_EVAL // nb
+    extra  = ESPACE_EVAL - base_w * nb
+    for j, col in enumerate(eval_columns):
+        col['width'] = base_w + (1 if j < extra else 0)
+
+    def build_notes_cells(matiere_id):
+        ordered = matiere_evals_ordered.get(str(matiere_id), [])
+        by_key: dict = {}
+        for ev, t, idx in ordered:
+            n = notes_par_eval.get(str(ev.id))
+            if n:
+                by_key[(t, idx)] = 'ABS' if n.absent else f"{float(n.valeur):g}"
+            else:
+                by_key[(t, idx)] = '—'
+        return [by_key.get(col['key'], '—') for col in eval_columns]
+
+    def _fmt(val):
+        if val is None:
+            return '—'
+        f = float(val)
+        return f"{f:g}"
+
+    matieres_ctx = []
+    for b in bulletins_list:
+        matieres_ctx.append({
+            'nom':          b.matiere.nom,
+            'coefficient':  float(b.matiere.coefficient),
+            'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
+            'moyenne':      _fmt(b.moyenne),
+            'points':       _fmt(b.points),
+            'rang':         b.rang_matiere,
+            'appreciation': b.appreciation,
+            'notes_cells':  build_notes_cells(b.matiere_id),
+        })
+    # ─────────────────────────────────────────────────────────────────
+
+    context = {
+        'tenant':    tenant,
+        'annee':     annee,
+        'trimestre': trimestre,
+        'note_max':  int(note_max) if note_max == int(note_max) else note_max,
+        'eval_columns':   eval_columns,
+        'eleve': {
+            'nom_complet':    eleve.nom_complet,
+            'matricule':      eleve.numero or '—',
+            'date_naissance': str(eleve.date_naissance) if eleve.date_naissance else '—',
+            # La classe de l'élève, pas sa section — voir le commentaire
+            # de la vue bulletin plus haut.
+            'classe':         (eleve.classe.nom if eleve.classe_id
+                               else (eleve.section.nom if eleve.section else '—')),
+            'rang':           situation['rang'],
+        },
+        'matieres':            matieres_ctx,
+        'total_coef':          round(total_coef, 1),
+        'total_points':        round(total_points, 2),
+        'stats': {
+            'moy_generale': moy_generale,
+            'moy_classe':   situation['moy_classe'],
+            'moy_max':      situation['moy_max'],
+            'moy_min':      situation['moy_min'],
+            'nb_eleves':    situation['effectif'],
+        },
+        'appreciation_generale': _appreciation(moy_generale, note_max),
+        'decision':              _decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
+        'is_final':              _est_periode_finale(tenant, trimestre),
+        'decision_positive':     moy_generale >= (note_max * 10 / 20),
+    }
+
+    context['programme'] = programme
+    context['hybride'] = getattr(tenant, 'programmes_hybrides', False)
+    context['_lignes'] = bulletins_list
+    return context
+
+
 class BulletinPDFView(APIView):
     """Générer le bulletin PDF d'un élève."""
     permission_classes = [IsAuthenticated]
@@ -649,135 +806,10 @@ class BulletinPDFView(APIView):
             return HttpResponse('Élève introuvable', status=404)
 
         programme = programme_valide(request.query_params.get('programme'))
-        situation = situation_periode(tenant, eleve, trimestre, annee, programme)
-        if situation is None:
+        context = contexte_bulletin(tenant, eleve, trimestre, annee, programme)
+        if context is None:
             return HttpResponse('Aucune note calculée', status=404)
-
-        bulletins_list = situation['lignes']
-        total_points   = situation['total_points']
-        total_coef     = situation['total_coef']
-        moy_generale   = situation['moy_generale']
-        # note_max de référence : niveau si défini, sinon note_max de la matière (niveau nullable)
-        m0 = bulletins_list[0].matiere
-        niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
-        note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
-
-        from collections import defaultdict
-
-        # ── Détail des notes individuelles par matière ────────────────────
-        matiere_ids = [b.matiere_id for b in bulletins_list]
-        # Devoirs (poids faible) en premier, Composition (poids fort) en dernier
-        evals_for_pdf = list(Evaluation.objects.filter(
-            matiere_id__in=matiere_ids, trimestre=trimestre, tenant=tenant
-        ).select_related('type_eval').order_by('type_eval__poids', 'id'))
-
-        evals_par_matiere: dict = defaultdict(list)
-        for ev in evals_for_pdf:
-            evals_par_matiere[str(ev.matiere_id)].append(ev)
-
-        notes_eleve = list(Note.objects.filter(
-            eleve=eleve, evaluation__in=evals_for_pdf, tenant=tenant
-        ))
-        notes_par_eval: dict = {str(n.evaluation_id): n for n in notes_eleve}
-
-        # ── Colonnes d'évaluation dynamiques (union, ordonnées par poids) ──
-        # Ex. 2 Devoirs + 1 Composition → colonnes [Devoir 1, Devoir 2, Composition].
-        # Chaque matière remplit les cases qu'elle possède, les autres = «—».
-        type_info: dict = {}            # tnom -> {'poids': float, 'max': int}
-        matiere_evals_ordered: dict = {}  # matiere_id -> [(ev, tnom, idx)]
-        for mid, evs in evals_par_matiere.items():
-            counts: dict = {}
-            ordered = []
-            for ev in evs:
-                t = ev.type_eval.nom
-                counts[t] = counts.get(t, 0) + 1
-                ordered.append((ev, t, counts[t]))
-                info = type_info.setdefault(t, {'poids': float(ev.type_eval.poids), 'max': 0})
-                info['max']   = max(info['max'], counts[t])
-                info['poids'] = min(info['poids'], float(ev.type_eval.poids))
-            matiere_evals_ordered[mid] = ordered
-
-        eval_columns = []   # [{'key': (tnom, idx), 'label': str, 'width': int}]
-        for tnom, info in sorted(type_info.items(), key=lambda x: (x[1]['poids'], x[0])):
-            for i in range(1, info['max'] + 1):
-                label = f"{tnom} {i}" if info['max'] > 1 else tnom
-                eval_columns.append({'key': (tnom, i), 'label': label})
-
-        # Largeur des colonnes d'évaluation : 37% partagé, en ENTIERS.
-        # xhtml2pdf (table-layout:fixed) gère mal les % fractionnaires → colonnes écrasées.
-        # On distribue 37 en entiers (reliquat sur les 1ères). Template fixe : 20+6+37+12+8+6+11=100.
-        ESPACE_EVAL = 34
-        nb = max(1, len(eval_columns))
-        base_w = ESPACE_EVAL // nb
-        extra  = ESPACE_EVAL - base_w * nb
-        for j, col in enumerate(eval_columns):
-            col['width'] = base_w + (1 if j < extra else 0)
-
-        def build_notes_cells(matiere_id):
-            ordered = matiere_evals_ordered.get(str(matiere_id), [])
-            by_key: dict = {}
-            for ev, t, idx in ordered:
-                n = notes_par_eval.get(str(ev.id))
-                if n:
-                    by_key[(t, idx)] = 'ABS' if n.absent else f"{float(n.valeur):g}"
-                else:
-                    by_key[(t, idx)] = '—'
-            return [by_key.get(col['key'], '—') for col in eval_columns]
-
-        def _fmt(val):
-            if val is None:
-                return '—'
-            f = float(val)
-            return f"{f:g}"
-
-        matieres_ctx = []
-        for b in bulletins_list:
-            matieres_ctx.append({
-                'nom':          b.matiere.nom,
-                'coefficient':  float(b.matiere.coefficient),
-                'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
-                'moyenne':      _fmt(b.moyenne),
-                'points':       _fmt(b.points),
-                'rang':         b.rang_matiere,
-                'appreciation': b.appreciation,
-                'notes_cells':  build_notes_cells(b.matiere_id),
-            })
-        # ─────────────────────────────────────────────────────────────────
-
-        context = {
-            'tenant':    tenant,
-            'annee':     annee,
-            'trimestre': trimestre,
-            'note_max':  int(note_max) if note_max == int(note_max) else note_max,
-            'eval_columns':   eval_columns,
-            'eleve': {
-                'nom_complet':    eleve.nom_complet,
-                'matricule':      eleve.numero or '—',
-                'date_naissance': str(eleve.date_naissance) if eleve.date_naissance else '—',
-                # La classe de l'élève, pas sa section — voir le commentaire
-                # de la vue bulletin plus haut.
-                'classe':         (eleve.classe.nom if eleve.classe_id
-                                   else (eleve.section.nom if eleve.section else '—')),
-                'rang':           situation['rang'],
-            },
-            'matieres':            matieres_ctx,
-            'total_coef':          round(total_coef, 1),
-            'total_points':        round(total_points, 2),
-            'stats': {
-                'moy_generale': moy_generale,
-                'moy_classe':   situation['moy_classe'],
-                'moy_max':      situation['moy_max'],
-                'moy_min':      situation['moy_min'],
-                'nb_eleves':    situation['effectif'],
-            },
-            'appreciation_generale': self.get_appreciation(moy_generale, note_max),
-            'decision':              self.get_decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
-            'is_final':              _est_periode_finale(tenant, trimestre),
-            'decision_positive':     moy_generale >= (note_max * 10 / 20),
-        }
-
-        context['programme'] = programme
-        context['hybride'] = getattr(tenant, 'programmes_hybrides', False)
+        bulletins_list = context.pop('_lignes')
         if programme == 'AR':
             # Bulletin du programme arabe : tout en arabe, de droite à gauche
             from .libelles import contexte_bulletin_ar
@@ -1050,3 +1082,171 @@ class FichePedagogiqueView(APIView):
         nom = eleve.nom_complet.replace(' ', '_').replace('/', '-')
         response['Content-Disposition'] = f'inline; filename="fiche_pedagogique_{nom}_{langue}.pdf"'
         return response
+
+
+def _imposer_deux_par_feuille(pdfs_bulletins):
+    """Empile deux bulletins par feuille A4 et trace le trait de découpe.
+
+    L'assemblage se fait sur les PDF finis, pas dans le gabarit : xhtml2pdf
+    ignore « page-break-inside: avoid », et deux bulletins empilés dans une
+    page A4 se coupaient en plein milieu dès qu'une classe avait dix
+    matières. Ici chaque bulletin arrive sur sa ou ses demi-pages.
+
+    Un bulletin qui déborde sa demi-page (une classe à quinze matières)
+    prend la feuille entière, sans trait : mieux vaut une feuille de plus
+    qu'un bulletin déchiré en deux au ciseau.
+    """
+    from io import BytesIO
+    from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+
+    A4_L, A4_H = 595.276, 841.89          # points PDF
+    demi = A4_H / 2
+
+    # Composition des feuilles : (demi-pages, trait de découpe ou non).
+    feuilles = []
+    en_attente = None                      # demi-page du haut, sans voisin encore
+    for donnees in pdfs_bulletins:
+        pages = PdfReader(BytesIO(donnees)).pages
+        if len(pages) == 1:
+            if en_attente is None:
+                en_attente = pages[0]
+            else:
+                feuilles.append(([en_attente, pages[0]], True))
+                en_attente = None
+            continue
+        if en_attente is not None:         # on ne mélange pas un long et un court
+            feuilles.append(([en_attente], False))
+            en_attente = None
+        for i in range(0, len(pages), 2):
+            feuilles.append((list(pages[i:i + 2]), False))
+    if en_attente is not None:
+        feuilles.append(([en_attente], False))
+
+    ecrivain = PdfWriter()
+    repere = _repere_decoupe(A4_L, A4_H)
+    for demi_pages, trait in feuilles:
+        feuille = PageObject.create_blank_page(width=A4_L, height=A4_H)
+        # L'origine PDF est en bas à gauche : la première demi-page est celle
+        # du haut, donc c'est elle qu'on remonte d'une demi-feuille.
+        feuille.merge_transformed_page(demi_pages[0], Transformation().translate(0, demi))
+        if len(demi_pages) > 1:
+            feuille.merge_transformed_page(demi_pages[1], Transformation())
+        # Pas de repère quand il n'y a rien à séparer : un trait inutile
+        # invite à couper un bulletin en deux.
+        if trait:
+            feuille.merge_page(repere)
+        ecrivain.add_page(feuille)
+
+    sortie = BytesIO()
+    ecrivain.write(sortie)
+    return sortie.getvalue()
+
+
+def _repere_decoupe(largeur, hauteur):
+    """Calque d'une feuille : pointillés et ciseaux à mi-hauteur.
+
+    Le trait doit se voir d'un coup d'œil sur une pile de feuilles, sinon
+    l'école coupe de travers.
+    """
+    from io import BytesIO
+    from pypdf import PdfReader
+    from reportlab.pdfgen import canvas
+
+    tampon = BytesIO()
+    c = canvas.Canvas(tampon, pagesize=(largeur, hauteur))
+    y = hauteur / 2
+    c.setStrokeColorRGB(0.47, 0.56, 0.61)
+    c.setDash(3, 3)
+    c.setLineWidth(0.6)
+    c.line(14, y, largeur - 14, y)
+    c.setDash()
+    c.setFillColorRGB(0.47, 0.56, 0.61)
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    police, corps, espacement = 'Helvetica', 6, 1.5
+    texte = '\u2702  DÉCOUPER ICI'
+    # Centrage à la main : stringWidth ignore l'espacement des lettres, et le
+    # repère se retrouverait décalé d'un centimètre vers la gauche.
+    largeur_texte = stringWidth(texte, police, corps) + espacement * len(texte)
+    ligne = c.beginText((largeur - largeur_texte) / 2, y + 2.5)
+    ligne.setFont(police, corps)
+    ligne.setCharSpace(espacement)      # lettres espacées : le repère se lit de loin
+    ligne.textOut(texte)
+    c.drawText(ligne)
+    c.showPage()
+    c.save()
+    tampon.seek(0)
+    return PdfReader(tampon).pages[0]
+
+
+class BulletinsClassePDFView(APIView):
+    """Tous les bulletins d'une classe, deux par feuille A4.
+
+    Une classe de 40 élèves consommait 40 feuilles, éditées une par une. On
+    les édite en un seul document, deux par page, séparés par un trait de
+    découpe : autant de bulletins, moitié moins de papier, et plus personne
+    ne clique 40 fois.
+
+    GET /api/academique/bulletins-classe/<classe_id>/<trimestre>/?programme=FR
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, classe_id, trimestre):
+        from io import BytesIO
+
+        tenant = get_tenant(request)
+        annee = request.query_params.get('annee') or _get_annee_scolaire(tenant)
+        programme = programme_valide(request.query_params.get('programme'))
+
+        try:
+            classe = Classe.objects.get(id=classe_id, tenant=tenant)
+        except Classe.DoesNotExist:
+            return HttpResponse('Classe introuvable', status=404)
+
+        from apps.eleves.tri import cle_nom
+        eleves = sorted(
+            Eleve.objects.filter(tenant=tenant, classe=classe).select_related('section', 'classe'),
+            key=lambda e: cle_nom(e.nom_complet))
+
+        # Un élève sans aucune note n'a pas de bulletin : on l'ignore plutôt
+        # que d'imprimer une feuille vide à son nom.
+        corps = []
+        sans_notes = []
+        for eleve in eleves:
+            contexte = contexte_bulletin(tenant, eleve, trimestre, annee, programme)
+            if contexte is None:
+                sans_notes.append(eleve.nom_complet)
+                continue
+            contexte.pop('_lignes', None)
+            corps.append(render_to_string('pdf/_bulletin_corps.html', contexte))
+
+        if not corps:
+            return HttpResponse(
+                "Aucun bulletin à éditer : aucun élève de cette classe n'a de note "
+                f"sur la période {trimestre}.", status=404)
+
+        # xhtml2pdf et lui seul : c'est le moteur embarqué chez l'école (il
+        # arrive avec les dépendances du backend, weasyprint non). S'en
+        # remettre à weasyprint quand il est là ferait voir en développement
+        # une mise en page que personne n'imprime.
+        from xhtml2pdf import pisa
+
+        documents = []
+        for corps_bulletin in corps:
+            html_str = render_to_string('pdf/bulletins_classe.html',
+                                        {'bulletins': [corps_bulletin],
+                                         'classe': classe, 'tenant': tenant})
+            buffer = BytesIO()
+            if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+                return HttpResponse('Erreur génération des bulletins.', status=500)
+            documents.append(buffer.getvalue())
+
+        pdf = _imposer_deux_par_feuille(documents)
+
+        reponse = HttpResponse(pdf, content_type='application/pdf')
+        reponse['Content-Disposition'] = (
+            f'inline; filename="bulletins_{classe.nom}_{trimestre}.pdf"')
+        # L'école doit savoir qui manque, sans ouvrir les 40 bulletins.
+        if sans_notes:
+            reponse['X-Sans-Notes'] = str(len(sans_notes))
+        return reponse

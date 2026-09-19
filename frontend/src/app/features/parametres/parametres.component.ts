@@ -193,6 +193,13 @@ import { MessageService } from 'primeng/api';
             <span>{{ 'parametres.rappels_nb' | translate }}</span>
             <strong [class.danger]="r.nb > 0">{{ r.nb }}</strong>
           </div>
+          <!-- Ce que l'école va réellement payer : une fratrie regroupée ne
+               reçoit qu'un message, et l'écart entre les deux chiffres est
+               tout le bénéfice du regroupement. -->
+          <div class="re-ligne" *ngIf="r.nb_messages !== undefined">
+            <span>{{ 'parametres.rappels_messages' | translate }}</span>
+            <strong>{{ r.nb_messages }}</strong>
+          </div>
           <div class="re-ligne">
             <span>{{ 'parametres.rappels_montant' | translate }}</span>
             <strong class="mono" [class.danger]="r.total_exigible > 0">
@@ -257,6 +264,9 @@ import { MessageService } from 'primeng/api';
         <div class="rappel-etat" *ngIf="dernierEnvoi() as env">
           <div class="re-ligne"><span>{{ 'parametres.sms_envoyes' | translate }}</span>
             <strong>{{ env.envoyes }}</strong></div>
+          <div class="re-ligne" *ngIf="env.nb_eleves !== undefined">
+            <span>{{ 'parametres.sms_eleves_couverts' | translate }}</span>
+            <strong>{{ env.nb_eleves }}</strong></div>
           <div class="re-ligne"><span>{{ 'parametres.sms_simules' | translate }}</span>
             <strong>{{ env.simules }}</strong></div>
           <div class="re-ligne"><span>{{ 'parametres.sms_echecs' | translate }}</span>
