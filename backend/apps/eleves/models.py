@@ -86,6 +86,10 @@ class Eleve(TenantModel):
         ('ORPHELIN',        'Orphelin'),
         ('HANDICAP',        'Handicap'),
         ('FAMILLE_DEMUNIE', 'Famille démunie'),
+        # Réduction accordée aux frères et sœurs. C'est bien une REMISE et non
+        # une créance sur un tiers : l'école y renonce, personne ne la paie —
+        # d'où sa place ici plutôt que du côté des organismes payeurs.
+        ('FRATRIE',         'Réduction fratrie'),
         ('AUTRE',           'Autre'),
     ]
     TYPE_PEC_CHOICES = [
@@ -1310,3 +1314,68 @@ class ResponsableFamille(TenantModel):
 
     def __str__(self):
         return f'{self.nom} ({self.get_lien_display()})'
+
+
+class BaremeFratrie(TenantModel):
+    """Ce que l'école accorde au 2e, 3e, 4e… enfant d'une même famille.
+
+    Une ligne par rang, avec sa forme : l'école raisonne tantôt en pourcentage
+    (« le 3e à moitié prix »), tantôt en montant (« 5 000 F de moins par
+    mois »), et parfois différemment sur l'inscription et sur les mensualités.
+    Imposer une seule forme aurait obligé la moitié des écoles à convertir
+    leur barème à la main à chaque changement de tarif.
+
+    La ligne du rang le plus élevé vaut pour tous les rangs au-dessus : une
+    école qui écrit « 4e et suivants » saisit une ligne 4, pas une ligne par
+    enfant supplémentaire.
+
+    Ce barème ne calcule aucun dû. Il PRODUIT la prise en charge des fiches
+    (`pec_inscription`, `pec_mensualite`, motif FRATRIE) — le dû continue de
+    se calculer en un seul endroit, « frais − prise en charge ». Un troisième
+    terme réservé aux fratries aurait fini par diverger des deux autres.
+    """
+    FORME_CHOICES = [
+        ('POURCENTAGE', 'Pourcentage'),
+        ('MONTANT',     'Montant fixe (FCFA)'),
+    ]
+    # 2 = deuxième enfant de la famille. Le rang 1 (l'aîné) peut être saisi :
+    # quelques écoles accordent déjà une remise dès le premier enfant.
+    rang = models.PositiveSmallIntegerField(
+        help_text="Rang de l'enfant dans la famille (2 = deuxième enfant)")
+    forme_inscription = models.CharField(max_length=12, choices=FORME_CHOICES,
+                                         default='POURCENTAGE')
+    valeur_inscription = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    forme_mensualite  = models.CharField(max_length=12, choices=FORME_CHOICES,
+                                         default='POURCENTAGE')
+    valeur_mensualite = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'baremes_fratrie'
+        ordering = ['rang']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'rang'],
+                                    name='uniq_bareme_fratrie_par_rang'),
+        ]
+
+    def __str__(self):
+        return f'Rang {self.rang}'
+
+    def reduction(self, forme, valeur, tarif):
+        """Montant de la remise sur un tarif donné, plafonné à ce tarif.
+
+        Le plafond n'est pas cosmétique : une remise supérieure au tarif
+        rendrait un dû négatif, et l'élève apparaîtrait créditeur.
+        """
+        tarif = float(tarif or 0)
+        valeur = float(valeur or 0)
+        if tarif <= 0 or valeur <= 0:
+            return 0.0
+        montant = tarif * valeur / 100 if forme == 'POURCENTAGE' else valeur
+        return round(min(montant, tarif), 2)
+
+    def sur_inscription(self, tarif):
+        return self.reduction(self.forme_inscription, self.valeur_inscription, tarif)
+
+    def sur_mensualite(self, tarif):
+        return self.reduction(self.forme_mensualite, self.valeur_mensualite, tarif)

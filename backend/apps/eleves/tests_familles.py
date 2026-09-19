@@ -12,6 +12,7 @@ Ce que ces tests rendent impossible :
 - la disparition d'élèves quand on supprime leur famille.
 """
 import datetime
+from io import BytesIO
 
 from django.db import IntegrityError, transaction
 from rest_framework.test import APITestCase
@@ -535,3 +536,354 @@ class RappelParFamilleTest(BaseFamille):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data['nb'], 4)            # quatre élèves en retard
         self.assertEqual(r.data['nb_messages'], 2)   # mais deux SMS à payer
+
+
+class BaremeFratrieTest(BaseFamille):
+    """La réduction accordée aux frères et sœurs — lot 3.
+
+    C'est une REMISE : l'école y renonce, personne ne la paie. Elle se pose
+    donc là où toutes les remises se posent (pec_inscription, pec_mensualite,
+    motif FRATRIE), et le dû continue de se calculer en un seul endroit.
+
+    Ce que ces tests rendent impossible :
+    - un troisième terme dans le calcul du dû, réservé aux fratries ;
+    - une remise qui rend un élève créditeur ;
+    - l'écrasement silencieux d'une prise en charge sociale (orphelin…) ;
+    - un rang qui change parce que l'enfant a changé de classe.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from apps.eleves.models import BaremeFratrie
+        # « 2e enfant : −10 % sur tout ; 3e et suivants : inscription offerte
+        # et 5 000 F de moins par mois » — les deux formes cohabitent.
+        BaremeFratrie.objects.create(tenant=self.tenant, rang=2,
+                                     forme_inscription='POURCENTAGE', valeur_inscription=10,
+                                     forme_mensualite='POURCENTAGE', valeur_mensualite=10)
+        BaremeFratrie.objects.create(tenant=self.tenant, rang=3,
+                                     forme_inscription='POURCENTAGE', valeur_inscription=100,
+                                     forme_mensualite='MONTANT', valeur_mensualite=5000)
+
+    def _enfant(self, nom, famille, entree, **kwargs):
+        return self._eleve(nom, famille=famille, date_entree=entree, **kwargs)
+
+    def test_le_rang_suit_l_anciennete_pas_la_classe(self):
+        from apps.eleves.familles import apercu_bareme
+
+        famille = self._famille()
+        # Créés dans le désordre : c'est l'ancienneté qui décide, pas la saisie.
+        self._enfant('Cadet NDIAYE', famille, datetime.date(2026, 9, 1))
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        self._enfant('Moyen NDIAYE', famille, datetime.date(2023, 9, 1))
+
+        rangs = {l['nom_complet']: l['rang']
+                 for l in apercu_bareme(famille, self.ex)['lignes']}
+        self.assertEqual(rangs, {'Aine NDIAYE': 1, 'Moyen NDIAYE': 2, 'Cadet NDIAYE': 3})
+
+    def test_les_deux_formes_cohabitent_sur_la_meme_fiche(self):
+        from apps.eleves.familles import appliquer_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        self._enfant('Moyen NDIAYE', famille, datetime.date(2023, 9, 1))
+        troisieme = self._enfant('Cadet NDIAYE', famille, datetime.date(2026, 9, 1))
+
+        appliquer_bareme(famille, self.ex)
+        troisieme.refresh_from_db()
+        # Inscription 25 000 offerte à 100 %, mensualité 15 000 − 5 000.
+        self.assertEqual(float(troisieme.pec_inscription), 25000)
+        self.assertEqual(float(troisieme.pec_mensualite), 5000)
+        self.assertEqual(troisieme.prise_en_charge, 'FRATRIE')
+
+    def test_la_remise_se_voit_dans_le_du_sans_autre_calcul(self):
+        """La remise passe par la prise en charge : le dû de la fiche baisse
+        du même montant, et aucun écran n'a besoin de connaître le barème."""
+        from apps.eleves.familles import appliquer_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        second = self._enfant('Second NDIAYE', famille, datetime.date(2023, 9, 1))
+        avant = float(second.total_attendu)
+
+        appliquer_bareme(famille, self.ex)
+        second.refresh_from_db()
+        attendu = avant - (25000 * 0.10) - (15000 * 0.10 * second.nb_mensualites_dues)
+        self.assertAlmostEqual(float(second.total_attendu), attendu, places=2)
+
+    def test_une_remise_ne_rend_jamais_un_eleve_crediteur(self):
+        from apps.eleves.models import BaremeFratrie
+
+        # Une école saisit 50 000 F de remise mensuelle sur une mensualité à
+        # 15 000 : la remise est ramenée au tarif, pas au-delà.
+        BaremeFratrie.objects.filter(rang=3).update(forme_mensualite='MONTANT',
+                                                    valeur_mensualite=50000)
+        ligne = BaremeFratrie.objects.get(rang=3)
+        self.assertEqual(ligne.sur_mensualite(15000), 15000)
+        self.assertEqual(ligne.sur_inscription(0), 0)
+
+    def test_au_dela_du_dernier_rang_la_derniere_ligne_s_applique(self):
+        from apps.eleves.familles import apercu_bareme
+
+        famille = self._famille()
+        for i in range(5):
+            self._enfant(f'Enfant {i} NDIAYE', famille, datetime.date(2020 + i, 9, 1))
+        lignes = {l['rang']: l['propose'] for l in apercu_bareme(famille, self.ex)['lignes']}
+        # Le barème s'arrête au rang 3 : les 4e et 5e reçoivent la même chose.
+        self.assertEqual(lignes[4], lignes[3])
+        self.assertEqual(lignes[5], lignes[3])
+        self.assertEqual(lignes[1], {'inscription': 0.0, 'mensualite': 0.0})
+
+    def test_une_prise_en_charge_sociale_n_est_jamais_ecrasee(self):
+        """Écraser une décision sociale par un calcul automatique serait le
+        genre d'erreur qu'on ne rattrape pas auprès d'une famille."""
+        from apps.eleves.familles import appliquer_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        orphelin = self._enfant('Orphelin NDIAYE', famille, datetime.date(2023, 9, 1),
+                                prise_en_charge='ORPHELIN', pec_inscription=25000,
+                                pec_mensualite=15000)
+        rapport = appliquer_bareme(famille, self.ex)
+        orphelin.refresh_from_db()
+        self.assertEqual(float(orphelin.pec_mensualite), 15000)
+        self.assertEqual(orphelin.prise_en_charge, 'ORPHELIN')
+        self.assertEqual(rapport['nb_protege'], 1)
+
+    def test_l_apercu_n_ecrit_rien(self):
+        from apps.eleves.familles import apercu_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        second = self._enfant('Second NDIAYE', famille, datetime.date(2023, 9, 1))
+        apercu = apercu_bareme(famille, self.ex)
+        self.assertEqual(apercu['nb_change'], 1)
+        second.refresh_from_db()
+        self.assertEqual(float(second.pec_mensualite), 0)
+
+    def test_reappliquer_un_bareme_inchange_ne_touche_rien(self):
+        from apps.eleves.familles import appliquer_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        self._enfant('Second NDIAYE', famille, datetime.date(2023, 9, 1))
+        self.assertEqual(appliquer_bareme(famille, self.ex)['nb_applique'], 1)
+        self.assertEqual(appliquer_bareme(famille, self.ex)['nb_applique'], 0)
+
+    def test_un_enfant_de_plus_decale_les_rangs_et_l_ecole_le_voit_avant(self):
+        """Le sixième enfant arrive en cours d'année : toute la fratrie se
+        décale. L'aperçu doit annoncer ce qui bouge avant qu'on applique."""
+        from apps.eleves.familles import appliquer_bareme, apercu_bareme
+
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        second = self._enfant('Second NDIAYE', famille, datetime.date(2023, 9, 1))
+        appliquer_bareme(famille, self.ex)
+
+        # Un aîné plus ancien est inscrit après coup : le « second » devient 3e.
+        self._enfant('Tres aine NDIAYE', famille, datetime.date(2018, 9, 1))
+        apercu = apercu_bareme(famille, self.ex)
+        change = {l['nom_complet']: l['change'] for l in apercu['lignes']}
+        self.assertTrue(change['Second NDIAYE'])
+        appliquer_bareme(famille, self.ex)
+        second.refresh_from_db()
+        self.assertEqual(float(second.pec_inscription), 25000)   # rang 3 désormais
+
+    def test_un_sortant_ne_bloque_pas_le_rang_de_ses_cadets(self):
+        from apps.eleves.familles import apercu_bareme
+
+        famille = self._famille()
+        self._enfant('Parti NDIAYE', famille, datetime.date(2018, 9, 1), statut='TRANSFERE')
+        self._enfant('Reste NDIAYE', famille, datetime.date(2023, 9, 1))
+        lignes = apercu_bareme(famille, self.ex)['lignes']
+        self.assertEqual([l['nom_complet'] for l in lignes], ['Reste NDIAYE'])
+        self.assertEqual(lignes[0]['rang'], 1)
+
+    def test_sans_bareme_l_ecole_est_prevenue_plutot_que_de_voir_zero(self):
+        from apps.eleves.familles import apercu_bareme
+        from apps.eleves.models import BaremeFratrie
+
+        BaremeFratrie.objects.all().delete()
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        self.assertFalse(apercu_bareme(famille, self.ex)['bareme_defini'])
+
+    def test_l_api_refuse_un_pourcentage_au_dela_de_cent(self):
+        r = self.client.post('/api/eleves/bareme-fratrie/',
+                             {'rang': 4, 'forme_mensualite': 'POURCENTAGE',
+                              'valeur_mensualite': 150}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('cent pour cent', str(r.data))
+
+    def test_l_api_applique_le_bareme_a_la_famille(self):
+        famille = self._famille()
+        self._enfant('Aine NDIAYE', famille, datetime.date(2020, 9, 1))
+        second = self._enfant('Second NDIAYE', famille, datetime.date(2023, 9, 1))
+
+        r = self.client.get(f'/api/eleves/familles/{famille.id}/apercu-bareme/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nb_change'], 1)
+
+        r = self.client.post(f'/api/eleves/familles/{famille.id}/appliquer-bareme/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nb_applique'], 1)
+        second.refresh_from_db()
+        self.assertEqual(float(second.pec_mensualite), 1500)
+
+
+class VersementGroupeTest(BaseFamille):
+    """Encaisser une fois pour toute la fratrie — lot 4.
+
+    Un père arrive avec 150 000 F pour cinq enfants : l'école faisait cinq
+    saisies et décidait à la main de qui était servi en premier.
+
+    Ce que ces tests rendent impossible :
+    - une répartition qui solde le mois courant d'un enfant pendant qu'un
+      autre traîne un arriéré ;
+    - un mois annoncé réglé alors qu'il n'est payé qu'en partie ;
+    - un reçu de famille qui promet plus que ce que la caisse a reçu ;
+    - un règlement rattaché au responsable d'une autre école.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.famille = self._famille()
+        self.jour = datetime.date(2026, 12, 15)
+
+    def _enfant(self, nom, **kwargs):
+        return self._eleve(nom, famille=self.famille, **kwargs)
+
+    def test_le_plus_ancien_du_est_servi_en_premier(self):
+        from apps.eleves.familles import repartir_versement
+
+        # L'aîné doit l'inscription (25 000) ; le cadet aussi. 30 000 versés
+        # ne peuvent pas solder les deux : le premier dû passe devant.
+        self._enfant('Aine NDIAYE')
+        self._enfant('Cadet NDIAYE')
+        repartition = repartir_versement(self.famille, self.ex, 30000, today=self.jour)
+        self.assertEqual(repartition['reparti'], 30000)
+        self.assertEqual(repartition['non_impute'], 0)
+        # Tout est imputé sur des postes réellement dus, jamais au-delà.
+        for ligne in repartition['lignes']:
+            self.assertLessEqual(ligne['total'], 30000)
+        self.assertEqual(round(sum(l['total'] for l in repartition['lignes']), 2), 30000)
+
+    def test_un_mois_n_est_annonce_regle_que_s_il_est_solde(self):
+        """Une imputation partielle laisserait croire le mois payé, et le
+        suivi mensuel de l'école afficherait un mois vert qui ne l'est pas."""
+        from apps.eleves.familles import repartir_versement
+
+        enfant = self._enfant('Seul NDIAYE')
+        # Inscription 25 000 + une mensualité entamée.
+        repartition = repartir_versement(self.famille, self.ex, 30000, today=self.jour)
+        ligne = repartition['lignes'][0]
+        self.assertEqual(ligne['montant_inscription'], 25000)
+        self.assertEqual(ligne['montant_mensualite'], 5000)   # mensualité à 15 000
+        self.assertEqual(ligne['mois_regles'], [])            # donc aucun mois soldé
+        self.assertEqual(enfant.nom_complet, ligne['nom_complet'])
+
+    def test_le_surplus_n_est_pas_impute_d_office(self):
+        """Ce qui dépasse les échéances échues reste visible : l'école décide
+        si c'est une avance ou de la monnaie à rendre."""
+        from apps.eleves.familles import repartir_versement
+
+        self._enfant('Seul NDIAYE')
+        repartition = repartir_versement(self.famille, self.ex, 10_000_000, today=self.jour)
+        self.assertGreater(repartition['non_impute'], 0)
+        self.assertEqual(round(repartition['reparti'] + repartition['non_impute'], 2),
+                         10_000_000)
+
+    def test_la_repartition_n_encaisse_rien(self):
+        from apps.eleves.familles import repartir_versement
+
+        enfant = self._enfant('Seul NDIAYE')
+        repartir_versement(self.famille, self.ex, 50000, today=self.jour)
+        self.assertEqual(Paiement.objects.filter(eleve=enfant).count(), 0)
+
+    def test_l_api_propose_la_repartition(self):
+        self._enfant('Aine NDIAYE')
+        self._enfant('Cadet NDIAYE')
+        r = self.client.post(f'/api/eleves/familles/{self.famille.id}/repartir/',
+                             {'montant': 60000}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['reparti'], 60000)
+        self.assertEqual(r.data['nb_enfants'], 2)
+
+    def test_l_api_refuse_un_montant_vide(self):
+        self._enfant('Seul NDIAYE')
+        r = self.client.post(f'/api/eleves/familles/{self.famille.id}/repartir/',
+                             {'montant': 0}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    # ── Le reçu unique ───────────────────────────────────────────────────
+    def _encaisser(self, enfants, reference):
+        """Règle chaque enfant par le chemin habituel de l'API paiements :
+        c'est lui qui écrit les écritures, et il ne doit pas être doublé."""
+        payeur = self.famille.responsable_principal
+        for enfant in enfants:
+            r = self.client.post('/api/paiements/paiements/', {
+                'eleve': str(enfant.id), 'montant_inscription': 25000,
+                'mode_paiement': 'ESPECE', 'reference_groupe': str(reference),
+                'payeur': str(payeur.id)}, format='json')
+            self.assertEqual(r.status_code, 201, r.content[:300])
+
+    def test_le_recu_unique_couvre_toute_la_fratrie(self):
+        import uuid
+
+        from pypdf import PdfReader
+
+        enfants = [self._enfant(nom) for nom in ('Awa NDIAYE', 'Moussa NDIAYE',
+                                                 'Fatou NDIAYE')]
+        reference = uuid.uuid4()
+        self._encaisser(enfants, reference)
+
+        r = self.client.get(f'/api/eleves/familles/{self.famille.id}/recu-groupe/',
+                            {'reference': str(reference)})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        texte = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(r.content)).pages)
+        for enfant in enfants:
+            self.assertIn(enfant.nom_complet.upper(), texte.upper())
+        # Le total est celui de la caisse : 3 × 25 000.
+        self.assertIn('75000', texte.replace(' ', '').replace('\xa0', ''))
+        # Et le gabarit ne laisse fuir aucun commentaire dans le document : un
+        # « {# … #} » sur plusieurs lignes s'imprimerait en tête du reçu.
+        self.assertNotIn('xhtml2pdf', texte)
+        self.assertIn('Ousmane NDIAYE'.upper(), texte.upper())   # le payeur
+
+    def test_le_recu_ne_promet_que_ce_qui_a_ete_encaisse(self):
+        """Un règlement annulé sort du reçu : le papier remis à la famille ne
+        doit jamais annoncer plus que ce que la caisse a reçu."""
+        import uuid
+
+        from pypdf import PdfReader
+
+        enfants = [self._enfant('Awa NDIAYE'), self._enfant('Moussa NDIAYE')]
+        reference = uuid.uuid4()
+        self._encaisser(enfants, reference)
+        Paiement.objects.filter(eleve=enfants[1]).update(statut='ANNULE')
+
+        r = self.client.get(f'/api/eleves/familles/{self.famille.id}/recu-groupe/',
+                            {'reference': str(reference)})
+        texte = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(r.content)).pages)
+        self.assertIn('AWA NDIAYE', texte.upper())
+        self.assertNotIn('MOUSSA NDIAYE', texte.upper())
+
+    def test_une_reference_inconnue_ne_produit_pas_un_recu_vide(self):
+        import uuid
+
+        r = self.client.get(f'/api/eleves/familles/{self.famille.id}/recu-groupe/',
+                            {'reference': str(uuid.uuid4())})
+        self.assertEqual(r.status_code, 404)
+
+    def test_un_payeur_d_une_autre_ecole_est_refuse(self):
+        from apps.eleves.models import Famille, ResponsableFamille
+
+        autre = Tenant.objects.create(nom='École de Thiès', code_etablissement='THS')
+        famille_autre = Famille.objects.create(tenant=autre, nom='Famille DIOP')
+        intrus = ResponsableFamille.objects.create(tenant=autre, famille=famille_autre,
+                                                   nom='Intrus', principal=True)
+        enfant = self._enfant('Awa NDIAYE')
+        r = self.client.post('/api/paiements/paiements/', {
+            'eleve': str(enfant.id), 'montant_inscription': 25000,
+            'mode_paiement': 'ESPECE', 'payeur': str(intrus.id)}, format='json')
+        self.assertEqual(r.status_code, 400)

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import (ChampFiche, Eleve, EleveService, Famille, FormuleEleve, FormuleSection,
-                     Organisme, PriseEnChargeOrganisme, ResponsableFamille, Section, Service)
+from .models import (BaremeFratrie, ChampFiche, Eleve, EleveService, Famille, FormuleEleve,
+                     FormuleSection, Organisme, PriseEnChargeOrganisme, ResponsableFamille,
+                     Section, Service)
 
 # Numéro → nom. Volontairement distinct de import_eleves._MOIS_NOMS, qui va
 # dans l'autre sens (nom → numéro) : deux tables homonymes seraient un piège.
@@ -692,3 +693,35 @@ class FamilleSerializer(serializers.ModelSerializer):
             if premier is not None:
                 premier.principal = True
                 premier.save(update_fields=['principal'])
+
+
+class BaremeFratrieSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = BaremeFratrie
+        fields = '__all__'
+        extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def validate(self, attrs):
+        """Un pourcentage au-delà de 100 % rendrait un dû négatif, et un rang
+        à zéro ne désigne aucun enfant."""
+        rang = attrs.get('rang', getattr(self.instance, 'rang', 0))
+        if not rang or int(rang) < 1:
+            raise serializers.ValidationError(
+                "Le rang commence à 1 (l'aîné) ; le 2e enfant porte le rang 2.")
+        for champ_forme, champ_valeur, libelle in (
+                ('forme_inscription', 'valeur_inscription', "l'inscription"),
+                ('forme_mensualite',  'valeur_mensualite',  'la mensualité')):
+            forme = attrs.get(champ_forme, getattr(self.instance, champ_forme, 'POURCENTAGE'))
+            valeur = float(attrs.get(champ_valeur,
+                                     getattr(self.instance, champ_valeur, 0)) or 0)
+            if valeur < 0:
+                raise serializers.ValidationError(
+                    f"La réduction sur {libelle} ne peut pas être négative.")
+            if forme == 'POURCENTAGE' and valeur > 100:
+                # Pas de « % » dans le texte : DRF passe le message dans un
+                # formatage pour-cent et « % : » y lève un ValueError, qui
+                # remonte en 500 au lieu du 400 attendu.
+                raise serializers.ValidationError(
+                    f"La réduction sur {libelle} dépasse cent pour cent : une "
+                    f"remise supérieure au tarif rendrait l'élève créditeur.")
+        return attrs

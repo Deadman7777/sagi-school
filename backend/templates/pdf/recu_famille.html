@@ -1,0 +1,123 @@
+{% comment %}
+Reçu d'un versement groupé : UN papier pour toute la fratrie.
+
+Un père qui règle pour cinq enfants repartait avec cinq reçus. Ce document les
+remplace : une ligne par enfant, le détail de ce que chaque règlement solde, et
+le total encaissé.
+
+Le bloc est un {% comment %} et non un {# … #} : sur plusieurs lignes, ce
+dernier n'est pas reconnu comme un commentaire et son texte s'imprime en tête
+du document.
+
+Les styles sont posés sur les CELLULES et non sur les lignes : sous xhtml2pdf,
+un fond ou une couleur déclarés sur une ligne sont écrasés par le CSS des
+cellules, et les totaux ressortaient illisibles.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: {{ page_size|default:"A5 portrait" }}; margin: 10mm; }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #1a1a1a; margin: 0; }
+
+  table { border-collapse: collapse; width: 100%; }
+
+  .rep      { text-align: center; font-size: 7pt; color: #555; }
+  .ecole    { text-align: center; font-size: 13pt; font-weight: bold; color: #1a3c5e; }
+  .sous     { text-align: center; font-size: 7.5pt; color: #555; }
+  .barre    { border-bottom: 2pt solid #1a3c5e; margin: 4pt 0 6pt; }
+  .titre    { text-align: center; font-size: 11pt; font-weight: bold; color: #1a3c5e;
+              margin-bottom: 2pt; }
+  .piece    { text-align: center; font-size: 9pt; color: #1a3c5e; font-weight: bold;
+              margin-bottom: 6pt; }
+
+  .tbl-infos td { border: 0.75pt solid #b0bec5; padding: 3pt 5pt; font-size: 8pt; }
+  .lbl { color: #374151; font-size: 6.5pt; }
+  .val { font-weight: bold; }
+
+  .tbl-lignes thead td { background-color: #1a3c5e; color: #ffffff; font-weight: bold;
+                         font-size: 7.5pt; padding: 3pt 4pt; border: 0.5pt solid #3a5a7e; }
+  .tbl-lignes tbody td { border: 0.5pt solid #dee2e6; padding: 3pt 4pt; font-size: 8pt; }
+  .tbl-lignes tbody td.pair { background-color: #f4f6f8; }
+  .droite { text-align: right; }
+  .detail { font-size: 6.5pt; color: #4b5563; }
+
+  .tbl-total td { background-color: #1a3c5e; color: #ffffff; font-weight: bold;
+                  font-size: 10pt; padding: 5pt 6pt; border: 0.5pt solid #1a3c5e; }
+
+  .mention { margin-top: 8pt; font-size: 7.5pt; color: #374151; }
+  .sig { margin-top: 14pt; font-size: 8pt; text-align: right; }
+  .pied { margin-top: 8pt; font-size: 6.5pt; color: #6b7280; text-align: center;
+          border-top: 0.5pt solid #ddd; padding-top: 3pt; }
+</style>
+</head>
+<body>
+
+<div class="rep">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
+{% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:42px; max-width:120px;"></div>{% endif %}
+<div class="ecole">{{ tenant.nom|upper }}</div>
+<div class="sous">{{ tenant.ville|default:"Sénégal" }}{% if tenant.telephone %} &nbsp;|&nbsp; {{ tenant.telephone }}{% endif %}</div>
+<div class="barre"></div>
+
+<div class="titre">REÇU DE VERSEMENT — FAMILLE</div>
+<div class="piece">{{ reference_courte }} &nbsp;·&nbsp; {{ date|date:"d/m/Y" }}</div>
+
+<table class="tbl-infos" style="margin-bottom:6pt">
+  <colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup>
+  <tr>
+    <td><div class="lbl">Famille</div><div class="val">{{ famille.nom }} — {{ famille.code }}</div></td>
+    <td><div class="lbl">Versé par</div><div class="val">{{ payeur|default:"—" }}</div></td>
+    <td><div class="lbl">Enfants concernés</div><div class="val">{{ lignes|length }}</div></td>
+  </tr>
+</table>
+
+<table class="tbl-lignes" style="margin-bottom:6pt">
+  <colgroup>
+    <col style="width:30%"><col style="width:16%"><col style="width:30%"><col style="width:24%">
+  </colgroup>
+  <thead>
+    <tr>
+      <td>ÉLÈVE</td>
+      <td>CLASSE</td>
+      <td>RÈGLE</td>
+      <td class="droite">MONTANT</td>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in lignes %}
+    <tr>
+      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %}">
+        <strong>{{ l.nom_complet }}</strong><br>
+        <span class="detail">{{ l.no_piece }}</span>
+      </td>
+      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %}">{{ l.classe }}</td>
+      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %} detail">{{ l.detail }}</td>
+      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %} droite">
+        {{ l.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<table class="tbl-total">
+  <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
+  <tr>
+    <td>TOTAL ENCAISSÉ{% if modes %} ({{ modes }}){% endif %}</td>
+    <td class="droite">{{ total|floatformat:0 }} FCFA</td>
+  </tr>
+</table>
+
+<div class="mention">
+  Ce reçu couvre {{ lignes|length }} règlement(s), un par enfant. Chacun figure
+  au nom de l'élève concerné dans la comptabilité de l'établissement.
+</div>
+
+<div class="sig">Le Caissier / La Caissière _______________</div>
+
+<div class="pied">
+  {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Reçu édité le {{ aujourdhui|date:"d/m/Y" }}
+</div>
+
+</body>
+</html>

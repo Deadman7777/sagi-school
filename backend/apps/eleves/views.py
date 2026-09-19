@@ -8,13 +8,14 @@ from django.db.models.functions import Coalesce, TruncMonth
 from apps.comptabilite.models import JournalEntry
 from core.permissions import IsTenantMember
 from core.tenant import get_tenant
-from .models import (ChampFiche, Eleve, Famille, FormuleEleve, FormuleSection, Organisme,
-                     PriseEnChargeOrganisme, Section, Service)
+from .models import (BaremeFratrie, ChampFiche, Eleve, Famille, FormuleEleve, FormuleSection,
+                     Organisme, PriseEnChargeOrganisme, Section, Service)
 from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (ChampFicheSerializer, EleveSerializer, FamilleSerializer,
+from .serializers import (BaremeFratrieSerializer, ChampFicheSerializer, EleveSerializer,
+                          FamilleSerializer,
                           FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
                           ServiceSerializer)
@@ -3077,6 +3078,152 @@ class FamilleViewSet(viewsets.ModelViewSet):
         return Response({'familles': creees, 'nb_familles': len(creees),
                          'nb_eleves': rattaches, 'nb_ignores': ignores})
 
+    @action(detail=True, methods=['get'], url_path='apercu-bareme')
+    def apercu_bareme_action(self, request, pk=None):
+        """Ce que le barème fratrie changerait pour cette famille.
+
+        Rien n'est écrit : les rangs bougent dès qu'un enfant arrive ou part,
+        et l'école doit voir ce qui se déplace avant de valider.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import apercu_bareme
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        return Response(apercu_bareme(self.get_object(), exercice))
+
+    @action(detail=True, methods=['post'], url_path='appliquer-bareme')
+    def appliquer_bareme_action(self, request, pk=None):
+        """Applique le barème à la famille : écrit la prise en charge FRATRIE.
+
+        `get_exercice` est appelé SANS la requête : c'est une écriture, elle
+        ne doit jamais atterrir sur un exercice clôturé qu'on consultait.
+        """
+        from apps.comptabilite.views import get_exercice
+        from core.models import log_audit
+
+        from .familles import appliquer_bareme
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        famille = self.get_object()
+        rapport = appliquer_bareme(famille, exercice)
+        if rapport['nb_applique']:
+            log_audit(request, 'MODIFICATION', 'Famille', famille.id,
+                      f"Barème fratrie appliqué — {rapport['nb_applique']} fiche(s)")
+        return Response(rapport)
+
+    @action(detail=True, methods=['post'])
+    def repartir(self, request, pk=None):
+        """Propose la répartition d'un versement entre les enfants.
+
+        N'encaisse rien : l'école modifie la proposition, puis chaque ligne
+        part par le chemin habituel d'un règlement, avec ses écritures. Ce
+        n'est pas une coquetterie — dupliquer ici la constatation comptable
+        aurait donné deux façons d'écrire un encaissement, et la seconde
+        aurait fini par diverger de la première.
+        """
+        from apps.comptabilite.views import get_exercice
+
+        from .familles import repartir_versement
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        try:
+            montant = float(request.data.get('montant') or 0)
+        except (TypeError, ValueError):
+            montant = 0
+        if montant <= 0:
+            return Response({'error': "Indiquez le montant versé."}, status=400)
+        return Response(repartir_versement(self.get_object(), exercice, montant))
+
+    @action(detail=True, methods=['get'], url_path='recu-groupe')
+    def recu_groupe(self, request, pk=None):
+        """Le reçu unique d'un versement groupé, à partir de sa référence.
+
+        Le reçu est édité APRÈS les règlements, sur ce qui a réellement été
+        encaissé : si l'un des règlements a échoué, le papier remis à la
+        famille ne promet pas ce que la caisse n'a pas reçu.
+        """
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from xhtml2pdf import pisa
+
+        from apps.paiements.models import Paiement
+
+        tenant  = get_tenant(request)
+        famille = self.get_object()
+        reference = (request.query_params.get('reference') or '').strip()
+        if not reference:
+            return HttpResponse("Référence du versement manquante.", status=400)
+
+        paiements = list(Paiement.objects.filter(
+            tenant=tenant, reference_groupe=reference, statut='ACTIF')
+            .select_related('eleve', 'eleve__classe', 'eleve__section', 'payeur')
+            .order_by('eleve__nom_complet'))
+        if not paiements:
+            return HttpResponse("Aucun règlement pour cette référence.", status=404)
+
+        lignes = []
+        for paiement in paiements:
+            # Les montants du détail s'écrivent comme ceux de la colonne
+            # (sans séparateur) : deux formats dans le même reçu se lisent
+            # comme deux chiffres différents.
+            postes = []
+            if paiement.montant_reliquat:
+                postes.append(f'impayé antérieur {paiement.montant_reliquat:.0f}')
+            if paiement.montant_inscription:
+                postes.append(f'{paiement.eleve.libelle_frais_entree.lower()} '
+                              f'{paiement.montant_inscription:.0f}')
+            if paiement.montant_mensualite:
+                mois = paiement.mois_regles or []
+                postes.append(f'mensualités {paiement.montant_mensualite:.0f}'
+                              + (f' ({len(mois)} mois)' if mois else ''))
+            eleve = paiement.eleve
+            lignes.append({
+                'nom_complet': eleve.nom_complet,
+                'classe': eleve.classe.nom if eleve.classe_id else (
+                          eleve.section.nom if eleve.section else ''),
+                'no_piece': paiement.no_piece,
+                'detail': ', '.join(postes) or 'règlement',
+                'montant': float(paiement.total),
+            })
+
+        modes = sorted({p.get_mode_paiement_display() for p in paiements})
+        contexte = {
+            'tenant':  tenant,
+            'famille': famille,
+            'lignes':  lignes,
+            'total':   round(sum(l['montant'] for l in lignes), 2),
+            'date':    paiements[0].date_paiement,
+            'payeur':  paiements[0].payeur.nom if paiements[0].payeur_id else '',
+            'modes':   ', '.join(modes),
+            # Les huit premiers caractères suffisent à retrouver le versement
+            # et tiennent sur une ligne de reçu.
+            'reference_courte': f'VERSEMENT {str(reference)[:8].upper()}',
+            'aujourdhui': timezone.localdate(),
+            'page_size': 'A4 portrait' if (
+                request.query_params.get('taille') or 'A5').upper() == 'A4' else 'A5 portrait',
+        }
+        html_str = render_to_string('pdf/recu_famille.html', contexte)
+        buffer = BytesIO()
+        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+            return HttpResponse('Erreur génération du reçu.', status=500)
+        reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        reponse['Content-Disposition'] = (
+            f'inline; filename="recu_{famille.code}_{str(reference)[:8]}.pdf"')
+        return reponse
+
     @action(detail=True, methods=['post'])
     def rattacher(self, request, pk=None):
         """Rattache des élèves à cette famille (ou les en détache).
@@ -3100,3 +3247,19 @@ class FamilleViewSet(viewsets.ModelViewSet):
                   f"{nb} élève(s) {'détaché(s) de' if detacher else 'rattaché(s) à'} "
                   f'{famille.nom}')
         return Response({'nb': nb, 'famille': famille.nom})
+
+
+class BaremeFratrieViewSet(viewsets.ModelViewSet):
+    """Le barème de réduction accordé aux frères et sœurs.
+
+    Une ligne par rang. Ce barème ne calcule aucun dû : il produit la prise en
+    charge des fiches, que le calcul unique du dû déduit ensuite.
+    """
+    serializer_class   = BaremeFratrieSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return BaremeFratrie.objects.filter(tenant=get_tenant(self.request)).order_by('rang')
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))

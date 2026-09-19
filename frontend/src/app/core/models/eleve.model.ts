@@ -388,3 +388,69 @@ export interface FratrieProbable {
   eleves: { id: string; nom_complet: string; matricule: string; classe: string }[];
   nb: number;
 }
+
+
+/** Une ligne du barème de réduction fratrie : ce que l'école accorde au 2e,
+ *  3e, 4e… enfant. La ligne du rang le plus élevé vaut pour tous les rangs
+ *  au-dessus (« 4e et suivants » = une seule ligne).
+ *
+ *  Ce barème ne calcule aucun dû : il PRODUIT la prise en charge des fiches,
+ *  que le calcul unique du dû déduit ensuite. */
+export interface BaremeFratrie {
+  id?: string;
+  rang: number;
+  forme_inscription: 'POURCENTAGE' | 'MONTANT';
+  valeur_inscription: number;
+  forme_mensualite: 'POURCENTAGE' | 'MONTANT';
+  valeur_mensualite: number;
+  actif: boolean;
+}
+
+/** Ce que le barème changerait pour une famille, avant d'écrire quoi que ce
+ *  soit : les rangs bougent dès qu'un enfant arrive ou part. */
+export interface ApercuBareme {
+  famille_id: string;
+  nom: string;
+  bareme_defini: boolean;
+  lignes: {
+    eleve_id: string;
+    nom_complet: string;
+    classe: string;
+    rang: number;
+    actuel: { inscription: number; mensualite: number; motif: string };
+    propose: { inscription: number; mensualite: number };
+    change: boolean;
+    /** Prise en charge d'un autre motif (orphelin, handicap…) : jamais
+     *  écrasée par le barème, l'école tranche. */
+    protege: boolean;
+  }[];
+  nb_change: number;
+  nb_protege: number;
+  nb_applique?: number;
+}
+
+
+/** Proposition de répartition d'un versement entre les enfants d'une famille.
+ *  Rien n'est encaissé : chaque ligne devient ensuite un règlement normal,
+ *  écrit par le chemin habituel, avec ses écritures. */
+export interface RepartitionVersement {
+  famille_id: string;
+  nom: string;
+  montant: number;
+  lignes: {
+    eleve_id: string;
+    nom_complet: string;
+    classe: string;
+    montant_reliquat: number;
+    montant_inscription: number;
+    montant_mensualite: number;
+    mois_regles: number[];
+    detail: { libelle: string; montant: number }[];
+    total: number;
+  }[];
+  reparti: number;
+  /** Ce que le versement dépasse des échéances échues : avance sur les mois
+   *  à venir, ou monnaie à rendre — l'école décide. */
+  non_impute: number;
+  nb_enfants: number;
+}

@@ -98,6 +98,19 @@ class Paiement(TenantModel):
     # {"mode": "WAVE", "montant": 20000}, {"mode": "ORANGE_MONEY", "montant": 10000}].
     modes_reglement     = models.JSONField(default=list, blank=True)
     observations        = models.TextField(blank=True)
+    # ── Règlement groupé d'une famille ────────────────────────────────────
+    # Un père règle 150 000 F pour ses cinq enfants. Le paiement reste PAR
+    # ÉLÈVE — l'échéancier, l'imputation par mois, le grand livre et le suivi
+    # en dépendent tous — mais les N règlements issus du même versement
+    # portent la même référence, ce qui permet d'imprimer UN reçu pour la
+    # famille au lieu de cinq.
+    reference_groupe    = models.UUIDField(null=True, blank=True, db_index=True,
+                                           help_text="Versement groupé d'une famille")
+    # Qui a effectivement payé, quand la famille compte plusieurs
+    # responsables : le père règle pour trois enfants, la mère pour deux.
+    # C'est la question que l'école pose en premier quand un parent conteste.
+    payeur              = models.ForeignKey('eleves.ResponsableFamille', null=True, blank=True,
+                                            on_delete=models.SET_NULL, related_name='paiements')
     saisi_par           = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)
 
     class Meta:

@@ -5,7 +5,8 @@ import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
          SuiviOrganisme, Famille, SituationFamille,
-         FratrieProbable } from '../models/eleve.model';
+         FratrieProbable, BaremeFratrie, ApercuBareme,
+         RepartitionVersement } from '../models/eleve.model';
 
 export interface LigneImport {
   ligne: number;
@@ -309,6 +310,45 @@ export class ElevesService {
                                contact?: { nom: string; telephone: string; lien: string } }[]) {
     return this.api.post<{ nb_familles: number; nb_eleves: number; nb_ignores: number }>(
       '/eleves/familles/regrouper/', { groupes });
+  }
+
+  // ── Réduction fratrie ───────────────────────────────────────────────
+  getBaremeFratrie() {
+    return this.api.get<BaremeFratrie[] | PaginatedResponse<BaremeFratrie>>(
+      '/eleves/bareme-fratrie/')
+      .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
+  creerLigneBareme(l: Partial<BaremeFratrie>) {
+    return this.api.post<BaremeFratrie>('/eleves/bareme-fratrie/', l);
+  }
+  majLigneBareme(id: string, l: Partial<BaremeFratrie>) {
+    return this.api.patch<BaremeFratrie>(`/eleves/bareme-fratrie/${id}/`, l);
+  }
+  supprimerLigneBareme(id: string) {
+    return this.api.delete<void>(`/eleves/bareme-fratrie/${id}/`);
+  }
+
+  /** Ce que le barème changerait pour cette famille. N'écrit rien. */
+  apercuBareme(familleId: string) {
+    return this.api.get<ApercuBareme>(`/eleves/familles/${familleId}/apercu-bareme/`);
+  }
+  appliquerBareme(familleId: string) {
+    return this.api.post<ApercuBareme>(`/eleves/familles/${familleId}/appliquer-bareme/`, {});
+  }
+
+  // ── Encaissement groupé ─────────────────────────────────────────────
+  /** Propose la répartition d'un versement, le plus ancien dû d'abord.
+   *  N'encaisse rien. */
+  repartirVersement(familleId: string, montant: number) {
+    return this.api.post<RepartitionVersement>(
+      `/eleves/familles/${familleId}/repartir/`, { montant });
+  }
+
+  /** Le reçu unique d'un versement groupé, édité APRÈS les règlements : il
+   *  ne promet que ce que la caisse a réellement reçu. */
+  recuGroupe(familleId: string, reference: string, taille: 'A5' | 'A4' = 'A5') {
+    return this.api.getBlob(`/eleves/familles/${familleId}/recu-groupe/`,
+                            { reference, taille });
   }
 
   getSections() {
