@@ -38,7 +38,9 @@ export interface Eleve {
   genre: 'G' | 'F';
   section: string;
   section_nom: string;
-  classe: string;
+  // Facultative : dans un daara, une même section mêle des élèves en classe
+  // et des mémorisants qui n'en suivent aucune.
+  classe: string | null;
   classe_nom: string;
   date_naissance: string;
   lieu_naissance: string;

@@ -1304,10 +1304,13 @@ const MOIS_ANNEE = [
                       [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
           </div>
         }
+        <!-- La classe est facultative : un mémorisant d'un daara n'en suit
+             aucune, dans une section qui en possède pourtant. « Sans classe »
+             est un choix explicite, pas un champ qu'on oublie de remplir. -->
         @if (classesSection().length) {
           <div class="form-group">
-            <label>{{ 'eleves.classe' | translate }} *</label>
-            <p-select appendTo="body" [options]="classesSection()" [(ngModel)]="nouvelEleve.classe"
+            <label>{{ 'eleves.classe' | translate }}</label>
+            <p-select appendTo="body" [options]="optionsClasse()" [(ngModel)]="nouvelEleve.classe"
                       optionLabel="nom" optionValue="id"
                       [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
           </div>
@@ -2273,18 +2276,31 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
-  // Classes de la section sélectionnée (les classes ont niveau_nom = nom de la section).
+  // Classes de la section sélectionnée. Le rattachement est une vraie clé
+  // étrangère depuis septembre 2026 : auparavant on rapprochait classe et
+  // section par leur NOM, si bien que renommer une section détachait ses
+  // classes sans rien dire. Repli sur le nom pour les classes d'une école qui
+  // ne s'est pas encore rangée.
   // Méthode (pas computed) car nouvelEleve.section n'est pas un signal.
   classesSection(): any[] {
-    const secNom = this.sections().find(s => s.id === this.nouvelEleve.section)?.nom;
-    if (!secNom) return [];
-    return this.classes().filter(c => c.niveau_nom === secNom);
+    const section = this.sections().find(s => s.id === this.nouvelEleve.section);
+    if (!section) return [];
+    const rattachees = this.classes().filter(c => c.section === section.id);
+    if (rattachees.length) return rattachees;
+    return this.classes().filter(c => !c.section && c.niveau_nom === section.nom);
+  }
+
+  /** Classes de la section, précédées du choix « Sans classe ». */
+  optionsClasse(): any[] {
+    return [{ id: null, nom: this.translate.instant('eleves.sans_classe') },
+            ...this.classesSection()];
   }
 
   onSectionChange() {
-    // Réinitialise la classe ; pré-sélectionne si la section n'a qu'une classe
-    const cs = this.classesSection();
-    this.nouvelEleve.classe = cs.length === 1 ? cs[0].id : undefined;
+    // La classe ne se pré-sélectionne plus, même quand la section n'en a
+    // qu'une : l'école doit pouvoir laisser « Sans classe » sans le défaire
+    // à chaque changement de section.
+    this.nouvelEleve.classe = null;
     // Une formule appartient à sa section.
     const fs = this.formulesDeSection(this.nouvelEleve.section);
     this.nouvelEleve.formule = fs.length === 1 ? fs[0].id : null;
@@ -3365,12 +3381,12 @@ export class ElevesListeComponent implements OnInit {
                      detail: this.translate.instant('eleves.formule_obligatoire') });
       return;
     }
-    // Classe requise uniquement si la section possède des classes
-    if (this.classesSection().length && !this.nouvelEleve.classe) {
-      this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
-                     detail: this.translate.instant('eleves.classe') });
-      return;
-    }
+    // La classe n'est JAMAIS obligatoire. Dans un daara, une même section
+    // (« Internat Tahfiiz ») mêle des élèves qui suivent un programme en
+    // classe et des mémorisants qui n'en suivent aucun. Exiger une classe dès
+    // que la section en possède rendait ces derniers impossibles à inscrire.
+    // Le choix « Sans classe » est explicite dans la liste : on distingue
+    // ainsi l'oubli de l'intention.
     // Tous les champs obligatoires (sauf services) : genre, naissance, lieu, date d'entrée
     const e = this.nouvelEleve;
     if (!e.genre || !e.date_naissance || !e.lieu_naissance || !e.date_inscription) {

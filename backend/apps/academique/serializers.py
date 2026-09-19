@@ -10,19 +10,24 @@ class NiveauScolaireSerializer(serializers.ModelSerializer):
 
 
 class ClasseSerializer(serializers.ModelSerializer):
-    niveau_nom = serializers.SerializerMethodField()
-    note_max   = serializers.SerializerMethodField()
+    niveau_nom  = serializers.SerializerMethodField()
+    section_nom = serializers.SerializerMethodField()
+    note_max    = serializers.SerializerMethodField()
 
     class Meta:
         model = Classe
         fields = '__all__'
         extra_kwargs = {
-            'tenant': {'required': False, 'read_only': True},
-            'niveau': {'required': False, 'allow_null': True},
+            'tenant':  {'required': False, 'read_only': True},
+            'niveau':  {'required': False, 'allow_null': True},
+            'section': {'required': False, 'allow_null': True},
         }
 
     def get_niveau_nom(self, obj):
         return obj.niveau.nom if obj.niveau_id else ''
+
+    def get_section_nom(self, obj):
+        return obj.section.nom if obj.section_id else ''
 
     def get_note_max(self, obj):
         return float(obj.niveau.note_max) if obj.niveau_id else 20.0

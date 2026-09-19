@@ -5,6 +5,11 @@ from core.models import TenantModel
 
 class Section(TenantModel):
     nom                = models.CharField(max_length=100)
+    # Niveau pédagogique auquel la section appartient : « Niveau élémentaire →
+    # section CI → classe CIA ». Facultatif — une école à une seule section n'a
+    # rien à ranger. Le niveau de ses classes en découle (academique.Classe).
+    niveau             = models.ForeignKey('academique.NiveauScolaire', null=True, blank=True,
+                                           on_delete=models.SET_NULL, related_name='sections')
     frais_inscription  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     frais_mensualite   = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     frais_uniforme     = models.DecimalField(max_digits=12, decimal_places=2, default=0)

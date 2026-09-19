@@ -582,8 +582,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'academique.note_max' | translate }}</label>
-          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="noteMaxOptions" [(ngModel)]="formMatiere.note_max"
-                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
+          <!-- Saisie libre : les barèmes varient d'un établissement à
+               l'autre (5, 15, 30, 60…). Une liste fermée obligeait à noter
+               sur 10 ou sur 20 une matière qui ne l'est pas. -->
+          <p-inputNumber [(ngModel)]="formMatiere.note_max" [min]="1" [max]="1000"
+                         mode="decimal" [maxFractionDigits]="1" [fluid]="true" />
+          <small class="fc-hint">{{ 'academique.note_max_aide' | translate }}</small>
+          <div class="bareme-rapide">
+            <button type="button" *ngFor="let b of baremesCourants"
+                    [class.actif]="formMatiere.note_max === b"
+                    (click)="formMatiere.note_max = b">/{{ b }}</button>
+          </div>
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -669,8 +678,13 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'academique.note_max' | translate }}</label>
-          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="noteMaxOptions" [(ngModel)]="formEval.note_max"
-                    optionLabel="label" optionValue="value" styleClass="w-full" scrollHeight="320px" />
+          <p-inputNumber [(ngModel)]="formEval.note_max" [min]="1" [max]="1000"
+                         mode="decimal" [maxFractionDigits]="1" [fluid]="true" />
+          <div class="bareme-rapide">
+            <button type="button" *ngFor="let b of baremesCourants"
+                    [class.actif]="formEval.note_max === b"
+                    (click)="formEval.note_max = b">/{{ b }}</button>
+          </div>
         </div>
         <div class="form-group full">
           <label>{{ 'academique.titre_optionnel' | translate }}</label>
@@ -733,6 +747,16 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .w-full { width:100%; }
     .stats-classe { display:flex; gap:16px; padding:12px 16px; border-bottom:1px solid var(--border); }
     .hybride-toggle { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer; }
+    /* Raccourcis de barème : ils remplissent le champ, ils ne le remplacent
+       pas — l'école qui note sur 37 tape 37. */
+    .bareme-rapide { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .bareme-rapide button {
+      padding:3px 10px; font-size:12px; line-height:1.6; cursor:pointer;
+      border:1px solid var(--surface-border); border-radius:14px;
+      background:var(--surface-card); color:var(--text-muted); }
+    .bareme-rapide button:hover { border-color:var(--primary); color:var(--primary); }
+    .bareme-rapide button.actif { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .fc-hint { display:block; margin-top:4px; font-size:12px; color:var(--text-muted); }
     .badge-ar { background:rgba(245,158,11,.15) !important; color:#b45309 !important; }
     .sc-item { display:flex; flex-direction:column; gap:2px; font-size:12px; }
     .sc-item span { color:var(--text-3); }
@@ -858,12 +882,15 @@ export class AcademiqueComponent implements OnInit {
   };
 
   formClasse:   any = { id: null, nom: '', code: '', niveau: '' };
+  /** Barèmes les plus courants, proposés en raccourci. La saisie reste libre :
+   *  un établissement note sur 5, un autre sur 60, et la liste fermée à 10/20
+   *  les obligeait à convertir à la main. */
+  baremesCourants = [5, 10, 15, 20, 30, 40, 50, 60, 100];
   formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20, programme: 'FR' };
   formTypeEval: any = { id: null, nom: '', nom_ar: '', poids: 1 };
   formEval     = { type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
 
   trimestres: any[] = [];
-  noteMaxOptions: any[] = [];
   periode = 'TRIMESTRE';   // type/mot : TRIMESTRE | SEMESTRE | PERIODE
   nbPeriodes = 3;          // nombre de périodes (libre)
   periodesOptions = [
@@ -925,10 +952,6 @@ export class AcademiqueComponent implements OnInit {
         this.construireTrimestres();
       },
     });
-    this.noteMaxOptions = [
-      { label: this.translate.instant('academique.sur_10'), value: 10 },
-      { label: this.translate.instant('academique.sur_20'), value: 20 },
-    ];
     this.acad.getNiveaux().subscribe({ next: r => this.niveaux.set(r.results || []) });
     this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
     this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });

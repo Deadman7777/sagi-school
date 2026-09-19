@@ -396,7 +396,8 @@
     "onglet_liste": "Student list",
     "onglet_pec": "Support",
     "onglet_pec_aide": "View social support",
-    "documents": "Documents"
+    "documents": "Documents",
+    "sans_classe": "No class"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -865,7 +866,8 @@
     "programme_FR": "French curriculum",
     "programme_AR": "Arabic curriculum",
     "tous_programmes": "All curricula",
-    "nom_ar": "Arabic label (Arabic curriculum report card)"
+    "nom_ar": "Arabic label (Arabic curriculum report card)",
+    "note_max_aide": "Grading scale for this subject: 5, 20, 60… as the school decides."
   },
   "comptabilite": {
     "title": "SYSCOHADA Accounting",

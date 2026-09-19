@@ -30,6 +30,23 @@ class NiveauScolaire(TenantModel):
 
 
 class Classe(TenantModel):
+    """Un groupe d'élèves, rangé sous une section, elle-même sous un niveau.
+
+    « Niveau élémentaire → section CI → classe CIA. » Une école qui gère
+    plusieurs niveaux, plusieurs sections et beaucoup de classes s'y retrouve ;
+    sans ce rangement, l'utilisateur lit une liste plate de dizaines de classes.
+
+    ⚠️ Jusqu'en septembre 2026, le lien classe→section n'existait pas : le
+    front rapprochait les deux par leur NOM (`c.niveau_nom === secNom`).
+    Renommer une section détachait silencieusement ses classes. `section` est
+    désormais une vraie clé étrangère, et `niveau` en découle — on ne saisit
+    plus deux fois la même information.
+    """
+    section    = models.ForeignKey('eleves.Section', on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='classes')
+    # Dérivé de la section (voir save()). Conservé en colonne : le barème
+    # note_max du niveau est lu sur la classe à chaque bulletin, et une classe
+    # peut encore exister sans section le temps qu'une école se range.
     niveau     = models.ForeignKey(NiveauScolaire, on_delete=models.SET_NULL,
                                    null=True, blank=True, related_name='classes')
     nom        = models.CharField(max_length=100)
@@ -41,8 +58,17 @@ class Classe(TenantModel):
         db_table = 'classes'
         ordering = ['ordre', 'nom']
 
+    def save(self, *args, **kwargs):
+        # La section fait foi : deux chemins vers le niveau finiraient par
+        # diverger, et le bulletin lirait un barème que l'écran ne montre pas.
+        if self.section_id and self.section.niveau_id:
+            self.niveau_id = self.section.niveau_id
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.nom} ({self.niveau.nom})"
+        parent = self.section.nom if self.section_id else (
+            self.niveau.nom if self.niveau_id else 'sans section')
+        return f"{self.nom} ({parent})"
 
 
 class TypeEvaluation(TenantModel):

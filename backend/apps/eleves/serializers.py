@@ -506,12 +506,14 @@ class SectionSerializer(serializers.ModelSerializer):
     frais_renouvellement = serializers.FloatField(required=False, default=0)
     tarif_demi_journee = serializers.FloatField(required=False, default=0, min_value=0)
     tarif_journee      = serializers.FloatField(required=False, default=0, min_value=0)
+    niveau_nom         = serializers.CharField(source='niveau.nom', read_only=True, default='')
 
     class Meta:
         model  = Section
         fields = '__all__'
         extra_kwargs = {
             'tenant': {'required': False, 'read_only': True},
+            'niveau': {'required': False, 'allow_null': True},
         }
 
     def validate(self, attrs):

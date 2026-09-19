@@ -396,7 +396,8 @@
     "onglet_liste": "Liste des élèves",
     "onglet_pec": "Prise en charge",
     "onglet_pec_aide": "Voir les prises en charge sociales",
-    "documents": "Documents"
+    "documents": "Documents",
+    "sans_classe": "Sans classe"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -865,7 +866,8 @@
     "programme_FR": "Programme français",
     "programme_AR": "Programme arabe",
     "tous_programmes": "Tous les programmes",
-    "nom_ar": "Libellé en arabe (bulletin du programme arabe)"
+    "nom_ar": "Libellé en arabe (bulletin du programme arabe)",
+    "note_max_aide": "Barème de la matière : 5, 20, 60… au choix de l'établissement."
   },
   "comptabilite": {
     "title": "Comptabilité SYSCOHADA",
