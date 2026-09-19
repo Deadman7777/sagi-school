@@ -726,7 +726,9 @@
     "caisse_compte_aide": "حساب فرعي من 571: يُحسب في صندوق المؤسسة.",
     "caisse_solde": "الرصيد الحالي",
     "caisses_vide": "لا صندوق خاص: كل شيء يدخل الصندوق الرئيسي.",
-    "caisse_confirm_suppr": "حذف هذا الصندوق؟"
+    "caisse_confirm_suppr": "حذف هذا الصندوق؟",
+    "rappels_messages": "الرسائل المزمع إرسالها (الإخوة مجمَّعون)",
+    "sms_eleves_couverts": "التلاميذ المشمولون بهذه الرسائل"
   },
   "cloture": {
     "title": "إغلاق السنة الدراسية",

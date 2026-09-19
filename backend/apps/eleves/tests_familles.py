@@ -406,3 +406,132 @@ class RegroupementTest(BaseFamille):
         self.assertEqual(encore.id, premier.id)
         # Colonne vide : rien n'est créé, l'école regroupera d'un clic.
         self.assertIsNone(EleveViewSet._famille_import(self.tenant, '', {}, {}))
+
+
+class RappelParFamilleTest(BaseFamille):
+    """Un rappel par famille — lot 5.
+
+    Un père de cinq enfants recevait cinq SMS le même jour, sur le même
+    numéro. L'école payait cinq segments et passait pour désorganisée auprès
+    de la famille qu'elle relance.
+
+    Ce que ces tests rendent impossible :
+    - plusieurs messages au même parent pour la même campagne ;
+    - un compteur qui annonce des envois par élève alors que l'école paie
+      des messages ;
+    - « vos 1 enfants » quand un seul enfant de la fratrie est en retard ;
+    - un rappel groupé sur des élèves que l'école n'a jamais reconnus comme
+      une même famille.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.tenant.rappel_actif = True
+        self.tenant.rappel_jour_debut = 1
+        self.tenant.rappel_jour_limite = 28
+        self.tenant.save()
+        self.jour = datetime.date(2026, 12, 15)
+
+    def _en_retard(self, nom, famille=None, **kwargs):
+        # Section à 15 000 F/mois, aucun paiement : l'élève doit tout.
+        return self._eleve(nom, famille=famille, **kwargs)
+
+    def test_une_fratrie_ne_recoit_qu_un_message(self):
+        from apps.eleves.rappels import envoyer_rappels
+
+        famille = self._famille()
+        for nom in ('Awa NDIAYE', 'Moussa NDIAYE', 'Fatou NDIAYE',
+                    'Ibrahima NDIAYE', 'Aminata NDIAYE'):
+            self._en_retard(nom, famille=famille)
+
+        rapport = envoyer_rappels(self.tenant, self.ex, today=self.jour)
+        # Un seul message simulé, pour cinq élèves.
+        self.assertEqual(rapport['simules'], 1)
+        self.assertEqual(rapport['nb_eleves'], 5)
+        # Mais cinq traces : le verrou mensuel et l'historique restent par
+        # élève.
+        from apps.eleves.models import RappelEnvoye
+        self.assertEqual(RappelEnvoye.objects.count(), 5)
+        self.assertEqual(
+            RappelEnvoye.objects.values_list('destinataire', flat=True).distinct().count(), 1)
+
+    def test_le_message_parle_de_la_fratrie_et_du_total(self):
+        from apps.eleves.rappels import composer_message, groupes_a_rappeler
+
+        famille = self._famille()
+        for nom in ('Awa NDIAYE', 'Moussa NDIAYE', 'Fatou NDIAYE'):
+            self._en_retard(nom, famille=famille)
+        groupe = groupes_a_rappeler(self.tenant, self.ex, today=self.jour)['groupes'][0]
+        message = composer_message(self.tenant, groupe, self.jour)
+        self.assertIn('vos 3 enfants', message)
+        # Le montant du message est celui de la FAMILLE, pas d'un enfant.
+        self.assertEqual(groupe['total_exigible'],
+                         round(sum(l['total_exigible'] for l in groupe['eleves']), 2))
+
+    def test_un_seul_enfant_en_retard_garde_un_message_nominatif(self):
+        from apps.eleves.rappels import composer_message, groupes_a_rappeler
+
+        famille = self._famille()
+        self._en_retard('Awa NDIAYE', famille=famille)
+        # Sa sœur est à jour : elle ne doit rien, donc elle n'est pas relancée.
+        soeur = self._eleve('Fatou NDIAYE', famille=famille)
+        Paiement.objects.create(tenant=self.tenant, exercice=self.ex, eleve=soeur,
+                                montant_inscription=25000, montant_mensualite=180000)
+
+        groupe = groupes_a_rappeler(self.tenant, self.ex, today=self.jour)['groupes'][0]
+        self.assertEqual(groupe['nb_eleves'], 1)
+        message = composer_message(self.tenant, groupe, self.jour)
+        self.assertIn('Awa NDIAYE', message)
+        self.assertNotIn('enfants', message)
+
+    def test_sans_famille_chacun_recoit_son_message(self):
+        """Deux élèves qui partagent un numéro mais qu'aucune école n'a
+        reconnus comme une fratrie restent deux messages : deux foyers peuvent
+        se partager un téléphone, et leur écrire « vos 2 enfants » serait faux.
+        """
+        from apps.eleves.rappels import groupes_a_rappeler
+
+        self._en_retard('Awa NDIAYE', telephone_pere='77 123 45 67')
+        self._en_retard('Moussa FALL', telephone_pere='77 123 45 67')
+        groupes = groupes_a_rappeler(self.tenant, self.ex, today=self.jour)
+        self.assertEqual(groupes['nb_messages'], 2)
+
+    def test_un_enfant_deja_prevenu_ne_relance_pas_toute_la_fratrie(self):
+        from apps.eleves.models import RappelEnvoye
+        from apps.eleves.rappels import envoyer_rappels
+
+        famille = self._famille()
+        premier = self._en_retard('Awa NDIAYE', famille=famille)
+        RappelEnvoye.objects.create(tenant=self.tenant, eleve=premier, periode='2026-12',
+                                    canal='SMS', destinataire='770000001',
+                                    message='déjà parti', statut='SIMULE')
+        self._en_retard('Moussa NDIAYE', famille=famille)
+
+        rapport = envoyer_rappels(self.tenant, self.ex, today=self.jour)
+        self.assertEqual(rapport['simules'], 1)
+        self.assertEqual(rapport['nb_eleves'], 1)      # le frère seul
+        self.assertEqual(rapport['ignores'], 1)
+        # Et rien n'est reparti pour l'aîné.
+        self.assertEqual(RappelEnvoye.objects.filter(eleve=premier).count(), 1)
+
+    def test_renvoyer_le_meme_jour_ne_renvoie_rien(self):
+        from apps.eleves.rappels import envoyer_rappels
+
+        famille = self._famille()
+        for nom in ('Awa NDIAYE', 'Moussa NDIAYE'):
+            self._en_retard(nom, famille=famille)
+        envoyer_rappels(self.tenant, self.ex, today=self.jour)
+        second = envoyer_rappels(self.tenant, self.ex, today=self.jour)
+        self.assertEqual(second['simules'], 0)
+        self.assertEqual(second['ignores'], 2)
+
+    def test_l_ecran_annonce_les_messages_et_les_eleves(self):
+        famille = self._famille()
+        for nom in ('Awa NDIAYE', 'Moussa NDIAYE', 'Fatou NDIAYE'):
+            self._en_retard(nom, famille=famille)
+        self._en_retard('Seul DIOP', telephone_pere='76 000 00 00')
+
+        r = self.client.get('/api/eleves/liste/rappels/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['nb'], 4)            # quatre élèves en retard
+        self.assertEqual(r.data['nb_messages'], 2)   # mais deux SMS à payer

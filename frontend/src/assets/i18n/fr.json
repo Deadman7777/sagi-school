@@ -726,7 +726,9 @@
     "caisse_compte_aide": "Sous-compte de 571 : il entre dans la caisse de l’école.",
     "caisse_solde": "Solde courant",
     "caisses_vide": "Aucune caisse spécifique : tout entre dans la caisse principale.",
-    "caisse_confirm_suppr": "Supprimer cette caisse ?"
+    "caisse_confirm_suppr": "Supprimer cette caisse ?",
+    "rappels_messages": "Messages à envoyer (fratries regroupées)",
+    "sms_eleves_couverts": "Élèves couverts par ces messages"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",

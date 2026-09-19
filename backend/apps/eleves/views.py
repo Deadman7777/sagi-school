@@ -1301,12 +1301,21 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         from .rappels import eleves_a_rappeler, fenetre_rappel
 
+        from .rappels import groupes_a_rappeler
+
         tenant = get_tenant(request)
         exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({'fenetre': fenetre_rappel(tenant), 'lignes': [],
-                             'nb': 0, 'total_exigible': 0})
-        return Response(eleves_a_rappeler(tenant, exercice))
+                             'nb': 0, 'nb_messages': 0, 'total_exigible': 0})
+        detail = eleves_a_rappeler(tenant, exercice)
+        # Le nombre de MESSAGES à côté du nombre d'élèves : c'est ce que
+        # l'école va payer, et l'écart entre les deux chiffres est tout le
+        # bénéfice du regroupement des fratries.
+        groupes = groupes_a_rappeler(tenant, exercice)
+        return Response({**detail,
+                         'nb_messages': groupes['nb_messages'],
+                         'groupes': groupes['groupes']})
 
     @action(detail=False, methods=['post'], url_path='rappels/envoyer')
     def envoyer_rappels_action(self, request):

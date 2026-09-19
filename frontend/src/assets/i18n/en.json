@@ -726,7 +726,9 @@
     "caisse_compte_aide": "Sub-account of 571: it counts in the school cash.",
     "caisse_solde": "Current balance",
     "caisses_vide": "No specific cash box: everything goes to the main one.",
-    "caisse_confirm_suppr": "Delete this cash box?"
+    "caisse_confirm_suppr": "Delete this cash box?",
+    "rappels_messages": "Messages to send (siblings grouped)",
+    "sms_eleves_couverts": "Students covered by those messages"
   },
   "cloture": {
     "title": "Year Closing",
