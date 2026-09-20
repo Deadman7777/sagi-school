@@ -7,13 +7,14 @@ from django.db.models import Avg, Max, Min, Count, Q
 from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache
 from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
                            TypeEvaluationSerializer, MatiereSerializer,
-                           EvaluationSerializer, NoteSerializer)
+                           EvaluationSerializer, NoteSerializer, erreur_bareme)
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
 from core.tenant import get_tenant
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
-                        programme_valide, situation_periode)
+                        note_max_reference, points_matiere, programme_valide, ramener,
+                        situation_periode)
 
 
 def _est_periode_finale(tenant, periode):
@@ -255,10 +256,31 @@ class NoteViewSet(viewsets.ModelViewSet):
         if not notes_data:
             return Response({'error': 'Aucune note fournie.'}, status=400)
 
+        # Barèmes des évaluations concernées, en une requête : la grille peut
+        # porter sur plusieurs évaluations de barèmes différents.
+        # Clés en CHAÎNE : la requête envoie des UUID sous forme de texte, et
+        # un dictionnaire indexé par UUID ne les retrouve jamais — le barème
+        # ressortait None et la note hors barème passait quand même.
+        eval_ids  = {item.get('evaluation') for item in notes_data if item.get('evaluation')}
+        baremes   = {str(i): nm for i, nm in
+                     Evaluation.objects.filter(tenant=tenant, id__in=eval_ids)
+                                       .values_list('id', 'note_max')}
+
         created = updated = errors = 0
+        refusees = []
         with transaction.atomic():
             for item in notes_data:
                 try:
+                    # Une note hors barème est refusée NOMMÉMENT. Elle passait
+                    # avant, et faussait ensuite moyenne, rang et mention sans
+                    # que rien ne le signale.
+                    if not item.get('absent', False):
+                        message = erreur_bareme(item.get('valeur', 0),
+                                                baremes.get(str(item['evaluation'])))
+                        if message:
+                            refusees.append({'eleve': item.get('eleve'), 'message': message})
+                            errors += 1
+                            continue
                     _, was_created = Note.objects.update_or_create(
                         tenant=tenant,
                         eleve_id=item['eleve'],
@@ -275,7 +297,8 @@ class NoteViewSet(viewsets.ModelViewSet):
                 except Exception:
                     errors += 1
 
-        return Response({'created': created, 'updated': updated, 'errors': errors})
+        return Response({'created': created, 'updated': updated, 'errors': errors,
+                         'refusees': refusees})
 
 
 class MoteurCalculView(APIView):
@@ -371,7 +394,7 @@ class MoteurCalculView(APIView):
             notes_idx[(str(n.eleve_id), str(n.evaluation_id))] = n
         # ─────────────────────────────────────────────────────────────────
 
-        note_max_niveau = float(classe.niveau.note_max) if classe.niveau else 20
+        note_max_niveau = note_max_reference(classe, matieres)
         seuil_reussite  = note_max_niveau / 2
 
         resultats = []
@@ -407,7 +430,11 @@ class MoteurCalculView(APIView):
                     if note:
                         has_any_note = True
                         if not note.absent:
-                            sum_note_poids += float(note.valeur) * poids
+                            # Une interro sur /10 dans une matière sur /20 :
+                            # 8 vaut 16. Sans cette conversion, un bon résultat
+                            # comptait pour la moitié de sa valeur.
+                            valeur = ramener(note.valeur, ev.note_max, matiere.note_max)
+                            sum_note_poids += valeur * poids
 
                 # Si aucune note saisie du tout → absent
                 if not has_any_note:
@@ -421,7 +448,10 @@ class MoteurCalculView(APIView):
                     continue
 
                 moyenne = sum_note_poids / sum_poids if sum_poids > 0 else 0
-                points  = moyenne * float(matiere.coefficient)
+                # La moyenne reste sur le barème de la matière (affichage),
+                # les points sont ramenés à celui du niveau (addition).
+                points  = points_matiere(moyenne, matiere.note_max,
+                                         note_max_niveau, matiere.coefficient)
                 total_points += points
                 total_coef   += float(matiere.coefficient)
                 appreciation  = self.get_appreciation(moyenne, matiere.note_max)
@@ -633,10 +663,10 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     total_points   = situation['total_points']
     total_coef     = situation['total_coef']
     moy_generale   = situation['moy_generale']
-    # note_max de référence : niveau si défini, sinon note_max de la matière (niveau nullable)
-    m0 = bulletins_list[0].matiere
-    niv = getattr(m0.classe, 'niveau', None) if m0.classe_id else None
-    note_max = float(niv.note_max) if niv else float(m0.note_max or 20)
+    # Barème de la moyenne générale — la MÊME déduction que le moteur de
+    # calcul, avec les mêmes arguments (cf. note_max_reference).
+    note_max = note_max_reference(bulletins_list[0].matiere.classe,
+                                  [b.matiere for b in bulletins_list])
 
     from collections import defaultdict
 
@@ -689,22 +719,37 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     for j, col in enumerate(eval_columns):
         col['width'] = base_w + (1 if j < extra else 0)
 
-    def build_notes_cells(matiere_id):
+    def build_notes_cells(matiere_id, note_max_matiere):
+        """Les notes du détail, ramenées au barème de la matière.
+
+        La ligne annonce « 15,5/20 » : il faut que les notes affichées à sa
+        gauche s'en approchent, sinon le parent ne retrouve pas la moyenne.
+        Une interro notée sur /10 s'imprime donc sur /20 comme le reste de la
+        ligne. Le professeur retrouve sa note telle qu'il l'a saisie dans
+        l'écran de saisie, qui affiche le barème de l'évaluation.
+        """
         ordered = matiere_evals_ordered.get(str(matiere_id), [])
         by_key: dict = {}
         for ev, t, idx in ordered:
             n = notes_par_eval.get(str(ev.id))
             if n:
-                by_key[(t, idx)] = 'ABS' if n.absent else f"{float(n.valeur):g}"
+                valeur = ramener(n.valeur, ev.note_max, note_max_matiere)
+                by_key[(t, idx)] = 'ABS' if n.absent else f"{valeur:g}".replace('.', ',')
             else:
                 by_key[(t, idx)] = '—'
         return [by_key.get(col['key'], '—') for col in eval_columns]
 
     def _fmt(val):
+        """Nombre court, avec la virgule décimale du document.
+
+        Les totaux de la ligne du bas sont rendus par Django, qui applique la
+        locale et écrit « 140,67 ». Ces cellules-ci étaient formatées à la
+        main en `%g` et écrivaient « 58.67 » : deux séparateurs dans la même
+        colonne du même tableau.
+        """
         if val is None:
             return '—'
-        f = float(val)
-        return f"{f:g}"
+        return f"{float(val):g}".replace('.', ',')
 
     matieres_ctx = []
     for b in bulletins_list:
@@ -716,7 +761,7 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             'points':       _fmt(b.points),
             'rang':         b.rang_matiere,
             'appreciation': b.appreciation,
-            'notes_cells':  build_notes_cells(b.matiere_id),
+            'notes_cells':  build_notes_cells(b.matiere_id, b.matiere.note_max),
         })
     # ─────────────────────────────────────────────────────────────────
 

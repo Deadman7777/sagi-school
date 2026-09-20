@@ -60,6 +60,28 @@ class EvaluationSerializer(serializers.ModelSerializer):
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
+def erreur_bareme(valeur, note_max):
+    """Le message d'erreur si la note ne tient pas dans son barème, sinon None.
+
+    Une seule définition, parce qu'il y a deux chemins d'écriture : le
+    serializer (API unitaire, imports) et `NoteViewSet.bulk_save` (la grille
+    de saisie, qui écrit en masse sans passer par DRF).
+    """
+    if valeur is None:
+        return None
+    try:
+        valeur = float(valeur)
+    except (TypeError, ValueError):
+        return "Note illisible."
+    if valeur < 0:
+        return "Une note ne peut pas être négative."
+    note_max = float(note_max or 0)
+    if note_max > 0 and valeur > note_max:
+        return (f"Note supérieure au barème de l'évaluation "
+                f"({valeur:g} sur /{note_max:g}).")
+    return None
+
+
 class NoteSerializer(serializers.ModelSerializer):
     eleve_nom      = serializers.CharField(source='eleve.nom_complet', read_only=True)
     evaluation_nom = serializers.CharField(source='evaluation.matiere.nom', read_only=True)
@@ -68,3 +90,18 @@ class NoteSerializer(serializers.ModelSerializer):
         model = Note
         fields = '__all__'
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def validate(self, attrs):
+        """Une note ne peut pas dépasser le barème de son évaluation.
+
+        L'écran de saisie borne déjà le champ, l'API ne le faisait pas : un
+        import ou un appel direct posait 18 sur une interrogation notée /10.
+        La note entrait en base et tout le reste en découlait — moyenne,
+        rang, mention — sans que rien ne signale l'anomalie.
+        """
+        evaluation = attrs.get('evaluation') or getattr(self.instance, 'evaluation', None)
+        valeur     = attrs.get('valeur', getattr(self.instance, 'valeur', None))
+        if evaluation is not None and not attrs.get('absent', False):
+            if message := erreur_bareme(valeur, evaluation.note_max):
+                raise serializers.ValidationError({'valeur': message})
+        return attrs

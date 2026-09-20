@@ -1107,8 +1107,17 @@ export class AcademiqueComponent implements OnInit {
           this.msg.add({ severity: 'success', summary: 'Notes enregistrées',
                          detail: `${total} note(s) sauvegardée(s).` });
         } else {
-          this.msg.add({ severity: 'warn', summary: `${total} OK / ${res.errors} erreur(s)`,
-                         detail: 'Certaines notes n\'ont pas pu être enregistrées.' });
+          // Dire LESQUELLES et POURQUOI. « Certaines notes » laissait le
+          // professeur relire quarante lignes pour trouver la sienne.
+          const noms = (res.refusees || [])
+            .map((r: any) => {
+              const el = this.elevesNotes().find((e: any) => e.id === r.eleve);
+              return `${el?.nom_complet || '?'} — ${r.message}`;
+            });
+          this.msg.add({ severity: 'warn', summary: `${total} OK / ${res.errors} refusée(s)`,
+                         detail: noms.length ? noms.join(' ; ')
+                                             : 'Certaines notes n\'ont pas pu être enregistrées.',
+                         life: 10000 });
         }
         this.selectionnerEvaluation(this.evalSelectionnee);
       },
@@ -1201,7 +1210,14 @@ export class AcademiqueComponent implements OnInit {
   }
   ouvrirDialogEvaluation() {
     if (!this.matiereNotes) { this.msg.add({ severity:'warn', summary: this.translate.instant('academique.select_matiere') }); return; }
-    this.formEval = { type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max:20, titre:'' };
+    // Le barème part de celui de la matière, pas d'un 20 en dur : une école
+    // qui note sa récitation sur 10 n'a pas à le ressaisir à chaque
+    // évaluation, et ne crée pas par inadvertance une interro /20 dans une
+    // matière /10. Il reste modifiable — un oral sur 5 dans une matière sur
+    // 20 est un cas réel.
+    const matiere = this.matieresNotes().find((m: any) => m.id === this.matiereNotes);
+    const bareme  = matiere?.note_max ? +matiere.note_max : 20;
+    this.formEval = { type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max: bareme, titre:'' };
     this.dialogEvalVisible = true;
   }
 

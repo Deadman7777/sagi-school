@@ -10,6 +10,16 @@ passent tous par ici : deux calculs séparés finissent toujours par diverger.
 
 Établissement hybride : on ne mélange JAMAIS les deux programmes. Une moyenne
 qui additionnerait le français et l'arabe ne correspond à aucun bulletin.
+
+Barèmes : depuis que la note maximale est libre (5, 10, 15, 30, 60…), trois
+échelles coexistent — celle de l'évaluation, celle de la matière, celle du
+niveau. La règle tient en une phrase : **chaque matière s'affiche sur SON
+barème, et seule l'agrégation ramène au barème du niveau.** Concrètement,
+`BulletinCache.moyenne` est sur le barème de la matière (une récitation notée
+sur 10 s'imprime « 8/10 »), tandis que `BulletinCache.points` est déjà ramené
+au barème du niveau — sans quoi Σ points / Σ coef ne vaudrait pas la moyenne
+générale imprimée juste en dessous, et le parent ne retrouverait pas son
+addition. Toute conversion passe par `ramener()` : c'est le seul endroit.
 """
 from collections import defaultdict
 
@@ -37,8 +47,64 @@ def lignes_cache(tenant, annee, programme=None, **filtres):
     return qs.select_related('matiere')
 
 
+def ramener(valeur, depuis, vers):
+    """Change une note d'échelle : 8 sur /10 vaut 16 sur /20.
+
+    Renvoie la valeur inchangée si l'une des deux échelles est absente ou
+    absurde (≤ 0) : mieux vaut un chiffre non converti qu'une division par
+    zéro au milieu d'un bulletin.
+    """
+    if valeur is None:
+        return None
+    depuis = float(depuis or 0)
+    vers   = float(vers or 0)
+    if depuis <= 0 or vers <= 0 or depuis == vers:
+        return float(valeur)
+    return float(valeur) * vers / depuis
+
+
+def points_matiere(moyenne, note_max_matiere, note_max_niveau, coefficient):
+    """Les points d'une matière, ramenés au barème du niveau.
+
+    La moyenne affichée reste sur le barème de la matière ; les points, eux,
+    servent à additionner des matières entre elles. Une récitation sur /10 et
+    des maths sur /20 ne s'additionnent qu'une fois mises à la même échelle.
+    """
+    if moyenne is None:
+        return None
+    return ramener(moyenne, note_max_matiere, note_max_niveau) * float(coefficient)
+
+
+def note_max_reference(classe, matieres):
+    """Le barème sur lequel s'imprime la moyenne GÉNÉRALE d'un bulletin.
+
+    C'est celui du niveau. Mais `Classe.niveau` est nullable — une classe peut
+    exister avant que l'école se soit rangée en niveaux. Deux replis, dans
+    cet ordre :
+
+    1. toutes les matières partagent le même barème → c'est celui-là, et
+       aucune conversion n'a lieu (le cas d'une école entièrement sur /10) ;
+    2. sinon 20, faute de mieux.
+
+    Le moteur de calcul et le bulletin appellent cette fonction avec les
+    MÊMES arguments (la classe, ses matières du programme demandé). Deux
+    déductions séparées divergeaient : une classe sans niveau dont les
+    matières sont sur /10 faisait calculer la moyenne sur 20 et l'imprimer
+    « /10 ».
+    """
+    niveau = getattr(classe, 'niveau', None) if classe is not None else None
+    if niveau is not None and niveau.note_max:
+        return float(niveau.note_max)
+    baremes = {float(m.note_max) for m in matieres if m.note_max}
+    return baremes.pop() if len(baremes) == 1 else 20.0
+
+
 def moyenne_generale(lignes):
-    """Σ points / Σ coefficients ; None si aucune matière notée."""
+    """Σ points / Σ coefficients ; None si aucune matière notée.
+
+    Les points sont déjà au barème du niveau (voir `points_matiere`), donc
+    cette moyenne l'est aussi : c'est elle qu'on imprime « /20 ».
+    """
     coef = sum(float(l.matiere.coefficient) for l in lignes)
     if coef <= 0:
         return None
@@ -55,10 +121,9 @@ def numero_periode(code):
 
 
 def sur_20(valeur, note_max):
-    if valeur is None:
-        return None
-    note_max = float(note_max or 20)
-    return round(float(valeur) * 20 / note_max, 2) if note_max else None
+    """Échelle de travail de la fiche pédagogique, dont les seuils sont sur 20."""
+    valeur = ramener(valeur, note_max, 20)
+    return None if valeur is None else round(valeur, 2)
 
 
 def resultats_classe(tenant, classe, periode, annee, programme=None):
