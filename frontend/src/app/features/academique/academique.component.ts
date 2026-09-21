@@ -79,6 +79,30 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </label>
         <span class="periode-hint">{{ 'academique.hybride_aide' | translate }}</span>
       </div>
+      <!-- Règle de la moyenne générale : deux calculs qui divergent dès que
+           les barèmes se mélangent (voir resultats.py côté serveur). -->
+      <div class="periode-bar">
+        <label class="periode-label" for="calcul-moyenne">🧮 Calcul de la moyenne</label>
+        <select id="calcul-moyenne" class="reglage-select" [(ngModel)]="calculMoyenne"
+                (ngModelChange)="sauvegarderReglesMoyenne()">
+          <option value="MATIERES">Moyenne des matières</option>
+          <option value="POINTS">Total des points ÷ total des barèmes</option>
+        </select>
+        <label class="periode-hint" for="bareme-moyenne">Moyenne sur</label>
+        <select id="bareme-moyenne" class="reglage-select" [(ngModel)]="baremeMoyenne"
+                (ngModelChange)="sauvegarderReglesMoyenne()">
+          <option value="">barème du niveau</option>
+          <option value="10">/10</option>
+          <option value="20">/20</option>
+        </select>
+        <span class="periode-hint">
+          @if (calculMoyenne === 'POINTS') {
+            On additionne les notes et les barèmes : 145 points sur 150 → 9,67/10. Une évaluation sur /20 compte deux fois plus qu'une sur /10.
+          } @else {
+            Chaque matière est ramenée au même barème, puis on fait la moyenne selon les coefficients : une matière sur /5 compte autant qu'une sur /20.
+          }
+        </span>
+      </div>
 
       <div class="param-grid">
 
@@ -746,6 +770,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
     .periode-label { font-weight:600; color:var(--text); font-size:13px; }
     .periode-hint { font-size:11px; color:var(--text-3); }
+    .reglage-select { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
+    .reglage-select:focus-visible { outline:2px solid #00d4aa; outline-offset:1px; }
     ::ng-deep .periode-select { min-width:150px; }
     ::ng-deep .periode-nb { width:110px; }
     .badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(0,212,170,0.1); color:#00d4aa; border:1px solid rgba(0,212,170,0.2); }
@@ -852,6 +878,9 @@ export class AcademiqueComponent implements OnInit {
 
   // ── Établissement hybride (programme français + programme arabe) ──
   hybride = false;
+  // Règle de la moyenne générale (Tenant.calcul_moyenne / bareme_moyenne)
+  calculMoyenne: 'MATIERES' | 'POINTS' = 'MATIERES';
+  baremeMoyenne: '' | '10' | '20' = '';
   programmeNotes = 'FR';
   programmeResultats = 'FR';
   programmeAnalyse = 'FR';
@@ -884,6 +913,25 @@ export class AcademiqueComponent implements OnInit {
     this.api.patch<any>('/tenants/mon_ecole/', { programmes_hybrides: this.hybride }).subscribe({
       next: () => { this.analyse.set(null); this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }); },
       error: () => { this.hybride = !this.hybride; this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }); },
+    });
+  }
+
+  sauvegarderReglesMoyenne() {
+    this.api.patch<any>('/tenants/mon_ecole/', {
+      calcul_moyenne: this.calculMoyenne,
+      bareme_moyenne: this.baremeMoyenne ? +this.baremeMoyenne : null,
+    }).subscribe({
+      next: r => {
+        this.analyse.set(null);
+        // Les moyennes déjà calculées suivaient l'ancienne règle : le serveur
+        // les a effacées. L'école doit les recalculer, classe par classe.
+        const nb = r?.moyennes_a_recalculer;
+        this.msg.add(nb
+          ? { severity: 'warn', summary: 'Règle de calcul changée', life: 9000,
+              detail: 'Les moyennes de l\'année ont été effacées : relancez « Calculer Moyennes » pour chaque classe et chaque période.' }
+          : { severity: 'success', summary: this.translate.instant('common.succes') });
+      },
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
     });
   }
 
@@ -989,6 +1037,8 @@ export class AcademiqueComponent implements OnInit {
       next: e => {
         this.periode = e?.periode_scolaire || 'TRIMESTRE';
         this.hybride = !!e?.programmes_hybrides;
+        this.calculMoyenne = e?.calcul_moyenne === 'POINTS' ? 'POINTS' : 'MATIERES';
+        this.baremeMoyenne = e?.bareme_moyenne ? (String(+e.bareme_moyenne) as '10' | '20') : '';
         this.nbPeriodes = e?.nb_periodes || 3;
         this.construireTrimestres();
       },

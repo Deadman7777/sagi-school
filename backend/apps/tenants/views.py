@@ -49,8 +49,16 @@ class TenantViewSet(viewsets.ModelViewSet):
         if request.method == 'PATCH':
             serializer = TenantSerializer(tenant, data=request.data, partial=True)
             if serializer.is_valid():
+                avant = (tenant.calcul_moyenne, tenant.bareme_moyenne)
                 serializer.save()
-                return Response(serializer.data)
+                donnees = dict(serializer.data)
+                if (tenant.calcul_moyenne, tenant.bareme_moyenne) != avant:
+                    # Les moyennes déjà calculées l'ont été selon l'ancienne
+                    # règle : les garder, c'est imprimer des bulletins faux
+                    # sans que rien ne le signale. Absentes, elles se voient.
+                    from apps.academique.resultats import oublier_moyennes
+                    donnees['moyennes_a_recalculer'] = oublier_moyennes(tenant)
+                return Response(donnees)
             return Response(serializer.errors, status=400)
 
         return Response(TenantSerializer(tenant).data)

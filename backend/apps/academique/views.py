@@ -13,7 +13,8 @@ from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
 from core.tenant import get_tenant
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
-                        note_max_reference, points_matiere, programme_valide, ramener,
+                        note_max_reference, points_matiere, poids_ligne, programme_valide, ramener,
+                        resultat_matiere,
                         situation_periode)
 
 
@@ -465,25 +466,14 @@ class MoteurCalculView(APIView):
                     })
                     continue
 
-                # Moyenne pondérée sur TOUTES les évaluations définies
-                sum_note_poids = 0.0
-                sum_poids      = 0.0
-                has_any_note   = False
-                for ev in evaluations:
-                    poids = float(ev.type_eval.poids)
-                    sum_poids += poids
-                    note = notes_idx.get((str(eleve.id), str(ev.id)))
-                    if note:
-                        has_any_note = True
-                        if not note.absent:
-                            # Une interro sur /10 dans une matière sur /20 :
-                            # 8 vaut 16. Sans cette conversion, un bon résultat
-                            # comptait pour la moitié de sa valeur.
-                            valeur = ramener(note.valeur, ev.note_max, matiere.note_max)
-                            sum_note_poids += valeur * poids
+                # Moyenne sur TOUTES les évaluations définies (une note
+                # manquante compte zéro), selon le calcul choisi par l'école.
+                resultat = resultat_matiere(
+                    [(ev, notes_idx.get((str(eleve.id), str(ev.id)))) for ev in evaluations],
+                    matiere, note_max_niveau, tenant.calcul_moyenne)
 
                 # Si aucune note saisie du tout → absent
-                if not has_any_note:
+                if resultat is None:
                     detail_matieres.append({
                         'matiere': matiere.nom,
                         'coefficient': float(matiere.coefficient),
@@ -493,22 +483,22 @@ class MoteurCalculView(APIView):
                     })
                     continue
 
-                moyenne = sum_note_poids / sum_poids if sum_poids > 0 else 0
                 # La moyenne reste sur le barème de la matière (affichage),
                 # les points sont ramenés à celui du niveau (addition).
-                points  = points_matiere(moyenne, matiere.note_max,
-                                         note_max_niveau, matiere.coefficient)
+                moyenne, points, poids = resultat
+                poids_effectif = poids if poids is not None else float(matiere.coefficient)
                 total_points += points
-                total_coef   += float(matiere.coefficient)
+                total_coef   += poids_effectif
                 appreciation  = self.get_appreciation(moyenne, matiere.note_max)
 
-                cache_to_upsert.append((eleve, matiere, round(moyenne, 2), round(points, 2), appreciation))
+                cache_to_upsert.append((eleve, matiere, round(moyenne, 2), round(points, 2),
+                                        None if poids is None else round(poids, 3), appreciation))
                 matieres_classement[str(matiere.id)].append((str(eleve.id), round(moyenne, 2)))
 
                 detail_matieres.append({
                     'matiere_id':   str(matiere.id),
                     'matiere':      matiere.nom,
-                    'coefficient':  float(matiere.coefficient),
+                    'coefficient':  round(poids_effectif, 3),
                     'note_max':     float(matiere.note_max),
                     'moyenne':      round(moyenne, 2),
                     'points':       round(points, 2),
@@ -532,11 +522,12 @@ class MoteurCalculView(APIView):
 
         # ── Upsert BulletinCache en bloc atomique ─────────────────────────
         with transaction.atomic():
-            for eleve, matiere, moyenne, points, appreciation in cache_to_upsert:
+            for eleve, matiere, moyenne, points, poids, appreciation in cache_to_upsert:
                 BulletinCache.objects.update_or_create(
                     tenant=tenant, eleve=eleve, matiere=matiere,
                     trimestre=trimestre, annee_scolaire=annee,
-                    defaults={'moyenne': moyenne, 'points': points, 'appreciation': appreciation}
+                    defaults={'moyenne': moyenne, 'points': points, 'poids': poids,
+                              'appreciation': appreciation}
                 )
         # ─────────────────────────────────────────────────────────────────
 
@@ -658,7 +649,7 @@ class BulletinView(APIView):
             'programme': programme,
             'matieres': [{
                 'nom':         b.matiere.nom,
-                'coefficient': float(b.matiere.coefficient),
+                'coefficient': poids_ligne(b),
                 'note_max':    float(b.matiere.note_max),
                 'moyenne':     float(b.moyenne) if b.moyenne is not None else None,
                 'points':      float(b.points) if b.points is not None else None,
@@ -801,7 +792,9 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     for b in bulletins_list:
         matieres_ctx.append({
             'nom':          b.matiere.nom,
-            'coefficient':  float(b.matiere.coefficient),
+            # Coefficient, ou poids du barème en calcul « total des points » :
+            # ce qui, multiplié par la moyenne, donne les points imprimés.
+            'coefficient':  _fmt(poids_ligne(b)),
             'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
             'moyenne':      _fmt(b.moyenne),
             'points':       _fmt(b.points),
@@ -948,6 +941,7 @@ class AnalysePerformanceView(APIView):
     def get(self, request):
         from apps.paiements.models import Exercice
         from django.db.models import Sum
+        from django.db.models.functions import Coalesce
         from collections import defaultdict
 
         tenant   = get_tenant(request)
@@ -964,7 +958,9 @@ class AnalysePerformanceView(APIView):
             rows = bulletins.filter(trimestre=periode).values(
                 'eleve_id', 'eleve__nom_complet',
                 'eleve__classe__nom', 'eleve__section__nom',
-            ).annotate(pts=Sum('points'), coef=Sum('matiere__coefficient'))
+            ).annotate(pts=Sum('points'),
+                       # Même poids que resultats.poids_ligne, en SQL.
+                       coef=Sum(Coalesce('poids', 'matiere__coefficient')))
             res = []
             for r in rows:
                 c = float(r['coef'] or 0)
@@ -1080,7 +1076,8 @@ class BulletinsHistoriqueView(APIView):
             .annotate(
                 nb_matieres=Count('id'),
                 total_points=Coalesce(Sum('points'), zero),
-                total_coef=Coalesce(Sum('matiere__coefficient'), zero),
+                # Même poids que resultats.poids_ligne, en SQL.
+                total_coef=Coalesce(Sum(Coalesce('poids', 'matiere__coefficient')), zero),
             )
             .order_by('-annee_scolaire', 'trimestre')
         )
