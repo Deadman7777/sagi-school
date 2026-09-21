@@ -151,6 +151,11 @@ class BulletinCache(TenantModel):
     annee_scolaire= models.CharField(max_length=10)
     moyenne       = models.DecimalField(max_digits=5, decimal_places=2, null=True)
     points        = models.DecimalField(max_digits=8, decimal_places=2, null=True)
+    # Poids de la matière dans la moyenne générale quand il n'est pas son
+    # coefficient : en calcul « total des points », une matière pèse autant que
+    # son barème (une matière sur /20 compte 2 sur un bulletin sur /10). Vide :
+    # le coefficient de la matière. Lu par `resultats.poids_ligne`, seul lecteur.
+    poids         = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True)
     rang_matiere  = models.IntegerField(null=True)
     appreciation  = models.CharField(max_length=100, blank=True)
 

@@ -64,6 +64,23 @@ class Tenant(TimeStampedModel):
     # Établissement hybride (programme français + programme arabe) : active le
     # choix du programme sur les matières, les bulletins et le suivi pédagogique.
     programmes_hybrides = models.BooleanField(default=False)
+    # ── Moyenne générale des bulletins ────────────────────────────────────
+    # Deux façons de calculer, qui divergent dès que les barèmes se mélangent :
+    #   MATIERES — chaque matière ramenée au barème du niveau, puis moyenne
+    #              pondérée par les coefficients. Une matière sur /5 pèse
+    #              autant qu'une matière sur /20.
+    #   POINTS   — total des points obtenus / total des points possibles, comme
+    #              on le fait à la main : 145 sur 150 → 9,67/10. Une
+    #              évaluation sur /20 pèse deux fois plus qu'une sur /10.
+    # Défaut MATIERES : aucune école ne voit ses moyennes changer sans l'avoir
+    # demandé. Voir apps/academique/resultats.py.
+    CALCUL_MOYENNE_CHOICES = [('MATIERES', 'Moyenne des matières'),
+                              ('POINTS', 'Total des points / total des barèmes')]
+    calcul_moyenne = models.CharField(max_length=10, choices=CALCUL_MOYENNE_CHOICES,
+                                      default='MATIERES')
+    # Barème de la moyenne générale pour toute l'école (10 ou 20). Vide : celui
+    # du niveau de la classe (20 par défaut), comme avant.
+    bareme_moyenne = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
 
     # ── Quand une mensualité devient-elle exigible ? ──────────────────────
     # Les écoles ne collectent pas au même moment, et la réponse décide de tout

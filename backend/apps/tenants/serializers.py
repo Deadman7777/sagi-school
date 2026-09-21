@@ -17,6 +17,10 @@ class TenantSerializer(serializers.ModelSerializer):
                 if not 1 <= int(attrs[champ]) <= 28:
                     raise serializers.ValidationError(
                         {champ: 'Indiquez un jour entre 1 et 28.'})
+        bareme = attrs.get('bareme_moyenne')
+        if bareme is not None and bareme <= 0:
+            raise serializers.ValidationError(
+                {'bareme_moyenne': 'Le barème de la moyenne doit être positif (10 ou 20).'})
         debut = attrs.get('rappel_jour_debut',
                           getattr(self.instance, 'rappel_jour_debut', 1))
         limite = attrs.get('rappel_jour_limite',
