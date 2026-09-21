@@ -53,11 +53,43 @@ class EvaluationSerializer(serializers.ModelSerializer):
     matiere_nom   = serializers.CharField(source='matiere.nom', read_only=True)
     type_eval_nom = serializers.CharField(source='type_eval.nom', read_only=True)
     type_eval_poids = serializers.FloatField(source='type_eval.poids', read_only=True)
+    # Combien de notes cette évaluation porte déjà. Sert à prévenir AVANT de
+    # supprimer : les notes partent avec elle (CASCADE). Annoté par la vue,
+    # replié sur un COUNT quand l'objet arrive d'ailleurs (création, détail).
+    nb_notes      = serializers.SerializerMethodField()
 
     class Meta:
         model = Evaluation
         fields = '__all__'
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def get_nb_notes(self, obj):
+        valeur = getattr(obj, 'nb_notes_annote', None)
+        return valeur if valeur is not None else obj.notes.count()
+
+    def validate(self, attrs):
+        """Baisser le barème ne doit pas rendre des notes déjà saisies illégales.
+
+        Le cas qui motive la modification : l'évaluation a été créée sur /20
+        alors qu'elle était sur /10, et la saisie a commencé. On garde les
+        valeurs telles quelles — le professeur a noté sur 10 dans sa tête, une
+        conversion lui changerait ses notes sous les yeux. Mais si l'une
+        dépasse le nouveau barème, on refuse en la nommant plutôt que de
+        laisser en base une note hors barème.
+        """
+        if self.instance is None:
+            return attrs
+        note_max = attrs.get('note_max', self.instance.note_max)
+        if note_max is None or float(note_max) >= float(self.instance.note_max):
+            return attrs
+        hors = list(self.instance.notes.filter(absent=False, valeur__gt=note_max)
+                                       .select_related('eleve')[:5])
+        if hors:
+            noms = ', '.join(f"{n.eleve.nom_complet} ({float(n.valeur):g})" for n in hors)
+            raise serializers.ValidationError({'note_max': (
+                f"Des notes déjà saisies dépassent /{float(note_max):g} : {noms}. "
+                f"Corrigez-les d'abord, ou supprimez l'évaluation.")})
+        return attrs
 
 
 def erreur_bareme(valeur, note_max):
