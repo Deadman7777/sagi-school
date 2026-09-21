@@ -49,10 +49,10 @@ class TenantViewSet(viewsets.ModelViewSet):
         if request.method == 'PATCH':
             serializer = TenantSerializer(tenant, data=request.data, partial=True)
             if serializer.is_valid():
-                avant = (tenant.calcul_moyenne, tenant.bareme_moyenne)
+                avant = (tenant.calcul_moyenne, tenant.bareme_moyenne, tenant.arrondi_moyenne)
                 serializer.save()
                 donnees = dict(serializer.data)
-                if (tenant.calcul_moyenne, tenant.bareme_moyenne) != avant:
+                if (tenant.calcul_moyenne, tenant.bareme_moyenne, tenant.arrondi_moyenne) != avant:
                     # Les moyennes déjà calculées l'ont été selon l'ancienne
                     # règle : les garder, c'est imprimer des bulletins faux
                     # sans que rien ne le signale. Absentes, elles se voient.

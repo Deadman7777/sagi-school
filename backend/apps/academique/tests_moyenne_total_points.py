@@ -110,8 +110,11 @@ class ModePointsTest(MoyenneTotalPointsBase):
     def test_une_matiere_sur_20_pese_deux_fois_une_matiere_sur_10(self):
         self._regler('POINTS', 10)
         self._une_matiere_par_note()
-        poids = {m['note_max']: m['coefficient'] for m in self._calculer()['matieres']}
+        matieres = self._calculer()['matieres']
+        poids = {m['note_max']: m['poids'] for m in matieres}
         self.assertEqual(poids, {10.0: 1.0, 5.0: 0.5, 20.0: 2.0})
+        # Ce poids reste interne : le coefficient affiché est celui de l'école.
+        self.assertEqual({m['coefficient'] for m in matieres}, {1.0})
 
     def test_le_coefficient_de_la_matiere_compte_toujours(self):
         """Coefficient 2 sur une matière : ses points et ses barèmes doublent."""
@@ -136,6 +139,7 @@ class ModePointsTest(MoyenneTotalPointsBase):
         bulletin = self.client.get(f'/api/academique/bulletin/{self.eleve.id}/T1/')
         self.assertEqual(bulletin.status_code, 200, bulletin.content)
         self.assertEqual(bulletin.data['stats']['moy_generale'], 9.67)
+        self.assertEqual({m['coefficient'] for m in bulletin.data['matieres']}, {1.0})
         pdf = self.client.get(f'/api/academique/bulletin-pdf/{self.eleve.id}/T1/')
         self.assertEqual(pdf.status_code, 200)
 
@@ -189,3 +193,96 @@ class ChangementDeRegleTest(MoyenneTotalPointsBase):
     def test_bareme_negatif_refuse(self):
         r = self.client.patch('/api/tenants/mon_ecole/', {'bareme_moyenne': -10}, format='json')
         self.assertEqual(r.status_code, 400)
+
+
+class BulletinImprimeTest(MoyenneTotalPointsBase):
+    def test_coefficients_de_l_ecole_et_points_sur_points_possibles(self):
+        """La feuille de la directrice : coef 1 partout, total 145 sur 150."""
+        from apps.academique.views import contexte_bulletin
+        self._regler('POINTS', 10)
+        self._une_matiere_par_note()
+        self._calculer()
+        ctx = contexte_bulletin(self.tenant, self.eleve, 'T1', '2025-2026', None)
+        self.assertEqual({m['coefficient'] for m in ctx['matieres']}, {'1'})
+        self.assertEqual(ctx['total_points'], 145)
+        self.assertEqual(ctx['total_bareme'], 150)
+        self.assertEqual(ctx['stats']['moy_generale'], 9.67)
+
+    def test_mode_matieres_sans_total_sur_bareme(self):
+        from apps.academique.views import contexte_bulletin
+        self._une_matiere_par_note()
+        self._calculer()
+        ctx = contexte_bulletin(self.tenant, self.eleve, 'T1', '2025-2026', None)
+        self.assertIsNone(ctx['total_bareme'])
+
+    def test_un_grand_logo_ne_pousse_pas_le_bulletin_sur_deux_pages(self):
+        """Logo de 1500 px importé tel quel : xhtml2pdf ignore max-width, il
+        s'imprimait en grand et chaque bulletin faisait deux pages."""
+        import base64
+        import io
+
+        from PIL import Image
+        from pypdf import PdfReader
+
+        tampon = io.BytesIO()
+        Image.new('RGB', (1500, 1400), (30, 90, 160)).save(tampon, 'PNG')
+        self.tenant.logo = 'data:image/png;base64,' + base64.b64encode(tampon.getvalue()).decode()
+        self.tenant.save()
+        self._regler('POINTS', 10)
+        self._une_matiere_par_note()
+        self._calculer()
+        pdf = self.client.get(f'/api/academique/bulletin-pdf/{self.eleve.id}/T1/')
+        self.assertEqual(pdf.status_code, 200)
+        contenu = b''.join(pdf.streaming_content) if pdf.streaming else pdf.content
+        self.assertEqual(len(PdfReader(io.BytesIO(contenu)).pages), 1)
+
+
+# La feuille de la directrice (1re Étape CP) : barèmes et notes de six élèves,
+# avec la moyenne qu'elle a écrite. La septième ligne (NDIAYE) n'y est pas :
+# la somme de ses notes (111,5) ne donne pas le total écrit (119,5).
+BAREMES_CP = [10, 10, 10, 5, 5, 10, 10, 10, 10, 10, 10, 20, 20, 10]
+FEUILLE_CP = {
+    'Mouhamed Saleh BADIANE': ([9, 10, 0, 4, 2.5, 6, 7, 8, 10, 7, 9, 17, 20, 8], 7.83),
+    'Adama THIAW':            ([8, 9, 0, 5, 5, 10, 9, 8, 10, 10, 6, 20, 14, 6], 8.0),
+    'Aïssata KÉBÉ':           ([9, 10, 7, 4, 4, 0, 8, 10, 10, 10, 9, 15, 10, 6], 7.46),
+    'Yacine DIAGNE':          ([7, 10, 2, 5, 3, 10, 9, 10, 10, 5, 10, 20, 10, 7], 7.86),
+    'Abdou Karim DIEDHIOU':   ([10, 10, 9, 4, 4, 10, 8, 10, 10, 7.5, 9, 15, 20, 7], 8.9),
+    'Adama NIANG':            ([10, 10, 10, 4, 5, 10, 9, 10, 10, 10, 10, 20, 20, 7], 9.66),
+}
+
+
+class TroncatureTest(MoyenneTotalPointsBase):
+    def test_arrondir(self):
+        from apps.academique.resultats import arrondir
+        self.assertEqual(arrondir(145 / 15, 'TRONQUE'), 9.66)
+        self.assertEqual(arrondir(145 / 15, 'ARRONDI'), 9.67)
+        # Un flottant « presque 7 » reste 7, et 8,9 ne devient pas 8,89.
+        self.assertEqual(arrondir(6.9999999999999, 'TRONQUE'), 7.0)
+        self.assertEqual(arrondir(133.5 / 15, 'TRONQUE'), 8.9)
+        self.assertIsNone(arrondir(None, 'TRONQUE'))
+
+    def test_la_feuille_de_la_directrice_a_l_identique(self):
+        self.tenant.calcul_moyenne, self.tenant.bareme_moyenne = 'POINTS', 10
+        self.tenant.arrondi_moyenne = 'TRONQUE'
+        self.tenant.save()
+        self.eleve.delete()
+        matieres = [Matiere.objects.create(tenant=self.tenant, classe=self.classe,
+                                           nom=f'Discipline {i + 1}', coefficient=1,
+                                           note_max=b, ordre=i)
+                    for i, b in enumerate(BAREMES_CP)]
+        evals = [self._eval(m, b) for m, b in zip(matieres, BAREMES_CP)]
+        for nom, (notes, _) in FEUILLE_CP.items():
+            e = Eleve.objects.create(tenant=self.tenant, exercice=self.ex, section=self.section,
+                                     classe=self.classe, nom_complet=nom)
+            for ev, n in zip(evals, notes):
+                Note.objects.create(tenant=self.tenant, eleve=e, evaluation=ev, valeur=n)
+
+        r = self.client.post('/api/academique/calculer/',
+                             {'classe_id': str(self.classe.id), 'trimestre': 'T1'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        obtenu = {x['eleve_nom']: x['moy_generale'] for x in r.data['resultats']}
+        self.assertEqual(obtenu, {nom: moy for nom, (_, moy) in FEUILLE_CP.items()})
+
+        # Le bulletin imprime la même chose que l'écran.
+        kebe = Eleve.objects.get(nom_complet='Aïssata KÉBÉ')
+        self.assertEqual(situation_periode(self.tenant, kebe, 'T1', '2025-2026')['moy_generale'], 7.46)

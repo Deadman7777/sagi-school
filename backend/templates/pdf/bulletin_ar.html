@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="ar">
 <head>
 <meta charset="UTF-8">
@@ -58,7 +58,7 @@ entières, styles posés sur les cellules.
 <body>
 
   <div class="centre rep-line">{{ t.republique }} &nbsp;|&nbsp; {{ t.devise }}</div>
-  {% if tenant.logo %}<div class="centre"><img src="{{ tenant.logo }}" style="max-height:45px; max-width:130px;"></div>{% endif %}
+  {% if tenant.logo %}<div class="centre">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
   <div class="centre school-name">{{ tenant.nom|upper }}</div>
   <div class="centre school-sub">{{ annee }} : {{ t.annee }} &nbsp;|&nbsp; {{ tenant.ville|default:"Sénégal" }}</div>
   {% if tenant.numero_autorisation %}<div class="centre school-sub">{{ tenant.numero_autorisation }} : {{ t.autorisation }}</div>{% endif %}
@@ -118,10 +118,10 @@ entières, styles posés sur les cellules.
     <tr>
       <td class="tot">{{ appreciation_generale }}</td>
       <td class="tot">&nbsp;</td>
-      <td class="tot">{{ total_points }}</td>
+      <td class="tot">{% if total_bareme %}{{ total_bareme }} / {% endif %}{{ total_points }}</td>
       <td class="tot moy-val">{{ stats.moy_generale }}/{{ note_max }}</td>
       {% if eval_columns_rtl %}{% for col in eval_columns_rtl %}<td class="tot">&nbsp;</td>{% endfor %}{% else %}<td class="tot">&nbsp;</td>{% endif %}
-      <td class="tot">{{ total_coef }}</td>
+      <td class="tot">{% if total_bareme %}—{% else %}{{ total_coef }}{% endif %}</td>
       <td class="tot" style="text-align:right">{{ t.total }}</td>
     </tr>
   </table>

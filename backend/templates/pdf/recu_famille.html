@@ -1,4 +1,4 @@
-{% comment %}
+{% load logo_ecole %}{% comment %}
 Reçu d'un versement groupé : UN papier pour toute la fratrie.
 
 Un père qui règle pour cinq enfants repartait avec cinq reçus. Ce document les
@@ -55,7 +55,7 @@ cellules, et les totaux ressortaient illisibles.
 <body>
 
 <div class="rep">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
-{% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:42px; max-width:120px;"></div>{% endif %}
+{% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 120 42 %}</div>{% endif %}
 <div class="ecole">{{ tenant.nom|upper }}</div>
 <div class="sous">{{ tenant.ville|default:"Sénégal" }}{% if tenant.telephone %} &nbsp;|&nbsp; {{ tenant.telephone }}{% endif %}</div>
 <div class="barre"></div>

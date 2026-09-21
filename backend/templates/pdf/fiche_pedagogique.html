@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -39,7 +39,7 @@ Styles de fond et de couleur posés sur les cellules, jamais sur les lignes.
 </head>
 <body>
 
-  {% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:45px; max-width:130px;"></div>{% endif %}
+  {% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
   <div class="ecole">{{ tenant.nom|upper }}</div>
   <div class="titre">{{ t.titre }}</div>
   <div class="sous-titre">{{ programme }} &nbsp;|&nbsp; {{ annee }}</div>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -89,7 +89,7 @@
 <table class="header-table">
   <tr>
     <td style="width:50%">
-      {% if tenant.logo %}<img src="{{ tenant.logo }}" style="max-height:50px; max-width:150px; margin-bottom:4px;"><br>{% endif %}
+      {% if tenant.logo %}{% logo_ecole tenant.logo 150 50 "margin-bottom:4px" %}<br>{% endif %}
       <div class="logo">{{ tenant.nom|default:"SAGI SCHOOL" }}</div>
       <div class="sub">Système de Gestion Scolaire &middot; by HADY GESMAN</div>
     </td>

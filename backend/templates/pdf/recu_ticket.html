@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -40,7 +40,7 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
 <body>
 
   <div class="center">
-    {% if tenant_logo %}<img src="{{ tenant_logo }}" style="height:48px;"><br>{% endif %}
+    {% if tenant_logo %}{% logo_ecole tenant_logo 150 48 %}<br>{% endif %}
     <div class="ecole">{{ tenant_nom }}</div>
     <div class="coord">
       {% if tenant_ville %}{{ tenant_ville }}<br>{% endif %}

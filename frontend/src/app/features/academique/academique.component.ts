@@ -95,9 +95,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <option value="10">/10</option>
           <option value="20">/20</option>
         </select>
+        <label class="periode-hint" for="arrondi-moyenne">Deux décimales</label>
+        <select id="arrondi-moyenne" class="reglage-select" [(ngModel)]="arrondiMoyenne"
+                (ngModelChange)="sauvegarderReglesMoyenne()">
+          <option value="ARRONDI">arrondies (9,666 → 9,67)</option>
+          <option value="TRONQUE">tronquées, comme à la main (9,666 → 9,66)</option>
+        </select>
         <span class="periode-hint">
           @if (calculMoyenne === 'POINTS') {
-            On additionne les notes et les barèmes : 145 points sur 150 → 9,67/10. Une évaluation sur /20 compte deux fois plus qu'une sur /10.
+            On additionne les notes et les barèmes : 145 points sur 150 → 9,666…/10. Une évaluation sur /20 compte deux fois plus qu'une sur /10.
           } @else {
             Chaque matière est ramenée au même barème, puis on fait la moyenne selon les coefficients : une matière sur /5 compte autant qu'une sur /20.
           }
@@ -881,6 +887,7 @@ export class AcademiqueComponent implements OnInit {
   // Règle de la moyenne générale (Tenant.calcul_moyenne / bareme_moyenne)
   calculMoyenne: 'MATIERES' | 'POINTS' = 'MATIERES';
   baremeMoyenne: '' | '10' | '20' = '';
+  arrondiMoyenne: 'ARRONDI' | 'TRONQUE' = 'ARRONDI';
   programmeNotes = 'FR';
   programmeResultats = 'FR';
   programmeAnalyse = 'FR';
@@ -920,6 +927,7 @@ export class AcademiqueComponent implements OnInit {
     this.api.patch<any>('/tenants/mon_ecole/', {
       calcul_moyenne: this.calculMoyenne,
       bareme_moyenne: this.baremeMoyenne ? +this.baremeMoyenne : null,
+      arrondi_moyenne: this.arrondiMoyenne,
     }).subscribe({
       next: r => {
         this.analyse.set(null);
@@ -1039,6 +1047,7 @@ export class AcademiqueComponent implements OnInit {
         this.hybride = !!e?.programmes_hybrides;
         this.calculMoyenne = e?.calcul_moyenne === 'POINTS' ? 'POINTS' : 'MATIERES';
         this.baremeMoyenne = e?.bareme_moyenne ? (String(+e.bareme_moyenne) as '10' | '20') : '';
+        this.arrondiMoyenne = e?.arrondi_moyenne === 'TRONQUE' ? 'TRONQUE' : 'ARRONDI';
         this.nbPeriodes = e?.nb_periodes || 3;
         this.construireTrimestres();
       },

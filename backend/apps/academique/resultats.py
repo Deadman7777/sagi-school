@@ -131,6 +131,30 @@ def resultat_matiere(evaluations_notes, matiere, note_max_niveau, mode='MATIERES
     return moyenne, points_matiere(moyenne, matiere.note_max, note_max_niveau, coef), None
 
 
+def arrondir(valeur, mode='ARRONDI'):
+    """Une moyenne à deux décimales, selon la règle de l'école
+    (`Tenant.arrondi_moyenne`) : arrondie (9,666… → 9,67) ou tronquée
+    (9,666… → 9,66, comme à la main). Toute moyenne imprimée ou comparée passe
+    par ici : un rang calculé sur 9,67 et un bulletin qui affiche 9,66
+    finiraient par se contredire.
+
+    Tronquer un flottant est piégeux : 7 peut valoir 6,9999999999 en mémoire
+    et deviendrait 6,99. D'où la tolérance d'un milliardième.
+    """
+    if valeur is None:
+        return None
+    if mode == 'TRONQUE':
+        from decimal import ROUND_DOWN, Decimal
+        signe = -1 if valeur < 0 else 1
+        brut = Decimal(repr(abs(float(valeur)) + 1e-9))
+        return signe * float(brut.quantize(Decimal('0.01'), rounding=ROUND_DOWN))
+    return round(float(valeur), 2)
+
+
+def mode_arrondi(tenant):
+    return getattr(tenant, 'arrondi_moyenne', 'ARRONDI') or 'ARRONDI'
+
+
 def poids_ligne(ligne):
     """Poids d'une ligne de BulletinCache dans la moyenne générale : son poids
     propre (mode POINTS), sinon le coefficient de la matière."""
@@ -186,7 +210,7 @@ def note_max_reference(classe, matieres):
     return baremes.pop() if len(baremes) == 1 else 20.0
 
 
-def moyenne_generale(lignes):
+def moyenne_generale(lignes, arrondi='ARRONDI'):
     """Σ points / Σ poids ; None si aucune matière notée.
 
     Les points sont déjà au barème du niveau (voir `resultat_matiere`), donc
@@ -196,7 +220,7 @@ def moyenne_generale(lignes):
     coef = sum(poids_ligne(l) for l in lignes)
     if coef <= 0:
         return None
-    return round(sum(float(l.points or 0) for l in lignes) / coef, 2)
+    return arrondir(sum(float(l.points or 0) for l in lignes) / coef, arrondi)
 
 
 def rang(moyenne, moyennes):
@@ -221,7 +245,7 @@ def resultats_classe(tenant, classe, periode, annee, programme=None):
         par_eleve[str(l.eleve_id)].append(l)
     resultats = {}
     for eleve_id, lignes in par_eleve.items():
-        moy = moyenne_generale(lignes)
+        moy = moyenne_generale(lignes, mode_arrondi(tenant))
         if moy is not None:
             resultats[eleve_id] = moy
     return resultats
@@ -236,7 +260,7 @@ def situation_periode(tenant, eleve, periode, annee, programme=None):
                   .select_related('matiere__classe__niveau').order_by('matiere__ordre', 'matiere__nom'))
     if not lignes:
         return None
-    moy = moyenne_generale(lignes) or 0
+    moy = moyenne_generale(lignes, mode_arrondi(tenant)) or 0
     classe = lignes[0].matiere.classe
     moyennes = list(resultats_classe(tenant, classe, periode, annee, programme).values())
     return {
@@ -246,7 +270,7 @@ def situation_periode(tenant, eleve, periode, annee, programme=None):
         'total_points': round(sum(float(l.points or 0) for l in lignes), 2),
         'total_coef':   round(sum(poids_ligne(l) for l in lignes), 2),
         'rang':         rang(moy, moyennes),
-        'moy_classe':   round(sum(moyennes) / len(moyennes), 2) if moyennes else 0,
+        'moy_classe':   arrondir(sum(moyennes) / len(moyennes), mode_arrondi(tenant)) if moyennes else 0,
         'moy_max':      max(moyennes) if moyennes else 0,
         'moy_min':      min(moyennes) if moyennes else 0,
         'effectif':     len(moyennes),

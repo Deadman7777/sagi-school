@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -12,7 +12,6 @@
   .header-table { width:100%; border-bottom:2px solid #00745a;
                   padding-bottom:6px; margin-bottom:8px; }
   .header-table td { vertical-align:middle; }
-  .logo-img { max-height:46px; max-width:46px; }
   .logo { font-size:16px; font-weight:bold; color:#00745a; }
   .sub  { font-size:9px; color:#374151; text-transform:uppercase; letter-spacing:.6px; }
   .doc-title { font-size:14px; font-weight:bold; color:#111827; text-align:right; }
@@ -98,7 +97,7 @@
   <tr>
     {% if tenant.logo %}
     <td style="width:54px">
-      <img src="{{ tenant.logo }}" class="logo-img">
+      {% logo_ecole tenant.logo 46 46 %}
     </td>
     {% endif %}
     <td>

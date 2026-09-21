@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -98,7 +98,7 @@
       {% if tenant_telephone %}<div class="rep">Tél : {{ tenant_telephone }}</div>{% endif %}
     </td>
     <td style="width:44%" class="school-block">
-      {% if tenant_logo %}<img src="{{ tenant_logo }}" style="max-height:45px; max-width:130px; margin-bottom:3px;"><br>{% endif %}
+      {% if tenant_logo %}{% logo_ecole tenant_logo 130 45 "margin-bottom:3px" %}<br>{% endif %}
       <div class="school-name">{{ tenant_nom }}</div>
       {% if tenant_ville %}<div class="school-sub">{{ tenant_ville }}</div>{% endif %}
       <div class="school-sub" style="margin-top:3px">Année Scolaire : <strong>{{ annee_scolaire }}</strong></div>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load logo_ecole %}<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -82,7 +82,7 @@ cellule vide effondre sa colonne, d'où les « — ».
 
 <table class="header-table">
   <tr>
-    {% if tenant.logo %}<td style="width:64px"><img src="{{ tenant.logo }}" style="width:58px; height:58px"></td>{% endif %}
+    {% if tenant.logo %}<td style="width:64px">{% logo_ecole tenant.logo 58 58 %}</td>{% endif %}
     <td>
       <div class="ecole">{{ tenant.nom }}</div>
       <div class="coord">

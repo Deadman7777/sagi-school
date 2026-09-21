@@ -1,9 +1,9 @@
-{# Corps d'UN bulletin, partage par bulletin.html (a l'unite) et bulletins_classe.html (deux par page). #}
+{% load logo_ecole %}{# Corps d'UN bulletin, partage par bulletin.html (a l'unite) et bulletins_classe.html (deux par page). #}
 <div class="bulletin">
 
   <!-- ── EN-TÊTE ── -->
   <div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
-  {% if tenant.logo %}<div style="text-align:center"><img src="{{ tenant.logo }}" style="max-height:45px; max-width:130px;"></div>{% endif %}
+  {% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
   <div class="school-name">{{ tenant.nom|upper }}</div>
   <div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
   {% if tenant.numero_autorisation %}<div class="school-sub">Autorisation d'ouverture N° : {{ tenant.numero_autorisation }}</div>{% endif %}
@@ -80,10 +80,10 @@
     <tfoot>
       <tr>
         <td class="left">TOTAL / RÉSULTAT</td>
-        <td>{{ total_coef }}</td>
+        <td>{% if total_bareme %}—{% else %}{{ total_coef }}{% endif %}</td>
         {% if eval_columns %}{% for col in eval_columns %}<td>&nbsp;</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
         <td class="moy-val" style="font-size:9pt">{{ stats.moy_generale }}/{{ note_max }}</td>
-        <td>{{ total_points }}</td>
+        <td>{{ total_points }}{% if total_bareme %} / {{ total_bareme }}{% endif %}</td>
         <td>&nbsp;</td>
         <td class="left col-app
           {% if appreciation_generale == 'Excellent' %}ap-ex

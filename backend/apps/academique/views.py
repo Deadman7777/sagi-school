@@ -14,7 +14,7 @@ from apps.eleves.models import Eleve
 from core.tenant import get_tenant
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
                         note_max_reference, points_matiere, poids_ligne, programme_valide, ramener,
-                        resultat_matiere,
+                        resultat_matiere, arrondir, mode_arrondi,
                         situation_periode)
 
 
@@ -442,6 +442,7 @@ class MoteurCalculView(APIView):
         # ─────────────────────────────────────────────────────────────────
 
         note_max_niveau = note_max_reference(classe, matieres)
+        arrondi         = mode_arrondi(tenant)
         seuil_reussite  = note_max_niveau / 2
 
         resultats = []
@@ -491,16 +492,19 @@ class MoteurCalculView(APIView):
                 total_coef   += poids_effectif
                 appreciation  = self.get_appreciation(moyenne, matiere.note_max)
 
-                cache_to_upsert.append((eleve, matiere, round(moyenne, 2), round(points, 2),
+                cache_to_upsert.append((eleve, matiere, arrondir(moyenne, arrondi), round(points, 2),
                                         None if poids is None else round(poids, 3), appreciation))
-                matieres_classement[str(matiere.id)].append((str(eleve.id), round(moyenne, 2)))
+                matieres_classement[str(matiere.id)].append((str(eleve.id), arrondir(moyenne, arrondi)))
 
                 detail_matieres.append({
                     'matiere_id':   str(matiere.id),
                     'matiere':      matiere.nom,
-                    'coefficient':  round(poids_effectif, 3),
+                    'coefficient':  float(matiere.coefficient),
+                    # Poids réel dans la moyenne générale : le coefficient, ou
+                    # en calcul « total des points » coef × barème / barème du niveau.
+                    'poids':        round(poids_effectif, 3),
                     'note_max':     float(matiere.note_max),
-                    'moyenne':      round(moyenne, 2),
+                    'moyenne':      arrondir(moyenne, arrondi),
                     'points':       round(points, 2),
                     'appreciation': appreciation,
                     'rang_matiere': None,  # rempli après
@@ -515,7 +519,7 @@ class MoteurCalculView(APIView):
                 'matieres':              detail_matieres,
                 'total_points':          round(total_points, 2),
                 'total_coef':            total_coef,
-                'moy_generale':          round(moy_generale, 2),
+                'moy_generale':          arrondir(moy_generale, arrondi),
                 'appreciation_generale': appr_generale,
                 'rang':                  0,  # calculé après
             })
@@ -579,7 +583,7 @@ class MoteurCalculView(APIView):
         # Statistiques classe
         moyennes = [r['moy_generale'] for r in resultats if r['moy_generale'] > 0]
         stats = {
-            'moy_classe':   round(sum(moyennes)/len(moyennes), 2) if moyennes else 0,
+            'moy_classe':   arrondir(sum(moyennes)/len(moyennes), arrondi) if moyennes else 0,
             'moy_max':      max(moyennes) if moyennes else 0,
             'moy_min':      min(moyennes) if moyennes else 0,
             'nb_eleves':    len(resultats),
@@ -649,7 +653,7 @@ class BulletinView(APIView):
             'programme': programme,
             'matieres': [{
                 'nom':         b.matiere.nom,
-                'coefficient': poids_ligne(b),
+                'coefficient': float(b.matiere.coefficient),
                 'note_max':    float(b.matiere.note_max),
                 'moyenne':     float(b.moyenne) if b.moyenne is not None else None,
                 'points':      float(b.points) if b.points is not None else None,
@@ -792,9 +796,11 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     for b in bulletins_list:
         matieres_ctx.append({
             'nom':          b.matiere.nom,
-            # Coefficient, ou poids du barème en calcul « total des points » :
-            # ce qui, multiplié par la moyenne, donne les points imprimés.
-            'coefficient':  _fmt(poids_ligne(b)),
+            # Le coefficient DE L'ÉCOLE, toujours. En calcul « total des
+            # points », le poids du barème (0,5 pour /5, 2 pour /20) reste
+            # interne : imprimé, il contredisait les coefficients que l'école
+            # a saisis.
+            'coefficient':  _fmt(b.matiere.coefficient),
             'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
             'moyenne':      _fmt(b.moyenne),
             'points':       _fmt(b.points),
@@ -823,6 +829,11 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
         'matieres':            matieres_ctx,
         'total_coef':          round(total_coef, 1),
         'total_points':        round(total_points, 2),
+        # Calcul « total des points » : le total se lit « 125 / 150 », comme la
+        # feuille de l'enseignant. Points possibles = Σ poids × barème de la
+        # moyenne (voir resultats.resultat_matiere).
+        'total_bareme':        (round(total_coef * note_max, 2)
+                                if any(b.poids is not None for b in bulletins_list) else None),
         'stats': {
             'moy_generale': moy_generale,
             'moy_classe':   situation['moy_classe'],
@@ -947,6 +958,7 @@ class AnalysePerformanceView(APIView):
         tenant   = get_tenant(request)
         exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
         annee    = exercice.annee_scolaire if exercice else ''
+        arrondi  = mode_arrondi(tenant)
 
         bulletins = BulletinCache.objects.filter(tenant=tenant, annee_scolaire=annee)
         if programme := programme_valide(request.query_params.get('programme')):
@@ -970,7 +982,7 @@ class AnalysePerformanceView(APIView):
                     'eleve_id': r['eleve_id'],
                     'nom':      r['eleve__nom_complet'] or '—',
                     'classe':   r['eleve__classe__nom'] or r['eleve__section__nom'] or '—',
-                    'moyenne':  round(float(r['pts'] or 0) / c, 2),
+                    'moyenne':  arrondir(float(r['pts'] or 0) / c, arrondi),
                 })
             return res
 
@@ -987,7 +999,7 @@ class AnalysePerformanceView(APIView):
         evolution = []
         for p in periodes:
             avgs = moyennes_par_eleve(p)
-            moy = round(sum(a['moyenne'] for a in avgs) / len(avgs), 2) if avgs else 0
+            moy = arrondir(sum(a['moyenne'] for a in avgs) / len(avgs), arrondi) if avgs else 0
             evolution.append({'trimestre': p, 'moyenne': moy, 'nb_eleves': len(avgs)})
 
         # Période de référence = la dernière disponible
@@ -1008,7 +1020,7 @@ class AnalysePerformanceView(APIView):
         for a in ref_avgs:
             par_classe[a['classe']].append(a['moyenne'])
         classes_calc = [
-            {'classe': nom, 'moyenne': round(sum(v) / len(v), 2), 'nb': len(v)}
+            {'classe': nom, 'moyenne': arrondir(sum(v) / len(v), arrondi), 'nb': len(v)}
             for nom, v in par_classe.items() if v
         ]
         top_classes = [
@@ -1046,6 +1058,7 @@ class BulletinsHistoriqueView(APIView):
         from apps.eleves.models import Eleve
 
         tenant = get_tenant(request)
+        arrondi = mode_arrondi(tenant)
 
         # Filtres optionnels
         classe_nom  = request.query_params.get('classe')
@@ -1095,7 +1108,7 @@ class BulletinsHistoriqueView(APIView):
                 continue
             coef = float(g['total_coef'] or 0)
             pts  = float(g['total_points'] or 0)
-            moy  = round(pts / coef, 2) if coef > 0 else 0
+            moy  = arrondir(pts / coef, arrondi) if coef > 0 else 0
             result.append({
                 'eleve_id':      str(g['eleve_id']),
                 'eleve_nom':     e.nom_complet,

@@ -81,6 +81,13 @@ class Tenant(TimeStampedModel):
     # Barème de la moyenne générale pour toute l'école (10 ou 20). Vide : celui
     # du niveau de la classe (20 par défaut), comme avant.
     bareme_moyenne = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
+    # Deux décimales, mais lesquelles ? ARRONDI : 9,666… → 9,67. TRONQUE :
+    # 9,666… → 9,66, comme l'enseignant qui s'arrête au deuxième chiffre — et
+    # dont les parents comparent le bulletin à sa feuille.
+    ARRONDI_MOYENNE_CHOICES = [('ARRONDI', 'Arrondi au plus proche'),
+                               ('TRONQUE', 'Tronqué (comme à la main)')]
+    arrondi_moyenne = models.CharField(max_length=10, choices=ARRONDI_MOYENNE_CHOICES,
+                                       default='ARRONDI')
 
     # ── Quand une mensualité devient-elle exigible ? ──────────────────────
     # Les écoles ne collectent pas au même moment, et la réponse décide de tout
