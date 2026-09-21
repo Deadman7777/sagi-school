@@ -147,3 +147,71 @@ class Paiement(TenantModel):
             from .numerotation import prochain_no_piece
             self.no_piece = prochain_no_piece(self.tenant, 'REC')
         super().save(*args, **kwargs)
+
+
+class Proforma(TenantModel):
+    """Facture proforma de scolarité remise à une famille.
+
+    Deux usages : le parent qui veut régler toute l'année d'un coup demande
+    combien, et le parent qui se renseigne avant d'inscrire son enfant veut
+    savoir ce que coûtera l'année, et quand payer.
+
+    Une proforma n'est PAS une pièce comptable : elle n'écrit rien au grand
+    livre, ne crée aucune créance et ne se règle pas en l'état — le paiement
+    passe par l'encaissement normal, qui produit le reçu. Elle est FIGÉE à
+    l'émission (lignes, échéancier, totaux) : réimprimée dans trois mois, elle
+    doit dire ce qu'elle disait le jour où le parent l'a emportée, même si les
+    tarifs ont changé depuis. Le calcul vit dans `proformas.py`.
+    """
+    STATUT_CHOICES = [('EMISE', 'Émise'), ('ANNULEE', 'Annulée')]
+
+    # PF-2026-0001 : séquence propre à l'école et à l'année d'émission.
+    numero          = models.CharField(max_length=30)
+    exercice        = models.ForeignKey(Exercice, on_delete=models.PROTECT, related_name='proformas')
+    # L'année scolaire chiffrée. Celle de l'exercice, ou la suivante pour une
+    # famille qui se renseigne avant la rentrée.
+    annee_scolaire  = models.CharField(max_length=20)
+    # Élève déjà inscrit ; vide pour un futur élève.
+    eleve           = models.ForeignKey('eleves.Eleve', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='proformas')
+    # Recopiés : une proforma se relit sans la fiche, qui peut changer ou disparaître.
+    beneficiaire    = models.CharField(max_length=200, blank=True)
+    matricule       = models.CharField(max_length=30, blank=True)
+    section_nom     = models.CharField(max_length=100, blank=True)
+    formule_nom     = models.CharField(max_length=100, blank=True)
+    parent_nom      = models.CharField(max_length=200, blank=True)
+    parent_telephone = models.CharField(max_length=60, blank=True)
+    date_emission   = models.DateField(default=timezone.localdate)
+    date_validite   = models.DateField()
+    # [{designation, detail, quantite, prix_unitaire, montant, nature}]
+    lignes          = models.JSONField(default=list)
+    # [{libelle, date, montant}] — règlement échelonné proposé à la famille.
+    echeancier      = models.JSONField(default=list, blank=True)
+    total_du        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    deja_regle      = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    part_organisme  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    organisme_nom   = models.CharField(max_length=200, blank=True)
+    remise_libelle  = models.CharField(max_length=150, blank=True)
+    remise_montant  = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net_a_payer     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Ce que l'école a demandé (portée, options) : de quoi refaire la même
+    # proforma à jour, sans ressaisir.
+    parametres      = models.JSONField(default=dict, blank=True)
+    observations    = models.TextField(blank=True)
+    conditions      = models.TextField(blank=True)
+    statut          = models.CharField(max_length=10, choices=STATUT_CHOICES, default='EMISE')
+    motif_annulation = models.CharField(max_length=255, blank=True)
+    emise_par       = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'proformas_scolarite'
+        ordering = ['-date_emission', '-created_at']
+        # Séquence PAR école : la première proforma d'une nouvelle école ne
+        # doit pas entrer en collision avec celle d'une autre.
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'numero'],
+                                    name='uniq_proforma_par_tenant'),
+        ]
+
+    def __str__(self):
+        return f"{self.numero} — {self.beneficiaire}"

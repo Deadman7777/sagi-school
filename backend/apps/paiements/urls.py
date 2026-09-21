@@ -1,11 +1,13 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
+from .views_proformas import ProformaViewSet
 from .views import (PaiementViewSet, ExerciceViewSet, CloturerExerciceView,
                     ReporterReliquatsView, CahierMensuelView, CahierMensuelPdfView)
 
 router = DefaultRouter()
 router.register('paiements', PaiementViewSet, basename='paiement')
 router.register('exercices', ExerciceViewSet, basename='exercice')
+router.register('proformas', ProformaViewSet, basename='proforma')
 
 urlpatterns = router.urls + [
     path('cloturer-exercice/', CloturerExerciceView.as_view()),
