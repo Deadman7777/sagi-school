@@ -212,6 +212,40 @@ class MatiereViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
 
+    def perform_update(self, serializer):
+        ancien_bareme = serializer.instance.note_max
+        matiere = serializer.save()
+        if matiere.note_max != ancien_bareme:
+            aligner_evaluations(matiere, ancien_bareme)
+
+
+def aligner_evaluations(matiere, ancien_bareme):
+    """Les évaluations d'une matière suivent son changement de barème.
+
+    Une matière créée sur /20 (le défaut) puis passée à /10 gardait ses
+    évaluations sur /20 : l'enseignant saisissait 10 en pensant 10/10, le
+    calcul lisait 10/20 et affichait 5. Les évaluations qui étaient au barème
+    de la matière le suivent donc — les notes, elles, ne sont JAMAIS
+    converties (le professeur a saisi 10, il voulait dire 10).
+
+    Une évaluation dont une note dépasse le nouveau barème reste où elle est :
+    la réduire rendrait cette note impossible. Rend le nombre d'évaluations
+    alignées.
+    """
+    from django.db.models import Max
+
+    alignees = 0
+    for ev in matiere.evaluations.filter(note_max=ancien_bareme).annotate(plus_haute=Max('notes__valeur')):
+        if ev.plus_haute is not None and ev.plus_haute > matiere.note_max:
+            continue
+        ev.note_max = matiere.note_max
+        ev.save(update_fields=['note_max'])
+        alignees += 1
+    if alignees:
+        # Moyennes calculées avec l'ancien barème : fausses, donc effacées.
+        BulletinCache.objects.filter(tenant=matiere.tenant, matiere=matiere).delete()
+    return alignees
+
 
 class EvaluationViewSet(viewsets.ModelViewSet):
     serializer_class   = EvaluationSerializer
@@ -439,6 +473,12 @@ class MoteurCalculView(APIView):
         notes_idx: dict = {}
         for n in all_notes:
             notes_idx[(str(n.eleve_id), str(n.evaluation_id))] = n
+        # Une évaluation où PERSONNE de la classe n'a de note n'a pas eu lieu
+        # (ou a été créée deux fois par erreur) : elle ne compte pas. Comptée
+        # zéro pour tous, elle divisait chaque moyenne de la matière par deux —
+        # 10/10 saisi, 5 affiché. L'élève absent à une évaluation que les
+        # autres ont passée, lui, compte toujours zéro.
+        evals_notees = {str(n.evaluation_id) for n in all_notes}
         # ─────────────────────────────────────────────────────────────────
 
         note_max_niveau = note_max_reference(classe, matieres)
@@ -455,7 +495,8 @@ class MoteurCalculView(APIView):
             detail_matieres = []
 
             for matiere in matieres:
-                evaluations = evals_by_matiere.get(str(matiere.id), [])
+                evaluations = [ev for ev in evals_by_matiere.get(str(matiere.id), [])
+                               if str(ev.id) in evals_notees]
 
                 if not evaluations:
                     detail_matieres.append({
@@ -1185,6 +1226,45 @@ class FichePedagogiqueView(APIView):
         return response
 
 
+# Hauteurs de page essayées pour un bulletin de classe, en mm (chaînes : voir
+# le gabarit). 148,5 = une demi-A4 ; au-delà, le bulletin sera réduit à
+# l'échelle pour y tenir. 297 : une A4 pleine, réduite de moitié — le cas
+# extrême d'une quarantaine de matières.
+HAUTEURS_BULLETIN = ('148.5', '170', '195', '225', '260', '297')
+
+
+def _bulletin_sur_une_page(corps, classe, tenant, depart=0):
+    """(PDF d'une seule page, index de la hauteur retenue) pour un bulletin.
+
+    Le bulletin est rendu sur une demi-feuille ; s'il déborde, sur une page
+    un peu plus haute, jusqu'à tenir sur UNE page. L'imposition le ramène
+    ensuite à la taille d'une demi-feuille. Jamais un bulletin sur deux
+    morceaux : la directrice veut deux bulletins par A4, séparés au milieu,
+    pas un bulletin coupé entre deux matières.
+
+    `depart` : les élèves d'une classe ont les mêmes matières, la hauteur qui
+    a suffi au précédent est le bon point de départ pour le suivant.
+    """
+    from io import BytesIO
+
+    from pypdf import PdfReader
+    from xhtml2pdf import pisa
+
+    donnees = None
+    for i in range(depart, len(HAUTEURS_BULLETIN)):
+        html_str = render_to_string('pdf/bulletins_classe.html', {
+            'bulletins': [corps], 'classe': classe, 'tenant': tenant,
+            'hauteur_page': HAUTEURS_BULLETIN[i]})
+        buffer = BytesIO()
+        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+            return None, depart
+        donnees = buffer.getvalue()
+        if len(PdfReader(BytesIO(donnees)).pages) == 1:
+            return donnees, i
+    # Même une A4 entière ne suffit pas : le bulletin garde ses pages.
+    return donnees, len(HAUTEURS_BULLETIN) - 1
+
+
 def _imposer_deux_par_feuille(pdfs_bulletins):
     """Empile deux bulletins par feuille A4 et trace le trait de découpe.
 
@@ -1193,9 +1273,11 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     page A4 se coupaient en plein milieu dès qu'une classe avait dix
     matières. Ici chaque bulletin arrive sur sa ou ses demi-pages.
 
-    Un bulletin qui déborde sa demi-page (une classe à quinze matières)
-    prend la feuille entière, sans trait : mieux vaut une feuille de plus
-    qu'un bulletin déchiré en deux au ciseau.
+    Chaque bulletin arrive sur UNE page (voir `_bulletin_sur_une_page`),
+    éventuellement plus haute qu'une demi-feuille : il est alors réduit à
+    l'échelle pour tenir dans sa moitié, centré. Seul un bulletin qui déborde
+    même d'une A4 entière (une quarantaine de matières) garde ses pages et sa
+    feuille à lui, sans trait.
     """
     from io import BytesIO
     from pypdf import PageObject, PdfReader, PdfWriter, Transformation
@@ -1229,9 +1311,9 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
         feuille = PageObject.create_blank_page(width=A4_L, height=A4_H)
         # L'origine PDF est en bas à gauche : la première demi-page est celle
         # du haut, donc c'est elle qu'on remonte d'une demi-feuille.
-        feuille.merge_transformed_page(demi_pages[0], Transformation().translate(0, demi))
+        feuille.merge_transformed_page(demi_pages[0], _dans_la_moitie(demi_pages[0], A4_L, demi, demi))
         if len(demi_pages) > 1:
-            feuille.merge_transformed_page(demi_pages[1], Transformation())
+            feuille.merge_transformed_page(demi_pages[1], _dans_la_moitie(demi_pages[1], A4_L, demi, 0))
         # Pas de repère quand il n'y a rien à séparer : un trait inutile
         # invite à couper un bulletin en deux.
         if trait:
@@ -1241,6 +1323,19 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     sortie = BytesIO()
     ecrivain.write(sortie)
     return sortie.getvalue()
+
+
+def _dans_la_moitie(page, largeur, demi, base):
+    """Transformation qui pose `page` dans la moitié de feuille commençant à
+    la hauteur `base` : réduite si elle est plus haute qu'une demi-feuille,
+    centrée en largeur, calée en haut de sa moitié."""
+    from pypdf import Transformation
+
+    l, h = float(page.mediabox.width), float(page.mediabox.height)
+    echelle = min(1.0, largeur / l, demi / h)
+    dx = (largeur - l * echelle) / 2
+    dy = base + (demi - h * echelle)
+    return Transformation().scale(echelle, echelle).translate(dx, dy)
 
 
 def _repere_decoupe(largeur, hauteur):
@@ -1333,14 +1428,12 @@ class BulletinsClassePDFView(APIView):
         from xhtml2pdf import pisa
 
         documents = []
+        depart = 0
         for corps_bulletin in corps:
-            html_str = render_to_string('pdf/bulletins_classe.html',
-                                        {'bulletins': [corps_bulletin],
-                                         'classe': classe, 'tenant': tenant})
-            buffer = BytesIO()
-            if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+            pdf_bulletin, depart = _bulletin_sur_une_page(corps_bulletin, classe, tenant, depart)
+            if pdf_bulletin is None:
                 return HttpResponse('Erreur génération des bulletins.', status=500)
-            documents.append(buffer.getvalue())
+            documents.append(pdf_bulletin)
 
         pdf = _imposer_deux_par_feuille(documents)
 

@@ -257,6 +257,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               {{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}
               <span *ngIf="e.nb_notes" class="ec-notes">· {{ e.nb_notes }} note(s)</span>
             </div>
+            <!-- Les deux défauts qui divisaient les moyennes par deux, montrés
+                 là où on peut les corriger (bouton ✎ ou 🗑 ci-dessus). -->
+            @if (baremeMatiere() && +e.note_max > baremeMatiere()!) {
+              <div class="ec-alerte" role="note">
+                ⚠ Évaluation sur /{{ +e.note_max }} dans une matière sur /{{ baremeMatiere() }} :
+                un 10 saisi comptera {{ 10 * baremeMatiere()! / +e.note_max }}. Corrigez le barème avec ✎.
+              </div>
+            }
+            @if (!e.nb_notes) {
+              <div class="ec-info ec-vide">Aucune note : ne compte pas dans la moyenne.</div>
+            }
           </div>
         </div>
         <div *ngIf="evaluations().length === 0" class="empty-msg" style="padding:10px;display:flex;align-items:center;gap:12px">
@@ -775,6 +786,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .pc-actions { display:flex; align-items:center; gap:2px; }
     .periode-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
     .periode-label { font-weight:600; color:var(--text); font-size:13px; }
+    .ec-alerte { margin-top:6px; font-size:11.5px; line-height:1.4; color:var(--text); background:rgba(234,88,12,.12); border:1px solid #ea580c; border-radius:6px; padding:5px 8px; }
+    .ec-vide { font-style:italic; margin-top:4px; }
     .periode-hint { font-size:11px; color:var(--text-3); }
     .reglage-select { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }
     .reglage-select:focus-visible { outline:2px solid #00d4aa; outline-offset:1px; }
@@ -906,6 +919,12 @@ export class AcademiqueComponent implements OnInit {
   private prog(valeur: string): string | null {
     return this.hybride ? valeur : null;
   }
+  /** Barème de la matière choisie dans Saisie notes (null si inconnue). */
+  baremeMatiere(): number | null {
+    const m = this.matieresNotes().find(x => x.id === this.matiereNotes);
+    return m?.note_max ? +m.note_max : null;
+  }
+
   matieresNotesAffichees() {
     const toutes = this.matieresNotes();
     return this.hybride ? toutes.filter((m: any) => (m.programme || 'FR') === this.programmeNotes) : toutes;

@@ -112,21 +112,31 @@ class BulletinsClasseTest(APITestCase):
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.assertEqual(len(self._pages(r)), 4)       # 8 élèves, 4 feuilles
 
-    def test_un_bulletin_trop_long_n_est_pas_coupe_par_le_trait(self):
-        """Vingt-cinq matières : le bulletin déborde de sa demi-feuille.
-
-        Il prend alors la feuille entière et le repère de découpe disparaît —
-        sinon l'école coupe un bulletin en deux au ciseau.
-        """
-        evaluations = self._matieres_en_plus(25)
+    def _deux_bulletins_longs(self, nb_matieres):
+        """Un bulletin qui déborde de sa demi-feuille était coupé entre deux
+        matières, les deux morceaux sur une même feuille, sans trait. Il est
+        désormais réduit pour tenir dans sa moitié : deux bulletins ENTIERS
+        par A4, séparés au milieu."""
+        evaluations = self._matieres_en_plus(nb_matieres)
         for i in range(2):
             self._noter(self._eleve(f'Élève NUMERO{i:02d}'), evaluations)
         r = self._pdf()
         self.assertEqual(r.status_code, 200, r.content[:300])
         pages = self._pages(r)
-        self.assertEqual(len(pages), 2)                # une feuille chacun
-        for page in pages:
-            self.assertNotIn('DÉCOUPER', page.extract_text().upper())
+        self.assertEqual(len(pages), 1)                 # une feuille pour deux
+        texte = pages[0].extract_text().upper()
+        self.assertIn('DÉCOUPER', texte)
+        self.assertIn('NUMERO00', texte)
+        self.assertIn('NUMERO01', texte)
+        # Chaque bulletin arrive jusqu'à ses signatures : rien n'est perdu.
+        self.assertEqual(texte.count('LE DIRECTEUR'), 2)
+
+    def test_seize_matieres_deux_bulletins_entiers_par_feuille(self):
+        # La 2e Étape CE1 de Shoumoul.
+        self._deux_bulletins_longs(16)
+
+    def test_vingt_cinq_matieres_deux_bulletins_entiers_par_feuille(self):
+        self._deux_bulletins_longs(25)
 
     def test_le_trait_de_decoupe_est_imprime_entre_deux_bulletins(self):
         # Sans repère visible, l'école coupe de travers.

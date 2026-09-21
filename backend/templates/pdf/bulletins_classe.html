@@ -8,7 +8,11 @@
      La vue empile ensuite deux de ces demi-pages par feuille : la largeur
      reste celle d'une A4, seule la hauteur est contrainte, donc le tableau
      des notes garde exactement la mise en page du bulletin à l'unité. */
-  @page { size: 210mm 148.5mm; margin: 5mm 8mm; }
+  /* Hauteur variable : un bulletin trop long pour 148,5 mm est rendu sur une
+     page plus haute, que la vue ramène ensuite à l'échelle de la demi-feuille
+     (voir _bulletin_sur_une_page). Une chaîne, pas un nombre : la locale
+     française écrirait « 148,5 » et la règle @page serait ignorée. */
+  @page { size: 210mm {{ hauteur_page|default:"148.5" }}mm; margin: 5mm 8mm; }
 
   /* Tout est d'un cran plus serré que le bulletin à l'unité : ici le
      bulletin dispose d'une demi-feuille, pas d'une feuille. */
