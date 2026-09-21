@@ -24,6 +24,7 @@ import { ApiService } from '../../core/services/api.service';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ImportChargesDialogComponent } from './import-charges-dialog.component';
 import { CahierMensuelComponent } from './cahier-mensuel.component';
+import { ProformasComponent } from './proformas.component';
 
 @Component({
   selector: 'app-paiements',
@@ -31,7 +32,7 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
             InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, PiecesJustificativesComponent,
-            ImportChargesDialogComponent, CahierMensuelComponent],
+            ImportChargesDialogComponent, CahierMensuelComponent, ProformasComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -62,6 +63,10 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
           @if (r.nb_impayes > 0) { <span class="tab-badge">{{ r.nb_impayes }}</span> }
         }
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'proformas'"
+              (click)="onglet.set('proformas')">
+        📄 Proformas
+      </button>
     </div>
 
     <!-- Rappel visuel permanent : le reste à faire du mois, visible depuis
@@ -85,6 +90,10 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
 
     @if (onglet() === 'cahier') {
       <app-cahier-mensuel />
+    }
+
+    @if (onglet() === 'proformas') {
+      <app-proformas />
     }
 
     <!-- === ONGLET PAIEMENTS === -->
@@ -1382,7 +1391,7 @@ export class PaiementsComponent implements OnInit {
     this.chargerCaisses();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
     const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
-    if (ongletDemande === 'cahier' || ongletDemande === 'charges') this.onglet.set(ongletDemande);
+    if (ongletDemande === 'cahier' || ongletDemande === 'charges' || ongletDemande === 'proformas') this.onglet.set(ongletDemande);
     this.chargerPaiements();
     this.chargerStats();
     this.chargerRappelMois();

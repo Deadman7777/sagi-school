@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Facture proforma de scolarité remise à une famille (apps/paiements/proformas.py).
+Rien n'est calculé ici : lignes et montants arrivent figés et mis en forme.
+Pièges xhtml2pdf : couleurs sur les cellules, jamais sur les lignes ; une
+cellule vide effondre sa colonne, d'où les « — ».
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:11px; color:#111827; }
+
+  .header-table { width:100%; border-bottom:2px solid #1e3a8a; padding-bottom:6px; margin-bottom:10px; }
+  .header-table td { vertical-align:top; }
+  .ecole  { font-size:16px; font-weight:bold; color:#1e3a8a; }
+  .coord  { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .doc-title  { font-size:18px; font-weight:bold; color:#111827; text-align:right; }
+  .doc-numero { font-size:12.5px; font-weight:bold; color:#1e3a8a; text-align:right; margin-top:2px; }
+  .doc-meta   { font-size:9.5px; color:#374151; margin-top:3px; text-align:right; }
+
+  table.encart { width:100%; margin-bottom:9px; }
+  td.info   { border:1px solid #1e3a8a; background:#eff6ff; padding:6px 10px; }
+  .info-titre { font-size:10.5px; font-weight:bold; color:#1e3a8a; }
+  .info-texte { font-size:9.5px; color:#1e293b; margin-top:2px; }
+  td.annule { border:2px solid #b91c1c; background:#fef2f2; padding:6px 10px; }
+  .annule-titre { font-size:12px; font-weight:bold; color:#b91c1c; }
+  .annule-texte { font-size:9.5px; color:#7f1d1d; margin-top:2px; }
+
+  .parties { width:100%; margin-bottom:8px; }
+  .parties td { padding:6px 9px; border:1px solid #e5e7eb; font-size:10.5px; vertical-align:top; }
+  .label { font-size:8.8px; color:#374151; text-transform:uppercase; letter-spacing:.4px; }
+  .nom { font-size:12.5px; font-weight:bold; color:#111827; margin-top:1px; }
+
+  .section-title { font-size:11px; font-weight:bold; color:#111827; border-left:3px solid #1e3a8a;
+                   padding-left:6px; margin:9px 0 4px; }
+
+  table.lignes { width:100%; border-collapse:collapse; margin-bottom:6px; }
+  table.lignes th { background:#1e293b; color:#ffffff; padding:4px 8px; font-size:10px; text-align:left; }
+  table.lignes th.num { text-align:right; }
+  table.lignes td { padding:3px 8px; border-bottom:1px solid #e5e7eb; font-size:10.5px; color:#111827; vertical-align:top; }
+  td.reduc { padding:3px 8px; border-bottom:1px solid #e5e7eb; font-size:10.5px; color:#047857; vertical-align:top; }
+  .ligne-detail { font-size:9px; color:#374151; line-height:1.3; }
+  .num { text-align:right; }
+
+  table.totaux { width:100%; border-collapse:collapse; }
+  .tot-label { padding:3px 8px; font-size:10.5px; text-align:right; color:#111827; }
+  .tot-val   { padding:3px 8px; font-size:10.5px; text-align:right; color:#111827; font-weight:bold; }
+  .deduc-val { padding:3px 8px; font-size:10.5px; text-align:right; color:#047857; font-weight:bold; }
+  .net-label { padding:5px 8px; font-size:12.5px; font-weight:bold; background:#1e3a8a; color:#ffffff; text-align:right; }
+  .net-val   { padding:5px 8px; font-size:14.5px; font-weight:bold; background:#1e3a8a; color:#ffffff; text-align:right; }
+
+  .lettres { font-size:10.5px; color:#111827; margin:8px 0 4px; }
+
+  table.options { width:100%; margin-top:6px; }
+  td.option { border:1px solid #d1d5db; padding:6px 9px; font-size:10px; color:#111827; vertical-align:top; }
+  .option-titre { font-size:10.5px; font-weight:bold; color:#1e3a8a; }
+
+  table.echeancier { width:100%; border-collapse:collapse; margin-top:4px; }
+  table.echeancier th { background:#e0e7ff; color:#1e293b; padding:3px 6px; font-size:9.5px; text-align:left; border:1px solid #c7d2fe; }
+  table.echeancier th.num { text-align:right; }
+  table.echeancier td { padding:3px 6px; font-size:9.5px; color:#111827; border:1px solid #e5e7eb; }
+
+  .conditions { font-size:9.2px; color:#374151; line-height:1.45; }
+  .conditions strong { color:#111827; }
+
+  .signatures { width:100%; margin-top:8px; }
+  .signatures td { padding:7px; border:1px solid #e5e7eb; font-size:9.5px; color:#374151; height:40px; vertical-align:top; }
+
+  .footer-table { width:100%; border-top:1px solid #e0e0e0; }
+  .footer-table td { padding:4px 0; font-size:8.3px; color:#374151; }
+
+  @page {
+    size: A4;
+    @frame contenu { left: 28pt; top: 28pt; width: 539pt; height: 762pt; }
+    @frame pied { -pdf-frame-content: pied-de-page; left: 28pt; top: 800pt; width: 539pt; height: 30pt; }
+  }
+</style>
+</head>
+<body>
+
+<table class="header-table">
+  <tr>
+    {% if tenant.logo %}<td style="width:64px"><img src="{{ tenant.logo }}" style="width:58px; height:58px"></td>{% endif %}
+    <td>
+      <div class="ecole">{{ tenant.nom }}</div>
+      <div class="coord">
+        {% if tenant.adresse %}{{ tenant.adresse }}{% if tenant.ville %}, {{ tenant.ville }}{% endif %}<br>{% elif tenant.ville %}{{ tenant.ville }}<br>{% endif %}
+        {% if tenant.telephone %}Tél. {{ tenant.telephone }}<br>{% endif %}
+        {% if tenant.numero_autorisation %}Autorisation N° {{ tenant.numero_autorisation }}<br>{% endif %}
+        {% if tenant.ninea %}NINEA {{ tenant.ninea }}{% endif %}{% if tenant.ninea and tenant.rccm %} &middot; {% endif %}{% if tenant.rccm %}RCCM {{ tenant.rccm }}{% endif %}
+      </div>
+    </td>
+    <td style="width:40%">
+      <div class="doc-title">FACTURE PROFORMA</div>
+      <div class="doc-numero">N° {{ p.numero }}</div>
+      <div class="doc-meta">
+        Émise le {{ p.date_emission|date:"d/m/Y" }}<br>
+        Valable jusqu'au <strong>{{ p.date_validite|date:"d/m/Y" }}</strong><br>
+        Année scolaire <strong>{{ p.annee_scolaire }}</strong>
+      </div>
+    </td>
+  </tr>
+</table>
+
+{% if p.statut == 'ANNULEE' %}
+<table class="encart"><tr><td class="annule">
+  <div class="annule-titre">PROFORMA ANNULÉE — SANS EFFET</div>
+  <div class="annule-texte">Motif : {{ p.motif_annulation|default:"—" }}</div>
+</td></tr></table>
+{% endif %}
+
+<table class="parties">
+  <tr>
+    <td style="width:50%">
+      <div class="label">Établie à l'attention de</div>
+      <div class="nom">{{ p.parent_nom|default:"Parent / tuteur" }}</div>
+      {% if p.parent_telephone %}<div style="margin-top:2px">Tél. {{ p.parent_telephone }}</div>{% endif %}
+    </td>
+    <td style="width:50%">
+      <div class="label">Élève</div>
+      <div class="nom">{{ p.beneficiaire }}</div>
+      <div style="margin-top:2px">
+        {% if p.matricule %}Matricule {{ p.matricule }} &middot; {% endif %}{{ p.section_nom|default:"—" }}{% if p.formule_nom %} &middot; {{ p.formule_nom }}{% endif %}
+      </div>
+      {% if nouvel_eleve %}<div style="font-size:9px; color:#374151; margin-top:2px">Futur élève — inscription non encore réalisée</div>{% endif %}
+    </td>
+  </tr>
+</table>
+
+<table class="lignes">
+  <tr>
+    <th style="width:55%">Désignation</th>
+    <th style="width:9%" class="num">Qté</th>
+    <th style="width:18%" class="num">Prix unitaire</th>
+    <th style="width:18%" class="num">Montant</th>
+  </tr>
+  {% for l in lignes %}
+  <tr>
+    <td{% if l.negatif %} class="reduc"{% endif %}><strong>{{ l.designation }}</strong>{% if l.detail %}<div class="ligne-detail">{{ l.detail }}</div>{% endif %}</td>
+    <td class="num{% if l.negatif %} reduc{% endif %}">{{ l.quantite }}</td>
+    <td class="num{% if l.negatif %} reduc{% endif %}">{{ l.prix_unitaire }}</td>
+    <td class="num{% if l.negatif %} reduc{% endif %}">{{ l.montant }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table class="totaux">
+  <tr>
+    <td class="tot-label" style="width:75%">Total de la scolarité chiffrée</td>
+    <td class="tot-val" style="width:25%">{{ montants.total_du }}</td>
+  </tr>
+  {% if p.deja_regle %}
+  <tr>
+    <td class="tot-label">Déjà réglé (reçus émis)</td>
+    <td class="deduc-val">− {{ montants.deja_regle }}</td>
+  </tr>
+  {% endif %}
+  {% if p.part_organisme %}
+  <tr>
+    <td class="tot-label">Pris en charge par {{ p.organisme_nom|default:"l'organisme" }}</td>
+    <td class="deduc-val">− {{ montants.part_organisme }}</td>
+  </tr>
+  {% endif %}
+  {% if p.remise_montant %}
+  {% if a_deduire %}
+  <tr>
+    <td class="tot-label">Reste à régler</td>
+    <td class="tot-val">{{ montants.reste }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td class="tot-label">{{ p.remise_libelle }}</td>
+    <td class="deduc-val">− {{ montants.remise }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td class="net-label">NET À PAYER</td>
+    <td class="net-val">{{ montants.net }}</td>
+  </tr>
+</table>
+
+<div class="lettres">
+  Arrêtée la présente facture proforma à la somme de <strong>{{ en_lettres }}</strong>.
+</div>
+
+{% if echeancier %}
+<div class="section-title">Modalités de règlement</div>
+{% if p.remise_montant %}
+<table class="options">
+  <tr>
+    <td class="option" style="width:50%">
+      <div class="option-titre">Option 1 — Règlement en une fois</div>
+      {{ montants.net }}, remise de {{ montants.remise }} incluse.
+    </td>
+    <td class="option" style="width:50%">
+      <div class="option-titre">Option 2 — Règlement échelonné</div>
+      {{ montants.reste }}, sans remise, selon l'échéancier ci-dessous.
+    </td>
+  </tr>
+</table>
+{% else %}
+<div class="conditions">La somme peut être réglée en une fois, ou selon l'échéancier suivant.</div>
+{% endif %}
+<table class="echeancier">
+  <tr>
+    <th style="width:{% if deux_colonnes %}22{% else %}52{% endif %}%">Échéance</th>
+    <th style="width:{% if deux_colonnes %}14{% else %}24{% endif %}%">Avant le</th>
+    <th style="width:{% if deux_colonnes %}14{% else %}24{% endif %}%" class="num">Montant</th>
+    {% if deux_colonnes %}
+    <th style="width:22%">Échéance</th>
+    <th style="width:14%">Avant le</th>
+    <th style="width:14%" class="num">Montant</th>
+    {% endif %}
+  </tr>
+  {% for g, d in rangees_echeancier %}
+  <tr>
+    <td>{{ g.libelle }}</td>
+    <td>{% if g.date %}{{ g.date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+    <td class="num"><strong>{{ g.montant }}</strong></td>
+    {% if deux_colonnes %}
+    {% if d %}
+    <td>{{ d.libelle }}</td>
+    <td>{% if d.date %}{{ d.date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+    <td class="num"><strong>{{ d.montant }}</strong></td>
+    {% else %}
+    <td>—</td><td>—</td><td class="num">—</td>
+    {% endif %}
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if p.observations %}
+<div class="section-title">Observations</div>
+<div class="conditions">{{ p.observations|linebreaksbr }}</div>
+{% endif %}
+
+<div class="section-title">Conditions</div>
+<div class="conditions">
+  <strong>Document non comptable :</strong> cette proforma renseigne sur les frais de scolarité ; elle ne vaut ni facture définitive ni reçu, seul le reçu remis à chaque versement fait foi du paiement.
+  Montants garantis jusqu'au <strong>{{ p.date_validite|date:"d/m/Y" }}</strong>. Référence à rappeler lors du règlement : <strong>{{ p.numero }}</strong>.
+  {% if p.conditions %}<br>{{ p.conditions|linebreaksbr }}{% endif %}
+</div>
+
+<table class="signatures">
+  <tr>
+    <td style="width:50%"><strong>Pour {{ tenant.nom }}</strong><br>La Direction — cachet et signature</td>
+    <td style="width:50%"><strong>{{ p.parent_nom|default:"Le parent / tuteur" }}</strong><br>Lu et approuvé — date et signature</td>
+  </tr>
+</table>
+
+<div id="pied-de-page">
+  <table class="footer-table">
+    <tr>
+      <td>{{ tenant.nom }} &middot; Proforma {{ p.numero }} &middot; {{ p.beneficiaire }}</td>
+      <td style="text-align:right">page <pdf:pagenumber></td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>
