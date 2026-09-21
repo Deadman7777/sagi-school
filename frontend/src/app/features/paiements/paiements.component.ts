@@ -2118,7 +2118,11 @@ export class PaiementsComponent implements OnInit {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = `recu_${d.no_piece}_${this.recuFormat}.pdf`;
+        // « Ousseynou NDOUR » → « OusseynouNDOUR » : sans accents ni espaces,
+        // pour que le fichier se retrouve et s'ouvre partout (Windows, WhatsApp).
+        const nom = String(d.eleve || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                                          .replace(/[^A-Za-z0-9-]/g, '');
+        link.download = `recu_${d.no_piece}_${this.recuFormat}${nom ? '_' + nom : ''}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

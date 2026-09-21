@@ -702,7 +702,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
             return HttpResponse('Erreur génération PDF reçu.', status=500)
 
         response = HttpResponse(buf.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}_{fmt}.pdf"'
+        # « Ousseynou NDOUR » → « OusseynouNDOUR » : ASCII sans espaces, sûr
+        # dans un en-tête HTTP et dans un nom de fichier Windows.
+        import re, unicodedata
+        nom = unicodedata.normalize('NFD', context.get('eleve') or '')
+        nom = re.sub(r'[^A-Za-z0-9-]', '', nom.encode('ascii', 'ignore').decode())
+        suffixe = f'_{nom}' if nom else ''
+        response['Content-Disposition'] = f'inline; filename="recu_{p.no_piece}_{fmt}{suffixe}.pdf"'
         return response
 
 
