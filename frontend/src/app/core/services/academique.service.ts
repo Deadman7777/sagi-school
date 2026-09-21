@@ -23,6 +23,19 @@ export class AcademiqueService {
 
   modifierClasse(id: string, data: any)   { return this.api.patch<any>(`/academique/classes/${id}/`, data); }
 
+  /** Corriger une évaluation créée de travers (barème, type, date, trimestre).
+   *  Baisser le barème sous une note déjà saisie est refusé côté serveur. */
+  modifierEvaluation(id: string, data: any) {
+    return this.api.patch<any>(`/academique/evaluations/${id}/`, data);
+  }
+
+  /** Supprime l'évaluation ET ses notes. La réponse dit combien de notes sont
+   *  parties, et que les moyennes doivent être recalculées. */
+  supprimerEvaluation(id: string) {
+    return this.api.delete<{ supprimee: string; notes_supprimees: number;
+                             recalcul_necessaire: boolean }>(`/academique/evaluations/${id}/`);
+  }
+
   /** Recopie les matières d'une classe vers d'autres. Une matière déjà
    *  présente dans la cible, reconnue à son nom, n'est jamais dupliquée. */
   copierMatieres(sourceId: string, cibles: string[], ecraser = false) {

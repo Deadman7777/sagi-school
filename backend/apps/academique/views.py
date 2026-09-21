@@ -219,7 +219,10 @@ class EvaluationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Evaluation.objects.filter(
             tenant=get_tenant(self.request)
-        ).select_related('matiere', 'type_eval')
+        ).select_related('matiere', 'type_eval').annotate(
+            # Le nombre de notes déjà saisies, en une requête plutôt qu'une
+            # par évaluation : la liste en affiche une dizaine.
+            nb_notes_annote=Count('notes'))
         if matiere := self.request.query_params.get('matiere'):
             qs = qs.filter(matiere_id=matiere)
         if trimestre := self.request.query_params.get('trimestre'):
@@ -228,6 +231,49 @@ class EvaluationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
+
+    def _perimer_moyennes(self, evaluation):
+        """Jette les moyennes calculées qui dépendaient de cette évaluation.
+
+        Elles sont dans BulletinCache, et rien ne les invalidait : supprimer
+        une évaluation ou changer son barème laissait le bulletin afficher
+        les moyennes d'avant, justes en apparence. Une moyenne absente se
+        voit (« Lancez d'abord le calcul »), une moyenne périmée ne se voit
+        pas — c'est la seule raison de préférer l'effacement au silence.
+        """
+        BulletinCache.objects.filter(
+            tenant=evaluation.tenant,
+            matiere=evaluation.matiere,
+            trimestre=evaluation.trimestre,
+        ).delete()
+
+    def perform_update(self, serializer):
+        ancienne_matiere   = serializer.instance.matiere
+        ancien_trimestre   = serializer.instance.trimestre
+        evaluation = serializer.save()
+        # La modification a pu déplacer l'évaluation : périmer des deux côtés.
+        self._perimer_moyennes(evaluation)
+        if (ancienne_matiere != evaluation.matiere
+                or ancien_trimestre != evaluation.trimestre):
+            BulletinCache.objects.filter(
+                tenant=evaluation.tenant, matiere=ancienne_matiere,
+                trimestre=ancien_trimestre).delete()
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprime l'évaluation ET ses notes, en disant combien.
+
+        Le CASCADE est voulu : une évaluation créée par erreur n'a pas à
+        laisser des notes orphelines derrière elle. Mais la réponse annonce
+        le nombre de notes emportées, pour que l'écran puisse le confirmer
+        avant, et le rappeler après.
+        """
+        evaluation = self.get_object()
+        nb_notes   = evaluation.notes.count()
+        libelle    = f"{evaluation.type_eval.nom} — {evaluation.matiere.nom}"
+        self._perimer_moyennes(evaluation)
+        evaluation.delete()
+        return Response({'supprimee': libelle, 'notes_supprimees': nb_notes,
+                         'recalcul_necessaire': True})
 
 
 class NoteViewSet(viewsets.ModelViewSet):

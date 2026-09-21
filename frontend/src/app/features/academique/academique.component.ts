@@ -212,8 +212,21 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="eval-card" *ngFor="let e of evaluations()"
                [class.active]="evalSelectionnee?.id === e.id"
                (click)="selectionnerEvaluation(e)">
-            <div class="ec-titre">{{ (e.type_eval_nom || 'Évaluation') + (e.titre ? ' — ' + e.titre : '') }}</div>
-            <div class="ec-info">{{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}</div>
+            <div class="ec-titre">
+              <span>{{ (e.type_eval_nom || 'Évaluation') + (e.titre ? ' — ' + e.titre : '') }}</span>
+              <!-- stopPropagation : la carte entière sélectionne l'évaluation,
+                   ces deux boutons ne doivent pas la sélectionner au passage. -->
+              <span class="ec-actions">
+                <button type="button" class="ec-btn" title="Modifier cette évaluation"
+                        (click)="$event.stopPropagation(); ouvrirEditionEvaluation(e)">✎</button>
+                <button type="button" class="ec-btn ec-btn-danger" title="Supprimer cette évaluation"
+                        (click)="$event.stopPropagation(); demanderSuppressionEvaluation(e)">🗑</button>
+              </span>
+            </div>
+            <div class="ec-info">
+              {{ e.trimestre }} · {{ e.date_eval | date:'dd/MM/yyyy' }} · /{{ e.note_max }}
+              <span *ngIf="e.nb_notes" class="ec-notes">· {{ e.nb_notes }} note(s)</span>
+            </div>
           </div>
         </div>
         <div *ngIf="evaluations().length === 0" class="empty-msg" style="padding:10px;display:flex;align-items:center;gap:12px">
@@ -665,7 +678,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     </p-dialog>
 
     <!-- Dialog Évaluation -->
-    <p-dialog [header]="'📝 ' + ('academique.nouvelle_eval' | translate)" [(visible)]="dialogEvalVisible"
+    <p-dialog [header]="formEval.id ? '✎ Modifier l’évaluation' : '📝 ' + ('academique.nouvelle_eval' | translate)"
+              [(visible)]="dialogEvalVisible"
               [modal]="true" [style]="{width:'420px'}">
       <div class="form-grid" style="grid-template-columns:1fr 1fr">
         <div class="form-group full">
@@ -696,10 +710,20 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <label>{{ 'academique.titre_optionnel' | translate }}</label>
           <input pInputText [(ngModel)]="formEval.titre" class="w-full" [placeholder]="'academique.ex_titre_eval' | translate" />
         </div>
+        <!-- Dire ce qui va se passer AVANT de valider : les notes gardent leur
+             valeur, et les moyennes déjà calculées seront à refaire. -->
+        <div class="form-group full" *ngIf="formEval.id && formEval.nb_notes">
+          <div class="eval-avert">
+            {{ formEval.nb_notes }} note(s) déjà saisie(s). Elles gardent leur valeur :
+            changer le barème ne les convertit pas. Une note qui dépasserait le nouveau
+            barème fera refuser l'enregistrement. Les moyennes seront à recalculer.
+          </div>
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogEvalVisible=false" />
-        <p-button [label]="'common.creer'   | translate" severity="success" (onClick)="creerEvaluation()" />
+        <p-button [label]="(formEval.id ? 'common.enregistrer' : 'common.creer') | translate"
+                  severity="success" (onClick)="creerEvaluation()" />
       </ng-template>
     </p-dialog>
   `,
@@ -731,8 +755,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .eval-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; cursor:pointer; transition:all 0.2s; }
     .eval-card:hover { border-color:#00d4aa; }
     .eval-card.active { border-color:#00d4aa; background:rgba(0,212,170,0.1); }
-    .ec-titre { font-size:13px; font-weight:600; color:var(--text); }
+    .ec-titre { font-size:13px; font-weight:600; color:var(--text);
+                display:flex; align-items:center; gap:10px; justify-content:space-between; }
     .ec-info  { font-size:11px; color:var(--text-3); margin-top:4px; }
+    .ec-notes { color:#00d4aa; }
+    .eval-avert { background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.35);
+                  border-radius:6px; padding:8px 10px; font-size:12px; color:var(--text-2);
+                  line-height:1.5; }
+    .ec-actions { display:flex; gap:2px; flex-shrink:0; }
+    .ec-btn { background:transparent; border:none; cursor:pointer; padding:2px 5px;
+              border-radius:4px; font-size:12px; line-height:1; color:var(--text-3); }
+    .ec-btn:hover { background:var(--surface-hover); color:var(--text); }
+    .ec-btn-danger:hover { background:rgba(239,68,68,0.15); color:#ef4444; }
     .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
                   /* auto, et non hidden : un tableau plus large que l'écran doit DÉFILER.
                      Coupé, ses dernières colonnes et ses boutons d'action disparaissaient. */
@@ -895,7 +929,7 @@ export class AcademiqueComponent implements OnInit {
   baremesCourants = [5, 10, 15, 20, 30, 40, 50, 60, 100];
   formMatiere:  any = { id: null, nom: '', classe: '', coefficient: 1, note_max: 20, programme: 'FR' };
   formTypeEval: any = { id: null, nom: '', nom_ar: '', poids: 1 };
-  formEval     = { type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
+  formEval: any = { id: null, type_eval: '', trimestre: 'T1', date_eval: '', note_max: 20, titre: '' };
 
   trimestres: any[] = [];
   periode = 'TRIMESTRE';   // type/mot : TRIMESTRE | SEMESTRE | PERIODE
@@ -1217,7 +1251,7 @@ export class AcademiqueComponent implements OnInit {
     // 20 est un cas réel.
     const matiere = this.matieresNotes().find((m: any) => m.id === this.matiereNotes);
     const bareme  = matiere?.note_max ? +matiere.note_max : 20;
-    this.formEval = { type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max: bareme, titre:'' };
+    this.formEval = { id:null, type_eval:'', trimestre: this.trimestreNotes, date_eval:'', note_max: bareme, titre:'' };
     this.dialogEvalVisible = true;
   }
 
@@ -1327,15 +1361,77 @@ export class AcademiqueComponent implements OnInit {
       this.msg.add({ severity:'warn', summary:'Matière requise', detail:'Sélectionnez une matière.' });
       return;
     }
-    const data = { ...this.formEval, matiere: this.matiereNotes };
-    this.acad.creerEvaluation(data).subscribe({
+    const { id, nb_notes, ...champs } = this.formEval;
+    const data = { ...champs, matiere: this.matiereNotes };
+    const obs = id ? this.acad.modifierEvaluation(id, data)
+                   : this.acad.creerEvaluation(data);
+    obs.subscribe({
       next: () => {
         this.dialogEvalVisible = false;
         this.chargerEvaluationsEtEleves();
-        this.msg.add({ severity:'success', summary: this.translate.instant('academique.evaluation_creee') });
+        if (id) {
+          this.msg.add({ severity:'success', summary:'Évaluation modifiée',
+                         detail: nb_notes ? 'Relancez « Calculer Moyennes » : les moyennes d\'avant ne valent plus.'
+                                          : 'Modification enregistrée.',
+                         life: 8000 });
+        } else {
+          this.msg.add({ severity:'success', summary: this.translate.instant('academique.evaluation_creee') });
+        }
+      },
+      // Le serveur nomme les élèves dont la note dépasse le nouveau barème :
+      // ce message-là vaut mieux qu'un « Impossible d'enregistrer » générique.
+      error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
+                                      detail: this._messageErreur(err) || 'Impossible d\'enregistrer l\'évaluation.',
+                                      life: 12000 }),
+    });
+  }
+
+  /** Aplatit ce que renvoie DRF : {detail}, {champ: [msg]}, ou une chaîne. */
+  private _messageErreur(err: any): string {
+    const corps = err?.error;
+    if (!corps) return '';
+    if (typeof corps === 'string') return corps;
+    if (corps.detail) return corps.detail;
+    return Object.values(corps)
+      .map((v: any) => Array.isArray(v) ? v.join(' ') : String(v))
+      .join(' ');
+  }
+
+  ouvrirEditionEvaluation(e: any) {
+    this.formEval = {
+      id: e.id, type_eval: e.type_eval, trimestre: e.trimestre,
+      // <input type="date"> veut YYYY-MM-DD ; l'API peut renvoyer un datetime.
+      date_eval: (e.date_eval || '').slice(0, 10),
+      note_max: +e.note_max, titre: e.titre || '', nb_notes: e.nb_notes || 0,
+    };
+    this.dialogEvalVisible = true;
+  }
+
+  demanderSuppressionEvaluation(e: any) {
+    const nom = (e.type_eval_nom || 'Évaluation') + (e.titre ? ` — ${e.titre}` : '');
+    // Annoncer les notes emportées AVANT : la suppression est en cascade et
+    // ne se rattrape pas.
+    const perte = e.nb_notes
+      ? `\n\n⚠ ${e.nb_notes} note(s) déjà saisie(s) seront supprimées avec elle. C'est définitif.`
+      : '\n\nAucune note n\'y est saisie.';
+    if (!confirm(`Supprimer l'évaluation « ${nom} » ?${perte}`)) return;
+
+    this.acad.supprimerEvaluation(e.id).subscribe({
+      next: (r: any) => {
+        // La carte supprimée pouvait être celle qu'on éditait : vider la grille.
+        if (this.evalSelectionnee?.id === e.id) {
+          this.evalSelectionnee = null;
+          this.elevesNotes.set([]);
+        }
+        this.chargerEvaluationsEtEleves();
+        this.msg.add({ severity:'success', summary:'Évaluation supprimée',
+                       detail: r?.notes_supprimees
+                         ? `${r.notes_supprimees} note(s) supprimée(s). Relancez « Calculer Moyennes ».`
+                         : 'Évaluation supprimée.',
+                       life: 8000 });
       },
       error: (err) => this.msg.add({ severity:'error', summary:'Erreur',
-                                      detail: err?.error?.detail || 'Impossible de créer l\'évaluation.' }),
+                                      detail: this._messageErreur(err) || 'Impossible de supprimer l\'évaluation.' }),
     });
   }
 
