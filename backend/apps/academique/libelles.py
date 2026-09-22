@@ -95,6 +95,9 @@ def contexte_bulletin_ar(context, tenant, lignes):
         'devise':      'شعب واحد — هدف واحد — إيمان واحد',
         'annee':       'السنة الدراسية',
         'autorisation': 'رقم رخصة الفتح',
+        # Tutelle académique : IA (académie) et IEF (département).
+        'ia':          'التفتيش الأكاديمي',
+        'ief':         'تفتيش التربية والتكوين',
         'titre':       'كشف النقاط',
         'programme':   'البرنامج العربي',
         'nom':         'الاسم واللقب',

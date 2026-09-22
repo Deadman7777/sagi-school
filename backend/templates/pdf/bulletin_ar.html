@@ -61,6 +61,9 @@ entières, styles posés sur les cellules.
   {% if tenant.logo %}<div class="centre">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
   <div class="centre school-name">{{ tenant.nom|upper }}</div>
   <div class="centre school-sub">{{ annee }} : {{ t.annee }} &nbsp;|&nbsp; {{ tenant.ville|default:"Sénégal" }}</div>
+  {% if tenant.inspection_academie or tenant.inspection_ief %}
+  <div class="centre rep-line">{% if tenant.inspection_ief %}{{ tenant.inspection_ief }} : {{ t.ief }}{% endif %}{% if tenant.inspection_academie and tenant.inspection_ief %} &nbsp;|&nbsp; {% endif %}{% if tenant.inspection_academie %}{{ tenant.inspection_academie }} : {{ t.ia }}{% endif %}</div>
+  {% endif %}
   {% if tenant.numero_autorisation %}<div class="centre school-sub">{{ tenant.numero_autorisation }} : {{ t.autorisation }}</div>{% endif %}
   <div class="sep-line"></div>
   <div class="centre titre-bul">{{ periode_ar }} — {{ t.programme }} — {{ t.titre }}</div>

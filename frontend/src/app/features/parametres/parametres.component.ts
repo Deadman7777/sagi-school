@@ -379,6 +379,18 @@ import { MessageService } from 'primeng/api';
             <label>{{ 'parametres.autorisation' | translate }}</label>
             <input pInputText [(ngModel)]="ecole()!.numero_autorisation" class="w-full" />
           </div>
+          <!-- Tutelle académique, imprimée en tête des bulletins :
+               « IA : Rufisque | IEF : Sangalkam ». -->
+          <div class="form-group">
+            <label for="ecole-ia">{{ 'parametres.ia' | translate }}</label>
+            <input id="ecole-ia" pInputText [(ngModel)]="ecole()!.inspection_academie"
+                   class="w-full" placeholder="Rufisque" />
+          </div>
+          <div class="form-group">
+            <label for="ecole-ief">{{ 'parametres.ief' | translate }}</label>
+            <input id="ecole-ief" pInputText [(ngModel)]="ecole()!.inspection_ief"
+                   class="w-full" placeholder="Sangalkam" />
+          </div>
           <!-- Signataire des documents officiels : « Monsieur Mouhamed GUEYE,
                Directeur de… ». La civilité accorde Directeur / Directrice. -->
           <div class="form-group">

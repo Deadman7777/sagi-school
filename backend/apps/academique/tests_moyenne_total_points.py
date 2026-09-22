@@ -286,3 +286,31 @@ class TroncatureTest(MoyenneTotalPointsBase):
         # Le bulletin imprime la même chose que l'écran.
         kebe = Eleve.objects.get(nom_complet='Aïssata KÉBÉ')
         self.assertEqual(situation_periode(self.tenant, kebe, 'T1', '2025-2026')['moy_generale'], 7.46)
+
+
+class TutelleAcademiqueTest(MoyenneTotalPointsBase):
+    """IA et IEF en tête du bulletin : « IA : Rufisque | IEF : Sangalkam »."""
+
+    def _texte_bulletin(self):
+        import io
+
+        from pypdf import PdfReader
+        self._une_matiere_par_note()
+        self._calculer()
+        pdf = self.client.get(f'/api/academique/bulletin-pdf/{self.eleve.id}/T1/')
+        self.assertEqual(pdf.status_code, 200)
+        contenu = b''.join(pdf.streaming_content) if pdf.streaming else pdf.content
+        return '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(contenu)).pages)
+
+    def test_imprimees_quand_l_ecole_les_a_renseignees(self):
+        self.tenant.inspection_academie = 'Rufisque'
+        self.tenant.inspection_ief = 'Sangalkam'
+        self.tenant.save()
+        texte = self._texte_bulletin()
+        self.assertIn('IA : Rufisque', texte)
+        self.assertIn('IEF : Sangalkam', texte)
+
+    def test_absentes_l_en_tete_ne_montre_pas_de_ligne_vide(self):
+        texte = self._texte_bulletin()
+        self.assertNotIn('IA :', texte)
+        self.assertNotIn('IEF :', texte)

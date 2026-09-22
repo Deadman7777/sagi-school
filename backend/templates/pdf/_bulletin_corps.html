@@ -5,6 +5,9 @@
   <div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
   {% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
   <div class="school-name">{{ tenant.nom|upper }}</div>
+  {% if tenant.inspection_academie or tenant.inspection_ief %}
+  <div class="rep-line">{% if tenant.inspection_academie %}IA : {{ tenant.inspection_academie }}{% endif %}{% if tenant.inspection_academie and tenant.inspection_ief %} &nbsp;|&nbsp; {% endif %}{% if tenant.inspection_ief %}IEF : {{ tenant.inspection_ief }}{% endif %}</div>
+  {% endif %}
   <div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
   {% if tenant.numero_autorisation %}<div class="school-sub">Autorisation d'ouverture N° : {{ tenant.numero_autorisation }}</div>{% endif %}
   <div class="sep-line"></div>

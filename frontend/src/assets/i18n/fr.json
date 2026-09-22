@@ -572,6 +572,8 @@
     "logo_format": "Le fichier doit être une image.",
     "logo_trop_gros": "Image trop lourde (max 1 Mo).",
     "autorisation": "N° d'autorisation d'ouverture",
+    "ia": "IA — Inspection d'Académie",
+    "ief": "IEF — Inspection de l'Éducation et de la Formation",
     "certificat": "Certificat",
     "cert_titre": "Personnalisation du certificat de scolarité",
     "cert_aide": "Choisissez les éléments à faire figurer sur le certificat. Par défaut, la version standard complète est appliquée.",

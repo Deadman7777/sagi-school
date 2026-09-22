@@ -572,6 +572,8 @@
     "logo_format": "The file must be an image.",
     "logo_trop_gros": "Image too large (max 1 MB).",
     "autorisation": "Opening authorization No.",
+    "ia": "IA — Academy Inspectorate",
+    "ief": "IEF — Education and Training Inspectorate",
     "certificat": "Certificate",
     "cert_titre": "School certificate customization",
     "cert_aide": "Choose the elements to include on the certificate. By default, the full standard version is used.",

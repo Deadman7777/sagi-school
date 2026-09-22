@@ -15,6 +15,15 @@ class Tenant(TimeStampedModel):
     # Numéro d'autorisation d'ouverture délivré par l'autorité de tutelle —
     # figure sur les documents officiels (certificat, bulletins, reçus).
     numero_autorisation = models.CharField(max_length=100, blank=True)
+    # Tutelle académique, imprimée en tête des documents officiels :
+    # « IA : Rufisque — IEF : Sangalkam ». IA = Inspection d'Académie (région),
+    # IEF = Inspection de l'Éducation et de la Formation (département). Vides,
+    # elles ne s'impriment pas : une école qui n'en dépend pas n'a rien à voir
+    # apparaître.
+    inspection_academie = models.CharField(max_length=100, blank=True,
+                                           help_text="Inspection d'Académie (IA), ex. Rufisque")
+    inspection_ief = models.CharField(max_length=100, blank=True,
+                                      help_text="Inspection de l'Éducation et de la Formation (IEF), ex. Sangalkam")
     # Qui signe les documents officiels (certificat) : « Monsieur Mouhamed
     # GUEYE, Directeur de… », « Madame Fatou Kiné NDIAYE, Directrice de… ».
     # La civilité accorde le titre et « soussigné(e) ».
