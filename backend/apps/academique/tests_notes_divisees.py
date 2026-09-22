@@ -117,3 +117,27 @@ class CommandeVerifierBaremesTest(NotesDiviseesBase):
         ev.refresh_from_db()
         self.assertEqual(ev.note_max, 10)
         self.assertEqual(self._moyennes(), {'Adama NIANG': 10, 'Adama THIAW': 9})
+
+
+class CommandeVerifierClasseTest(NotesDiviseesBase):
+    def test_chaque_anomalie_est_signalee_et_le_releve_imprime(self):
+        m = self._matiere(10)
+        ev1 = self._eval(m, 10)
+        self._noter(ev1, 10, 8)
+        ev2 = self._eval(m, 10)                 # 2e évaluation : moyennée, THIAW sans note
+        Note.objects.create(tenant=self.tenant, eleve=self.eleves[0], evaluation=ev2, valeur=12)
+        m2 = Matiere.objects.create(tenant=self.tenant, classe=self.classe, nom='Copie',
+                                    coefficient=1, note_max=5)
+        self._eval(m2, 5)                       # jamais notée
+        self._moyennes()
+
+        sortie = StringIO()
+        call_command('verifier_classe', ecole='Shoumoul', classe='CP', periode='S2', stdout=sortie)
+        texte = sortie.getvalue()
+        self.assertIn('2 évaluations notées sur S2', texte)
+        self.assertIn("Adama THIAW n'a PAS de note — compte 0", texte)
+        self.assertIn('Adama NIANG a 12 sur /10', texte)
+        self.assertIn('Copie · Devoir : aucune note', texte)
+        self.assertIn('RELEVÉ 1ère Etape CP — S2', texte)
+        self.assertIn('Identification de mots: 10+12', texte)
+        self.assertIn('MOYENNE', texte)
