@@ -314,3 +314,91 @@ class TutelleAcademiqueTest(MoyenneTotalPointsBase):
         texte = self._texte_bulletin()
         self.assertNotIn('IA :', texte)
         self.assertNotIn('IEF :', texte)
+
+
+class SeuilsSelonLeBaremeTest(MoyenneTotalPointsBase):
+    """Analyse et suivi pédagogique sur une école qui note sur 10.
+
+    Les seuils des mentions étaient écrits en dur sur 20 : une école primaire,
+    dont la meilleure moyenne est 9,66/10, rangeait TOUS ses élèves dans
+    « Insuffisant ».
+    """
+
+    def test_analyse_les_mentions_suivent_le_bareme(self):
+        self._regler('POINTS', 10)
+        self._une_matiere_par_note()
+        self._calculer()
+        r = self.client.get('/api/academique/analyse/')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.data['bareme'], 10.0)
+        self.assertEqual(r.data['seuils'],
+                         {'excellent': 8.0, 'bien': 7.0, 'assez_bien': 6.0, 'passable': 5.0})
+        # 9,66/10 = 19,3/20 : excellent, et non insuffisant.
+        self.assertEqual(r.data['distribution']['excellent'], 1)
+        self.assertEqual(r.data['distribution']['insuffisant'], 0)
+        self.assertEqual(r.data['top_eleves'][0]['moyenne'], 9.67)
+        self.assertEqual(r.data['top_eleves'][0]['bareme'], 10.0)
+
+    def test_analyse_sur_20_inchangee(self):
+        self._une_matiere_par_note()
+        self._calculer()
+        r = self.client.get('/api/academique/analyse/')
+        self.assertEqual(r.data['bareme'], 20.0)
+        self.assertEqual(r.data['seuils']['excellent'], 16.0)
+        self.assertEqual(r.data['distribution']['excellent'], 1)
+
+    def test_fiche_pedagogique_affiche_sur_le_bareme_de_l_ecole(self):
+        from apps.academique.resultats import fiche_pedagogique
+        self._regler('POINTS', 10)
+        self._une_matiere_par_note()
+        self._calculer()
+        fiche = fiche_pedagogique(self.tenant, self.eleve, '2025-2026')
+        self.assertEqual(fiche['bareme'], 10.0)
+        matiere_10 = next(m for m in fiche['matieres'] if m['note_max'] == 10.0)
+        # 10/10 s'affiche 10, et non 20 ; il reste un point fort.
+        self.assertEqual(matiere_10['derniere'], 10.0)
+        self.assertEqual(matiere_10['statut'], 'FORT')
+        pdf = self.client.get(f'/api/academique/fiche-pedagogique-pdf/{self.eleve.id}/')
+        self.assertEqual(pdf.status_code, 200)
+
+
+class MatieresEnArabeTest(MoyenneTotalPointsBase):
+    """Une école peut nommer ses matières en arabe : « القرآن الكريم ».
+
+    Le gabarit français est en Arial, qui n'a pas ces caractères : les noms
+    sortaient en carrés noirs. Ils sont désormais pré-formés et imprimés dans
+    la police arabe embarquée (Amiri).
+    """
+    NOM_AR = 'القرآن الكريم'
+
+    def _avec_matiere_arabe(self):
+        from apps.academique.models import Matiere, Note
+        m = Matiere.objects.create(tenant=self.tenant, classe=self.classe, nom=self.NOM_AR,
+                                   coefficient=1, note_max=20)
+        Note.objects.create(tenant=self.tenant, eleve=self.eleve,
+                            evaluation=self._eval(m, 20), valeur=18)
+        self._calculer()
+
+    def test_le_bulletin_francais_imprime_l_arabe_dans_sa_police(self):
+        from apps.academique.views import contexte_bulletin
+        self._avec_matiere_arabe()
+        ctx = contexte_bulletin(self.tenant, self.eleve, 'T1', '2025-2026', None)
+        ligne = ctx['matieres'][0]
+        self.assertTrue(ligne['arabe'])
+        self.assertNotEqual(ligne['nom'], self.NOM_AR)      # pré-formée (ligatures + RTL)
+        self.assertEqual(ctx['font_ar'], 'Amiri-Regular.ttf')
+        pdf = self.client.get(f'/api/academique/bulletin-pdf/{self.eleve.id}/T1/')
+        self.assertEqual(pdf.status_code, 200)
+
+    def test_une_matiere_en_francais_n_est_pas_touchee(self):
+        from apps.academique.views import contexte_bulletin
+        self._une_matiere_par_note()
+        self._calculer()
+        ligne = contexte_bulletin(self.tenant, self.eleve, 'T1', '2025-2026', None)['matieres'][0]
+        self.assertFalse(ligne['arabe'])
+        self.assertEqual(ligne['nom'], 'Matière 1')
+
+    def test_les_bulletins_de_classe_aussi(self):
+        self._avec_matiere_arabe()
+        r = self.client.get(f'/api/academique/bulletins-classe/{self.classe.id}/T1/')
+        self.assertEqual(r.status_code, 200, r.content[:200])

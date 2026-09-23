@@ -11,6 +11,7 @@ from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
+from core.arabe import POLICE_ARABE, est_arabe, shape_ar
 from core.tenant import get_tenant
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
                         note_max_reference, points_matiere, poids_ligne, programme_valide, ramener,
@@ -836,7 +837,12 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     matieres_ctx = []
     for b in bulletins_list:
         matieres_ctx.append({
-            'nom':          b.matiere.nom,
+            # Une matière saisie en arabe (« القرآن الكريم ») s'imprimait en
+            # carrés : le gabarit français est en Arial, sans caractères
+            # arabes, et xhtml2pdf ne sait ni lier ni inverser les lettres.
+            # Pré-formée et marquée, elle sort dans la police Amiri embarquée.
+            'nom':          shape_ar(b.matiere.nom) if est_arabe(b.matiere.nom) else b.matiere.nom,
+            'arabe':        est_arabe(b.matiere.nom),
             # Le coefficient DE L'ÉCOLE, toujours. En calcul « total des
             # points », le poids du barème (0,5 pour /5, 2 pour /20) reste
             # interne : imprimé, il contredisait les coefficients que l'école
@@ -890,6 +896,7 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
 
     context['programme'] = programme
     context['hybride'] = getattr(tenant, 'programmes_hybrides', False)
+    context['font_ar'] = POLICE_ARABE
     context['_lignes'] = bulletins_list
     return context
 
@@ -966,20 +973,22 @@ class BulletinPDFView(APIView):
         _logger = logging.getLogger('django')
         html_str = render_to_string('pdf/bulletin.html', context)
         buffer   = BytesIO()
+        # xhtml2pdf et lui seul, comme les bulletins de classe : c'est le
+        # moteur livré avec le backend (requirements/base.txt). Essayer
+        # weasyprint d'abord faisait voir en développement, où il est parfois
+        # installé, une mise en page que l'école n'imprime jamais — un logo à
+        # sa taille ici, en pleine page chez elle.
         try:
-            import weasyprint
-            weasyprint.HTML(string=html_str).write_pdf(buffer)
-        except Exception as e_weasy:
-            try:
-                from xhtml2pdf import pisa
-                buffer = BytesIO()
-                result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8')
-                if result.err:
-                    _logger.error('Bulletin PDF — xhtml2pdf err=%s (weasy: %s)', result.err, e_weasy)
-                    return HttpResponse('Erreur génération bulletin PDF.', status=500)
-            except Exception as e:
-                _logger.error('Bulletin PDF — échec rendu :\n%s', _tb.format_exc())
-                return HttpResponse(f'Erreur PDF : {e}', status=500)
+            from core.arabe import font_link_callback
+            from xhtml2pdf import pisa
+            result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
+                                    link_callback=font_link_callback)
+            if result.err:
+                _logger.error('Bulletin PDF — xhtml2pdf err=%s', result.err)
+                return HttpResponse('Erreur génération bulletin PDF.', status=500)
+        except Exception as e:
+            _logger.error('Bulletin PDF — échec rendu :\n%s', _tb.format_exc())
+            return HttpResponse(f'Erreur PDF : {e}', status=500)
 
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="bulletin_{eleve.nom_complet}_{trimestre}.pdf"'
@@ -1005,11 +1014,25 @@ class AnalysePerformanceView(APIView):
         if programme := programme_valide(request.query_params.get('programme')):
             bulletins = bulletins.filter(matiere__programme=programme)
 
+        # Barème de la moyenne, classe par classe : une école primaire compte
+        # sur 10, un collège sur 20. Les seuils des mentions en découlent —
+        # écrits en dur sur 20, ils rangeaient toute une école primaire dans
+        # « Insuffisant ».
+        classes_tenant = {c.id: c for c in Classe.objects.filter(tenant=tenant)
+                          .select_related('niveau', 'tenant')}
+        matieres_par_classe = defaultdict(list)
+        for m in Matiere.objects.filter(tenant=tenant, est_active=True):
+            matieres_par_classe[m.classe_id].append(m)
+
+        def bareme_de(classe_id):
+            classe = classes_tenant.get(classe_id)
+            return note_max_reference(classe, matieres_par_classe.get(classe_id, []))
+
         # BulletinCache est PAR MATIÈRE → la moyenne générale d'un élève = Σpoints / Σcoef.
         def moyennes_par_eleve(periode):
             """Retourne [{eleve_id, nom, classe, moyenne}] pour une période donnée."""
             rows = bulletins.filter(trimestre=periode).values(
-                'eleve_id', 'eleve__nom_complet',
+                'eleve_id', 'eleve__nom_complet', 'eleve__classe_id',
                 'eleve__classe__nom', 'eleve__section__nom',
             ).annotate(pts=Sum('points'),
                        # Même poids que resultats.poids_ligne, en SQL.
@@ -1024,6 +1047,7 @@ class AnalysePerformanceView(APIView):
                     'nom':      r['eleve__nom_complet'] or '—',
                     'classe':   r['eleve__classe__nom'] or r['eleve__section__nom'] or '—',
                     'moyenne':  arrondir(float(r['pts'] or 0) / c, arrondi),
+                    'bareme':   bareme_de(r['eleve__classe_id']),
                 })
             return res
 
@@ -1041,7 +1065,8 @@ class AnalysePerformanceView(APIView):
         for p in periodes:
             avgs = moyennes_par_eleve(p)
             moy = arrondir(sum(a['moyenne'] for a in avgs) / len(avgs), arrondi) if avgs else 0
-            evolution.append({'trimestre': p, 'moyenne': moy, 'nb_eleves': len(avgs)})
+            evolution.append({'trimestre': p, 'moyenne': moy, 'nb_eleves': len(avgs),
+                              'bareme': _bareme_commun(avgs)})
 
         # Période de référence = la dernière disponible
         tri_ref = periodes[-1] if periodes else ''
@@ -1053,15 +1078,17 @@ class AnalysePerformanceView(APIView):
             'nom':       a['nom'],
             'classe':    a['classe'],
             'moyenne':   a['moyenne'],
+            'bareme':    a['bareme'],
             'trimestre': tri_ref,
         } for i, a in enumerate(sorted(ref_avgs, key=lambda x: x['moyenne'], reverse=True)[:10])]
 
         # ── Top classes (moyenne des moyennes générales des élèves) ───────
         par_classe = defaultdict(list)
         for a in ref_avgs:
-            par_classe[a['classe']].append(a['moyenne'])
+            par_classe[a['classe']].append((a['moyenne'], a['bareme']))
         classes_calc = [
-            {'classe': nom, 'moyenne': arrondir(sum(v) / len(v), arrondi), 'nb': len(v)}
+            {'classe': nom, 'moyenne': arrondir(sum(m for m, _ in v) / len(v), arrondi),
+             'nb': len(v), 'bareme': v[0][1]}
             for nom, v in par_classe.items() if v
         ]
         top_classes = [
@@ -1070,15 +1097,18 @@ class AnalysePerformanceView(APIView):
         ]
 
         # ── Distribution des mentions (période de référence) ──────────────
+        # Les mentions se décident sur la PART de la moyenne, pas sur des
+        # points : 8/10 vaut 16/20, c'est « Bien » dans les deux cas.
         distribution = {'excellent': 0, 'bien': 0, 'assez_bien': 0, 'passable': 0, 'insuffisant': 0}
         for a in ref_avgs:
-            m = a['moyenne']
-            if m >= 16:   distribution['excellent']   += 1
-            elif m >= 14: distribution['bien']         += 1
-            elif m >= 12: distribution['assez_bien']   += 1
-            elif m >= 10: distribution['passable']      += 1
-            else:         distribution['insuffisant']   += 1
+            note_20 = float(a['moyenne']) / float(a['bareme'] or 20) * 20
+            if note_20 >= 16:   distribution['excellent']   += 1
+            elif note_20 >= 14: distribution['bien']         += 1
+            elif note_20 >= 12: distribution['assez_bien']   += 1
+            elif note_20 >= 10: distribution['passable']     += 1
+            else:               distribution['insuffisant'] += 1
 
+        bareme_ref = _bareme_commun(ref_avgs)
         return Response({
             'annee_scolaire': annee,
             'trimestre_ref':  tri_ref,
@@ -1086,7 +1116,19 @@ class AnalysePerformanceView(APIView):
             'top_eleves':     top_eleves,
             'top_classes':    top_classes,
             'distribution':   distribution,
+            # Barème des moyennes affichées, et seuils des mentions qui en
+            # découlent : l'écran ne les recalcule pas dans son coin.
+            'bareme':         bareme_ref,
+            'seuils': {'excellent': round(bareme_ref * 0.8, 2), 'bien': round(bareme_ref * 0.7, 2),
+                       'assez_bien': round(bareme_ref * 0.6, 2), 'passable': round(bareme_ref * 0.5, 2)},
         })
+
+
+def _bareme_commun(lignes):
+    """Le barème des moyennes d'une liste : le leur s'il est unique, 20 sinon
+    (une école qui mélange primaire sur 10 et collège sur 20)."""
+    baremes = {float(l['bareme']) for l in lignes if l.get('bareme')}
+    return baremes.pop() if len(baremes) == 1 else 20.0
 
 class BulletinsHistoriqueView(APIView):
     """Liste de tous les bulletins déjà calculés, groupés par (élève, trimestre, année)."""
@@ -1250,13 +1292,16 @@ def _bulletin_sur_une_page(corps, classe, tenant, depart=0):
     from pypdf import PdfReader
     from xhtml2pdf import pisa
 
+    from core.arabe import font_link_callback
+
     donnees = None
     for i in range(depart, len(HAUTEURS_BULLETIN)):
         html_str = render_to_string('pdf/bulletins_classe.html', {
             'bulletins': [corps], 'classe': classe, 'tenant': tenant,
             'hauteur_page': HAUTEURS_BULLETIN[i]})
         buffer = BytesIO()
-        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
+        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
+                          link_callback=font_link_callback).err:
             return None, depart
         donnees = buffer.getvalue()
         if len(PdfReader(BytesIO(donnees)).pages) == 1:

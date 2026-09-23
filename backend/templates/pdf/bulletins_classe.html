@@ -12,6 +12,11 @@
      page plus haute, que la vue ramène ensuite à l'échelle de la demi-feuille
      (voir _bulletin_sur_une_page). Une chaîne, pas un nombre : la locale
      française écrirait « 148,5 » et la règle @page serait ignorée. */
+  /* Police des matières saisies en arabe (Amiri, OFL) : Arial n'a pas
+     ces caractères et les imprime en carrés. */
+  @font-face { font-family: "arf"; src: url("{{ font_ar|default:'Amiri-Regular.ttf' }}"); }
+  .ar { font-family: "arf"; }
+
   @page { size: 210mm {{ hauteur_page|default:"148.5" }}mm; margin: 5mm 8mm; }
 
   /* Tout est d'un cran plus serré que le bulletin à l'unité : ici le

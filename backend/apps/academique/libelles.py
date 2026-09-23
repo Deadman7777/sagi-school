@@ -147,7 +147,7 @@ _FICHE = {
         'annee': 'Année scolaire', 'matricule': 'Matricule',
         'evolution': 'Évolution des résultats', 'periode': 'Période', 'moyenne': 'Moyenne',
         'rang': 'Rang', 'moy_classe': 'Moy. classe', 'matieres': 'Résultats par matière',
-        'matiere': 'Matière', 'coef': 'Coef.', 'derniere': 'Dernière /20',
+        'matiere': 'Matière', 'coef': 'Coef.', 'derniere': 'Dernière',
         'ecart': 'Évolution', 'lecture': 'Lecture', 'forts': 'Points forts',
         'faibles': 'Points faibles', 'ameliorer': "Points d'amélioration",
         'recommandations': 'Recommandations', 'observations': "Observations de l'équipe pédagogique",
@@ -170,7 +170,7 @@ _FICHE = {
         'annee': 'السنة الدراسية', 'matricule': 'رقم التسجيل',
         'evolution': 'تطور النتائج', 'periode': 'الفترة', 'moyenne': 'المعدل',
         'rang': 'الرتبة', 'moy_classe': 'معدل القسم', 'matieres': 'النتائج حسب المادة',
-        'matiere': 'المادة', 'coef': 'المعامل', 'derniere': 'آخر معدل /20',
+        'matiere': 'المادة', 'coef': 'المعامل', 'derniere': 'آخر معدل',
         'ecart': 'التطور', 'lecture': 'القراءة', 'forts': 'نقاط القوة',
         'faibles': 'نقاط الضعف', 'ameliorer': 'نقاط تحتاج إلى تحسين',
         'recommandations': 'التوصيات', 'observations': 'ملاحظات الفريق التربوي',
@@ -248,6 +248,9 @@ def contexte_fiche(fiche, tenant, eleve, classe_nom, langue):
             'statut':     m['statut'],
             'lecture':    f(lecture),
         })
+
+    # Le barème de l'école complète l'en-tête : « Dernière /10 ».
+    t = {**t, 'derniere': f"{t['derniere']} /{fiche.get('bareme', 20):g}"}
 
     def liste(noms):
         return f(sep.join(noms)) if noms else t['aucun']

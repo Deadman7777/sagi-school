@@ -70,7 +70,7 @@ import { AcademiqueService } from '../../../core/services/academique.service';
                 <th>{{ 'pedago.matiere' | translate }}</th>
                 <th>{{ 'pedago.coef' | translate }}</th>
                 @for (p of f.periodes; track p.code) { <th>{{ libellePeriode(p.code) }}</th> }
-                <th>{{ 'pedago.derniere' | translate }}</th>
+                <th>{{ 'pedago.derniere' | translate }} /{{ fiche()?.bareme ?? 20 }}</th>
                 <th>{{ 'pedago.moy_classe' | translate }}</th>
                 <th>{{ 'pedago.evolution' | translate }}</th>
                 <th>{{ 'pedago.lecture' | translate }}</th>

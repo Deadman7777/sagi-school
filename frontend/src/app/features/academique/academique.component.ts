@@ -413,23 +413,23 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         <!-- KPI distribution -->
         <div class="analyse-grid" style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px">
           <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #f59e0b">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Excellent ≥16</div>
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Excellent ≥ {{ analyse()!.seuils?.excellent ?? 16 }}</div>
             <div style="font-size:22px; font-weight:700; color:#f59e0b">{{ analyse()!.distribution.excellent }}</div>
           </div>
           <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #10b981">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Bien ≥14</div>
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Bien ≥ {{ analyse()!.seuils?.bien ?? 14 }}</div>
             <div style="font-size:22px; font-weight:700; color:#10b981">{{ analyse()!.distribution.bien }}</div>
           </div>
           <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #0099ff">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Assez bien ≥12</div>
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Assez bien ≥ {{ analyse()!.seuils?.assez_bien ?? 12 }}</div>
             <div style="font-size:22px; font-weight:700; color:#0099ff">{{ analyse()!.distribution.assez_bien }}</div>
           </div>
           <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #a855f7">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Passable ≥10</div>
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Passable ≥ {{ analyse()!.seuils?.passable ?? 10 }}</div>
             <div style="font-size:22px; font-weight:700; color:#a855f7">{{ analyse()!.distribution.passable }}</div>
           </div>
           <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #ef4444">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Insuffisant &lt;10</div>
+            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Insuffisant &lt; {{ analyse()!.seuils?.passable ?? 10 }}</div>
             <div style="font-size:22px; font-weight:700; color:#ef4444">{{ analyse()!.distribution.insuffisant }}</div>
           </div>
         </div>
@@ -449,7 +449,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 @for (t of analyse()!.evolution; track t.trimestre) {
                   <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
                     <td style="padding:8px 12px; font-weight:600; color:#00d4aa">{{ t.trimestre }}</td>
-                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:var(--text)">{{ t.moyenne }}/20</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:var(--text)">{{ t.moyenne }}/{{ t.bareme ?? analyse()!.bareme ?? 20 }}</td>
                     <td style="padding:8px 12px; text-align:right; color:var(--text-3)">{{ t.nb_eleves }}</td>
                   </tr>
                 }
@@ -472,7 +472,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
                     <td style="padding:8px 12px; color:#f59e0b; font-weight:700">{{ c.rang }}</td>
                     <td style="padding:8px 12px; color:var(--text)">{{ c.classe }}</td>
-                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa">{{ c.moyenne }}/20</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa">{{ c.moyenne }}/{{ c.bareme ?? analyse()!.bareme ?? 20 }}</td>
                     <td style="padding:8px 12px; text-align:right; color:var(--text-3)">{{ c.nb }}</td>
                   </tr>
                 }
@@ -497,7 +497,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : 'var(--text-3)' }}">{{ e.rang }}</td>
                   <td style="padding:8px 12px; font-weight:600; color:var(--text)">{{ e.nom }}</td>
                   <td style="padding:8px 12px; color:var(--text-3)">{{ e.classe }}</td>
-                  <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa; font-weight:700">{{ e.moyenne }}/20</td>
+                  <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa; font-weight:700">{{ e.moyenne }}/{{ e.bareme ?? analyse()!.bareme ?? 20 }}</td>
                 </tr>
               }
             </tbody>

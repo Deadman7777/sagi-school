@@ -285,8 +285,15 @@ def fiche_pedagogique(tenant, eleve, annee, programme=None):
     ramenée sur 20 pour comparer une matière sur 10 à une matière sur 20.
     """
     lignes = list(lignes_cache(tenant, annee, programme, eleve=eleve)
-                  .select_related('matiere__classe'))
+                  .select_related('matiere__classe__niveau', 'matiere__classe__tenant'))
     codes = sorted({l.trimestre for l in lignes}, key=numero_periode)
+    # Les seuils (FORT, FAIBLE) raisonnent sur 20 ; l'école, elle, lit ses
+    # moyennes sur SON barème — 8/10 s'affiche 8, pas 16.
+    bareme = note_max_reference(lignes[0].matiere.classe if lignes else None,
+                                [l.matiere for l in lignes])
+
+    def afficher(valeur_sur_20):
+        return None if valeur_sur_20 is None else round(ramener(valeur_sur_20, 20, bareme), 2)
 
     periodes = []
     for code in codes:
@@ -342,9 +349,9 @@ def fiche_pedagogique(tenant, eleve, annee, programme=None):
             'coefficient': float(m.coefficient),
             'note_max':    float(m.note_max),
             'par_periode': {c: notes.get(c) for c in codes},
-            'derniere':    derniere,
-            'moy_classe':  moy_classe,
-            'evolution':   evolution,
+            'derniere':    afficher(derniere),
+            'moy_classe':  afficher(moy_classe),
+            'evolution':   afficher(evolution),
             'statut':      statut,
             'a_ameliorer': raisons,
             'en_progres':  evolution is not None and evolution >= BAISSE_NOTABLE,
@@ -359,6 +366,8 @@ def fiche_pedagogique(tenant, eleve, annee, programme=None):
     fiche = {
         'programme':          programme or 'FR',
         'annee':              annee,
+        # Barème sur lequel l'écran et le PDF affichent ces valeurs.
+        'bareme':             bareme,
         'periodes':           periodes,
         'matieres':           matieres,
         'points_forts':       [m['nom'] for m in matieres if m['statut'] == 'FORT'],

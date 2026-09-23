@@ -63,7 +63,7 @@
     <tbody>
       {% for m in matieres %}
       <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
-        <td class="left mat-nom">{{ m.nom }}</td>
+        <td class="left mat-nom{% if m.arabe %} ar{% endif %}">{{ m.nom }}</td>
         <td>{{ m.coefficient }}</td>
         {% if eval_columns %}{% for cell in m.notes_cells %}<td>{{ cell }}</td>{% endfor %}{% else %}<td></td>{% endif %}
         <td class="moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>

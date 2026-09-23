@@ -13,6 +13,12 @@ POLICE_ARABE = 'Amiri-Regular.ttf'
 POLICE_LATINE = 'DejaVuSans.ttf'
 
 
+def est_arabe(texte):
+    """Le texte contient-il de l'arabe ? Sert à choisir la police d'une cellule
+    dans un document par ailleurs latin (une matière nommée en arabe)."""
+    return any('\u0600' <= c <= '\u06ff' or '\ufb50' <= c <= '\ufeff' for c in str(texte or ''))
+
+
 def shape_ar(text):
     """Pré-forme l'arabe (ligatures + ordre visuel RTL) pour xhtml2pdf/ReportLab,
     qui ne savent ni façonner ni inverser. Échoue en douceur sur le texte brut."""
