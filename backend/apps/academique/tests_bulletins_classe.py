@@ -31,6 +31,14 @@ from apps.tenants.models import Tenant
 from apps.users.models import User
 
 
+# Les quatorze matières de la 1ère Étape CI de Shoumoul, telles que saisies.
+MATIERES_SHOUMOUL = (
+    'Activités de mesure', 'Activités géométriques', 'Activités numériques', 'Art',
+    'Compréhension', 'Copie', 'Découverte du monde', 'Développement Durable',
+    'Dictée de mots', 'Ecriture', 'Identification de mots', "Production D'écrits",
+    'Résolution de Problème', 'Vocabulaire')
+
+
 class BulletinsClasseTest(APITestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(nom='École du Cap', code_etablissement='CAP')
@@ -61,15 +69,16 @@ class BulletinsClasseTest(APITestCase):
                                 evaluation=self.evaluation, valeur=note)
         return eleve
 
-    def _matieres_en_plus(self, combien):
+    def _matieres_en_plus(self, combien, noms=None, types=('Devoir 1', 'Devoir 2')):
         """Une vraie classe a dix matières, pas une : c'est ce volume qui
         décide si deux bulletins tiennent encore sur une feuille."""
-        types = [TypeEvaluation.objects.create(tenant=self.tenant, nom=nom, poids=poids)
-                 for nom, poids in (('Devoir 1', 1), ('Devoir 2', 1))]
+        types = [TypeEvaluation.objects.create(tenant=self.tenant, nom=nom, poids=1)
+                 for nom in types]
+        noms = noms or [f'Matière {i + 1}' for i in range(combien)]
         evaluations = []
-        for i in range(combien):
+        for nom in noms:
             matiere = Matiere.objects.create(tenant=self.tenant, classe=self.classe,
-                                             nom=f'Matière {i + 1}', coefficient=2, note_max=20)
+                                             nom=nom, coefficient=2, note_max=20)
             evaluations += [Evaluation.objects.create(
                 tenant=self.tenant, matiere=matiere, type_eval=type_eval, trimestre='T1',
                 date_eval=datetime.date(2026, 3, 1), note_max=20) for type_eval in types]
@@ -158,6 +167,39 @@ class BulletinsClasseTest(APITestCase):
         _, hauteur = _bulletin_sur_une_page(
             render_to_string('pdf/_bulletin_corps.html', contexte), self.tenant)
         self.assertEqual(HAUTEURS_BULLETIN[hauteur], '210')
+
+    def test_les_matieres_de_shoumoul_tiennent_sans_reduction(self):
+        # Le 24/09, les bulletins de la 1ère Étape CI sortaient réduits à
+        # 72 % : « Matière 1 » tenait sur une ligne, « Activités
+        # géométriques » sur deux, et les quatorze matières réelles ne
+        # tenaient plus dans la demi-feuille. Imprimés, trop petits.
+        from apps.academique.views import HAUTEURS_BULLETIN, _bulletin_sur_une_page
+        from django.template.loader import render_to_string
+        from apps.academique.views import contexte_bulletin
+        # L'en-tête complet de l'école : tutelle, autorisation et logo.
+        import base64
+        from io import BytesIO as Tampon
+        from PIL import Image
+        image = Tampon()
+        Image.new('RGB', (120, 120), (26, 60, 94)).save(image, 'PNG')
+        Tenant.objects.filter(pk=self.tenant.pk).update(
+            nom='Complexe Shoumoul Excellence', inspection_academie='Rufisque',
+            inspection_ief='Sangalkam', numero_autorisation='00250',
+            logo='data:image/png;base64,' + base64.b64encode(image.getvalue()).decode())
+        self.tenant.refresh_from_db()
+        evaluations = self._matieres_en_plus(0, noms=MATIERES_SHOUMOUL, types=('Évaluation',))
+        eleve = self._eleve('Mouhamed Salih BADIANE')
+        self._noter(eleve, evaluations)
+        # « Très Insuffisant », l'appréciation la plus longue.
+        Note.objects.filter(eleve=eleve, evaluation=evaluations[0]).update(valeur=0)
+        self._calculer()
+        contexte = contexte_bulletin(self.tenant, eleve, 'T1', '2026', None)
+        contexte.pop('_lignes')
+        _, hauteur = _bulletin_sur_une_page(
+            render_to_string('pdf/_bulletin_corps.html', contexte), self.tenant)
+        # 215 mm au plus : réduit à 97 %, rien qui se voie à l'impression
+        # (la place de signer, sous les signatures, fait déborder 210).
+        self.assertLessEqual(int(HAUTEURS_BULLETIN[hauteur]), 215)
 
     def test_effectif_garcons_filles_en_tete(self):
         for nom, genre in (('Awa NDIAYE', 'F'), ('Fatou SOW', 'F'), ('Moussa FALL', 'G')):

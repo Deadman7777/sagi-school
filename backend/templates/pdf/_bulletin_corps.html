@@ -40,17 +40,19 @@
   </table>
 
   <!-- ── TABLEAU DES NOTES ──
-       Largeurs : MATIÈRE 24 + COEF 6 + (évals dynamiques, 28) + MOY 11 + PTS 7 + RG 5 + APPRÉC 19. -->
+       Largeurs : MATIÈRE + COEF 6 + évaluations + MOY 11 + PTS 7 + RG 5 + APPRÉC = 100.
+       MATIÈRE, évaluations et APPRÉC. sont calculées par la vue (largeurs) :
+       moins il y a d'évaluations, plus le nom de la matière a de place. -->
   <table class="tbl-notes mb">
     <thead>
       <tr>
-        <td class="left" width="24%">MATIÈRE</td>
+        <td class="left" width="{{ largeurs.matiere|default:24 }}%">MATIÈRE</td>
         <td width="6%">COEF</td>
-        {% if eval_columns %}{% for col in eval_columns %}<td width="{{ col.width }}%">{{ col.label }}</td>{% endfor %}{% else %}<td width="28%">NOTES</td>{% endif %}
+        {% if eval_columns %}{% for col in eval_columns %}<td width="{{ col.largeur|default:col.width }}%">{{ col.label }}</td>{% endfor %}{% else %}<td width="{{ largeurs.notes|default:28 }}%">NOTES</td>{% endif %}
         <td width="11%">MOY.</td>
         <td width="7%">PTS</td>
         <td width="5%">RG</td>
-        <td class="left" width="19%">APPRÉC.</td>
+        <td class="left" width="{{ largeurs.apprec|default:19 }}%">APPRÉC.</td>
       </tr>
     </thead>
     <tbody>

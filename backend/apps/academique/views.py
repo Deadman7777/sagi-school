@@ -814,6 +814,24 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     for j, col in enumerate(eval_columns):
         col['width'] = base_w + (1 if j < extra else 0)
 
+    # Bulletin français : les colonnes d'évaluation ne prennent que la place
+    # de leurs notes (12 % chacune, 28 % au plus). Le 24/09/2026, une classe
+    # à UNE évaluation laissait 28 % à un seul chiffre pendant que « Activités
+    # géométriques » passait sur deux lignes : quatorze matières ne tenaient
+    # plus dans la demi-feuille, et le bulletin sortait réduit à 72 %. La
+    # place libérée va au nom de la matière, et un peu à l'appréciation
+    # (« Très Insuffisant » sur une ligne).
+    # Le gabarit arabe garde `width` : ses colonnes sont réparties autrement.
+    PAR_EVAL = 12
+    espace_fr = min(ESPACE_EVAL, PAR_EVAL * nb)
+    base_fr, extra_fr = divmod(espace_fr, nb)
+    for j, col in enumerate(eval_columns):
+        col['largeur'] = base_fr + (1 if j < extra_fr else 0)
+    libere = ESPACE_EVAL - espace_fr
+    largeurs = {'matiere': 24 + libere - min(libere, 4),
+                'apprec': 19 + min(libere, 4),
+                'notes': espace_fr}
+
     def build_notes_cells(matiere_id, note_max_matiere):
         """Les notes du détail, ramenées au barème de la matière.
 
@@ -875,6 +893,7 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
         'trimestre': trimestre,
         'note_max':  int(note_max) if note_max == int(note_max) else note_max,
         'eval_columns':   eval_columns,
+        'largeurs':       largeurs,
         'eleve': {
             'nom_complet':    eleve.nom_complet,
             'matricule':      eleve.numero or '—',
@@ -1282,7 +1301,11 @@ class FichePedagogiqueView(APIView):
 # gabarit). 210 = une demi-A4 debout (148,5 x 210) : la taille visée, sans
 # réduction. Au-delà, le bulletin sera réduit à l'échelle pour tenir dans
 # sa moitié — le cas d'une classe à vingt-cinq matières et plus.
-HAUTEURS_BULLETIN = ('210', '235', '260', '290', '330', '380')
+# De 5 en 5 mm : la réduction suit la longueur réelle du bulletin. Par pas
+# de 25 mm, un bulletin qui dépassait de 2 mm était réduit comme s'il en
+# dépassait 25, et le bas de sa demi-feuille restait blanc (24/09/2026,
+# bulletins de Shoumoul imprimés à 72 % au lieu de ~90 %).
+HAUTEURS_BULLETIN = tuple(str(h) for h in range(210, 300, 5)) + ('330', '380')
 
 
 def _bulletin_sur_une_page(corps, tenant, depart=0):
