@@ -1240,11 +1240,12 @@ export class AcademiqueComponent implements OnInit {
     });
   }
 
-  private _getAnneeScolaire(): string {
-    const now = new Date();
-    const y = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    return `${y}-${y + 1}`;
-  }
+  /** Année scolaire des derniers résultats calculés, telle que le serveur l'a
+   *  retenue (celle de l'exercice actif). L'écran la déduisait du calendrier :
+   *  dès le 1er septembre, les moyennes partaient sous « 2026-2027 » alors que
+   *  l'analyse et le suivi pédagogique lisaient l'exercice encore ouvert, et
+   *  restaient vides. Vide = le serveur prend l'exercice actif. */
+  private anneeResultats = '';
 
   calculerMoyennes() {
     if (!this.classeResultats) {
@@ -1259,10 +1260,10 @@ export class AcademiqueComponent implements OnInit {
     this.acad.calculerMoyennes({
       classe_id:     this.classeResultats,
       trimestre:     this.trimestreResultats,
-      annee_scolaire: this._getAnneeScolaire(),
       programme:     this.prog(this.programmeResultats),
     }).subscribe({
       next: res => {
+        this.anneeResultats = res.annee_scolaire || '';
         const resultats = res.resultats || [];
         this.resultats.set(resultats);
         this.statsClasse.set(res.stats);
@@ -1519,11 +1520,11 @@ export class AcademiqueComponent implements OnInit {
                      detail: 'Sélectionnez un trimestre avant de télécharger.' });
       return;
     }
-    const annee     = this._getAnneeScolaire();
+    const annee     = this.anneeResultats || null;
     const trimestre = this.trimestreResultats;
     const programme = this.prog(this.programmeResultats);
     this.acad.getBulletinPdf(eleveId, trimestre, annee, programme).subscribe({
-      next: (blob: Blob) => this.enregistrer(blob, `bulletin_${programme ? programme + '_' : ''}${trimestre}_${annee}.pdf`),
+      next: (blob: Blob) => this.enregistrer(blob, `bulletin_${programme ? programme + '_' : ''}${trimestre}${annee ? '_' + annee : ''}.pdf`),
       error: () => this.msg.add({ severity: 'error', summary: 'Erreur PDF',
                                    detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
     });
@@ -1538,13 +1539,13 @@ export class AcademiqueComponent implements OnInit {
       return;
     }
     this.editionClasse.set(true);
-    const annee     = this._getAnneeScolaire();
+    const annee     = this.anneeResultats || null;
     const trimestre = this.trimestreResultats;
     const programme = this.prog(this.programmeResultats);
     const nom = this.classes().find(c => c.id === this.classeResultats)?.nom || 'classe';
     this.acad.getBulletinsClassePdf(this.classeResultats, trimestre, annee, programme).subscribe({
       next: (reponse) => {
-        this.enregistrer(reponse.body as Blob, `bulletins_${nom}_${trimestre}_${annee}.pdf`);
+        this.enregistrer(reponse.body as Blob, `bulletins_${nom}_${trimestre}${annee ? '_' + annee : ''}.pdf`);
         this.editionClasse.set(false);
         // Les élèves sans aucune note n'ont pas de bulletin : l'école doit
         // l'apprendre ici, pas en comptant les feuilles à la sortie.

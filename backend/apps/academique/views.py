@@ -415,17 +415,18 @@ class MoteurCalculView(APIView):
 
     def post(self, request):
         """Calculer les moyennes pour une classe et un trimestre."""
-        import datetime as _dt
         from django.db import transaction
         tenant    = get_tenant(request)
         classe_id = request.data.get('classe_id')
         trimestre = request.data.get('trimestre', 'T1')
-        # Année scolaire : fournie par le frontend ou calculée depuis exercice actif
-        annee = request.data.get('annee_scolaire')
-        if not annee:
-            from apps.paiements.models import Exercice as _Ex2
-            ex = _Ex2.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
-            annee = ex.annee_scolaire if ex else f"{_dt.date.today().year-1}-{_dt.date.today().year}"
+        # Année scolaire : celle de l'exercice actif, la même que lisent
+        # l'analyse, le suivi pédagogique et les bulletins. L'écran envoyait
+        # l'année du calendrier (« 2026-2027 » dès le 1er septembre) : les
+        # moyennes d'une école dont l'exercice court encore sur 2025-2026
+        # étaient rangées sous une année que ces écrans ne lisent pas, et ils
+        # restaient vides (24/09/2026). Un paramètre explicite reste accepté
+        # pour recalculer une année passée.
+        annee = request.data.get('annee_scolaire') or _get_annee_scolaire(tenant)
 
         try:
             classe = Classe.objects.select_related('niveau').get(id=classe_id, tenant=tenant)
@@ -636,6 +637,7 @@ class MoteurCalculView(APIView):
         return Response({
             'classe':    classe.nom,
             'trimestre': trimestre,
+            'annee_scolaire': annee,
             'programme': programme,
             'resultats': resultats,
             'stats':     stats,

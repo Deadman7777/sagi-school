@@ -201,6 +201,41 @@ class BulletinsClasseTest(APITestCase):
         # (la place de signer, sous les signatures, fait déborder 210).
         self.assertLessEqual(int(HAUTEURS_BULLETIN[hauteur]), 215)
 
+    def test_analyse_et_suivi_lisent_l_annee_du_calcul(self):
+        # Le 24/09/2026, l'écran envoyait l'année du calendrier (« 2026-2027 »)
+        # au calcul, l'analyse et le suivi lisaient l'exercice : les deux
+        # écrans restaient vides. Une seule année, celle de l'exercice.
+        eleve = self._eleve('Awa NDIAYE', 14)
+        calcul = self.client.post('/api/academique/calculer/',
+                                  {'classe_id': str(self.classe.id), 'trimestre': 'T1'},
+                                  format='json').json()
+        self.assertEqual(calcul['annee_scolaire'], self.ex.annee_scolaire)
+        analyse = self.client.get('/api/academique/analyse/').json()
+        self.assertEqual(analyse['annee_scolaire'], calcul['annee_scolaire'])
+        self.assertEqual(len(analyse['top_eleves']), 1)
+        fiche = self.client.get(f'/api/academique/fiche-pedagogique/{eleve.id}/').json()
+        self.assertEqual([p['code'] for p in fiche['periodes']], ['T1'])
+
+    def test_realigner_les_moyennes_rangees_sous_l_annee_du_calendrier(self):
+        # Shoumoul : exercice « 2026 », moyennes calculées sous « 2026-2027 ».
+        from django.core.management import call_command
+        from apps.academique.models import BulletinCache
+        eleve = self._eleve('Awa NDIAYE', 14)
+        self.client.post('/api/academique/calculer/',
+                         {'classe_id': str(self.classe.id), 'trimestre': 'T1',
+                          'annee_scolaire': '2026-2027'}, format='json')
+        self.assertEqual(len(self.client.get('/api/academique/analyse/').json()['top_eleves']), 0)
+
+        call_command('realigner_annee_bulletins', ecole='Cap')           # simulation
+        self.assertTrue(BulletinCache.objects.filter(annee_scolaire='2026-2027').exists())
+
+        call_command('realigner_annee_bulletins', ecole='Cap', appliquer=True)
+        self.assertFalse(BulletinCache.objects.filter(annee_scolaire='2026-2027').exists())
+        ligne = BulletinCache.objects.get(eleve=eleve, annee_scolaire='2026')
+        self.assertEqual(float(ligne.moyenne), 14)
+        self.assertEqual(ligne.rang_matiere, 1)
+        self.assertEqual(len(self.client.get('/api/academique/analyse/').json()['top_eleves']), 1)
+
     def test_effectif_garcons_filles_en_tete(self):
         for nom, genre in (('Awa NDIAYE', 'F'), ('Fatou SOW', 'F'), ('Moussa FALL', 'G')):
             eleve = self._eleve(nom, 12)
