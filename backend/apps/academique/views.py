@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
 from core.arabe import POLICE_ARABE, est_arabe, shape_ar
 from core.tenant import get_tenant
+from .libelles import libelle_periode
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
                         note_max_reference, points_matiere, poids_ligne, programme_valide, ramener,
                         resultat_matiere, arrondir, mode_arrondi,
@@ -730,6 +731,15 @@ def _decision(moy, note_max, trimestre='T1', est_finale=None):
     return BulletinPDFView().get_decision(moy, note_max, trimestre, est_finale)
 
 
+def _effectif_classe(tenant, eleve):
+    """Garçons, filles et total des élèves inscrits dans la classe de l'élève."""
+    if not eleve.classe_id:
+        return None
+    genres = list(Eleve.objects.filter(tenant=tenant, classe_id=eleve.classe_id,
+                                       statut='INSCRIT').values_list('genre', flat=True))
+    return {'garcons': genres.count('G'), 'filles': genres.count('F'), 'total': len(genres)}
+
+
 def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
     """Contexte de rendu d'UN bulletin, ou None si l'élève n'a aucune note.
 
@@ -792,10 +802,12 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             label = f"{tnom} {i}" if info['max'] > 1 else tnom
             eval_columns.append({'key': (tnom, i), 'label': label})
 
-    # Largeur des colonnes d'évaluation : 37% partagé, en ENTIERS.
+    # Largeur des colonnes d'évaluation : 28% partagé, en ENTIERS.
     # xhtml2pdf (table-layout:fixed) gère mal les % fractionnaires → colonnes écrasées.
-    # On distribue 37 en entiers (reliquat sur les 1ères). Template fixe : 20+6+37+12+8+6+11=100.
-    ESPACE_EVAL = 34
+    # On distribue 28 en entiers (reliquat sur les 1ères). Gabarit fixe :
+    # 24+6+28+11+7+5+19=100 — l'appréciation (« Très Insuffisant ») doit
+    # tenir sur une ligne dans un bulletin large de 148 mm.
+    ESPACE_EVAL = 28
     nb = max(1, len(eval_columns))
     base_w = ESPACE_EVAL // nb
     extra  = ESPACE_EVAL - base_w * nb
@@ -888,6 +900,10 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             'moy_min':      situation['moy_min'],
             'nb_eleves':    situation['effectif'],
         },
+        # En-tête du bulletin, pour l'affichage seulement : les inscrits de la
+        # classe, comme sur les bulletins papier des écoles.
+        'effectif_classe':     _effectif_classe(tenant, eleve),
+        'periode_libelle':     libelle_periode(tenant, trimestre),
         'appreciation_generale': _appreciation(moy_generale, note_max),
         'decision':              _decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
         'is_final':              _est_periode_finale(tenant, trimestre),
@@ -971,26 +987,20 @@ class BulletinPDFView(APIView):
 
         import logging, traceback as _tb
         _logger = logging.getLogger('django')
-        html_str = render_to_string('pdf/bulletin.html', context)
-        buffer   = BytesIO()
-        # xhtml2pdf et lui seul, comme les bulletins de classe : c'est le
-        # moteur livré avec le backend (requirements/base.txt). Essayer
-        # weasyprint d'abord faisait voir en développement, où il est parfois
-        # installé, une mise en page que l'école n'imprime jamais — un logo à
-        # sa taille ici, en pleine page chez elle.
+        # Le même rendu que les bulletins de classe, page pour page : deux
+        # chemins de rendu finiraient par imprimer deux bulletins différents
+        # pour le même élève selon le bouton utilisé.
         try:
-            from core.arabe import font_link_callback
-            from xhtml2pdf import pisa
-            result = pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
-                                    link_callback=font_link_callback)
-            if result.err:
-                _logger.error('Bulletin PDF — xhtml2pdf err=%s', result.err)
+            pdf_bulletin, _ = _bulletin_sur_une_page(
+                render_to_string('pdf/_bulletin_corps.html', context), tenant)
+            if pdf_bulletin is None:
                 return HttpResponse('Erreur génération bulletin PDF.', status=500)
+            pdf = _imposer_deux_par_feuille([pdf_bulletin])
         except Exception as e:
             _logger.error('Bulletin PDF — échec rendu :\n%s', _tb.format_exc())
             return HttpResponse(f'Erreur PDF : {e}', status=500)
 
-        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response = HttpResponse(pdf, content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="bulletin_{eleve.nom_complet}_{trimestre}.pdf"'
         return response
 
@@ -1268,21 +1278,20 @@ class FichePedagogiqueView(APIView):
         return response
 
 
-# Hauteurs de page essayées pour un bulletin de classe, en mm (chaînes : voir
-# le gabarit). 148,5 = une demi-A4 ; au-delà, le bulletin sera réduit à
-# l'échelle pour y tenir. 297 : une A4 pleine, réduite de moitié — le cas
-# extrême d'une quarantaine de matières.
-HAUTEURS_BULLETIN = ('148.5', '170', '195', '225', '260', '297')
+# Hauteurs de page essayées pour un bulletin, en mm (chaînes : voir le
+# gabarit). 210 = une demi-A4 debout (148,5 x 210) : la taille visée, sans
+# réduction. Au-delà, le bulletin sera réduit à l'échelle pour tenir dans
+# sa moitié — le cas d'une classe à vingt-cinq matières et plus.
+HAUTEURS_BULLETIN = ('210', '235', '260', '290', '330', '380')
 
 
-def _bulletin_sur_une_page(corps, classe, tenant, depart=0):
+def _bulletin_sur_une_page(corps, tenant, depart=0):
     """(PDF d'une seule page, index de la hauteur retenue) pour un bulletin.
 
-    Le bulletin est rendu sur une demi-feuille ; s'il déborde, sur une page
-    un peu plus haute, jusqu'à tenir sur UNE page. L'imposition le ramène
-    ensuite à la taille d'une demi-feuille. Jamais un bulletin sur deux
-    morceaux : la directrice veut deux bulletins par A4, séparés au milieu,
-    pas un bulletin coupé entre deux matières.
+    Le bulletin est rendu sur une demi-A4 debout ; s'il déborde, sur une
+    page un peu plus haute, jusqu'à tenir sur UNE page. L'imposition le
+    ramène ensuite à la taille de sa demi-feuille. Jamais un bulletin sur
+    deux morceaux, coupé entre deux matières.
 
     `depart` : les élèves d'une classe ont les mêmes matières, la hauteur qui
     a suffi au précédent est le bon point de départ pour le suivant.
@@ -1297,7 +1306,7 @@ def _bulletin_sur_une_page(corps, classe, tenant, depart=0):
     donnees = None
     for i in range(depart, len(HAUTEURS_BULLETIN)):
         html_str = render_to_string('pdf/bulletins_classe.html', {
-            'bulletins': [corps], 'classe': classe, 'tenant': tenant,
+            'bulletins': [corps], 'tenant': tenant, 'font_ar': POLICE_ARABE,
             'hauteur_page': HAUTEURS_BULLETIN[i]})
         buffer = BytesIO()
         if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
@@ -1306,12 +1315,17 @@ def _bulletin_sur_une_page(corps, classe, tenant, depart=0):
         donnees = buffer.getvalue()
         if len(PdfReader(BytesIO(donnees)).pages) == 1:
             return donnees, i
-    # Même une A4 entière ne suffit pas : le bulletin garde ses pages.
+    # Même la page la plus haute ne suffit pas : le bulletin garde ses pages.
     return donnees, len(HAUTEURS_BULLETIN) - 1
 
 
 def _imposer_deux_par_feuille(pdfs_bulletins):
-    """Empile deux bulletins par feuille A4 et trace le trait de découpe.
+    """Pose deux bulletins côte à côte sur une A4 à l'horizontale, et trace
+    le trait de découpe au milieu.
+
+    Le 24/09/2026, l'école a demandé la feuille couchée : deux bulletins de
+    même taille, en hauteur, séparés par un trait vertical. (Jusque-là, les
+    deux bulletins étaient empilés sur une A4 debout.)
 
     L'assemblage se fait sur les PDF finis, pas dans le gabarit : xhtml2pdf
     ignore « page-break-inside: avoid », et deux bulletins empilés dans une
@@ -1327,12 +1341,12 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     from io import BytesIO
     from pypdf import PageObject, PdfReader, PdfWriter, Transformation
 
-    A4_L, A4_H = 595.276, 841.89          # points PDF
-    demi = A4_H / 2
+    A4_L, A4_H = 841.89, 595.276          # points PDF, feuille couchée
+    demi = A4_L / 2
 
     # Composition des feuilles : (demi-pages, trait de découpe ou non).
     feuilles = []
-    en_attente = None                      # demi-page du haut, sans voisin encore
+    en_attente = None                      # demi-page de gauche, sans voisin encore
     for donnees in pdfs_bulletins:
         pages = PdfReader(BytesIO(donnees)).pages
         if len(pages) == 1:
@@ -1354,11 +1368,9 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     repere = _repere_decoupe(A4_L, A4_H)
     for demi_pages, trait in feuilles:
         feuille = PageObject.create_blank_page(width=A4_L, height=A4_H)
-        # L'origine PDF est en bas à gauche : la première demi-page est celle
-        # du haut, donc c'est elle qu'on remonte d'une demi-feuille.
-        feuille.merge_transformed_page(demi_pages[0], _dans_la_moitie(demi_pages[0], A4_L, demi, demi))
+        feuille.merge_transformed_page(demi_pages[0], _dans_la_moitie(demi_pages[0], demi, A4_H, 0))
         if len(demi_pages) > 1:
-            feuille.merge_transformed_page(demi_pages[1], _dans_la_moitie(demi_pages[1], A4_L, demi, 0))
+            feuille.merge_transformed_page(demi_pages[1], _dans_la_moitie(demi_pages[1], demi, A4_H, demi))
         # Pas de repère quand il n'y a rien à séparer : un trait inutile
         # invite à couper un bulletin en deux.
         if trait:
@@ -1370,50 +1382,59 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     return sortie.getvalue()
 
 
-def _dans_la_moitie(page, largeur, demi, base):
+def _dans_la_moitie(page, demi, hauteur, base):
     """Transformation qui pose `page` dans la moitié de feuille commençant à
-    la hauteur `base` : réduite si elle est plus haute qu'une demi-feuille,
-    centrée en largeur, calée en haut de sa moitié."""
+    l'abscisse `base` : réduite si elle est plus haute que la feuille,
+    centrée en largeur dans sa moitié, calée en haut."""
     from pypdf import Transformation
 
     l, h = float(page.mediabox.width), float(page.mediabox.height)
-    echelle = min(1.0, largeur / l, demi / h)
-    dx = (largeur - l * echelle) / 2
-    dy = base + (demi - h * echelle)
+    echelle = min(1.0, demi / l, hauteur / h)
+    dx = base + (demi - l * echelle) / 2
+    dy = hauteur - h * echelle
     return Transformation().scale(echelle, echelle).translate(dx, dy)
 
 
 def _repere_decoupe(largeur, hauteur):
-    """Calque d'une feuille : pointillés et ciseaux à mi-hauteur.
+    """Calque d'une feuille : pointillés verticaux et ciseaux au milieu.
 
     Le trait doit se voir d'un coup d'œil sur une pile de feuilles, sinon
     l'école coupe de travers.
     """
     from io import BytesIO
     from pypdf import PdfReader
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
 
     tampon = BytesIO()
     c = canvas.Canvas(tampon, pagesize=(largeur, hauteur))
-    y = hauteur / 2
+    x = largeur / 2
     c.setStrokeColorRGB(0.47, 0.56, 0.61)
     c.setDash(3, 3)
     c.setLineWidth(0.6)
-    c.line(14, y, largeur - 14, y)
+    c.line(x, 14, x, hauteur - 14)
     c.setDash()
     c.setFillColorRGB(0.47, 0.56, 0.61)
-    from reportlab.pdfbase.pdfmetrics import stringWidth
 
     police, corps, espacement = 'Helvetica', 6, 1.5
     texte = '\u2702  DÉCOUPER ICI'
     # Centrage à la main : stringWidth ignore l'espacement des lettres, et le
-    # repère se retrouverait décalé d'un centimètre vers la gauche.
+    # repère se retrouverait décalé d'un centimètre.
     largeur_texte = stringWidth(texte, police, corps) + espacement * len(texte)
-    ligne = c.beginText((largeur - largeur_texte) / 2, y + 2.5)
+    # Le texte court le long du trait, écrit de bas en haut, dans une bande
+    # blanche pour ne pas se confondre avec les pointillés.
+    c.saveState()
+    c.translate(x, hauteur / 2)
+    c.rotate(90)
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(-largeur_texte / 2 - 3, -3, largeur_texte + 6, 8, stroke=0, fill=1)
+    c.setFillColorRGB(0.47, 0.56, 0.61)
+    ligne = c.beginText(-largeur_texte / 2, -0.5)
     ligne.setFont(police, corps)
     ligne.setCharSpace(espacement)      # lettres espacées : le repère se lit de loin
     ligne.textOut(texte)
     c.drawText(ligne)
+    c.restoreState()
     c.showPage()
     c.save()
     tampon.seek(0)
@@ -1421,7 +1442,7 @@ def _repere_decoupe(largeur, hauteur):
 
 
 class BulletinsClassePDFView(APIView):
-    """Tous les bulletins d'une classe, deux par feuille A4.
+    """Tous les bulletins d'une classe, deux par feuille A4 couchée.
 
     Une classe de 40 élèves consommait 40 feuilles, éditées une par une. On
     les édite en un seul document, deux par page, séparés par un trait de
@@ -1475,7 +1496,7 @@ class BulletinsClassePDFView(APIView):
         documents = []
         depart = 0
         for corps_bulletin in corps:
-            pdf_bulletin, depart = _bulletin_sur_une_page(corps_bulletin, classe, tenant, depart)
+            pdf_bulletin, depart = _bulletin_sur_une_page(corps_bulletin, tenant, depart)
             if pdf_bulletin is None:
                 return HttpResponse('Erreur génération des bulletins.', status=500)
             documents.append(pdf_bulletin)

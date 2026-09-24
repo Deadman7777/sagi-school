@@ -1,69 +1,62 @@
-{% load logo_ecole %}{# Corps d'UN bulletin, partage par bulletin.html (a l'unite) et bulletins_classe.html (deux par page). #}
+{% load logo_ecole %}{# Corps d'UN bulletin (demi-A4 couchee), partage par le bulletin a l'unite et les bulletins de classe. #}
 <div class="bulletin">
 
-  <!-- ── EN-TÊTE ── -->
-  <div class="rep-line">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
-  {% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 130 45 %}</div>{% endif %}
-  <div class="school-name">{{ tenant.nom|upper }}</div>
-  {% if tenant.inspection_academie or tenant.inspection_ief %}
-  <div class="rep-line">{% if tenant.inspection_academie %}IA : {{ tenant.inspection_academie }}{% endif %}{% if tenant.inspection_academie and tenant.inspection_ief %} &nbsp;|&nbsp; {% endif %}{% if tenant.inspection_ief %}IEF : {{ tenant.inspection_ief }}{% endif %}</div>
-  {% endif %}
-  <div class="school-sub">{{ tenant.ville|default:"Sénégal" }} &nbsp;|&nbsp; Année Scolaire : {{ annee }}</div>
-  {% if tenant.numero_autorisation %}<div class="school-sub">Autorisation d'ouverture N° : {{ tenant.numero_autorisation }}</div>{% endif %}
-  <div class="sep-line"></div>
-  <div class="titre-bul">BULLETIN DE NOTES — {{ trimestre }}</div>
-
-  <!-- ── INFOS ÉLÈVE ── -->
-  <table class="tbl-info mb4">
-    <colgroup>
-      <col style="width:30%"><col style="width:22%"><col style="width:13%"><col style="width:20%"><col style="width:15%">
-    </colgroup>
+  <!-- ── EN-TÊTE : tutelle à gauche, école et période à droite ──
+       Disposition des bulletins que les écoles utilisent déjà (G.S. Les
+       Petits Érudits) : l'IA et l'IEF se lisent en premier, en haut à gauche.
+       Deux colonnes, pas trois : le bulletin n'a que 148 mm de large. -->
+  <table class="tbl-entete">
     <tr>
-      <td><div class="lbl">Nom &amp; Prénom</div><div class="val">{{ eleve.nom_complet|upper }}</div></td>
-      <td><div class="lbl">Classe</div><div class="val">{{ eleve.classe }}</div></td>
-      <td><div class="lbl">Matricule</div><div class="val">{{ eleve.matricule }}</div></td>
-      <td><div class="lbl">Date de naissance</div><div class="val">{{ eleve.date_naissance }}</div></td>
-      <td><div class="lbl">Rang</div><div class="val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div></td>
+      <td class="ent-g" width="54%">
+        <div class="rep">RÉPUBLIQUE DU SÉNÉGAL</div>
+        <div class="devise">Un Peuple — Un But — Une Foi</div>
+        {% if tenant.inspection_academie %}<div class="tutelle">IA : {{ tenant.inspection_academie }}</div>{% endif %}
+        {% if tenant.inspection_ief %}<div class="tutelle">IEF : {{ tenant.inspection_ief }}</div>{% endif %}
+        {% if tenant.numero_autorisation %}<div class="tutelle">Autorisation N° : {{ tenant.numero_autorisation }}</div>{% endif %}
+        {% if effectif_classe %}<div class="tutelle">Effectif : {{ effectif_classe.total }} élèves</div>
+        <div class="tutelle">Garçons : {{ effectif_classe.garcons }} &nbsp;&nbsp; Filles : {{ effectif_classe.filles }}</div>{% endif %}
+      </td>
+      <td class="ent-d" width="46%">
+        {% if tenant.logo %}<div>{% logo_ecole tenant.logo 110 30 %}</div>{% endif %}
+        <div class="school-name">{{ tenant.nom|upper }}</div>
+        <div class="titre-bul">BULLETIN DE NOTES</div>
+        <div class="periode">{{ periode_libelle }}</div>
+        <div class="tutelle">Année scolaire : {{ annee }}</div>
+      </td>
     </tr>
   </table>
+  <div class="sep-line"></div>
 
-  <!-- ── STATS CLASSE ── -->
-  <table class="tbl-stats mb4">
-    <colgroup>
-      <col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%">
-    </colgroup>
+  <!-- ── ÉLÈVE ── -->
+  <table class="tbl-info mb">
     <tr>
-      <td><div class="stat-val">{{ stats.moy_generale }}</div><div class="stat-lbl">MOYENNE GÉNÉRALE</div></td>
-      <td><div class="stat-val">{{ stats.moy_classe }}</div><div class="stat-lbl">MOYENNE DE LA CLASSE</div></td>
-      <td><div class="stat-val" style="color:#2e7d32">{{ stats.moy_max }}</div><div class="stat-lbl">PLUS HAUTE</div></td>
-      <td><div class="stat-val" style="color:#c62828">{{ stats.moy_min }}</div><div class="stat-lbl">PLUS BASSE</div></td>
+      <td width="64%"><span class="lbl">Prénom &amp; Nom :</span> {{ eleve.nom_complet|upper }}</td>
+      <td width="36%"><span class="lbl">Classe :</span> {{ eleve.classe }}</td>
+    </tr>
+    <tr>
+      <td><span class="lbl">Matricule :</span> {{ eleve.matricule }}</td>
+      <td><span class="lbl">Né(e) le :</span> {{ eleve.date_naissance }}</td>
     </tr>
   </table>
 
   <!-- ── TABLEAU DES NOTES ──
-       Largeurs : MATIÈRE 20 + COEF 6 + (évals dynamiques) + MOY 12 + PTS 8 + RG 6 + APPRÉC 11.
-       Les colonnes d'évaluation se partagent les ~37% restants (calculé côté Django dans col.width). -->
-  <table class="tbl-notes mb4">
-    <colgroup>
-      <col style="width:23%"><col style="width:6%">
-      {% if eval_columns %}{% for col in eval_columns %}<col style="width:{{ col.width }}%">{% endfor %}{% else %}<col style="width:34%">{% endif %}
-      <col style="width:12%"><col style="width:8%"><col style="width:6%"><col style="width:11%">
-    </colgroup>
+       Largeurs : MATIÈRE 24 + COEF 6 + (évals dynamiques, 28) + MOY 11 + PTS 7 + RG 5 + APPRÉC 19. -->
+  <table class="tbl-notes mb">
     <thead>
       <tr>
-        <td class="left">MATIÈRE</td>
-        <td>COEF</td>
-        {% if eval_columns %}{% for col in eval_columns %}<td>{{ col.label }}</td>{% endfor %}{% else %}<td>NOTES</td>{% endif %}
-        <td>MOY.</td>
-        <td>PTS</td>
-        <td>RG</td>
-        <td class="left">APPRÉC.</td>
+        <td class="left" width="24%">MATIÈRE</td>
+        <td width="6%">COEF</td>
+        {% if eval_columns %}{% for col in eval_columns %}<td width="{{ col.width }}%">{{ col.label }}</td>{% endfor %}{% else %}<td width="28%">NOTES</td>{% endif %}
+        <td width="11%">MOY.</td>
+        <td width="7%">PTS</td>
+        <td width="5%">RG</td>
+        <td class="left" width="19%">APPRÉC.</td>
       </tr>
     </thead>
     <tbody>
       {% for m in matieres %}
       <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
-        <td class="left mat-nom{% if m.arabe %} ar{% endif %}">{{ m.nom }}</td>
+        <td class="left{% if m.arabe %} ar{% endif %}">{{ m.nom }}</td>
         <td>{{ m.coefficient }}</td>
         {% if eval_columns %}{% for cell in m.notes_cells %}<td>{{ cell }}</td>{% endfor %}{% else %}<td></td>{% endif %}
         <td class="moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
@@ -82,10 +75,10 @@
     </tbody>
     <tfoot>
       <tr>
-        <td class="left">TOTAL / RÉSULTAT</td>
+        <td class="left">TOTAL</td>
         <td>{% if total_bareme %}—{% else %}{{ total_coef }}{% endif %}</td>
         {% if eval_columns %}{% for col in eval_columns %}<td>&nbsp;</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
-        <td class="moy-val" style="font-size:9pt">{{ stats.moy_generale }}/{{ note_max }}</td>
+        <td class="moy-val">{{ stats.moy_generale }}/{{ note_max }}</td>
         <td>{{ total_points }}{% if total_bareme %} / {{ total_bareme }}{% endif %}</td>
         <td>&nbsp;</td>
         <td class="left col-app
@@ -100,44 +93,30 @@
     </tfoot>
   </table>
 
-  <!-- ── MENTION / DÉCISION ── -->
-  {% if is_final %}
-    {% if decision_positive %}
-    <div class="final-pos">
-      <div class="mention-title" style="color:#1b5e20">Décision du Conseil de Classe — {{ trimestre }}</div>
-      <div class="mention-text">{{ decision }}</div>
-    </div>
-    {% else %}
-    <div class="final-neg">
-      <div class="mention-title" style="color:#b71c1c">Décision du Conseil de Classe — {{ trimestre }}</div>
-      <div class="mention-text">{{ decision }}</div>
-    </div>
-    {% endif %}
-  {% else %}
-    {% if decision_positive %}
-    <div class="mention-pos">
-      <div class="mention-title" style="color:#0d47a1">Mention du Conseil de Classe — {{ trimestre }}</div>
-      <div class="mention-text">{{ decision }}</div>
-    </div>
-    {% else %}
-    <div class="mention-neg">
-      <div class="mention-title" style="color:#e65100">Mention du Conseil de Classe — {{ trimestre }}</div>
-      <div class="mention-text">{{ decision }}</div>
-    </div>
-    {% endif %}
-  {% endif %}
+  <!-- ── RÉSULTATS + MENTION / DÉCISION, sur une seule ligne ──
+       La page est en paysage : côte à côte, ils laissent la hauteur au
+       tableau des notes. -->
+  <table class="tbl-stats mb">
+    <tr>
+      <td width="13%"><div class="stat-val">{{ stats.moy_generale }}</div><div class="stat-lbl">MOY. GÉN.</div></td>
+      <td width="10%"><div class="stat-val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div><div class="stat-lbl">RANG</div></td>
+      <td width="13%"><div class="stat-val">{{ stats.moy_classe }}</div><div class="stat-lbl">MOY. CLASSE</div></td>
+      <td width="12%"><div class="stat-val" style="color:#2e7d32">{{ stats.moy_max }}</div><div class="stat-lbl">PLUS HAUTE</div></td>
+      <td width="12%"><div class="stat-val" style="color:#c62828">{{ stats.moy_min }}</div><div class="stat-lbl">PLUS BASSE</div></td>
+      <td width="40%" class="{% if is_final %}{% if decision_positive %}final-pos{% else %}final-neg{% endif %}{% else %}{% if decision_positive %}mention-pos{% else %}mention-neg{% endif %}{% endif %}">
+        <div class="mention-title">{% if is_final %}Décision{% else %}Mention{% endif %} du Conseil de Classe</div>
+        <div class="mention-text">{{ decision }}</div>
+      </td>
+    </tr>
+  </table>
 
   <!-- ── SIGNATURES ── -->
   <table class="tbl-sig">
     <tr>
-      <td><div class="sig-line">Le Professeur Principal _______________</div></td>
-      <td><div class="sig-line">Le Directeur _______________</div></td>
-      <td><div class="sig-line">Cachet _______________</div></td>
+      <td width="33%"><div class="sig-titre">Les Parents</div></td>
+      <td width="34%"><div class="sig-titre">L'Enseignant(e)</div></td>
+      <td width="33%"><div class="sig-titre">Le Directeur</div></td>
     </tr>
   </table>
-
-  <div class="footer">
-    {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Conforme SYSCOHADA Révisé &middot; {{ annee }}
-  </div>
 
 </div>

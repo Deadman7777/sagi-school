@@ -3,12 +3,15 @@
 Une classe de 40 élèves consommait 40 feuilles, éditées une par une.
 Demande du CEO (19/09/2026) : éditer par classe, deux bulletins par page
 séparés par un trait de découpe, pour diviser la charge de papier par deux.
+Le 23/09, Shoumoul a imprimé des bulletins de treize matières réduits de
+moitié pour tenir dans leur demi-feuille : illisibles. Le gabarit est
+désormais dessiné pour sa demi-feuille ; depuis le 24/09, deux bulletins
+debout côte à côte sur une A4 couchée.
 
 Ce que ces tests rendent impossible :
-- un document qui repasse à une feuille par élève (le premier gabarit, qui
-  empilait deux bulletins dans une page A4, en produisait vingt-huit pour
-  sept élèves : xhtml2pdf n'honore pas « page-break-inside: avoid ») ;
+- un document qui repasse à une feuille par élève ;
 - un bulletin coupé en deux par le trait de découpe ;
+- un bulletin de treize matières réduit pour tenir dans sa moitié ;
 - une feuille blanche au nom d'un élève qui n'a aucune note.
 
 Le nombre de pages est vérifié à chaque fois : c'est la seule chose qui
@@ -103,8 +106,6 @@ class BulletinsClasseTest(APITestCase):
             self.assertIn(nom, texte)
 
     def test_une_classe_entiere_tient_sur_la_moitie_des_feuilles(self):
-        # Le cas réel : dix matières, deux devoirs chacune. C'est ici que le
-        # premier gabarit repassait à une feuille par élève.
         evaluations = self._matieres_en_plus(10)
         for i in range(8):
             self._noter(self._eleve(f'Élève NUMERO{i:02d}'), evaluations)
@@ -113,10 +114,8 @@ class BulletinsClasseTest(APITestCase):
         self.assertEqual(len(self._pages(r)), 4)       # 8 élèves, 4 feuilles
 
     def _deux_bulletins_longs(self, nb_matieres):
-        """Un bulletin qui déborde de sa demi-feuille était coupé entre deux
-        matières, les deux morceaux sur une même feuille, sans trait. Il est
-        désormais réduit pour tenir dans sa moitié : deux bulletins ENTIERS
-        par A4, séparés au milieu."""
+        """Deux bulletins ENTIERS par A4, séparés au milieu, jusqu'à leurs
+        signatures — même quand il faut les réduire pour y arriver."""
         evaluations = self._matieres_en_plus(nb_matieres)
         for i in range(2):
             self._noter(self._eleve(f'Élève NUMERO{i:02d}'), evaluations)
@@ -128,12 +127,11 @@ class BulletinsClasseTest(APITestCase):
         self.assertIn('DÉCOUPER', texte)
         self.assertIn('NUMERO00', texte)
         self.assertIn('NUMERO01', texte)
-        # Chaque bulletin arrive jusqu'à ses signatures : rien n'est perdu.
         self.assertEqual(texte.count('LE DIRECTEUR'), 2)
 
-    def test_seize_matieres_deux_bulletins_entiers_par_feuille(self):
-        # La 2e Étape CE1 de Shoumoul.
-        self._deux_bulletins_longs(16)
+    def test_treize_matieres_deux_bulletins_entiers_par_feuille(self):
+        # Les bulletins de Shoumoul imprimés le 23/09.
+        self._deux_bulletins_longs(13)
 
     def test_vingt_cinq_matieres_deux_bulletins_entiers_par_feuille(self):
         self._deux_bulletins_longs(25)
@@ -144,6 +142,30 @@ class BulletinsClasseTest(APITestCase):
             self._eleve(nom, 14)
         r = self._pdf()
         self.assertIn('DÉCOUPER ICI', self._pages(r)[0].extract_text().upper())
+
+    def test_treize_matieres_ne_sont_pas_reduites(self):
+        # Réduits pour tenir dans leur demi-feuille, les bulletins étaient
+        # illisibles : treize matières doivent y tenir à taille réelle.
+        from apps.academique.views import HAUTEURS_BULLETIN, _bulletin_sur_une_page
+        from django.template.loader import render_to_string
+        from apps.academique.views import contexte_bulletin
+        evaluations = self._matieres_en_plus(13)
+        eleve = self._eleve('Awa NDIAYE')
+        self._noter(eleve, evaluations)
+        self._calculer()
+        contexte = contexte_bulletin(self.tenant, eleve, 'T1', '2026', None)
+        contexte.pop('_lignes')
+        _, hauteur = _bulletin_sur_une_page(
+            render_to_string('pdf/_bulletin_corps.html', contexte), self.tenant)
+        self.assertEqual(HAUTEURS_BULLETIN[hauteur], '210')
+
+    def test_effectif_garcons_filles_en_tete(self):
+        for nom, genre in (('Awa NDIAYE', 'F'), ('Fatou SOW', 'F'), ('Moussa FALL', 'G')):
+            eleve = self._eleve(nom, 12)
+            Eleve.objects.filter(pk=eleve.pk).update(genre=genre)
+        texte = self._pages(self._pdf())[0].extract_text()
+        self.assertIn('Effectif : 3 élèves', texte)
+        self.assertRegex(texte, r'Garçons\s*:\s*1\s+Filles\s*:\s*2')
 
     def test_un_eleve_sans_note_n_a_pas_de_feuille_blanche(self):
         self._eleve('Awa NDIAYE', 14)
