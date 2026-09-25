@@ -150,7 +150,7 @@ class DashboardKPIView(APIView):
         eleves = eleves_presents(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         )).annotate(
-            total_paye_sql=Coalesce(
+            paye_recouvrement=Coalesce(
                 Sum('paiements__montant_inscription', filter=_pf) +
                 Sum('paiements__montant_mensualite',  filter=_pf) +
                 Sum('paiements__montant_uniforme',    filter=_pf) +
@@ -195,10 +195,13 @@ class DashboardKPIView(APIView):
         ).order_by('mois')
         
         # Calcul taux recouvrement et impayés
-        total_attendu = sum(float(e.total_attendu) for e in eleves)
-        total_paye    = sum(float(e.total_paye_sql or 0) for e in eleves)
-        total_impayes = max(total_attendu - total_paye, 0)
-        taux_recouvrement = round((total_paye / total_attendu * 100), 1) if total_attendu > 0 else 0
+        # Le calcul du suivi mensuel et de la clôture : un seul recouvrement.
+        from apps.eleves.recouvrement import totaux as totaux_recouvrement
+        _rec = totaux_recouvrement(list(eleves))
+        total_attendu = _rec['total_attendu']
+        total_paye    = _rec['total_paye']
+        total_impayes = _rec['reste']
+        taux_recouvrement = _rec['taux']
 
         # Statuts élèves — queryset PROPRE (sans la jointure paiements de `eleves`,
         # sinon Count('id') compte chaque élève autant de fois qu'il a de paiements)

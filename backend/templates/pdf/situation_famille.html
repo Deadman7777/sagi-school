@@ -1,0 +1,153 @@
+{% load logo_ecole humanize_fcfa %}{% comment %}
+Situation financière d'une famille : chaque enfant, chaque mois.
+
+Le document que le parent emporte quand il demande « où j'en suis pour mes
+enfants ? ». Les montants viennent de l'échéancier de chaque fiche, le même que
+la fiche élève, le reçu et les relances : ce papier ne peut pas les contredire.
+
+Les styles sont posés sur les CELLULES : sous xhtml2pdf, un fond ou une couleur
+déclarés sur une ligne sont écrasés par le CSS des cellules.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4 portrait; margin: 12mm 12mm 14mm 12mm; }
+  body { font-family: Arial, sans-serif; font-size: 8.5pt; color: #1a1a1a; margin: 0; }
+  table { border-collapse: collapse; width: 100%; }
+
+  .rep      { text-align: center; font-size: 7pt; color: #555; }
+  .ecole    { text-align: center; font-size: 13pt; font-weight: bold; color: #1a3c5e; }
+  .sous     { text-align: center; font-size: 7.5pt; color: #555; }
+  .barre    { border-bottom: 2pt solid #1a3c5e; margin: 4pt 0 6pt; }
+  .titre    { text-align: center; font-size: 12pt; font-weight: bold; color: #1a3c5e; }
+  .soustitre { text-align: center; font-size: 8pt; color: #374151; margin-bottom: 8pt; }
+
+  .tbl-infos td { border: 0.75pt solid #b0bec5; padding: 3pt 5pt; }
+  .lbl { color: #374151; font-size: 6.5pt; }
+  .val { font-weight: bold; font-size: 8.5pt; }
+
+  .enfant   { margin-top: 10pt; font-size: 10pt; font-weight: bold; color: #1a3c5e;
+              border-bottom: 1pt solid #1a3c5e; padding-bottom: 2pt; }
+  .enfant-infos { font-size: 7.5pt; color: #374151; margin: 2pt 0 4pt; }
+
+  .tbl td.h { background-color: #1a3c5e; color: #ffffff; font-weight: bold;
+              font-size: 7pt; padding: 3pt 4pt; border: 0.5pt solid #3a5a7e; }
+  .tbl td { border: 0.5pt solid #dee2e6; padding: 2.5pt 4pt; font-size: 7.8pt; }
+  .tbl td.sous-total { background-color: #e8eef4; font-weight: bold; }
+  .droite { text-align: right; }
+  .retard { color: #b91c1c; font-weight: bold; }
+  .solde  { color: #166534; }
+  .attente { color: #6b7280; }
+
+  .tbl-total td { background-color: #1a3c5e; color: #ffffff; font-weight: bold;
+                  font-size: 9pt; padding: 4pt 6pt; border: 0.5pt solid #1a3c5e; }
+  .note { margin-top: 6pt; font-size: 7pt; color: #374151; }
+  .pied { margin-top: 10pt; font-size: 6.5pt; color: #6b7280; text-align: center;
+          border-top: 0.5pt solid #ddd; padding-top: 3pt; }
+</style>
+</head>
+<body>
+
+<div class="rep">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
+{% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 120 42 %}</div>{% endif %}
+<div class="ecole">{{ tenant.nom|upper }}</div>
+<div class="sous">{{ tenant.ville|default:"Sénégal" }}{% if tenant.telephone %} &nbsp;|&nbsp; {{ tenant.telephone }}{% endif %}</div>
+<div class="barre"></div>
+
+<div class="titre">SITUATION FINANCIÈRE DE LA FAMILLE</div>
+<div class="soustitre">Année scolaire {{ exercice.annee_scolaire }} &nbsp;·&nbsp; arrêtée au {{ aujourdhui|date:"d/m/Y" }}</div>
+
+<table class="tbl-infos">
+  <colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup>
+  <tr>
+    <td><div class="lbl">Famille</div><div class="val">{{ famille.nom }} — {{ famille.code }}</div></td>
+    <td><div class="lbl">Responsable</div><div class="val">
+      {% for r in responsables %}{% if r.principal %}{{ r.nom }}{% if r.telephone %} · {{ r.telephone }}{% endif %}{% endif %}{% empty %}—{% endfor %}</div></td>
+    <td><div class="lbl">Enfants inscrits</div><div class="val">{{ situation.nb_enfants }}</div></td>
+  </tr>
+  <tr>
+    <td><div class="lbl">Total attendu</div><div class="val">{{ situation.total_attendu|fcfa }} FCFA</div></td>
+    <td><div class="lbl">Total payé</div><div class="val">{{ situation.total_paye|fcfa }} FCFA</div></td>
+    <td><div class="lbl">Reste à payer</div><div class="val">{{ situation.reste_a_payer|fcfa }} FCFA</div></td>
+  </tr>
+</table>
+
+{% for e in enfants %}
+<div class="enfant">{{ e.nom_complet }}</div>
+<div class="enfant-infos">
+  Matricule {{ e.matricule|default:"—" }} &nbsp;·&nbsp; {{ e.classe|default:"—" }}
+  {% if e.organisme %} &nbsp;·&nbsp; Bourse : {{ e.organisme }} ({{ e.part_organisme|fcfa }} F, dont {{ e.reste_organisme|fcfa }} F encore attendus de l'organisme){% endif %}
+</div>
+<table class="tbl">
+  <tr>
+    <td class="h" style="width:180pt">ÉCHÉANCE</td><td class="h droite" style="width:80pt">DÛ</td>
+    <td class="h droite" style="width:80pt">PAYÉ</td><td class="h droite" style="width:80pt">RESTE</td>
+    <td class="h" style="width:100pt">SITUATION</td>
+  </tr>
+  {% if e.reliquat %}
+  <tr>
+    <td>Impayé des années précédentes</td><td class="droite">{{ e.reliquat|fcfa }}</td>
+    <td class="droite">—</td><td class="droite retard">{{ e.reliquat|fcfa }}</td>
+    <td class="retard">À régler</td>
+  </tr>
+  {% endif %}
+  {% with h=e.echeancier.hors_mensualite %}{% if h and h.du %}
+  <tr>
+    <td>{{ h.libelle|default:"Inscription" }}, uniforme, fournitures, services</td>
+    <td class="droite">{{ h.du|fcfa }}</td><td class="droite">{{ h.paye|fcfa }}</td>
+    <td class="droite{% if h.reste %} retard{% endif %}">{{ h.reste|fcfa }}</td>
+    <td class="{% if not h.reste %}solde{% elif h.echu %}retard{% else %}attente{% endif %}">
+      {% if not h.reste %}Soldé{% elif h.echu %}En retard{% else %}À venir{% endif %}</td>
+  </tr>
+  {% endif %}{% endwith %}
+  {% for l in e.echeancier.lignes %}
+  <tr>
+    <td>{{ l.nom }} {{ l.annee }}</td>
+    <td class="droite">{{ l.du|fcfa }}</td><td class="droite">{{ l.paye|fcfa }}</td>
+    <td class="droite{% if l.reste and l.echu %} retard{% endif %}">{{ l.reste|fcfa }}</td>
+    <td class="{% if l.statut == 'SOLDE' %}solde{% elif l.echu %}retard{% else %}attente{% endif %}">
+      {% if l.statut == 'SOLDE' %}Soldé{% elif l.echu and l.statut == 'PARTIEL' %}Partiel — en retard{% elif l.echu %}En retard{% elif l.statut == 'PARTIEL' %}Partiel — à venir{% else %}À venir{% endif %}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td class="sous-total">Total {{ e.nom_complet }}</td>
+    <td class="sous-total droite">{{ e.total_attendu|fcfa }}</td>
+    <td class="sous-total droite">{{ e.total_paye|fcfa }}</td>
+    <td class="sous-total droite">{{ e.reste_a_payer|fcfa }}</td>
+    <td class="sous-total">&nbsp;</td>
+  </tr>
+</table>
+{% endfor %}
+
+<table class="tbl-total" style="margin-top:10pt">
+  <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
+  {% if reste_organismes %}
+  <tr>
+    <td>Reste dû sur l'année, tous débiteurs</td>
+    <td class="droite">{{ situation.reste_a_payer|fcfa }} FCFA</td>
+  </tr>
+  <tr>
+    <td>dont attendu des organismes boursiers</td>
+    <td class="droite">{{ reste_organismes|fcfa }} FCFA</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td>RESTE À PAYER PAR LA FAMILLE</td>
+    <td class="droite">{{ reste_famille|fcfa }} FCFA</td>
+  </tr>
+</table>
+
+<div class="note">
+  « En retard » : échéance passée et non réglée. « À venir » : échéance pas encore
+  exigible, que la famille peut régler d'avance. La part d'une bourse encore attendue
+  d'un organisme n'est pas réclamée à la famille.
+</div>
+
+<div class="pied">
+  {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Document édité le {{ aujourdhui|date:"d/m/Y" }}
+</div>
+
+</body>
+</html>

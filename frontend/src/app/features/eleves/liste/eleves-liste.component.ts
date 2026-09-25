@@ -23,6 +23,8 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { CheckboxModule } from 'primeng/checkbox';
 import { ImportElevesDialogComponent } from './import-eleves-dialog.component';
 import { FamillesComponent } from '../familles/familles.component';
+import { EncaissementGroupeComponent, FinEncaissement }
+  from '../encaissement-groupe/encaissement-groupe.component';
 
 /** Ligne de la grille de saisie, augmentée de sa valeur d'origine. */
 type LigneImpayeEditable = LigneImpayeAnterieur & { montant0: number; note0: string };
@@ -68,7 +70,7 @@ const MOIS_ANNEE = [
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
             TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent,
-            FamillesComponent],
+            FamillesComponent, EncaissementGroupeComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -150,6 +152,15 @@ const MOIS_ANNEE = [
                         optionValue="value" size="small" appendTo="body" styleClass="tri-select"
                         [pTooltip]="'eleves.tri_export_aide' | translate"
                         [ariaLabel]="'eleves.tri_export' | translate" />
+            </label>
+            <!-- Une classe, ou toute l'école : le titulaire emporte la liste
+                 de SA classe, pas celle des huit autres. -->
+            <label class="doc-ordre">
+              <span>{{ 'eleves.export_classe' | translate }}</span>
+              <p-select [options]="optionsClasseExport()" [(ngModel)]="classeExport"
+                        optionLabel="nom" optionValue="id" size="small" appendTo="body"
+                        styleClass="tri-select" [filter]="true" filterBy="nom"
+                        [ariaLabel]="'eleves.export_classe' | translate" />
             </label>
             <p-button icon="pi pi-file-pdf" [label]="'eleves.export_financier' | translate"
                       severity="danger" size="small"
@@ -446,6 +457,14 @@ const MOIS_ANNEE = [
                 {{ o.reste | number:'1.0-0' }}</td>
               <td>
                 <div class="btn-row">
+                  <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="success"
+                            [pTooltip]="'eleves.org_encaisser' | translate"
+                            [disabled]="!o.nb_boursiers || o.reste <= 0"
+                            (onClick)="ouvrirEncaissementOrganisme(o)" />
+                  <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="info"
+                            [pTooltip]="'eleves.org_releve' | translate"
+                            [disabled]="!o.nb_boursiers"
+                            (onClick)="telechargerReleveOrganisme(o)" />
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                             [pTooltip]="'common.modifier' | translate"
                             (onClick)="ouvrirOrganisme(o.organisme_id)" />
@@ -459,7 +478,7 @@ const MOIS_ANNEE = [
           <ng-template pTemplate="rowexpansion" let-o>
             <tr>
               <td colspan="9" style="padding:0">
-                <table class="ech-table" style="margin:0">
+                <table class="ech-table org-boursiers" style="margin:0">
                   <thead>
                     <tr>
                       <th>{{ 'eleves.matricule' | translate }}</th>
@@ -468,6 +487,7 @@ const MOIS_ANNEE = [
                       <th class="num">{{ 'eleves.org_couvert' | translate }}</th>
                       <th class="num">{{ 'eleves.org_recu' | translate }}</th>
                       <th class="num">{{ 'eleves.org_reste' | translate }}</th>
+                      <th>{{ 'eleves.org_versements' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -480,6 +500,14 @@ const MOIS_ANNEE = [
                         <td class="mono num success">{{ e.recu | number:'1.0-0' }}</td>
                         <td class="mono num" [class.danger]="e.reste > 0">
                           {{ e.reste | number:'1.0-0' }}</td>
+                        <td class="versements">
+                          @for (v of e.versements; track v.no_piece) {
+                            <span class="versement">{{ v.date | date:'dd/MM/yyyy' }} · {{ v.no_piece }}
+                              · <b>{{ v.montant | number:'1.0-0' }}</b></span>
+                          } @empty {
+                            <span class="aucun">{{ 'eleves.org_aucun_versement' | translate }}</span>
+                          }
+                        </td>
                       </tr>
                     }
                   </tbody>
@@ -495,6 +523,17 @@ const MOIS_ANNEE = [
         </p-table>
       </div>
     }
+
+    <!-- Encaisser la bourse : le versement de l'organisme, réparti entre ses
+         boursiers, comptabilisé en 4112 (créance sur l'organisme). -->
+    <p-dialog [(visible)]="encaissementOrgVisible" [modal]="true"
+              [style]="{ width: '960px', maxWidth: '96vw' }"
+              [header]="('eleves.org_encaisser' | translate) + (orgEncaisse() ? ' — ' + orgEncaisse()!.nom : '')">
+      @if (encaissementOrgVisible && orgEncaisse(); as o) {
+        <app-encaissement-groupe type="organisme" [cibleId]="o.organisme_id"
+                                 (termine)="finEncaissementOrganisme($event)" />
+      }
+    </p-dialog>
 
     @if (onglet() === 'anciens') {
       <div class="kpi-row" style="margin-bottom:14px">
@@ -1912,6 +1951,10 @@ const MOIS_ANNEE = [
     .imput-input:focus-visible { outline:2px solid #00d4aa; outline-offset:1px; }
 
     .ech-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .org-boursiers .versements { display:flex; flex-wrap:wrap; gap:4px; }
+    .org-boursiers .versement { background:var(--surface-2); border:1px solid var(--border);
+      border-radius:10px; padding:1px 7px; white-space:nowrap; }
+    .org-boursiers .aucun { color:var(--text-3); }
     .ech-table th { text-align:left; color:var(--text-3); font-weight:600;
                     padding:3px 4px; border-bottom:1px solid var(--border); }
     .ech-table td { padding:3px 4px; border-bottom:1px solid rgba(42,63,95,0.3);
@@ -2281,6 +2324,16 @@ export class ElevesListeComponent implements OnInit {
         life: 6000,
       }),
     });
+  }
+
+  /** Classe des exports PDF : '' = toute l'école, 'sans' = élèves sans classe. */
+  classeExport = '';
+  optionsClasseExport(): { id: string; nom: string }[] {
+    return [
+      { id: '', nom: this.translate.instant('eleves.toutes_classes') },
+      ...this.classes().map((c: any) => ({ id: c.id, nom: c.nom })),
+      { id: 'sans', nom: this.translate.instant('eleves.sans_classe') },
+    ];
   }
 
   chargerClasses() {
@@ -2746,6 +2799,47 @@ export class ElevesListeComponent implements OnInit {
     });
   }
 
+  // ── Encaisser la bourse d'un organisme ──────────────────────────────
+  encaissementOrgVisible = false;
+  orgEncaisse = signal<{ organisme_id: string; nom: string } | null>(null);
+
+  ouvrirEncaissementOrganisme(o: { organisme_id: string; nom: string }) {
+    this.orgEncaisse.set(o);
+    this.encaissementOrgVisible = true;
+  }
+
+  finEncaissementOrganisme(fin: FinEncaissement) {
+    this.encaissementOrgVisible = false;
+    if (fin.echecs.length) {
+      this.msg.add({ severity: 'warn', life: 9000,
+                     summary: this.translate.instant('eleves.org_encaissement_partiel',
+                                                     { nb: fin.echecs.length }),
+                     detail: fin.echecs.join(', ') });
+    } else if (fin.nbReglements) {
+      this.msg.add({ severity: 'success',
+                     summary: this.translate.instant('eleves.org_encaisse',
+                                                     { nb: fin.nbReglements }) });
+    }
+    // Reçu, reste et alerte des boursiers bougent : tout se relit.
+    this.chargerOrganismes();
+    this.chargerEleves();
+  }
+
+  telechargerReleveOrganisme(o: { organisme_id: string; nom: string }) {
+    this.elevesService.releveOrganismePdf(o.organisme_id).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `releve_${o.nom.replace(/[^A-Za-z0-9]+/g, '_')}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.msg.add({ severity: 'error',
+                                  summary: this.translate.instant('eleves.org_releve_erreur') }),
+    });
+  }
+
   ouvrirOrganisme(id: string | null) {
     this.organismeEdite = id;
     if (!id) {
@@ -3052,6 +3146,7 @@ export class ElevesListeComponent implements OnInit {
     const params: Record<string, string> = { tri: groupe, ordre: ordre || 'alpha' };
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
     if (this.exerciceSel)  params['exercice'] = this.exerciceSel;
+    if (this.classeExport) params['classe'] = this.classeExport;
     if (financier) {
       if (this.filtreAlerte) params['alerte'] = this.filtreAlerte;
     } else {
@@ -3062,7 +3157,11 @@ export class ElevesListeComponent implements OnInit {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href     = url;
-        link.download = financier ? 'eleves_liste.pdf' : 'eleves_liste_nominative.pdf';
+        const suffixe = this.classeExport
+          ? '_' + (this.optionsClasseExport().find(c => c.id === this.classeExport)?.nom || 'classe')
+              .replace(/[^A-Za-z0-9]+/g, '_')
+          : '';
+        link.download = (financier ? 'eleves_liste' : 'eleves_liste_nominative') + suffixe + '.pdf';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

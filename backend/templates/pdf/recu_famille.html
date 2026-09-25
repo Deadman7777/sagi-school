@@ -68,7 +68,7 @@ cellules, et les totaux ressortaient illisibles.
   <tr>
     <td><div class="lbl">Famille</div><div class="val">{{ famille.nom }} — {{ famille.code }}</div></td>
     <td><div class="lbl">Versé par</div><div class="val">{{ payeur|default:"—" }}</div></td>
-    <td><div class="lbl">Enfants concernés</div><div class="val">{{ lignes|length }}</div></td>
+    <td><div class="lbl">Enfants concernés</div><div class="val">{{ nb_enfants }}</div></td>
   </tr>
 </table>
 
@@ -109,8 +109,8 @@ cellules, et les totaux ressortaient illisibles.
 </table>
 
 <div class="mention">
-  Ce reçu couvre {{ lignes|length }} règlement(s), un par enfant. Chacun figure
-  au nom de l'élève concerné dans la comptabilité de l'établissement.
+  Ce reçu couvre {{ lignes|length }} règlement(s). Chacun figure au nom de
+  l'élève concerné dans la comptabilité de l'établissement.
 </div>
 
 <div class="sig">Le Caissier / La Caissière _______________</div>

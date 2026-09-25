@@ -1,3 +1,4 @@
+import { SyntheseModulesComponent } from './synthese-modules.component';
 import { Component, OnDestroy, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DashboardService, DashboardKPI, DashboardSuperAdmin, TresorerieCanaux } from '../../core/services/dashboard.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -12,7 +13,8 @@ import { ApiService } from '../../core/services/api.service';
 @Component({
   selector: 'app-dashboard',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TagModule, TranslateModule, TableModule, SkeletonModule, DecimalPipe, DatePipe, RouterLink],
+  imports: [TagModule, TranslateModule, TableModule, SkeletonModule, DecimalPipe, DatePipe, RouterLink,
+            SyntheseModulesComponent],
   template: `
     <!-- ══ VUE SUPER ADMIN ══ -->
     @if (isSuperAdmin()) {
@@ -235,6 +237,11 @@ import { ApiService } from '../../core/services/api.service';
             <div class="kpi-sub">bénéficiaires</div>
           </div>
         </div>
+
+        <!-- ══ TOUS LES MODULES ══ Chaque carte relit l'API de son module : le
+             chiffre est celui qu'on retrouve en cliquant. -->
+        <app-synthese-modules [mois]="d.pilotage?.mois ?? null" [annee]="d.pilotage?.annee ?? null"
+                              [libelleMois]="d.pilotage?.libelle_mois ?? ''" />
 
         <div class="grid-2">
           <div class="card">

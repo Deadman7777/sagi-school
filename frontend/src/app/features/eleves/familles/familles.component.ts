@@ -17,10 +17,11 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { ApercuBareme, BaremeFratrie, Famille, FratrieProbable, RepartitionVersement,
+import { ApercuBareme, BaremeFratrie, Famille, FratrieProbable,
          ResponsableFamille, SituationFamille } from '../../../core/models/eleve.model';
 import { ElevesService } from '../../../core/services/eleves.service';
-import { PaiementsService } from '../../../core/services/paiements.service';
+import { EncaissementGroupeComponent, FinEncaissement }
+  from '../encaissement-groupe/encaissement-groupe.component';
 
 /**
  * Les familles (fratries) d'une école.
@@ -44,7 +45,7 @@ import { PaiementsService } from '../../../core/services/paiements.service';
   imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
             MultiSelectModule, CheckboxModule, InputNumberModule, ToastModule, TooltipModule,
-            ConfirmDialogModule,
+            ConfirmDialogModule, EncaissementGroupeComponent,
             TranslateModule],
   providers: [MessageService, ConfirmationService],
   template: `
@@ -189,6 +190,10 @@ import { PaiementsService } from '../../../core/services/paiements.service';
                     size="small" severity="success"
                     [pTooltip]="'familles.encaisser_aide' | translate"
                     (onClick)="ouvrirEncaissement()" />
+          <p-button icon="pi pi-file-pdf" [label]="'familles.situation_pdf' | translate"
+                    size="small" severity="secondary" [outlined]="true"
+                    [loading]="telechargementSituation()"
+                    (onClick)="telechargerSituation()" />
           @if (dernierVersement()) {
             <p-button icon="pi pi-print" [label]="'familles.recu_groupe' | translate"
                       size="small" severity="secondary" [outlined]="true"
@@ -287,67 +292,18 @@ import { PaiementsService } from '../../../core/services/paiements.service';
     </p-dialog>
 
     <!-- ══ ENCAISSER POUR LA FAMILLE ══
-         Le père verse une somme pour toute la fratrie. La répartition suit
-         l'ordre de la dette — impayé antérieur, inscription, mois échus du
-         plus ancien au plus récent — et non l'ordre des enfants. Chaque
-         ligne reste un règlement normal, avec ses écritures. -->
-    <p-dialog [(visible)]="encaissementVisible" [modal]="true" [style]="{ width: '820px' }"
+         La logique du guichet, pour toute la fratrie : chaque enfant montre
+         ses échéances, échues ou à venir, et l'école coche ce que le parent
+         règle — y compris d'avance. Chaque ligne reste un règlement normal,
+         avec ses écritures. -->
+    <p-dialog [(visible)]="encaissementVisible" [modal]="true"
+              [style]="{ width: '960px', maxWidth: '96vw' }"
               [header]="'familles.encaisser' | translate">
-      <div class="ligne-versement">
-        <span>{{ 'familles.montant_verse' | translate }}</span>
-        <p-inputNumber [(ngModel)]="montantVerse" [min]="0" [fluid]="true"
-                       styleClass="champ-montant" suffix=" FCFA" />
-        <p-select [(ngModel)]="modeVersement" [options]="modes" optionLabel="label"
-                  optionValue="value" appendTo="body" />
-        @if (responsablesFamille().length > 1) {
-          <p-select [(ngModel)]="payeur" [options]="responsablesFamille()" optionLabel="nom"
-                    optionValue="id" appendTo="body"
-                    [placeholder]="'familles.payeur' | translate" />
-        }
-        <p-button icon="pi pi-calculator" [label]="'familles.repartir' | translate"
-                  size="small" severity="info" [outlined]="true"
-                  [disabled]="!montantVerse" [loading]="repartition()"
-                  (onClick)="repartir()" />
-      </div>
-
-      @if (proposition(); as p) {
-        <p-table [value]="p.lignes" styleClass="p-datatable-sm">
-          <ng-template pTemplate="header">
-            <tr>
-              <th>{{ 'familles.enfant' | translate }}</th>
-              <th>{{ 'familles.impute_sur' | translate }}</th>
-              <th class="droite">{{ 'familles.montant' | translate }}</th>
-            </tr>
-          </ng-template>
-          <ng-template pTemplate="body" let-l>
-            <tr>
-              <td>{{ l.nom_complet }} <span class="cl">{{ l.classe }}</span></td>
-              <td class="detail-imputation">
-                @for (d of l.detail; track $index) {
-                  <span class="puce">{{ d.libelle }} · {{ d.montant | number:'1.0-0' }}</span>
-                }
-              </td>
-              <td class="droite"><strong>{{ l.total | number:'1.0-0' }}</strong></td>
-            </tr>
-          </ng-template>
-        </p-table>
-
-        @if (p.non_impute > 0) {
-          <!-- Le surplus n'est jamais imputé d'office sur les mois à venir :
-               l'école décide si c'est une avance ou de la monnaie à rendre. -->
-          <p class="avertissement">
-            {{ 'familles.non_impute' | translate: { montant: p.non_impute | number:'1.0-0' } }}
-          </p>
-        }
+      @if (encaissementVisible && situation(); as s) {
+        <app-encaissement-groupe type="famille" [cibleId]="s.famille_id"
+                                 [payeurs]="responsablesFamille()"
+                                 (termine)="finEncaissement($event)" />
       }
-
-      <ng-template pTemplate="footer">
-        <p-button [label]="'common.annuler' | translate" severity="secondary" [text]="true"
-                  (onClick)="encaissementVisible = false" />
-        <p-button [label]="'familles.confirmer_encaissement' | translate" severity="success"
-                  [disabled]="!proposition() || proposition()!.lignes.length === 0"
-                  [loading]="encaissement()" (onClick)="encaisser()" />
-      </ng-template>
     </p-dialog>
 
     <!-- ══ BARÈME DE RÉDUCTION FRATRIE ══
@@ -499,7 +455,6 @@ import { PaiementsService } from '../../../core/services/paiements.service';
 })
 export class FamillesComponent implements OnInit {
   private eleves   = inject(ElevesService);
-  private paiements = inject(PaiementsService);
   private msg      = inject(MessageService);
   private confirm  = inject(ConfirmationService);
   private translate = inject(TranslateService);
@@ -515,23 +470,10 @@ export class FamillesComponent implements OnInit {
    *  par mégarde. */
   elevesLibres  = signal<{ id: string; nom_complet: string }[]>([]);
 
-  proposition       = signal<RepartitionVersement | null>(null);
-  repartition       = signal(false);
-  encaissement      = signal(false);
+  telechargementSituation = signal(false);
   dernierVersement  = signal<string | null>(null);
   responsablesFamille = signal<ResponsableFamille[]>([]);
   encaissementVisible = false;
-  montantVerse: number | null = null;
-  modeVersement = 'ESPECE';
-  payeur: string | null = null;
-  modes = [
-    { label: 'Espèces',       value: 'ESPECE' },
-    { label: 'Wave',          value: 'WAVE' },
-    { label: 'Orange Money',  value: 'ORANGE_MONEY' },
-    { label: 'Virement',      value: 'VIREMENT' },
-    { label: 'Chèque',        value: 'CHEQUE' },
-  ];
-
   bareme            = signal<BaremeFratrie[]>([]);
   apercu            = signal<ApercuBareme | null>(null);
   enregistrementBareme = signal(false);
@@ -707,80 +649,42 @@ export class FamillesComponent implements OnInit {
 
   // ── Encaisser pour la famille ─────────────────────────────────────────
   ouvrirEncaissement() {
-    this.encaissementVisible = true;
-    this.proposition.set(null);
-    this.montantVerse = null;
     const famille = this.familles().find(f => f.id === this.situation()?.famille_id);
-    const responsables = famille?.responsables || [];
-    this.responsablesFamille.set(responsables);
-    this.payeur = responsables.find(r => r.principal)?.id || responsables[0]?.id || null;
+    this.responsablesFamille.set(famille?.responsables || []);
+    this.encaissementVisible = true;
   }
 
-  repartir() {
-    const s = this.situation();
-    if (!s || !this.montantVerse) return;
-    this.repartition.set(true);
-    this.eleves.repartirVersement(s.famille_id, this.montantVerse).subscribe({
-      next: p => { this.proposition.set(p); this.repartition.set(false); },
-      error: () => { this.repartition.set(false); this.erreur('familles.erreur_repartition'); },
-    });
-  }
-
-  encaisser() {
-    const p = this.proposition();
-    const s = this.situation();
-    if (!p || !s) return;
-    // Une référence commune aux N règlements : c'est elle qui permettra
-    // d'imprimer UN reçu pour la famille au lieu d'un par enfant.
-    const reference = this.nouvelleReference();
-    this.encaissement.set(true);
-
-    let restants = p.lignes.length;
-    let echecs = 0;
-    p.lignes.forEach(ligne => {
-      this.paiements.creerPaiement({
-        eleve: ligne.eleve_id,
-        montant_inscription: ligne.montant_inscription,
-        montant_mensualite: ligne.montant_mensualite,
-        montant_reliquat: ligne.montant_reliquat,
-        mois_regles: ligne.mois_regles,
-        mode_paiement: this.modeVersement,
-        reference_groupe: reference,
-        payeur: this.payeur,
-      } as any).subscribe({
-        next: () => { if (--restants === 0) this.finEncaissement(reference, echecs, p); },
-        error: () => { echecs++; if (--restants === 0) this.finEncaissement(reference, echecs, p); },
-      });
-    });
-  }
-
-  private finEncaissement(reference: string, echecs: number, p: RepartitionVersement) {
-    this.encaissement.set(false);
-    this.dernierVersement.set(reference);
+  finEncaissement(fin: FinEncaissement) {
     this.encaissementVisible = false;
-    if (echecs > 0) {
+    this.dernierVersement.set(fin.nbReglements ? fin.reference : null);
+    if (fin.echecs.length) {
       // On ne masque pas un échec partiel : le reçu n'annoncera que ce qui
       // est réellement passé en caisse, et l'école doit le savoir.
       this.msg.add({ severity: 'warn', life: 9000,
                      summary: this.translate.instant('familles.encaissement_partiel',
-                                                     { nb: echecs }),
-                     detail: this.translate.instant('familles.encaissement_partiel_aide') });
-    } else {
+                                                     { nb: fin.echecs.length }),
+                     detail: fin.echecs.join(', ') });
+    } else if (fin.nbReglements) {
       this.msg.add({ severity: 'success',
                      summary: this.translate.instant('familles.encaisse',
-                                                     { nb: p.lignes.length }) });
+                                                     { nb: fin.nbReglements }) });
     }
-    this.rafraichirSituation(p.famille_id);
+    const s = this.situation();
+    if (s) this.rafraichirSituation(s.famille_id);
+    // La liste affiche le reste de chaque famille : elle doit suivre.
+    this.charger();
   }
 
-  private nouvelleReference(): string {
-    const c: any = globalThis.crypto;
-    if (c?.randomUUID) return c.randomUUID();
-    // Repli pour les navigateurs sans randomUUID : la référence doit juste
-    // être unique, elle n'a aucune valeur cryptographique.
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, ch => {
-      const r = Math.random() * 16 | 0;
-      return (ch === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  telechargerSituation() {
+    const s = this.situation();
+    if (!s) return;
+    this.telechargementSituation.set(true);
+    this.eleves.situationFamillePdf(s.famille_id).subscribe({
+      next: blob => {
+        this.telechargementSituation.set(false);
+        this.telechargerPdf(blob, `situation_${s.code}.pdf`);
+      },
+      error: () => { this.telechargementSituation.set(false); this.erreur('familles.erreur_situation_pdf'); },
     });
   }
 

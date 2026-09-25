@@ -1,0 +1,96 @@
+{% load logo_ecole humanize_fcfa %}{% comment %}
+Relevé d'un organisme boursier : ce qu'il couvre, a versé et doit encore.
+
+La pièce jointe à la relance d'un ministère ou d'une fondation. Boursier par
+boursier, avec chaque versement reçu : l'organisme retrouve ses propres
+virements et voit ce qui manque.
+{% endcomment %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  body { font-family: Arial, sans-serif; font-size: 8.5pt; color: #1a1a1a; margin: 0; }
+  table { border-collapse: collapse; width: 100%; }
+  .rep      { text-align: center; font-size: 7pt; color: #555; }
+  .ecole    { text-align: center; font-size: 13pt; font-weight: bold; color: #1a3c5e; }
+  .sous     { text-align: center; font-size: 7.5pt; color: #555; }
+  .barre    { border-bottom: 2pt solid #1a3c5e; margin: 4pt 0 6pt; }
+  .titre    { text-align: center; font-size: 12pt; font-weight: bold; color: #1a3c5e; }
+  .soustitre { text-align: center; font-size: 8pt; color: #374151; margin-bottom: 8pt; }
+  .tbl-infos td { border: 0.75pt solid #b0bec5; padding: 3pt 5pt; }
+  .lbl { color: #374151; font-size: 6.5pt; }
+  .val { font-weight: bold; font-size: 8.5pt; }
+  .tbl td.h { background-color: #1a3c5e; color: #ffffff; font-weight: bold;
+              font-size: 7pt; padding: 3pt 4pt; border: 0.5pt solid #3a5a7e; }
+  .tbl td { border: 0.5pt solid #dee2e6; padding: 3pt 4pt; font-size: 8pt; vertical-align: top; }
+  .tbl td.total { background-color: #e8eef4; font-weight: bold; }
+  .droite { text-align: right; }
+  .detail { font-size: 6.8pt; color: #4b5563; }
+  .retard { color: #b91c1c; font-weight: bold; }
+  .note { margin-top: 8pt; font-size: 7.5pt; color: #374151; }
+  .pied { margin-top: 10pt; font-size: 6.5pt; color: #6b7280; text-align: center;
+          border-top: 0.5pt solid #ddd; padding-top: 3pt; }
+</style>
+</head>
+<body>
+
+<div class="rep">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
+{% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 120 42 %}</div>{% endif %}
+<div class="ecole">{{ tenant.nom|upper }}</div>
+<div class="sous">{{ tenant.ville|default:"Sénégal" }}{% if tenant.telephone %} &nbsp;|&nbsp; {{ tenant.telephone }}{% endif %}</div>
+<div class="barre"></div>
+
+<div class="titre">RELEVÉ DES BOURSES — {{ organisme.nom|upper }}</div>
+<div class="soustitre">Année scolaire {{ exercice.annee_scolaire }} &nbsp;·&nbsp; arrêté au {{ aujourdhui|date:"d/m/Y" }}</div>
+
+<table class="tbl-infos" style="margin-bottom:8pt">
+  <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
+  <tr>
+    <td><div class="lbl">Boursiers</div><div class="val">{{ boursiers|length }}</div></td>
+    <td><div class="lbl">Montant couvert</div><div class="val">{{ totaux.couvert|fcfa }} FCFA</div></td>
+    <td><div class="lbl">Déjà versé</div><div class="val">{{ totaux.recu|fcfa }} FCFA</div></td>
+    <td><div class="lbl">Reste dû</div><div class="val">{{ totaux.reste|fcfa }} FCFA</div></td>
+  </tr>
+</table>
+
+<table class="tbl">
+  <colgroup>
+    <col style="width:28%"><col style="width:12%"><col style="width:26%">
+    <col style="width:11%"><col style="width:11%"><col style="width:12%">
+  </colgroup>
+  <tr>
+    <td class="h">BOURSIER</td><td class="h">CLASSE</td><td class="h">VERSEMENTS REÇUS</td>
+    <td class="h droite">COUVERT</td><td class="h droite">REÇU</td><td class="h droite">RESTE DÛ</td>
+  </tr>
+  {% for b in boursiers %}
+  <tr>
+    <td><strong>{{ b.nom_complet }}</strong><br><span class="detail">{{ b.matricule }}{% if b.reference %} · réf. {{ b.reference }}{% endif %}</span></td>
+    <td>{{ b.classe|default:"—" }}</td>
+    <td class="detail">{% for v in b.versements %}{{ v.date|date:"d/m/Y" }} · {{ v.no_piece }} · {{ v.montant|fcfa }} F<br>{% empty %}Aucun versement reçu{% endfor %}</td>
+    <td class="droite">{{ b.couvert|fcfa }}</td>
+    <td class="droite">{{ b.recu|fcfa }}</td>
+    <td class="droite{% if b.reste %} retard{% endif %}">{{ b.reste|fcfa }}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td class="total" colspan="3">TOTAL</td>
+    <td class="total droite">{{ totaux.couvert|fcfa }}</td>
+    <td class="total droite">{{ totaux.recu|fcfa }}</td>
+    <td class="total droite">{{ totaux.reste|fcfa }}</td>
+  </tr>
+</table>
+
+<div class="note">
+  Montants en francs CFA. Le montant couvert est celui de la convention, plafonné à la
+  scolarité réellement due par chaque élève. Merci de rappeler la référence du boursier
+  sur tout versement.
+</div>
+
+<div class="pied">
+  {{ tenant.nom }} &middot; {{ tenant.ville|default:"Sénégal" }} &middot; Relevé édité le {{ aujourdhui|date:"d/m/Y" }}
+</div>
+
+</body>
+</html>

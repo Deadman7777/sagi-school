@@ -254,8 +254,8 @@ class OrganismeViewSet(viewsets.ModelViewSet):
         for organisme in Organisme.objects.filter(tenant=tenant):
             pecs = (PriseEnChargeOrganisme.objects
                     .filter(tenant=tenant, organisme=organisme, exercice=exercice)
-                    .select_related('eleve__section')
-                    .prefetch_related('eleve__abonnements__service'))
+                    .select_related('eleve__section', 'eleve__classe')
+                    .prefetch_related('eleve__abonnements__service', 'eleve__paiements'))
             couvert = recu = 0.0
             eleves = []
             for pec in pecs:
@@ -268,10 +268,19 @@ class OrganismeViewSet(viewsets.ModelViewSet):
                     'eleve_id':   str(eleve.id),
                     'matricule':  eleve.matricule or '',
                     'nom_complet': eleve.nom_complet,
+                    'classe':     eleve.classe.nom if eleve.classe_id else (
+                                  eleve.section.nom if eleve.section else ''),
                     'reference':  pec.reference,
                     'couvert':    part,
                     'recu':       paye,
                     'reste':      round(max(part - paye, 0.0), 2),
+                    # Le suivi du bénéficiaire : chaque versement de
+                    # l'organisme à son nom, avec sa pièce.
+                    'versements': [
+                        {'date': p.date_paiement, 'no_piece': p.no_piece,
+                         'mode': p.mode_paiement, 'montant': float(p.total)}
+                        for p in eleve.paiements.all()
+                        if p.statut == 'ACTIF' and p.organisme_id == organisme.id],
                 })
             if not eleves and not organisme.actif:
                 continue
@@ -301,6 +310,138 @@ class OrganismeViewSet(viewsets.ModelViewSet):
                 'reste':         round(sum(l['reste'] for l in lignes), 2),
             },
         })
+
+
+    # ── Encaisser ce que l'organisme verse pour ses boursiers ─────────────
+    def _boursiers(self, organisme, exercice):
+        """Les boursiers de l'organisme, avec ce que l'organisme doit sur chacun."""
+        from .echeancier import precharger
+        from .encaissement_groupe import echeances_eleve
+        eleves = precharger(Eleve.objects.filter(
+            tenant=organisme.tenant, exercice=exercice,
+            prises_en_charge_organisme__organisme=organisme,
+            prises_en_charge_organisme__exercice=exercice).distinct())
+        boursiers = []
+        for eleve in eleves:
+            fiche = echeances_eleve(eleve)
+            # Côté organisme, on ne réclame que SA part : la part famille ne le
+            # regarde pas. `reste_famille` est remplacé par la part organisme.
+            fiche['postes'] = [dict(p, reste_organisme=p['part_organisme'])
+                               for p in fiche['postes'] if p['part_organisme'] > 0]
+            fiche['couvert'] = eleve.part_organisme
+            fiche['recu'] = eleve.paye_organisme
+            fiche['reste'] = eleve.reste_organisme
+            boursiers.append(fiche)
+        return sorted(boursiers, key=lambda b: cle_nom(b['nom_complet']))
+
+    @action(detail=True, methods=['get'])
+    def echeances(self, request, pk=None):
+        from apps.comptabilite.views import get_exercice
+        organisme = self.get_object()
+        exercice = get_exercice(get_tenant(request))
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        boursiers = self._boursiers(organisme, exercice)
+        return Response({
+            'organisme_id': str(organisme.id), 'nom': organisme.nom,
+            'boursiers': boursiers,
+            'totaux': {k: round(sum(b[k] for b in boursiers), 2)
+                       for k in ('couvert', 'recu', 'reste')},
+        })
+
+    @action(detail=True, methods=['post'])
+    def preparer(self, request, pk=None):
+        """Répartit le versement de l'organisme entre ses boursiers.
+
+        Un ministère vire 900 000 F pour ses dix boursiers : chaque part
+        devient un règlement ordinaire AU NOM DE L'ÉLÈVE, marqué « organisme »,
+        que l'API des paiements comptabilise en 4112 — la créance sur
+        l'organisme, jamais la famille. L'école peut aussi choisir élève par
+        élève (`selection`).
+        """
+        from apps.comptabilite.views import get_exercice
+        from .encaissement_groupe import preparer, repartir_montant
+        organisme = self.get_object()
+        exercice = get_exercice(get_tenant(request))
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        boursiers = self._boursiers(organisme, exercice)
+        selection = request.data.get('selection')
+        non_impute = 0.0
+        if not selection:
+            try:
+                montant = float(request.data.get('montant') or 0)
+            except (TypeError, ValueError):
+                montant = 0
+            if montant <= 0:
+                return Response({'error': "Indiquez le montant versé par l'organisme."},
+                                status=400)
+            # Un organisme paie sa part de l'année, pas au rythme du calendrier
+            # des familles : tout ce qu'il doit est servi, échu ou non.
+            selection, non_impute = repartir_montant(
+                boursiers, montant, anticiper=True, cle_reste='reste_organisme')
+        lignes = preparer(boursiers, selection, organisme_id=str(organisme.id))
+        return Response({
+            'organisme_id': str(organisme.id), 'selection': selection, 'lignes': lignes,
+            'total': round(sum(l['total'] for l in lignes), 2),
+            'non_impute': non_impute,
+        })
+
+    @action(detail=True, methods=['get'], url_path='releve-pdf')
+    def releve_pdf(self, request, pk=None):
+        """Relevé à adresser à l'organisme : ce qu'il couvre, a versé, doit encore.
+
+        Boursier par boursier, avec chaque versement déjà reçu. C'est la pièce
+        qu'on joint à la relance d'un ministère ou d'une fondation.
+        """
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from xhtml2pdf import pisa
+
+        from apps.comptabilite.views import get_exercice
+        from .pdf_nom import nom_fichier
+
+        tenant = get_tenant(request)
+        organisme = self.get_object()
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return HttpResponse("Aucun exercice ouvert.", status=400)
+        boursiers = []
+        pecs = (PriseEnChargeOrganisme.objects
+                .filter(tenant=tenant, organisme=organisme, exercice=exercice)
+                .select_related('eleve__section', 'eleve__classe'))
+        for pec in pecs:
+            eleve = pec.eleve
+            versements = [{'date': p.date_paiement, 'no_piece': p.no_piece,
+                           'mode': p.get_mode_paiement_display(), 'montant': float(p.total)}
+                          for p in eleve.paiements.filter(statut='ACTIF', organisme=organisme)
+                          .order_by('date_paiement')]
+            boursiers.append({
+                'nom_complet': eleve.nom_complet, 'matricule': eleve.matricule or '',
+                'classe': eleve.classe.nom if eleve.classe_id else (
+                    eleve.section.nom if eleve.section else ''),
+                'reference': pec.reference, 'couvert': eleve.part_organisme,
+                'recu': eleve.paye_organisme, 'reste': eleve.reste_organisme,
+                'versements': versements,
+            })
+        boursiers.sort(key=lambda b: cle_nom(b['nom_complet']))
+        contexte = {
+            'tenant': tenant, 'organisme': organisme, 'exercice': exercice,
+            'boursiers': boursiers, 'aujourdhui': timezone.localdate(),
+            'totaux': {k: round(sum(b[k] for b in boursiers), 2)
+                       for k in ('couvert', 'recu', 'reste')},
+        }
+        html = render_to_string('pdf/releve_organisme.html', contexte)
+        buffer = BytesIO()
+        if pisa.CreatePDF(html, dest=buffer, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        reponse['Content-Disposition'] = (
+            f'inline; filename="{nom_fichier("releve", organisme.nom)}.pdf"')
+        return reponse
 
 
 class PriseEnChargeOrganismeViewSet(viewsets.ModelViewSet):
@@ -1983,18 +2124,13 @@ class SuiviMensuelView(APIView):
                 tenant=tenant, exercice=exercice, statut='ACTIF'
             ).values('eleve_id').annotate(paye=_pmt_sum)
         }
-        pmt_section_raw = {
-            r['eleve__section__nom']: float(r['paye'] or 0)
-            for r in Paiement.objects.filter(
-                tenant=tenant, exercice=exercice, statut='ACTIF'
-            ).values('eleve__section__nom').annotate(paye=_pmt_sum)
-        }
 
         # Itération unique sur les élèves pour synthèse + sections + créances
         total_attendu = 0.0
         nb_eleves     = 0
         sections_dict: dict = {}
         creances      = []
+        presents      = []
         # Scolarité ATTENDUE mois par mois : ce que l'école devrait encaisser en
         # janvier, en février… d'après la situation de chaque élève. Le suivi ne
         # montrait que l'encaissé — utile pour constater, inutile pour décider.
@@ -2017,14 +2153,17 @@ class SuiviMensuelView(APIView):
             att  = float(e.total_attendu)
             paye = pmt_eleve.get(e.id, 0.0)
             snom = e.section.nom if e.section else '—'
+            e.paye_recouvrement = paye
+            presents.append(e)
 
             total_attendu += att
             nb_eleves     += 1
 
             if snom not in sections_dict:
-                sections_dict[snom] = {'nb': 0, 'attendu': 0.0}
+                sections_dict[snom] = {'nb': 0, 'attendu': 0.0, 'paye': 0.0}
             sections_dict[snom]['nb']      += 1
             sections_dict[snom]['attendu'] += att
+            sections_dict[snom]['paye']    += paye
 
             reste = att - paye
             if reste > 0:
@@ -2052,19 +2191,23 @@ class SuiviMensuelView(APIView):
                 max(row['scolarite_prevue'] - row['scolarite_reste'], 0.0), 2)
             row['nb_eleves_dus']     = nb_dus_mois.get(cle, 0)
 
-        # Total réellement encaissé = somme de tous les paiements de l'exercice
+        # Recouvrement : le calcul du tableau de bord et de la clôture, sur les
+        # élèves présents (voir recouvrement.py). L'encaissé de l'année, lui,
+        # garde TOUS les règlements — y compris ceux des élèves partis : c'est
+        # de l'argent entré, et la marge se calcule sur la caisse.
+        from .recouvrement import totaux as totaux_recouvrement
+        rec = totaux_recouvrement(presents)
         total_paiements = sum(pmt_eleve.values())
-        reste_global    = total_attendu - total_paiements
-        taux_global     = round(total_paiements / total_attendu * 100, 1) if total_attendu else 0
         total_charges   = sum(charges_par_mois.values())
         total_invest    = sum(invest_par_mois.values())
 
         synthese = {
             'nb_eleves':              nb_eleves,
             'total_attendu':          round(total_attendu, 2),
-            'total_paye':             round(total_paiements, 2),
-            'reste':                  round(reste_global, 2),
-            'taux_recouvrement':      taux_global,
+            'total_paye':             rec['total_paye'],
+            'reste':                  rec['reste'],
+            'taux_recouvrement':      rec['taux'],
+            'total_encaisse':         round(total_paiements, 2),
             'exercice':               exercice.annee_scolaire,
             'total_charges':          round(total_charges, 2),
             'total_investissements':  round(total_invest, 2),
@@ -2073,7 +2216,7 @@ class SuiviMensuelView(APIView):
 
         sections_data = []
         for snom, info in sorted(sections_dict.items()):
-            paye = pmt_section_raw.get(snom, 0.0)
+            paye = info['paye']
             att  = info['attendu']
             sections_data.append({
                 'nom':           snom,
@@ -2289,6 +2432,12 @@ class ElevesListePDFView(APIView):
             # l'effectif du document et y faisait figurer des enfants partis
             # depuis des années. Un ?statut= explicite reste honoré.
             qs = qs.filter(fiche_creance=False).exclude(statut__in=STATUTS_SORTIE)
+        # Une seule classe : la liste que le titulaire emporte pour ses relances.
+        classe = request.query_params.get('classe')
+        if classe == 'sans':
+            qs = qs.filter(classe__isnull=True)
+        elif classe:
+            qs = qs.filter(classe_id=classe)
 
         eleves_data = []
         total_attendu_global = 0.0
@@ -3185,10 +3334,19 @@ class FamilleViewSet(viewsets.ModelViewSet):
             if paiement.montant_inscription:
                 postes.append(f'{paiement.eleve.libelle_frais_entree.lower()} '
                               f'{paiement.montant_inscription:.0f}')
+            if paiement.montant_uniforme:
+                postes.append(f'uniforme {paiement.montant_uniforme:.0f}')
+            if paiement.montant_fournitures:
+                postes.append(f'fournitures {paiement.montant_fournitures:.0f}')
             if paiement.montant_mensualite:
+                from .echeancier import NOMS_MOIS
                 mois = paiement.mois_regles or []
+                noms = ', '.join(NOMS_MOIS.get(int(m), str(m)).lower() for m in mois)
                 postes.append(f'mensualités {paiement.montant_mensualite:.0f}'
-                              + (f' ({len(mois)} mois)' if mois else ''))
+                              + (f' ({noms})' if noms else ''))
+            for service in paiement.services_regles or []:
+                postes.append(f"{str(service.get('nom') or 'service').lower()} "
+                              f"{float(service.get('montant') or 0):.0f}")
             eleve = paiement.eleve
             lignes.append({
                 'nom_complet': eleve.nom_complet,
@@ -3204,6 +3362,7 @@ class FamilleViewSet(viewsets.ModelViewSet):
             'tenant':  tenant,
             'famille': famille,
             'lignes':  lignes,
+            'nb_enfants': len({p.eleve_id for p in paiements}),
             'total':   round(sum(l['montant'] for l in lignes), 2),
             'date':    paiements[0].date_paiement,
             'payeur':  paiements[0].payeur.nom if paiements[0].payeur_id else '',
@@ -3222,6 +3381,126 @@ class FamilleViewSet(viewsets.ModelViewSet):
         reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         reponse['Content-Disposition'] = (
             f'inline; filename="recu_{famille.code}_{str(reference)[:8]}.pdf"')
+        return reponse
+
+    # ── Encaissement de la famille, poste par poste ───────────────────────
+    def _enfants_echeances(self, famille, exercice):
+        from .echeancier import precharger
+        from .encaissement_groupe import echeances_eleve
+        enfants = precharger(famille.eleves.filter(exercice=exercice))
+        return sorted((echeances_eleve(e) for e in enfants),
+                      key=lambda e: cle_nom(e['nom_complet']))
+
+    @action(detail=True, methods=['get'])
+    def echeances(self, request, pk=None):
+        """Ce que chaque enfant doit encore, échu ou à venir, poste par poste.
+
+        C'est la même lecture que le guichet : l'écran familial y coche les
+        mois comme on les coche pour un seul élève, y compris les mois à venir
+        qu'une famille décide de payer d'avance.
+        """
+        from apps.comptabilite.views import get_exercice
+        famille  = self.get_object()
+        exercice = get_exercice(get_tenant(request))
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        enfants = self._enfants_echeances(famille, exercice)
+        return Response({
+            'famille_id': str(famille.id), 'code': famille.code, 'nom': famille.nom,
+            'enfants': enfants,
+            'totaux': {k: round(sum(e['totaux'][k] for e in enfants), 2)
+                       for k in ('echu', 'a_venir', 'reste', 'part_organisme')},
+        })
+
+    @action(detail=True, methods=['post'])
+    def preparer(self, request, pk=None):
+        """Traduit la sélection de l'école en règlements, enfant par enfant.
+
+        Deux façons de choisir, comme au guichet : cocher des postes
+        (`selection`), ou donner le montant versé (`montant`) et laisser le
+        logiciel servir le plus ancien dû d'abord — au-delà de l'échu si
+        `anticiper`. N'encaisse rien : l'écran envoie chaque règlement à l'API
+        des paiements, qui écrit les écritures.
+        """
+        from apps.comptabilite.views import get_exercice
+        from .encaissement_groupe import preparer, repartir_montant
+        famille  = self.get_object()
+        exercice = get_exercice(get_tenant(request))
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        enfants = self._enfants_echeances(famille, exercice)
+        selection = request.data.get('selection')
+        non_impute = 0.0
+        if not selection:
+            try:
+                montant = float(request.data.get('montant') or 0)
+            except (TypeError, ValueError):
+                montant = 0
+            if montant <= 0:
+                return Response({'error': "Indiquez le montant versé ou cochez des échéances."},
+                                status=400)
+            selection, non_impute = repartir_montant(
+                enfants, montant, anticiper=bool(request.data.get('anticiper')))
+        lignes = preparer(enfants, selection)
+        return Response({
+            'famille_id': str(famille.id), 'selection': selection, 'lignes': lignes,
+            'total': round(sum(l['total'] for l in lignes), 2),
+            'non_impute': non_impute,
+        })
+
+    @action(detail=True, methods=['get'], url_path='situation-pdf')
+    def situation_pdf(self, request, pk=None):
+        """Situation financière de la famille : chaque enfant, chaque mois.
+
+        Le document que le parent emporte. Les montants sont ceux des fiches
+        (échéancier de chaque enfant) : il ne peut pas contredire le reçu ni
+        la fiche individuelle.
+        """
+        from io import BytesIO
+
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from xhtml2pdf import pisa
+
+        from apps.comptabilite.views import get_exercice
+        from .echeancier import construire_echeancier, precharger
+        from .familles import situation_famille
+        from .pdf_nom import nom_fichier
+
+        tenant   = get_tenant(request)
+        famille  = self.get_object()
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return HttpResponse("Aucun exercice ouvert.", status=400)
+        situation = situation_famille(famille, exercice)
+        fiches = {str(e.id): e for e in precharger(famille.eleves.filter(exercice=exercice))}
+        enfants = []
+        for ligne in situation['enfants']:
+            eleve = fiches.get(ligne['eleve_id'])
+            ech = construire_echeancier(eleve) if eleve else None
+            enfants.append({**ligne, 'echeancier': ech,
+                            'organisme': (eleve.pec_organisme.organisme.nom
+                                          if eleve and eleve.pec_organisme else ''),
+                            'part_organisme': eleve.part_organisme if eleve else 0,
+                            'reste_organisme': eleve.reste_organisme if eleve else 0,
+                            'reliquat': eleve.reliquat_restant if eleve else 0})
+        contexte = {
+            'tenant': tenant, 'famille': famille, 'exercice': exercice,
+            'responsables': list(famille.responsables.all()),
+            'situation': situation, 'enfants': enfants,
+            'reste_organismes': round(sum(float(e['reste_organisme'] or 0) for e in enfants), 2),
+            'reste_famille': round(max(situation['reste_a_payer'] - sum(
+                float(e['reste_organisme'] or 0) for e in enfants), 0.0), 2),
+            'aujourdhui': timezone.localdate(),
+        }
+        html = render_to_string('pdf/situation_famille.html', contexte)
+        buffer = BytesIO()
+        if pisa.CreatePDF(html, dest=buffer, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        reponse['Content-Disposition'] = (
+            f'inline; filename="{nom_fichier("situation", famille.nom)}.pdf"')
         return reponse
 
     @action(detail=True, methods=['post'])

@@ -6,7 +6,15 @@ import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
          SuiviOrganisme, Famille, SituationFamille,
          FratrieProbable, BaremeFratrie, ApercuBareme,
-         RepartitionVersement } from '../models/eleve.model';
+         RepartitionVersement, EcheancesGroupe,
+         PreparationEncaissement } from '../models/eleve.model';
+
+/** Ce que l'écran demande : des postes cochés, ou un montant à répartir. */
+export interface PreparationDemande {
+  selection?: { eleve_id: string; cle: string; montant: number }[];
+  montant?: number;
+  anticiper?: boolean;
+}
 
 export interface LigneImport {
   ligne: number;
@@ -342,6 +350,34 @@ export class ElevesService {
   repartirVersement(familleId: string, montant: number) {
     return this.api.post<RepartitionVersement>(
       `/eleves/familles/${familleId}/repartir/`, { montant });
+  }
+
+  /** Ce que chaque enfant doit encore, échu ou à venir, poste par poste. */
+  echeancesFamille(familleId: string) {
+    return this.api.get<EcheancesGroupe>(`/eleves/familles/${familleId}/echeances/`);
+  }
+
+  /** Traduit une sélection (ou un montant) en règlements. N'encaisse rien. */
+  preparerFamille(familleId: string, corps: PreparationDemande) {
+    return this.api.post<PreparationEncaissement>(
+      `/eleves/familles/${familleId}/preparer/`, corps);
+  }
+
+  situationFamillePdf(familleId: string) {
+    return this.api.getBlob(`/eleves/familles/${familleId}/situation-pdf/`);
+  }
+
+  echeancesOrganisme(organismeId: string) {
+    return this.api.get<EcheancesGroupe>(`/eleves/organismes/${organismeId}/echeances/`);
+  }
+
+  preparerOrganisme(organismeId: string, corps: PreparationDemande) {
+    return this.api.post<PreparationEncaissement>(
+      `/eleves/organismes/${organismeId}/preparer/`, corps);
+  }
+
+  releveOrganismePdf(organismeId: string) {
+    return this.api.getBlob(`/eleves/organismes/${organismeId}/releve-pdf/`);
   }
 
   /** Le reçu unique d'un versement groupé, édité APRÈS les règlements : il

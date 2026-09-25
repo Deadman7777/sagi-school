@@ -79,6 +79,8 @@ def precharger(qs):
                      'eleve_id', 'montant_inscription', 'montant_mensualite',
                      'montant_uniforme', 'montant_fournitures', 'montant_cantine',
                      'montant_divers', 'mois_regles', 'services_regles',
+                     # L'encaissement groupé distingue ce qu'a versé un organisme.
+                     'organisme_id',
                      # `created_at` : horodatage d'enregistrement. Il sert à
                      # distinguer les règlements POSTÉRIEURS à une correction
                      # manuelle d'imputation. `date_paiement` ne suffit pas :

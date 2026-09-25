@@ -454,3 +454,77 @@ export interface RepartitionVersement {
   non_impute: number;
   nb_enfants: number;
 }
+
+// ── Encaissement groupé (famille, organisme) ──────────────────────────────
+/** Une échéance d'un élève : impayé antérieur, frais d'entrée, uniforme,
+ *  service, ou un mois — échu ou à venir. */
+export interface PosteEcheance {
+  cle: string;
+  type: 'RELIQUAT' | 'HORS' | 'MOIS';
+  libelle: string;
+  mois?: number;
+  annee?: number;
+  du: number;
+  paye: number;
+  reste: number;
+  /** Ce qu'on peut réclamer à la famille : net de la part d'un organisme. */
+  reste_famille: number;
+  part_organisme: number;
+  /** Côté organisme : sa part encore due sur ce poste. */
+  reste_organisme?: number;
+  echu: boolean;
+  exigible_le?: string | null;
+  statut?: string;
+}
+
+export interface EcheancesEleve {
+  eleve_id: string;
+  nom_complet: string;
+  matricule: string;
+  classe: string;
+  organisme: string;
+  postes: PosteEcheance[];
+  totaux: { echu: number; a_venir: number; reste: number; part_organisme: number };
+  /** Côté organisme seulement. */
+  couvert?: number;
+  recu?: number;
+  reste?: number;
+}
+
+export interface EcheancesGroupe {
+  enfants?: EcheancesEleve[];
+  boursiers?: EcheancesEleve[];
+  nom: string;
+  totaux: Record<string, number>;
+}
+
+/** Un règlement prêt à envoyer à l'API des paiements. */
+export interface ReglementPrepare {
+  eleve: string;
+  organisme?: string;
+  montant_reliquat: number;
+  montant_inscription: number;
+  montant_uniforme: number;
+  montant_fournitures: number;
+  montant_mensualite: number;
+  montant_divers: number;
+  services_regles: { nom: string; montant: number; nature: string; cle?: string }[];
+  part_accessoire: number;
+  mois_regles: number[];
+  detail: { libelle: string; montant: number }[];
+  total: number;
+}
+
+export interface PreparationEncaissement {
+  selection: { eleve_id: string; cle: string; montant: number }[];
+  lignes: {
+    eleve_id: string;
+    nom_complet: string;
+    classe: string;
+    reglements: ReglementPrepare[];
+    detail: { libelle: string; montant: number }[];
+    total: number;
+  }[];
+  total: number;
+  non_impute: number;
+}
