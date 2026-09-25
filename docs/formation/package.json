@@ -1,0 +1,7 @@
+{
+  "name": "sagi-guide-formation",
+  "private": true,
+  "description": "Captures et PDF du guide de formation SAGI SCHOOL",
+  "type": "module",
+  "dependencies": { "puppeteer-core": "^24.0.0" }
+}

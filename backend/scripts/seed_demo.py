@@ -75,7 +75,7 @@ def journal(message):
 
 
 def _nom(genre):
-    prenom = random.choice(PRENOMS_G if genre == 'M' else PRENOMS_F)
+    prenom = random.choice(PRENOMS_G if genre == 'G' else PRENOMS_F)
     return f'{prenom} {random.choice(NOMS)}'
 
 
@@ -100,7 +100,7 @@ def creer_ecole():
     Licence.objects.create(
         tenant=tenant, cle_licence='DEMO-AVAN-2025-PALM',
         type='AVANCE', statut='ACTIVE',
-        date_debut=DEBUT, date_fin=dt.date(2026, 9, 30))
+        date_debut=DEBUT, date_fin=dt.date(2027, 7, 31))
 
     exercice = Exercice.objects.create(
         tenant=tenant, annee_scolaire=ANNEE, date_debut=DEBUT, date_fin=FIN,
@@ -188,19 +188,19 @@ def creer_eleves(tenant, exercice, sections, classes):
     for section_nom, classe in classes:
         for _ in range(EFFECTIFS[classe.nom]):
             numero += 1
-            genre = random.choice('MF')
+            genre = random.choice('GF')
             nom_pere = f'{random.choice(PRENOMS_G)} {random.choice(NOMS)}'
             # Les enfants portent le nom de famille du père : une liste où les
             # noms ne se répondent pas se voit tout de suite.
             patronyme = nom_pere.split()[-1]
-            prenom = random.choice(PRENOMS_G if genre == 'M' else PRENOMS_F)
+            prenom = random.choice(PRENOMS_G if genre == 'G' else PRENOMS_F)
             age = {'Maternelle': 5, 'Élémentaire': 8, 'Collège': 12}[section_nom]
 
             eleves.append(Eleve(
                 tenant=tenant, exercice=exercice, section=sections[section_nom],
                 classe=classe, numero=numero,
-                matricule=f'GSLP-{DEBUT.year}-{numero:04d}',
-                nom_complet=f'{prenom} {patronyme}', genre=genre,
+                matricule=f'{DEBUT.year}-GSLP-{numero:04d}',
+                nom_complet=f'{prenom} {patronyme.upper()}', genre=genre,
                 date_naissance=dt.date(DEBUT.year - age - random.randint(0, 2),
                                        random.randint(1, 12), random.randint(1, 28)),
                 lieu_naissance=random.choice(['Dakar', 'Pikine', 'Guédiawaye',
@@ -246,7 +246,7 @@ def _creer_des_fratries(eleves):
         for _ in range(combien):
             enfant = disponibles.pop()
             prenom = enfant.nom_complet.split()[0]
-            enfant.nom_complet = f'{prenom} {patronyme}'
+            enfant.nom_complet = f'{prenom} {patronyme.upper()}'
             enfant.nom_pere = pere
             enfant.telephone_pere = numero
             enfant.nom_mere = mere
@@ -255,10 +255,10 @@ def _creer_des_fratries(eleves):
 
 # ─── 5. Le personnel ────────────────────────────────────────────────────────
 PERSONNEL = [
-    ('Aminata Ndiaye',    'ADMINISTRATIF', 'Directrice',              450000, True),
-    ('Ousmane Sarr',      'ADMINISTRATIF', 'Directeur des études',    350000, True),
-    ('Fatou Mbaye',       'ADMINISTRATIF', 'Comptable',               280000, False),
-    ('Khadija Diallo',    'ADMINISTRATIF', 'Secrétaire',              180000, False),
+    ('Aminata Ndiaye',    'ADMINISTRATION', 'Directrice',              450000, True),
+    ('Ousmane Sarr',      'ADMINISTRATION', 'Directeur des études',    350000, True),
+    ('Fatou Mbaye',       'ADMINISTRATION', 'Comptable',               280000, False),
+    ('Khadija Diallo',    'ADMINISTRATION', 'Secrétaire',              180000, False),
     ('Ibrahima Faye',     'ENSEIGNANT',    'Instituteur — CI',        220000, False),
     ('Adama Gueye',       'ENSEIGNANT',    'Institutrice — CP',       220000, False),
     ('Mamadou Thiam',     'ENSEIGNANT',    'Instituteur — CE1',       220000, False),
@@ -268,8 +268,8 @@ PERSONNEL = [
     ('Serigne Kane',      'ENSEIGNANT',    'Professeur de français',  260000, False),
     ('Coumba Niang',      'ENSEIGNANT',    'Professeure de maths',    260000, False),
     ('Astou Camara',      'ENSEIGNANT',    'Éducatrice — Maternelle', 195000, False),
-    ('Babacar Dieng',     'PERSONNEL',     'Surveillant général',     165000, False),
-    ('Maimouna Touré',    'PERSONNEL',     'Agente d\'entretien',     120000, False),
+    ('Babacar Dieng',     'APPUI',         'Surveillant général',     165000, False),
+    ('Maimouna Touré',    'APPUI',         'Agente d\'entretien',     120000, False),
 ]
 
 
@@ -281,6 +281,11 @@ def creer_personnel(tenant):
             date_embauche=dt.date(2025 - random.randint(0, 5),
                                   random.randint(1, 12), 1),
             salaire_base=salaire, telephone=_telephone(),
+            # Le canal de paie décide du compte de trésorerie débité : tout
+            # payer en espèces viderait la caisse bien au-delà de ce qu'elle
+            # reçoit, et la démonstration afficherait une caisse négative.
+            mode_paiement={'ADMINISTRATION': 'BANQUE', 'APPUI': 'CAISSE'}.get(
+                type_emp, 'WAVE' if rang % 2 else 'ORANGE_MONEY'),
             statut='ACTIF', est_cadre=cadre,
             nb_enfants=random.randint(0, 4),
             situation_matrimoniale=random.choice(['MARIE', 'CELIBATAIRE']))
@@ -319,19 +324,76 @@ def _date_du_mois(mois):
     return dt.date(annee, mois, min(random.randint(1, 12), 28))
 
 
+# ─── 5 bis. Les services optionnels ─────────────────────────────────────────
+# Assurance pour tous, cantine et transport pour une partie des familles : sans
+# eux, le reçu ne montre jamais une ligne de service ni la part « produits
+# accessoires » (758) que la comptabilité distingue du service éducatif (706).
+SERVICES = [
+    # (nom, montant, périodicité, part des élèves abonnés)
+    ('Assurance scolaire', 5000,  'UNIQUE',  1.0),
+    ('Cantine',            12000, 'MENSUEL', 0.35),
+    ('Transport scolaire', 15000, 'MENSUEL', 0.15),
+]
+
+
+def creer_services(tenant, eleves):
+    from apps.eleves.models import EleveService, Service
+    abonnements = []
+    for nom, montant, periodicite, part in SERVICES:
+        service = Service.objects.create(tenant=tenant, nom=nom, montant=montant,
+                                         periodicite=periodicite)
+        for eleve in eleves:
+            if random.random() < part:
+                abonnements.append(EleveService(tenant=tenant, eleve=eleve,
+                                                service=service))
+    EleveService.objects.bulk_create(abonnements)
+    journal(f'{len(SERVICES)} services, {len(abonnements)} abonnements')
+
+
+def _services_de(eleve):
+    """(services uniques, services mensuels) souscrits par l'élève."""
+    uniques, mensuels = [], []
+    for ab in eleve.abonnements.select_related('service'):
+        (uniques if ab.service.periodicite == 'UNIQUE' else mensuels).append(ab.service)
+    return uniques, mensuels
+
+
+def _dus_famille(eleve):
+    """(inscription, mensualité) que la FAMILLE règle, remises déduites.
+
+    Payer le tarif plein d'une section à un élève pris en charge, boursier ou
+    remisé au titre de la fratrie donnerait des familles en trop-perçu — une
+    démonstration qui se contredit dès qu'on ouvre une fiche.
+    """
+    bourse = eleve.pec_organisme
+    inscription = (float(eleve.section.frais_inscription)
+                   - float(eleve.montant_pec_inscription)
+                   - float(bourse.montant_inscription if bourse else 0))
+    mensualite = (float(eleve.section.frais_mensualite) - float(eleve.pec_mensualite or 0)
+                  - float(bourse.montant_mensualite if bourse else 0))
+    return max(int(inscription), 0), max(int(mensualite), 0)
+
+
 def creer_paiements(client, exercice, eleves):
     total, refuses = 0, 0
     for eleve in eleves:
+        eleve.refresh_from_db()
         section = eleve.section
         profil = _profil()
+        uniques, mensuels = _services_de(eleve)
+        inscription, mensualite = _dus_famille(eleve)
 
         # L'inscription se règle à l'entrée, sauf pour les familles en retard.
         if profil != 'en_retard' or random.random() < 0.6:
+            lignes = [{'nom': sv.nom, 'montant': int(sv.montant), 'nature': 'UNIQUE'}
+                      for sv in uniques]
             reponse = client.post('/api/paiements/paiements/', {
                 'eleve': str(eleve.id), 'exercice': str(exercice.id),
-                'montant_inscription': int(section.frais_inscription),
+                'montant_inscription': inscription,
                 'montant_uniforme': int(section.frais_uniforme),
                 'montant_fournitures': int(section.frais_fournitures),
+                'montant_divers': sum(l['montant'] for l in lignes),
+                'services_regles': lignes,
                 'date_paiement': _date_du_mois(10).isoformat(),
                 'mode_paiement': random.choice(MODES),
                 'observations': 'Inscription et fournitures',
@@ -343,16 +405,25 @@ def creer_paiements(client, exercice, eleves):
             continue
 
         mois_regles = (MOIS_SCOLAIRES if profil == 'a_jour'
-                       else MOIS_SCOLAIRES[:random.randint(2, 6)])
+                       else MOIS_SCOLAIRES[:random.randint(5, 8)])
+        if eleve.date_sortie:
+            # Un élève parti ne règle que les mois où il était là.
+            mois_regles = [m for m in mois_regles if m in (10, 11, 12, 1, 2)]
+        if not mois_regles or not mensualite:
+            continue
         # Les familles règlent rarement mois par mois : on regroupe par deux ou
         # trois, comme au guichet.
         paquet = []
         for mois in mois_regles:
             paquet.append(mois)
             if len(paquet) >= random.randint(1, 3) or mois == mois_regles[-1]:
+                lignes = [{'nom': sv.nom, 'montant': int(sv.montant) * len(paquet),
+                           'nature': 'MENSUEL'} for sv in mensuels]
                 reponse = client.post('/api/paiements/paiements/', {
                     'eleve': str(eleve.id), 'exercice': str(exercice.id),
-                    'montant_mensualite': int(section.frais_mensualite) * len(paquet),
+                    'montant_mensualite': mensualite * len(paquet),
+                    'montant_divers': sum(l['montant'] for l in lignes),
+                    'services_regles': lignes,
                     'mois_regles': paquet,
                     'date_paiement': _date_du_mois(paquet[0]).isoformat(),
                     'mode_paiement': random.choice(MODES),
@@ -394,7 +465,7 @@ def creer_charges(client):
         nonlocal total, refuses
         reponse = client.post('/api/comptabilite/charges/', {
             'no_compte': compte, 'libelle': libelle, 'montant': montant,
-            'compte_credit': tresorerie, 'date_ecriture': date_charge.isoformat(),
+            'compte_credit': tresorerie, 'date': date_charge.isoformat(),
         }, format='json')
         total += 1
         refuses += reponse.status_code != 201
@@ -445,6 +516,16 @@ def creer_paie(client, employes_ids):
     return refuses
 
 
+def creer_avances(client, employes):
+    """Avant la paie : c'est le bulletin du mois qui les impute."""
+    for rang, montant, date in ((4, 50000, '2026-02-10'), (13, 120000, '2026-03-12'),
+                                (9, 75000, '2026-05-06')):
+        _poster(client, '/api/rh/avances/', {
+            'employe': str(employes[rang]), 'montant': montant, 'date_avance': date,
+            'mode_paiement': 'CAISSE', 'observations': 'Avance sur salaire'})
+    journal('3 avances sur salaire')
+
+
 # ─── 8. Les notes ───────────────────────────────────────────────────────────
 # Deux classes suffisent pour montrer un bulletin et l'analyse des résultats :
 # noter les 187 élèves sur trois trimestres ferait des milliers d'écritures
@@ -487,6 +568,308 @@ def creer_notes(tenant, classes):
             f'({", ".join(CLASSES_NOTEES)})')
 
 
+# ─── 9. Ce que l'école fait d'autre que la scolarité ────────────────────────
+# Le guide de formation photographie TOUS les modules. Une démonstration qui
+# s'arrête aux élèves et à la paie laisse vides la garderie, les familles, les
+# immobilisations, les ressources financières et la gouvernance — et le guide
+# retomberait sur des captures d'une version périmée.
+def _poster(client, url, donnees, attendu=(200, 201)):
+    reponse = client.post(url, donnees, format='json')
+    if reponse.status_code not in attendu:
+        raise SystemExit(f'{url} refusé ({reponse.status_code}) : '
+                         f'{getattr(reponse, "data", reponse.content)}')
+    return reponse.data
+
+
+def _patcher(client, url, donnees):
+    reponse = client.patch(url, donnees, format='json')
+    if reponse.status_code not in (200, 201):
+        raise SystemExit(f'{url} refusé ({reponse.status_code}) : '
+                         f'{getattr(reponse, "data", reponse.content)}')
+    return reponse.data
+
+
+def _logo_png():
+    """Un palmier stylisé, dessiné ici : aucun logo réel ne doit apparaître."""
+    import base64
+    import io
+
+    from PIL import Image, ImageDraw
+    img = Image.new('RGBA', (240, 240), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((6, 6, 234, 234), fill=(11, 94, 74, 255))
+    d.polygon([(112, 200), (128, 200), (124, 104), (116, 104)], fill=(233, 196, 106, 255))
+    for dx, dy in ((-70, -18), (-40, -58), (0, -74), (40, -58), (70, -18)):
+        d.line((120, 104, 120 + dx, 104 + dy), fill=(245, 252, 248, 255), width=13)
+    tampon = io.BytesIO()
+    img.save(tampon, format='PNG')
+    return 'data:image/png;base64,' + base64.b64encode(tampon.getvalue()).decode()
+
+
+def completer_ecole(tenant):
+    """Identité complète, équipe et réglages : ce que montre Paramètres."""
+    tenant.logo = _logo_png()
+    tenant.inspection_academie = 'IA de Dakar'
+    tenant.inspection_ief = 'IEF de Grand Dakar'
+    tenant.directeur_civilite, tenant.directeur_nom = 'MME', 'Aminata Ndiaye'
+    tenant.rappel_actif = True
+    tenant.garde_soir_actif = True
+    tenant.garde_soir_heure_limite = dt.time(17, 30)
+    tenant.garde_soir_facturation_a = dt.time(17, 45)
+    tenant.garde_soir_tarif = 1000
+    tenant.save()
+    for email, prenom, nom, role in (
+            ('secretariat@lespalmiers.sn', 'Khadija', 'Diallo', 'ADMIN_SCOLARITE'),
+            ('comptabilite@lespalmiers.sn', 'Fatou', 'Mbaye', 'ADMIN_COMPTABLE'),
+            ('etudes@lespalmiers.sn', 'Ousmane', 'Sarr', 'LECTEUR')):
+        User.objects.create_user(email=email, password='Demo2026!', nom=nom,
+                                 prenom=prenom, role=role, tenant=tenant)
+    from apps.comptabilite.models import CaisseEncaissement
+    CaisseEncaissement.objects.create(tenant=tenant, nom='Caisse garderie',
+                                      no_compte='5716')
+    journal('logo, inspections, trois comptes utilisateurs, caisse garderie')
+
+
+def creer_garderie(client, tenant, exercice):
+    """Une section facturée à la journée et une semaine d'appels."""
+    garderie = Section.objects.create(
+        tenant=tenant, nom='Garderie', ordre=9, mode_tarif='JOURNEE',
+        frais_inscription=10000, tarif_demi_journee=3000, tarif_journee=5000)
+    enfants = []
+    for numero in range(1, 9):
+        genre = random.choice('GF')
+        pere = f'{random.choice(PRENOMS_G)} {random.choice(NOMS)}'
+        enfants.append(Eleve.objects.create(
+            tenant=tenant, exercice=exercice, section=garderie, classe=None,
+            numero=500 + numero, matricule=f'{DEBUT.year}-GSLP-{500 + numero:04d}',
+            nom_complet=f'{random.choice(PRENOMS_G if genre == "G" else PRENOMS_F)} '
+                        f'{pere.split()[-1].upper()}',
+            genre=genre, date_naissance=dt.date(2022, random.randint(1, 12), 10),
+            nom_pere=pere, telephone_pere=_telephone(),
+            date_entree=dt.date(2026, 5, 4), date_inscription=dt.date(2026, 5, 4),
+            annee_entree=ANNEE, statut='INSCRIT'))
+    jours = [dt.date(2026, 6, j) for j in (1, 2, 3, 4, 5, 8, 9, 10, 11, 12)]
+    for jour in jours:
+        _poster(client, '/api/eleves/garderie/appel/', {
+            'date': jour.isoformat(),
+            'presences': [{'eleve': str(e.id),
+                           'formule': random.choice(['JOURNEE', 'JOURNEE', 'DEMI_JOURNEE'])}
+                          for e in enfants if random.random() < 0.8]})
+    # Garde du soir : quelques retards de parents sur les élèves du primaire.
+    retards = 0
+    for eleve in Eleve.objects.filter(exercice=exercice, section__nom='Élémentaire')[:6]:
+        for jour in random.sample(jours, 2):
+            _poster(client, '/api/eleves/garde-soir/', {
+                'eleve': str(eleve.id), 'date': jour.isoformat(),
+                'heure_depart': random.choice(['17:50', '18:20', '18:40'])})
+            retards += 1
+    # La moitié des familles règle le mois de juin à la caisse de la garderie,
+    # par le même chemin que le bouton « Encaisser » de l'écran Garderie.
+    from apps.comptabilite.models import CaisseEncaissement
+    caisse = CaisseEncaissement.objects.get(tenant=tenant, no_compte='5716')
+    for enfant in enfants:
+        _poster(client, '/api/paiements/paiements/', {
+            'eleve': str(enfant.id), 'exercice': str(exercice.id),
+            'montant_inscription': int(garderie.frais_inscription),
+            'date_paiement': '2026-05-04', 'mode_paiement': 'ESPECE',
+            'caisse': str(caisse.id)})
+    for enfant in enfants[::2]:
+        du = int(enfant.du_du_mois(6))
+        if du:
+            _poster(client, '/api/paiements/paiements/', {
+                'eleve': str(enfant.id), 'exercice': str(exercice.id),
+                'montant_mensualite': du, 'mois_regles': [6], 'part_accessoire': du,
+                'date_paiement': '2026-06-15', 'mode_paiement': 'ESPECE',
+                'caisse': str(caisse.id)})
+    journal(f'garderie : {len(enfants)} enfants, {len(jours)} appels ; '
+            f'{retards} soirs de garde')
+    return enfants
+
+
+def creer_familles_et_bourses(client, tenant):
+    """Les fratries regroupées, un barème fratrie, un organisme boursier."""
+    groupes = client.get('/api/eleves/familles/fratries-probables/').data['groupes']
+    _poster(client, '/api/eleves/familles/regrouper/', {'groupes': [
+        {'eleve_ids': [e['id'] for e in g['eleves']], 'nom': g['nom_propose'],
+         'contact': g.get('contact') or {}} for g in groupes]})
+    from django.db.models import Count
+
+    from apps.eleves.models import BaremeFratrie, Famille, Organisme
+    BaremeFratrie.objects.create(tenant=tenant, rang=2, forme_mensualite='POURCENTAGE',
+                                 valeur_mensualite=10)
+    BaremeFratrie.objects.create(tenant=tenant, rang=3, forme_mensualite='POURCENTAGE',
+                                 valeur_mensualite=20, forme_inscription='POURCENTAGE',
+                                 valeur_inscription=50)
+    grande = Famille.objects.filter(tenant=tenant).annotate(
+        n=Count('eleves')).order_by('-n').first()
+    _poster(client, f'/api/eleves/familles/{grande.id}/appliquer-bareme/', {})
+
+    Organisme.objects.create(tenant=tenant, nom='Fondation Horizon Éducation',
+                             type='FONDATION', contact_nom='Mme Sy',
+                             telephone='33 860 12 34')
+    journal(f'{len(groupes)} familles regroupées, barème fratrie appliqué à '
+            f'« {grande.nom} », un organisme boursier')
+
+
+def creer_cas_particuliers(client, tenant, exercice):
+    """Une prise en charge, une bourse, un départ : les cas du guichet."""
+    from apps.eleves.models import Organisme
+    eleves = list(Eleve.objects.filter(exercice=exercice, famille__isnull=True,
+                                       section__nom='Élémentaire').order_by('numero'))
+    orphelin, boursier, boursiere, parti = eleves[3], eleves[11], eleves[27], eleves[40]
+    _patcher(client, f'/api/eleves/liste/{orphelin.id}/', {
+        'prise_en_charge': 'ORPHELIN', 'obs_prise_en_charge': 'Père décédé en 2024',
+        'pec_mensualite': int(orphelin.section.frais_mensualite)})
+    fondation = Organisme.objects.get(tenant=tenant)
+    for eleve in (boursier, boursiere):
+        _poster(client, '/api/eleves/bourses/', {
+            'eleve': str(eleve.id), 'organisme': str(fondation.id),
+            'exercice': str(exercice.id),
+            'montant_mensualite': int(eleve.section.frais_mensualite) // 2,
+            'reference': 'CONV-2025-014'})
+    _patcher(client, f'/api/eleves/liste/{parti.id}/', {
+        'statut': 'TRANSFERE', 'date_sortie': '2026-02-13'})
+    journal('une prise en charge, deux boursiers, un transfert')
+
+
+def creer_proformas(client, exercice):
+    """Deux proformas : une famille qui veut régler l'année d'un coup, un futur élève."""
+    eleve = next(e for e in Eleve.objects.filter(exercice=exercice, famille__isnull=True,
+                                                 section__nom='Collège').order_by('numero')
+                 if e.reste_a_payer > 0)
+    _poster(client, '/api/paiements/proformas/', {
+        'mode': 'ELEVE', 'eleve_id': str(eleve.id),
+        'parent_nom': eleve.nom_pere, 'parent_telephone': eleve.telephone_pere})
+    section = Section.objects.get(tenant=eleve.tenant, nom='Élémentaire')
+    _poster(client, '/api/paiements/proformas/', {
+        'mode': 'NOUVEAU', 'section_id': str(section.id), 'date_entree': '2026-01-05',
+        'beneficiaire': 'Mame Diarra GUEYE', 'parent_nom': 'Alioune Gueye',
+        'parent_telephone': '77 412 55 90'})
+    journal('2 proformas de scolarité')
+
+
+IMMOBILISATIONS = [
+    # (libellé, compte, valeur, durée, date, mode)
+    ('Minibus de ramassage scolaire', '245',  12500000, 5, '2025-10-06', 'VIREMENT'),
+    ('Parc informatique — 12 postes', '244',  3600000,  3, '2025-10-20', 'VIREMENT'),
+    ('Tables-bancs — 60 places',      '244',  1800000,  10, '2025-11-03', 'ESPECE'),
+    ('Photocopieur multifonction',    '244',  1350000,  4, '2026-01-12', 'WAVE'),
+]
+BUDGET = [
+    # (compte, libellé, type, montant mensuel)
+    ('622',  'Loyer des locaux',            'FIXE',     650000),
+    ('6052', 'Électricité',                 'VARIABLE', 80000),
+    ('6054', 'Fournitures pédagogiques',    'VARIABLE', 100000),
+    ('624',  'Entretien et réparations',    'VARIABLE', 50000),
+    ('628',  'Internet et téléphone',       'FIXE',     45000),
+]
+
+
+def creer_patrimoine_et_budget(client):
+    for libelle, compte, valeur, duree, date, mode in IMMOBILISATIONS:
+        _poster(client, '/api/comptabilite/immobilisations/', {
+            'libelle': libelle, 'no_compte_immobilisation': compte,
+            'no_compte_amortissement': '28' + compte[2:], 'valeur_entree': valeur,
+            'duree_utilisation': duree, 'date_entree': date,
+            'mode_reglement': mode,
+            'compte_tresorerie': {'VIREMENT': '521', 'ESPECE': '571', 'WAVE': '5521'}[mode]})
+    for compte, libelle, type_charge, montant in BUDGET:
+        mois = {f'm{m:02d}': montant for m in MOIS_SCOLAIRES}
+        _poster(client, '/api/comptabilite/budget/', {
+            'no_compte': compte, 'libelle': libelle, 'type_charge': type_charge, **mois})
+    journal(f'{len(IMMOBILISATIONS)} immobilisations, {len(BUDGET)} lignes de budget')
+
+
+def creer_ressources_financieres(client):
+    """Dons, subvention, tontine, prêt — puis les projets qu'ils financent."""
+    types = {t['code']: t for t in client.get('/api/gmrf/types/').data}
+
+    def type_de(*mots):
+        for t in types.values():
+            if all(m in t['libelle'].lower() for m in mots):
+                return t['id']
+        return next(iter(types.values()))['id']
+
+    _poster(client, '/api/gmrf/financements/', {
+        'type_financement': type_de('don'), 'libelle': 'Don de l\'association des parents',
+        'source': 'APE des Palmiers', 'type_source': 'ASSOCIATION', 'montant': 1500000,
+        'statut': 'RECU', 'date_reception': '2025-12-15', 'compte_tresorerie': '521'})
+    _poster(client, '/api/gmrf/financements/', {
+        'type_financement': type_de('subvention'), 'libelle': 'Subvention cantine scolaire',
+        'source': 'Commune de Grand Dakar', 'type_source': 'ETAT', 'montant': 1200000,
+        'statut': 'RECU', 'date_reception': '2026-01-20', 'compte_tresorerie': '521'})
+    _poster(client, '/api/gmrf/financements/', {
+        'type_financement': type_de('subvention'), 'libelle': 'Appui à l\'équipement numérique',
+        'source': 'Ministère de l\'Éducation nationale', 'type_source': 'ETAT',
+        'montant': 2500000, 'statut': 'ATTENDU'})
+
+    cycle = _poster(client, '/api/gmrf/natt/', {
+        'nom': 'Natt des enseignants', 'organisateur': 'Amicale du personnel',
+        'nb_participants': 10, 'duree': 10, 'periodicite': 'MENSUELLE',
+        'montant_cotisation': 200000, 'date_debut': '2025-10-05',
+        'compte_tresorerie': '571'})
+    for cotisation in cycle['cotisations'][:8]:
+        _patcher(client, f"/api/gmrf/cotisations/{cotisation['id']}/", {
+            'action': 'payer', 'date_paiement': cotisation['date_echeance'],
+            'compte_tresorerie': '571'})
+    _poster(client, f"/api/gmrf/natt/{cycle['id']}/reception/", {
+        'numero_echeance': 6, 'date_reception': '2026-03-05'})
+
+    pret = _poster(client, '/api/gmrf/prets/', {
+        'type_pret': 'BANCAIRE', 'organisme_preteur': 'Banque de l\'Habitat du Sénégal',
+        'objet': 'Construction de deux salles de classe', 'montant': 8000000,
+        'taux_interet': 9.5, 'duree_mois': 36, 'periodicite': 'MENSUELLE',
+        'mode_amortissement': 'CONSTANT', 'date_deblocage': '2025-11-10',
+        'date_premiere_echeance': '2025-12-10', 'compte_tresorerie': '521'})
+    for echeance in pret['echeances'][:7]:
+        _patcher(client, f"/api/gmrf/echeances/{echeance['id']}/", {
+            'action': 'payer', 'date_paiement': echeance['date_echeance'],
+            'compte_tresorerie': '521'})
+    journal('3 financements, une tontine, un prêt bancaire')
+
+
+def creer_gouvernance(client):
+    cantine = _poster(client, '/api/gouvernance/projets/', {
+        'code': 'CANT-26', 'libelle': 'Programme cantine', 'responsable': 'Fatou Mbaye',
+        'budget_prevu': 1200000, 'statut': 'EN_COURS', 'date_debut': '2026-01-01'})
+    numerique = _poster(client, '/api/gouvernance/projets/', {
+        'code': 'NUM-26', 'libelle': 'Équipement numérique', 'responsable': 'Ousmane Sarr',
+        'budget_prevu': 3600000, 'statut': 'EN_COURS', 'date_debut': '2025-10-01'})
+    _poster(client, '/api/gouvernance/projets/', {
+        'code': 'BIB-26', 'libelle': 'Réfection de la bibliothèque',
+        'responsable': 'Aminata Ndiaye', 'budget_prevu': 900000, 'statut': 'PLANIFIE'})
+    ressource = _poster(client, '/api/gouvernance/ressources/', {
+        'type_ressource': 'SUBVENTION', 'libelle': 'Subvention communale — cantine',
+        'organisme': 'Commune de Grand Dakar', 'montant': 1200000,
+        'date_ressource': '2026-01-20', 'projet_id': cantine['id']})
+    _poster(client, '/api/gouvernance/ressources/', {
+        'type_ressource': 'FONDS_PROPRES', 'libelle': 'Recettes scolaires affectées',
+        'montant': 3600000, 'date_ressource': '2025-10-01', 'projet_id': numerique['id']})
+    for mois, montant in ((2, 320000), (3, 320000)):
+        _poster(client, '/api/comptabilite/charges/', {
+            'no_compte': '601', 'libelle': f'Denrées de cantine — {mois:02d}/2026',
+            'montant': montant, 'compte_credit': '571',
+            'date': f'2026-{mois:02d}-08',
+            'projet_id': cantine['id'], 'ressource_id': ressource['id']})
+    for mois in (11, 12, 1, 2, 3, 4, 5, 6):
+        annee = DEBUT.year if mois >= 10 else DEBUT.year + 1
+        _poster(client, '/api/gouvernance/transferts/', {
+            'compte_source': '571', 'compte_destination': '521',
+            'montant': random.choice([1500000, 2000000, 2500000]),
+            'date_transfert': f'{annee}-{mois:02d}-28',
+            'observations': 'Versement des espèces en banque'})
+    journal('3 projets, 2 ressources, 8 versements en banque')
+
+
+def calculer_moyennes(client):
+    """Ce que fait le directeur des études en fin de trimestre, par l'API."""
+    for classe in Classe.objects.filter(nom__in=CLASSES_NOTEES):
+        for trimestre in TRIMESTRES:
+            _poster(client, '/api/academique/calculer/', {
+                'classe_id': str(classe.id), 'trimestre': trimestre})
+    journal(f'moyennes calculées : {", ".join(CLASSES_NOTEES)}, trois trimestres')
+
+
 # ─── Assemblage ─────────────────────────────────────────────────────────────
 def main():
     print(f'\nConstruction de la démonstration — {ECOLE}\n')
@@ -496,6 +879,7 @@ def main():
     classes = creer_classes(tenant)
     eleves = creer_eleves(tenant, exercice, sections, classes)
     creer_personnel(tenant)
+    creer_services(tenant, eleves)
     creer_notes(tenant, classes)
 
     # Le plan comptable doit exister avant la première écriture.
@@ -506,9 +890,23 @@ def main():
 
     client = APIClient()
     client.force_authenticate(user=directrice)
+    completer_ecole(tenant)
+    # Familles, remises et bourses AVANT les règlements : les familles paient
+    # alors ce qu'elles doivent vraiment.
+    creer_familles_et_bourses(client, tenant)
+    creer_cas_particuliers(client, tenant, exercice)
     creer_paiements(client, exercice, eleves)
     creer_charges(client)
+    creer_avances(client, list(Employe.objects.order_by('matricule')
+                               .values_list('id', flat=True)))
     creer_paie(client, list(Employe.objects.values_list('id', flat=True)))
+
+    creer_garderie(client, tenant, exercice)
+    creer_proformas(client, exercice)
+    creer_patrimoine_et_budget(client)
+    creer_ressources_financieres(client)
+    creer_gouvernance(client)
+    calculer_moyennes(client)
 
     from apps.comptabilite.models import JournalEntry
     ecritures = JournalEntry.objects.filter(tenant=tenant).count()
