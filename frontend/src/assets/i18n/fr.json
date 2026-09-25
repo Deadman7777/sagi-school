@@ -143,7 +143,10 @@
     "niveau_ok_sub": "À jour, reste les mois à venir",
     "conseils": "Conseils du système",
     "conseils_tous": "Voir tous les conseils (module Fiscal)",
-    "legende_montant": "Le montant réclamé est ce que la FAMILLE doit aujourd'hui : mensualités échues impayées, plus l'ardoise des exercices antérieurs. La part prise en charge par un organisme (bourse) en est retirée — on ne relance pas des parents parce que l'État tarde à verser."
+    "legende_montant": "Le montant réclamé est ce que la FAMILLE doit aujourd'hui : mensualités échues impayées, plus l'ardoise des exercices antérieurs. La part prise en charge par un organisme (bourse) en est retirée — on ne relance pas des parents parce que l'État tarde à verser.",
+    "modules_titre": "Tous les modules en un coup d'œil",
+    "modules_aide": "Chaque carte reprend les chiffres de l'écran du module : cliquez pour le détail.",
+    "ouvrir_module": "Ouvrir le module"
   },
   "eleves": {
     "title": "Élèves & Paiements",
@@ -397,7 +400,17 @@
     "onglet_pec": "Prise en charge",
     "onglet_pec_aide": "Voir les prises en charge sociales",
     "documents": "Documents",
-    "sans_classe": "Sans classe"
+    "sans_classe": "Sans classe",
+    "email": "E-mail",
+    "export_classe": "Classe",
+    "toutes_classes": "Toutes les classes",
+    "org_encaisser": "Encaisser la bourse",
+    "org_releve": "Relevé PDF de l'organisme",
+    "org_versements": "Versements reçus",
+    "org_aucun_versement": "Aucun versement",
+    "org_encaisse": "{{nb}} règlement(s) enregistré(s) au titre de la bourse.",
+    "org_encaissement_partiel": "{{nb}} règlement(s) n'ont pas pu être enregistrés.",
+    "org_releve_erreur": "Impossible de générer le relevé de l'organisme."
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -775,7 +788,9 @@
     "modifier": "Modifier",
     "echec": "Échec",
     "erreur_chargement": "Réglage illisible : l'écran peut être incomplet.",
-    "chargement": "Chargement…"
+    "chargement": "Chargement…",
+    "attention": "Attention",
+    "telephone": "Téléphone"
   },
   "auth": {
     "email": "Email",
@@ -1279,7 +1294,9 @@
     "mode_col": "Mode",
     "aucun_paiement_eleve": "Aucun paiement pour cet élève",
     "rechercher_historique": "Recherchez un élève pour voir son historique",
-    "services_col": "Services"
+    "services_col": "Services",
+    "nb_inscrits": "Élèves inscrits",
+    "reste_global": "Reste à encaisser"
   },
   "shell": {
     "super_admin": "Super Admin",
@@ -1668,7 +1685,16 @@
     "aucun_soir": "Aucun départ tardif saisi pour cette date.",
     "soir_enregistre": "Garde du soir enregistrée",
     "heure_requise": "Choisissez l'enfant et l'heure de départ.",
-    "soir_encaisser": "Le montant s’ajoute au mois concerné : il s’encaisse au guichet avec la mensualité."
+    "soir_encaisser": "Le montant s’ajoute au mois concerné : il s’encaisse au guichet avec la mensualité.",
+    "encaisser": "Encaisser",
+    "encaisser_titre": "Encaisser la garderie",
+    "encaisse": "Encaissement enregistré",
+    "recu": "Reçu",
+    "mode": "Mode de paiement",
+    "caisse": "Caisse",
+    "caisse_principale": "Caisse principale",
+    "montant_requis": "Saisissez un montant supérieur à zéro.",
+    "encaisser_aide": "Le règlement est imputé sur {{mois}}, avec les mêmes écritures qu’un paiement saisi au guichet."
   },
   "familles": {
     "onglet": "Familles",
@@ -1759,6 +1785,39 @@
     "encaissement_partiel_aide": "Les autres sont bien passés en caisse. Le reçu n'annoncera que ceux-là ; reprenez les règlements manquants un par un.",
     "recu_groupe": "Reçu du versement",
     "erreur_repartition": "Le calcul de la répartition a échoué.",
-    "erreur_recu": "L'édition du reçu a échoué."
+    "erreur_recu": "L'édition du reçu a échoué.",
+    "situation_pdf": "Situation financière (PDF)",
+    "erreur_situation_pdf": "Impossible de générer la situation financière de la famille."
+  },
+  "encaissement": {
+    "montant_verse": "Montant versé par la famille",
+    "montant_organisme": "Montant versé par l'organisme",
+    "anticiper": "Inclure les mois à venir (paiement d'avance)",
+    "repartir": "Répartir",
+    "tout_echu": "Cocher tout l'échu",
+    "tout_decocher": "Tout décocher",
+    "non_impute": "{{montant}} FCFA dépassent les échéances échues. Cochez « Inclure les mois à venir » pour les imputer d'avance, ou rendez la différence.",
+    "boursier": "Boursier — {{organisme}}",
+    "echu": "Échu",
+    "a_venir": "À venir",
+    "rien_du": "Plus rien à régler.",
+    "echeance": "Échéance",
+    "situation": "Situation",
+    "reste": "Reste dû",
+    "a_encaisser": "À encaisser",
+    "dont_organisme": "dont {{montant}} F attendus de l'organisme",
+    "en_retard": "En retard",
+    "partiel_retard": "Partiel — en retard",
+    "partiel_avenir": "Partiel — à venir",
+    "mode": "Mode de paiement",
+    "caisse": "Caisse",
+    "caisse_principale": "Caisse principale",
+    "date": "Date du règlement",
+    "payeur": "Versé par",
+    "observations": "Observations",
+    "reference_virement": "Référence du virement ou du chèque",
+    "total": "Total à encaisser",
+    "nb_eleves": "{{nb}} élève(s)",
+    "encaisser": "Encaisser"
   }
 }

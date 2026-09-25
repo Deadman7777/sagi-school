@@ -143,7 +143,10 @@
     "niveau_ok_sub": "Up to date, upcoming months remain",
     "conseils": "System advice",
     "conseils_tous": "See all advice (Tax module)",
-    "legende_montant": "The amount claimed is what the FAMILY owes today: unpaid due monthly fees, plus any debt carried over from previous years. A sponsor's share (scholarship) is deducted — parents are not chased because the State is late paying."
+    "legende_montant": "The amount claimed is what the FAMILY owes today: unpaid due monthly fees, plus any debt carried over from previous years. A sponsor's share (scholarship) is deducted — parents are not chased because the State is late paying.",
+    "modules_titre": "All modules at a glance",
+    "modules_aide": "Each card shows the figures of the module's own screen: click for details.",
+    "ouvrir_module": "Open the module"
   },
   "eleves": {
     "title": "Students & Payments",
@@ -397,7 +400,17 @@
     "onglet_pec": "Support",
     "onglet_pec_aide": "View social support",
     "documents": "Documents",
-    "sans_classe": "No class"
+    "sans_classe": "No class",
+    "email": "Email",
+    "export_classe": "Class",
+    "toutes_classes": "All classes",
+    "org_encaisser": "Collect the scholarship",
+    "org_releve": "Organisation statement (PDF)",
+    "org_versements": "Payments received",
+    "org_aucun_versement": "No payment",
+    "org_encaisse": "{{nb}} scholarship payment(s) recorded.",
+    "org_encaissement_partiel": "{{nb}} payment(s) could not be recorded.",
+    "org_releve_erreur": "Unable to generate the organisation statement."
   },
   "paiements": {
     "title": "Payment Entry",
@@ -775,7 +788,9 @@
     "modifier": "Edit",
     "echec": "Failed",
     "erreur_chargement": "Setting could not be read: this screen may be incomplete.",
-    "chargement": "Loading…"
+    "chargement": "Loading…",
+    "attention": "Warning",
+    "telephone": "Phone"
   },
   "auth": {
     "email": "Email",
@@ -1279,7 +1294,9 @@
     "mode_col": "Method",
     "aucun_paiement_eleve": "No payments for this student",
     "rechercher_historique": "Search a student to view their history",
-    "services_col": "Services"
+    "services_col": "Services",
+    "nb_inscrits": "Enrolled students",
+    "reste_global": "Outstanding"
   },
   "shell": {
     "super_admin": "Super Admin",
@@ -1668,7 +1685,16 @@
     "aucun_soir": "No late departure recorded for this date.",
     "soir_enregistre": "Evening care recorded",
     "heure_requise": "Choose the child and the departure time.",
-    "soir_encaisser": "The amount is added to the month and collected at the desk with the monthly fee."
+    "soir_encaisser": "The amount is added to the month and collected at the desk with the monthly fee.",
+    "encaisser": "Collect",
+    "encaisser_titre": "Collect day-care fees",
+    "encaisse": "Payment recorded",
+    "recu": "Receipt",
+    "mode": "Payment method",
+    "caisse": "Cash box",
+    "caisse_principale": "Main cash box",
+    "montant_requis": "Enter an amount greater than zero.",
+    "encaisser_aide": "The payment is allocated to {{mois}}, with the same entries as a payment recorded at the desk."
   },
   "familles": {
     "onglet": "Families",
@@ -1759,6 +1785,39 @@
     "encaissement_partiel_aide": "The others did go through. The receipt will only list those; re-enter the missing ones one by one.",
     "recu_groupe": "Payment receipt",
     "erreur_repartition": "Computing the split failed.",
-    "erreur_recu": "Producing the receipt failed."
+    "erreur_recu": "Producing the receipt failed.",
+    "situation_pdf": "Financial statement (PDF)",
+    "erreur_situation_pdf": "Unable to generate the family's financial statement."
+  },
+  "encaissement": {
+    "montant_verse": "Amount paid by the family",
+    "montant_organisme": "Amount paid by the organisation",
+    "anticiper": "Include upcoming months (advance payment)",
+    "repartir": "Allocate",
+    "tout_echu": "Tick everything due",
+    "tout_decocher": "Untick all",
+    "non_impute": "{{montant}} FCFA exceed the amounts due. Tick “Include upcoming months” to pay in advance, or give back the difference.",
+    "boursier": "Scholarship — {{organisme}}",
+    "echu": "Due",
+    "a_venir": "Upcoming",
+    "rien_du": "Nothing left to pay.",
+    "echeance": "Instalment",
+    "situation": "Status",
+    "reste": "Outstanding",
+    "a_encaisser": "To collect",
+    "dont_organisme": "of which {{montant}} F expected from the organisation",
+    "en_retard": "Overdue",
+    "partiel_retard": "Partial — overdue",
+    "partiel_avenir": "Partial — upcoming",
+    "mode": "Payment method",
+    "caisse": "Cash box",
+    "caisse_principale": "Main cash box",
+    "date": "Payment date",
+    "payeur": "Paid by",
+    "observations": "Notes",
+    "reference_virement": "Transfer or cheque reference",
+    "total": "Total to collect",
+    "nb_eleves": "{{nb}} student(s)",
+    "encaisser": "Collect"
   }
 }

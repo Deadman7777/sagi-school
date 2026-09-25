@@ -344,6 +344,8 @@ export class ShellComponent {
       '/garderie':     'garderie.title',
       '/paiements':    'nav.paiements',
       '/comptabilite': 'nav.comptabilite',
+      '/academique':   'nav.academique',
+      '/prospects':    'nav.prospects',
       '/rh': 'nav.rh',
       '/gmrf': 'nav.gmrf',
       '/gouvernance': 'nav.gouvernance',

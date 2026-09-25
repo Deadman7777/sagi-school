@@ -775,9 +775,9 @@ interface Transfert {
     .trac-col.card { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:10px; padding:14px 16px; }
     .tt { color:#9ca3af; font-style:normal; font-size:.82rem; }
     .alertes { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
-    .alerte { padding:8px 14px; border-radius:8px; font-size:.88rem; background:#eff6ff; border-left:4px solid #3b82f6; }
-    .alerte.warn { background:#fffbeb; border-left-color:#d97706; }
-    .alerte.danger { background:#fef2f2; border-left-color:#e24c4c; }
+    .alerte { padding:8px 14px; border-radius:8px; font-size:.88rem; background:rgba(59,130,246,.12); border-left:4px solid #3b82f6; }
+    .alerte.warn { background:rgba(217,119,6,.14); border-left-color:#d97706; }
+    .alerte.danger { background:rgba(226,76,76,.14); border-left-color:#e24c4c; }
     .bar-row { display:grid; grid-template-columns:130px 1fr auto; align-items:center; gap:10px; padding:5px 0; font-size:.85rem; }
     .bar-lbl { color:var(--text-4); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .bar-track { background:var(--surface-100,#f1f5f9); height:12px; border-radius:6px; overflow:hidden; }

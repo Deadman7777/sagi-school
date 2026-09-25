@@ -62,6 +62,15 @@ body.theme-light {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+/* Jetons au nom PrimeNG qu'emploient Gouvernance, Familles et Académique.
+   Personne ne les définissait : leur repli blanc donnait des cartes blanches
+   au texte clair en thème sombre, chiffres illisibles. Posés sur `body`, ils
+   suivent le thème clair comme le sombre. */
+body {
+  --surface-card:   var(--surface-2);
+  --surface-border: var(--border);
+  --surface-100:    var(--surface);
+}
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .w-full { width: 100% !important; }
@@ -145,6 +154,10 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
 [dir="rtl"] .text-left  { text-align: right; }
 [dir="rtl"] * { font-family: 'Amiri', 'Scheherazade New', 'NotoColorEmoji', 'Segoe UI', sans-serif; }
 [dir="ltr"] * { font-family: 'Outfit', 'NotoColorEmoji', 'Segoe UI', sans-serif; }
+/* Les deux règles ci-dessus ont la même spécificité que `.pi` et viennent
+   après : elles retiraient aux icônes leur police, et chaque bouton affichait
+   un carré vide à la place de son pictogramme. */
+[dir] .pi { font-family: 'primeicons' !important; }
 
 /* ── Niveaux d'alerte de paiement — une seule palette pour toute l'application.
    Rouge = CRITIQUE, orange = URGENT, jaune = ATTENTION (demande Shoumoul,
