@@ -183,6 +183,32 @@ EFFECTIFS = {'Grande Section': 22, 'CI': 26, 'CP': 25, 'CE1': 24,
              'CE2': 23, 'CM1': 22, 'CM2': 21, '6e': 24}
 
 
+def _fiche_renseignements(numero, nom_pere):
+    """Fiche de renseignements (nationalité, domicile, urgence…).
+
+    Tirage à part, sur un générateur propre à l'élève : le tirage principal
+    reste celui d'avant, et tous les montants de la démonstration cités dans
+    le guide sont inchangés.
+    """
+    r = random.Random(numero)
+    quartier = r.choice(['Sacré-Cœur 3', 'Liberté 6', 'Grand Yoff', 'Parcelles Assainies U17',
+                         'Ouakam', 'Keur Massar', 'Mermoz', 'HLM Grand Médine'])
+    return dict(
+        nationalite='Sénégalaise' if r.random() < 0.9 else r.choice(['Guinéenne', 'Malienne', 'Gambienne']),
+        adresse=f'{quartier}, Dakar',
+        groupe_sanguin=r.choice(['O+', 'O+', 'A+', 'B+', 'AB+', 'O-', '']),
+        contact_urgence_nom=f"{nom_pere.split()[0]} {nom_pere.split()[-1]} (oncle)" if r.random() < 0.5
+        else f"{r.choice(PRENOMS_F)} {nom_pere.split()[-1]} (tante)",
+        contact_urgence_telephone=_telephone_r(r),
+        etablissement_provenance=r.choice(['', '', 'École Sainte-Marie', 'Cours privé Les Lauriers',
+                                           'École publique Liberté 6']),
+    )
+
+
+def _telephone_r(r):
+    return f"7{r.choice('0678')} {r.randint(100, 999)} {r.randint(10, 99)} {r.randint(10, 99)}"
+
+
 def creer_eleves(tenant, exercice, sections, classes):
     eleves, numero = [], 0
     for section_nom, classe in classes:
@@ -209,7 +235,8 @@ def creer_eleves(tenant, exercice, sections, classes):
                 nom_mere=f'{random.choice(PRENOMS_F)} {random.choice(NOMS)}',
                 telephone_mere=_telephone(),
                 date_entree=DEBUT, date_inscription=DEBUT,
-                annee_entree=ANNEE, statut='INSCRIT'))
+                annee_entree=ANNEE, statut='INSCRIT',
+                **_fiche_renseignements(numero, nom_pere)))
 
     _creer_des_fratries(eleves)
     Eleve.objects.bulk_create(eleves)

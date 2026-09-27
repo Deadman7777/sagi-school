@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: {{ page_size|default:"A5 portrait" }}; margin: 1cm; }
+  /* Une SEULE règle @page : une seconde « size:A5 » laissée en fin de feuille
+     écrasait celle-ci, et le reçu demandé en A4 sortait en A5. */
+  @page { size: {{ page_size|default:"A5 portrait" }}; margin: 8mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:Arial, sans-serif; font-size:11px; color:#1a1a1a; }
 
@@ -79,7 +81,25 @@
   /* ════ NOTICE LÉGALE ════ */
   .notice { font-size:7px; color:#6b7280; text-align:center; margin-top:4px; }
 
-  @page { size:A5; margin:8mm; }
+  {% if page_size != "A4 portrait" %}
+  /* A5 : même contenu, espacements resserrés. Sans cela, dès trois lignes de
+     détail le mode de paiement et les signatures passaient en page 2. */
+  body { font-size:10px; }
+  .top-band td { padding:3px 0; }
+  .originale, .etab-row, .eleve-table, .detail-table, .suivi-table, .mode-table { margin-bottom:5px; }
+  /* Lignes de détail : hauteur de ligne en px, sans police monospace (avec
+     Courier, xhtml2pdf calcule des lignes deux fois trop hautes) et SANS
+     trait entre les lignes — xhtml2pdf les fait traverser le texte. */
+  .detail-table td { font-size:10px; line-height:14px; padding-top:2px; padding-bottom:2px;
+                     border-bottom:none; }
+  .detail-table td.tr { font-family:Arial, sans-serif; }
+  .eleve-table td, .suivi-table td { padding-top:5px; padding-bottom:2px; font-size:10px; }
+  .mode-table td { padding:3px 8px; font-size:10px; }
+  .sig-table { margin-top:6px; }
+  .sig-line { margin-top:12px; }
+  .footer-band { margin-top:4px; }
+  {% endif %}
+
 </style>
 </head>
 <body>
@@ -197,7 +217,7 @@
     </td>
     <td>
       <div class="suivi-lbl">Ce paiement</div>
-      <div class="suivi-val s-green" style="font-size:13px">+ {{ total|floatformat:0 }}</div>
+      <div class="suivi-val s-green" style="font-size:13px">+ {{ part_exercice|floatformat:0 }}</div>
     </td>
     <td>
       <div class="suivi-lbl">Total versé après</div>
@@ -212,13 +232,15 @@
   </tr>
 </table>
 
+<!-- Impayés des années antérieures : toujours mentionnés, « Néant » compris —
+     la famille voit sur chaque reçu qu'elle ne traîne aucune dette ancienne,
+     ou ce qu'il en reste. Suivis hors du bloc de l'exercice en cours. Une
+     seule ligne quand il n'y en a pas : le reçu doit tenir sur une page. -->
 {% if reliquat_du %}
-<!-- Dette d'une année antérieure : suivie hors du bloc « exercice en cours »,
-     qui ne porte que sur les frais de l'année. -->
 <table class="suivi-table">
   <tr>
     <td>
-      <div class="suivi-lbl">Reliquat {{ reliquat_annee }} — reporté</div>
+      <div class="suivi-lbl">Impayés antérieurs{% if reliquat_annee %} ({{ reliquat_annee }}){% endif %}</div>
       <div class="suivi-val s-blue">{{ reliquat_du|floatformat:0 }}</div>
     </td>
     <td>
@@ -226,7 +248,7 @@
       <div class="suivi-val s-green">{% if reliquat %}+ {{ reliquat|floatformat:0 }}{% else %}—{% endif %}</div>
     </td>
     <td>
-      <div class="suivi-lbl">Reliquat restant</div>
+      <div class="suivi-lbl">Impayés antérieurs restants</div>
       <div class="suivi-val {% if reliquat_restant_apres == 0 %}s-green{% else %}s-red{% endif %}">
         {% if reliquat_restant_apres == 0 %}✓ SOLDÉ{% else %}{{ reliquat_restant_apres|floatformat:0 }}{% endif %}
       </div>
@@ -239,6 +261,8 @@
     </td>
   </tr>
 </table>
+{% else %}
+<div style="font-size:9px; margin:-4px 0 6px 2px">Impayés antérieurs : <strong>Néant</strong></div>
 {% endif %}
 
 <!-- MODE DE PAIEMENT -->
@@ -254,7 +278,7 @@
     </td>
     <td style="width:40%">
       <div class="lbl">Date &amp; heure de la transaction</div>
-      <div class="val">{{ date }} à {{ heure_edition }}</div>
+      <div class="val">{{ date }}{% if heure_saisie %} à {{ heure_saisie }}{% endif %}</div>
     </td>
   </tr>
 </table>

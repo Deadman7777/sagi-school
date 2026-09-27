@@ -1,14 +1,45 @@
 from rest_framework.permissions import BasePermission
 
-# Mapping rôle → modules accessibles
+# Mapping rôle → modules accessibles. MIROIR EXACT du menu de l'application
+# (frontend/src/app/layout/shell/shell.component.ts, itemVisible) : le serveur
+# refuse ce que le menu ne montre pas. Les deux listes divergeaient — le rôle
+# « Responsable scolarité » voyait Académique à l'écran, pas au serveur.
 ROLE_PERMISSIONS = {
     'SUPER_ADMIN': ['*'],
     'ADMIN_ECOLE': ['*'],
     'ADMIN_RH': ['rh', 'dashboard'],
-    'ADMIN_COMPTABLE': ['comptabilite', 'fiscal', 'dashboard'],
-    'ADMIN_SCOLARITE': ['eleves', 'paiements', 'dashboard'],
+    'ADMIN_COMPTABLE': ['comptabilite', 'fiscal', 'paiements', 'suivi-mensuel', 'gmrf',
+                        'gouvernance', 'dashboard'],
+    'ADMIN_SCOLARITE': ['eleves', 'garderie', 'paiements', 'suivi-mensuel', 'academique',
+                        'dashboard'],
     'LECTEUR': ['dashboard'],
 }
+
+# Préfixe d'API → modules dont l'accès autorise à y ÉCRIRE. Un écran écrit
+# parfois dans l'API d'un autre module : la saisie d'une charge (écran
+# Paiements) écrit en comptabilité, l'encaissement d'une famille écrit sous
+# /api/eleves/. Les préfixes absents (auth, tenants, licences, sauvegarde…)
+# ont leurs propres contrôles.
+MODULES_ECRITURE = {
+    'eleves':       {'eleves', 'paiements', 'garderie', 'academique', 'suivi-mensuel'},
+    'paiements':    {'paiements', 'eleves', 'garderie', 'suivi-mensuel'},
+    'comptabilite': {'comptabilite', 'paiements', 'fiscal', 'gouvernance', 'suivi-mensuel'},
+    'fiscal':       {'fiscal', 'comptabilite'},
+    'academique':   {'academique'},
+    'daara':        {'academique', 'eleves'},
+    'gmrf':         {'gmrf'},
+    'gouvernance':  {'gouvernance', 'comptabilite', 'paiements'},
+    'rh':           {'rh'},
+}
+
+
+def peut_ecrire(user, prefixe):
+    """L'utilisateur peut-il modifier les données sous /api/<prefixe>/ ?"""
+    modules = MODULES_ECRITURE.get(prefixe)
+    if modules is None:
+        return True
+    return any(has_module_access(user, m) for m in modules)
+
 
 def has_module_access(user, module):
     if not user or not user.is_authenticated:

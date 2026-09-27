@@ -92,7 +92,8 @@ cellules, et les totaux ressortaient illisibles.
         <span class="detail">{{ l.no_piece }}</span>
       </td>
       <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %}">{{ l.classe }}</td>
-      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %} detail">{{ l.detail }}</td>
+      <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %} detail">{{ l.detail }}<br>
+        Impayés antérieurs restants : {% if l.impaye_anterieur_restant %}{{ l.impaye_anterieur_restant|floatformat:0 }}{% else %}néant{% endif %}</td>
       <td class="{% if forloop.counter|divisibleby:2 %}pair{% endif %} droite">
         {{ l.montant|floatformat:0 }}</td>
     </tr>

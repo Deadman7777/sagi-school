@@ -77,6 +77,63 @@ class FicheEtendueTest(Base):
             self.assertIn(attendu, html)
 
 
+class FicheRenseignementsTest(Base):
+    """La fiche PDF circule chez les enseignants : aucune donnée financière,
+    mais tout ce que porte la fiche papier de l'école."""
+
+    def _html_de_la_fiche(self, eleve_id):
+        from unittest import mock
+        from django.template import loader
+        rendu = {}
+        original = loader.render_to_string
+
+        def capture(nom, ctx=None, *a, **k):
+            html = original(nom, ctx, *a, **k)
+            if nom == 'pdf/fiche_eleve.html':
+                rendu['html'] = html
+            return html
+        with mock.patch('django.template.loader.render_to_string', side_effect=capture):
+            r = self.client.get(f"/api/eleves/{eleve_id}/fiche-pdf/")
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        return rendu['html']
+
+    def test_aucune_donnee_financiere(self):
+        r = self._eleve(pec_mensualite=5000, reliquat_anterieur=30000, reliquat_note='2025')
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        html = self._html_de_la_fiche(r.data['id'])
+        for interdit in ('FCFA', 'Reste à payer', 'Total payé', 'Total attendu',
+                         'Prise en charge', 'Situation financière', '30 000', '30000'):
+            self.assertNotIn(interdit, html)
+
+    def test_champs_de_la_fiche_papier(self):
+        photo = 'data:image/jpeg;base64,' + 'A' * 100
+        r = self._eleve(nationalite='Sénégalaise', adresse='Keur Massar, rue 12',
+                        etablissement_provenance='École Sainte-Marie', classe_precedente='CP',
+                        redoublant=True, groupe_sanguin='O+',
+                        contact_urgence_nom='Moussa FALL (oncle)',
+                        contact_urgence_telephone='771234567', photo=photo)
+        self.assertEqual(r.status_code, 201, r.content[:300])
+        html = self._html_de_la_fiche(r.data['id'])
+        for attendu in ('Sénégalaise', 'Keur Massar, rue 12', 'École Sainte-Marie', 'O+',
+                        'Moussa FALL (oncle)', '771234567', photo, 'Signature du parent'):
+            self.assertIn(attendu, html)
+
+    def test_photo_refusee_si_pas_une_image(self):
+        r = self._eleve(photo='data:image/svg+xml;base64,PHN2Zz4=')
+        self.assertEqual(r.status_code, 400)
+        r = self._eleve(photo='data:image/jpeg;base64,' + 'A' * 500_000)
+        self.assertEqual(r.status_code, 400)
+
+    def test_la_liste_n_envoie_pas_les_photos(self):
+        r = self._eleve(photo='data:image/png;base64,' + 'A' * 100)
+        liste = self.client.get('/api/eleves/')
+        lignes = liste.data['results'] if isinstance(liste.data, dict) else liste.data
+        ligne = next(l for l in lignes if l['id'] == r.data['id'])
+        self.assertNotIn('photo', ligne)
+        self.assertTrue(ligne['a_photo'])
+        self.assertTrue(self.client.get(f"/api/eleves/{r.data['id']}/").data['photo'])
+
+
 class ChampsLibresTest(Base):
     def test_types_valides_et_refus(self):
         nombre = self._champ('Nombre de frères', type_champ='NOMBRE')

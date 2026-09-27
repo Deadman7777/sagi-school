@@ -191,8 +191,17 @@ if ($sagiDir) {
     # Configurer production.py
     $configPath = Join-Path $sagiDir "resources\backend\config\settings\production.py"
 
+    # Clé secrète UNIQUE par poste : une clé commune à toutes les écoles
+    # permettrait de fabriquer un jeton de connexion valide partout.
+    $octets = New-Object byte[] 48
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($octets)
+    $SECRET_KEY = -join ($octets | ForEach-Object { $_.ToString('x2') })
     if (Test-Path $configPath) {
         $config = Get-Content $configPath -Raw
+        # Clé secrète fixe d'une ancienne installation : remplacée par une clé propre au poste.
+        if ($config -match "SECRET_KEY\s*=\s*'(sagi-school-prod-[^']*|changez-moi-absolument|changeme-in-production)'") {
+            $config = $config -replace "SECRET_KEY\s*=\s*'[^']*'", "SECRET_KEY    = '$SECRET_KEY'"
+        }
         $config = $config -replace "'PASSWORD': '[^']*'", "'PASSWORD': '$DB_PASSWORD'"
         $config = $config -replace "'NAME': '[^']*'",     "'NAME': '$DB_NAME'"
         $config = $config -replace "'USER': '[^']*'",     "'USER': '$DB_USER'"
@@ -209,7 +218,7 @@ from .base import *
 import os
 
 DEBUG         = False
-SECRET_KEY    = 'sagi-school-prod-2026-hady-gesman'
+SECRET_KEY    = '$SECRET_KEY'
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
 
 INSTALLED_APPS = [a for a in INSTALLED_APPS if 'debug_toolbar' not in a]

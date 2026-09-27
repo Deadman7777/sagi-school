@@ -887,3 +887,56 @@ class VersementGroupeTest(BaseFamille):
             'eleve': str(enfant.id), 'montant_inscription': 25000,
             'mode_paiement': 'ESPECE', 'payeur': str(intrus.id)}, format='json')
         self.assertEqual(r.status_code, 400)
+
+
+class ReductionDirecteTest(BaseFamille):
+    """Réduction fratrie saisie en nommant l'enfant, sans barème par rang."""
+
+    def setUp(self):
+        super().setUp()
+        self.famille = self._famille()
+        self.aine = self._eleve('Awa NDIAYE', self.famille)
+        self.cadet = self._eleve('Modou NDIAYE', self.famille)
+        self.url = f'/api/eleves/familles/{self.famille.id}/reductions/'
+
+    def test_remise_en_pourcentage_et_en_montant(self):
+        r = self.client.post(self.url, {'lignes': [
+            {'eleve_id': str(self.cadet.id), 'forme_inscription': 'POURCENTAGE',
+             'valeur_inscription': 50, 'forme_mensualite': 'MONTANT', 'valeur_mensualite': 5000},
+        ]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.cadet.refresh_from_db()
+        self.assertEqual(float(self.cadet.pec_inscription), 12500)
+        self.assertEqual(float(self.cadet.pec_mensualite), 5000)
+        self.assertEqual(self.cadet.prise_en_charge, 'FRATRIE')
+        self.aine.refresh_from_db()
+        self.assertEqual(float(self.aine.pec_mensualite), 0)
+
+    def test_remise_plafonnee_au_tarif_et_retrait(self):
+        self.client.post(self.url, {'lignes': [
+            {'eleve_id': str(self.cadet.id), 'valeur_mensualite': 999999}]}, format='json')
+        self.cadet.refresh_from_db()
+        self.assertEqual(float(self.cadet.pec_mensualite), 15000)
+        self.client.post(self.url, {'lignes': [
+            {'eleve_id': str(self.cadet.id), 'valeur_mensualite': 0}]}, format='json')
+        self.cadet.refresh_from_db()
+        self.assertEqual(float(self.cadet.pec_mensualite), 0)
+        self.assertIsNone(self.cadet.prise_en_charge)
+
+    def test_autre_motif_protege_et_enfant_etranger_refuse(self):
+        self.aine.prise_en_charge = 'ORPHELIN'
+        self.aine.save()
+        r = self.client.post(self.url, {'lignes': [
+            {'eleve_id': str(self.aine.id), 'valeur_mensualite': 1000}]}, format='json')
+        self.assertEqual(r.status_code, 400)
+        autre = self._eleve('Inconnu SARR')
+        r = self.client.post(self.url, {'lignes': [
+            {'eleve_id': str(autre.id), 'valeur_mensualite': 1000}]}, format='json')
+        self.assertEqual(r.status_code, 400)
+        autre.refresh_from_db()
+        self.assertEqual(float(autre.pec_mensualite), 0)
+
+    def test_la_lecture_liste_les_enfants_par_nom(self):
+        r = self.client.get(self.url)
+        self.assertEqual([l['nom_complet'] for l in r.data['lignes']], ['Awa NDIAYE', 'Modou NDIAYE'])
+        self.assertEqual(r.data['lignes'][0]['tarif_mensualite'], 15000)

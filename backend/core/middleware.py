@@ -53,3 +53,50 @@ class ApiSansCacheMiddleware:
             response['Pragma'] = 'no-cache'
             response['Expires'] = '0'
         return response
+
+
+class DroitsEcritureMiddleware:
+    """Le serveur refuse les écritures qu'un rôle ne voit pas dans son menu.
+
+    Les rôles (Responsable RH, comptable, scolarité, Lecteur) n'étaient
+    appliqués qu'à l'affichage du menu — et au seul module RH côté serveur. Un
+    compte « Lecteur » pouvait donc, en appelant l'API directement, enregistrer
+    ou annuler des paiements, supprimer des charges.
+
+    Contrôle central plutôt que vue par vue : une vue ajoutée demain est
+    couverte d'office. Seules les ÉCRITURES (POST, PUT, PATCH, DELETE) sont
+    filtrées — les écrans lisent légitimement d'autres modules pour leurs
+    listes déroulantes. Le jeton est lu ici parce que DRF n'authentifie
+    qu'à l'intérieur de la vue.
+    """
+    METHODES_LECTURE = ('GET', 'HEAD', 'OPTIONS')
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        refus = self._refus(request)
+        return refus if refus is not None else self.get_response(request)
+
+    def _refus(self, request):
+        if request.method in self.METHODES_LECTURE or not request.path.startswith('/api/'):
+            return None
+        from .permissions import MODULES_ECRITURE, peut_ecrire
+        prefixe = request.path.split('/')[2] if request.path.count('/') >= 3 else ''
+        if prefixe not in MODULES_ECRITURE:
+            return None
+        from rest_framework_simplejwt.authentication import JWTAuthentication
+        try:
+            resultat = JWTAuthentication().authenticate(request)
+        except Exception:
+            return None          # jeton invalide : DRF répondra 401 dans la vue
+        if resultat is None:
+            return None
+        user = resultat[0]
+        if peut_ecrire(user, prefixe):
+            return None
+        from django.http import JsonResponse
+        return JsonResponse(
+            {'error': "Votre rôle ne permet pas de modifier ces données. "
+                      "Demandez à l'administrateur de l'établissement."},
+            status=403)

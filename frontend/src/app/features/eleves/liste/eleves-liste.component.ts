@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, ChangeDetectionStrategy, HostListener } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, inject, signal, computed, ChangeDetectionStrategy, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -665,14 +665,17 @@ const MOIS_ANNEE = [
           <div class="stats-grid">
             <div class="stat-item">
               <span class="stat-label">Recettes théoriques annuelles</span>
+              <span class="stat-aide">Frais scolaires de tous les inscrits au plein tarif, sans aucune prise en charge ni service.</span>
               <span class="stat-val">{{ fin.recettes_theoriques_annuelles | number:'1.0-0' }} FCFA</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Recettes réelles attendues</span>
+              <span class="stat-aide">Ce que l'école doit réellement encaisser : théorique − prises en charge + services choisis (cantine, transport…).</span>
               <span class="stat-val success">{{ fin.recettes_reelles_attendues | number:'1.0-0' }} FCFA</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Perte annuelle (écart PEC)</span>
+              <span class="stat-aide">Montant abandonné par l'école au titre des prises en charge (hors services).</span>
               <span class="stat-val danger">{{ fin.perte_annuelle_pec | number:'1.0-0' }} FCFA</span>
             </div>
             <div class="stat-item">
@@ -685,6 +688,7 @@ const MOIS_ANNEE = [
             </div>
             <div class="stat-item">
               <span class="stat-label">Écart mensuel sur mensualités</span>
+              <span class="stat-aide">Mensualités au plein tarif − mensualités effectivement facturées, chaque mois.</span>
               <span class="stat-val" style="color:#a78bfa">{{ fin.ecart_mensuel | number:'1.0-0' }} FCFA</span>
             </div>
           </div>
@@ -776,6 +780,10 @@ const MOIS_ANNEE = [
             <div class="fiche-row"><span>Genre</span><strong>{{ e.genre === 'F' ? 'Fille' : 'Garçon' }}</strong></div>
             <div class="fiche-row"><span>Date naissance</span><strong>{{ e.date_naissance || '—' }}</strong></div>
             <div class="fiche-row"><span>Lieu naissance</span><strong>{{ e.lieu_naissance || '—' }}</strong></div>
+            @if (e['nationalite']) { <div class="fiche-row"><span>{{ 'eleves.nationalite' | translate }}</span><strong>{{ e['nationalite'] }}</strong></div> }
+            @if (e['adresse']) { <div class="fiche-row"><span>{{ 'eleves.adresse' | translate }}</span><strong>{{ e['adresse'] }}</strong></div> }
+            @if (e['etablissement_provenance']) { <div class="fiche-row"><span>{{ 'eleves.etablissement_provenance' | translate }}</span><strong>{{ e['etablissement_provenance'] }}</strong></div> }
+            @if (e['classe_precedente']) { <div class="fiche-row"><span>{{ 'eleves.classe_precedente' | translate }}</span><strong>{{ e['classe_precedente'] }}{{ e['redoublant'] ? ' — redoublant(e)' : '' }}</strong></div> }
           </div>
           <div class="fiche-section">
             <div class="fiche-title">Scolarité</div>
@@ -831,6 +839,11 @@ const MOIS_ANNEE = [
           <div class="fiche-section">
             <div class="fiche-title">Santé</div>
             <div class="fiche-row"><span>État</span><strong>{{ etatSanteLabel(e.etat_sante) }}</strong></div>
+            @if (e['groupe_sanguin']) { <div class="fiche-row"><span>{{ 'eleves.groupe_sanguin' | translate }}</span><strong>{{ e['groupe_sanguin'] }}</strong></div> }
+            @if (e['contact_urgence_nom'] || e['contact_urgence_telephone']) {
+              <div class="fiche-row"><span>{{ 'eleves.contact_urgence' | translate }}</span>
+                <strong>{{ e['contact_urgence_nom'] }} <span class="mono">{{ e['contact_urgence_telephone'] }}</span></strong></div>
+            }
             @if (e.observations_sante) {
               <div class="fiche-row"><span>Observations</span><strong>{{ e.observations_sante }}</strong></div>
             }
@@ -1410,6 +1423,39 @@ const MOIS_ANNEE = [
           <input pInputText [(ngModel)]="nouvelEleve.lieu_naissance" class="w-full"
                  [placeholder]="'eleves.lieu_naissance_ph' | translate" />
         </div>
+        <!-- Fiche de renseignements : ce que porte la fiche papier de l'école. -->
+        <div class="form-group">
+          <label>{{ 'eleves.nationalite' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.nationalite" class="w-full"
+                 [placeholder]="'eleves.nationalite_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.adresse' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.adresse" class="w-full"
+                 [placeholder]="'eleves.adresse_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.etablissement_provenance' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.etablissement_provenance" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.classe_precedente' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.classe_precedente" class="w-full" />
+        </div>
+        <div class="form-group">
+          <label class="case-adhesion"><input type="checkbox" [(ngModel)]="nouvelEleve.redoublant" />
+            {{ 'eleves.redoublant' | translate }}</label>
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.photo' | translate }}</label>
+          <div class="photo-saisie">
+            @if (nouvelEleve.photo) {
+              <img [src]="nouvelEleve.photo" alt="" class="photo-mini" />
+              <button type="button" class="lien-retirer" (click)="nouvelEleve.photo = ''">{{ 'eleves.photo_retirer' | translate }}</button>
+            }
+            <input type="file" accept="image/jpeg,image/png,image/webp" (change)="choisirPhoto($event)" />
+          </div>
+        </div>
         <div class="form-group full" style="margin-top:2px">
           <small style="color:var(--text-3);font-size:11px">⚑ {{ 'eleves.parent_obligatoire' | translate }}</small>
         </div>
@@ -1460,6 +1506,20 @@ const MOIS_ANNEE = [
           <label>{{ 'eleves.lien_tuteur' | translate }}</label>
           <input pInputText [(ngModel)]="nouvelEleve.lien_tuteur" class="w-full"
                  [placeholder]="'eleves.lien_tuteur_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.contact_urgence' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.contact_urgence_nom" class="w-full"
+                 [placeholder]="'eleves.contact_urgence_ph' | translate" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.contact_urgence_tel' | translate }}</label>
+          <input pInputText [(ngModel)]="nouvelEleve.contact_urgence_telephone" class="w-full" placeholder="7X XXX XX XX" />
+        </div>
+        <div class="form-group">
+          <label>{{ 'eleves.groupe_sanguin' | translate }}</label>
+          <p-select appendTo="body" [options]="groupesSanguins" [(ngModel)]="nouvelEleve.groupe_sanguin"
+                    [showClear]="true" [placeholder]="'eleves.choisir' | translate" styleClass="w-full" />
         </div>
         <!-- Ce que l'école doit savoir pour accueillir l'enfant. -->
         <div class="form-group full">
@@ -1792,6 +1852,10 @@ const MOIS_ANNEE = [
     <app-import-eleves-dialog [(visible)]="dialogImportVisible" (importe)="chargerEleves()" />
   `,
   styles: [`
+    .photo-saisie { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .photo-mini { width:48px; height:60px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
+    .lien-retirer { background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; padding:0; }
+    .stat-aide { display:block; font-size:10.5px; color:var(--text-3); line-height:1.35; margin:2px 0 4px; }
     .case-adhesion { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2); margin-top:10px; }
     .histo-formule { font-size:13px; color:var(--text-2); padding:2px 0; }
     .aide-formule { font-size:11px; color:var(--text-3); }
@@ -2061,6 +2125,7 @@ const MOIS_ANNEE = [
   `]
 })
 export class ElevesListeComponent implements OnInit {
+  private cdr           = inject(ChangeDetectorRef);
   private translate     = inject(TranslateService);
   private elevesService = inject(ElevesService);
   private msg           = inject(MessageService);
@@ -3434,6 +3499,36 @@ export class ElevesListeComponent implements OnInit {
     this.dialogVisible = true;
   }
 
+  groupesSanguins = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+  /** Photo d'identité : réduite à 300 px de large en JPEG (≈ 30 Ko), pour
+   *  qu'un appareil photo de téléphone ne remplisse pas la base. */
+  choisirPhoto(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const fichier = input.files?.[0];
+    if (!fichier) return;
+    const url = URL.createObjectURL(fichier);
+    const img = new Image();
+    img.onload = () => {
+      const largeur = Math.min(300, img.width);
+      const hauteur = Math.round(img.height * largeur / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = largeur; canvas.height = hauteur;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, largeur, hauteur);
+      this.nouvelEleve.photo = canvas.toDataURL('image/jpeg', 0.85);
+      URL.revokeObjectURL(url);
+      input.value = '';
+      // Application sans zone.js : un rappel d'image ne rafraîchit pas l'écran seul.
+      this.cdr.markForCheck();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      this.msg.add({ severity: 'warn', summary: this.translate.instant('common.attention'),
+                     detail: this.translate.instant('eleves.photo_invalide') });
+    };
+    img.src = url;
+  }
+
   ouvrirModifier(eleve: Eleve | null) {
     if (!eleve) return;
     this.editId = eleve.id;
@@ -3466,9 +3561,29 @@ export class ElevesListeComponent implements OnInit {
       profession_mere:  eleve['profession_mere'],
       residence_mere:   eleve['residence_mere'],
       attitudes_particulieres: eleve['attitudes_particulieres'],
+      nationalite:      eleve['nationalite'] || '',
+      adresse:          eleve['adresse'] || '',
+      etablissement_provenance: eleve['etablissement_provenance'] || '',
+      classe_precedente: eleve['classe_precedente'] || '',
+      redoublant:       !!eleve['redoublant'],
+      groupe_sanguin:   eleve['groupe_sanguin'] || '',
+      contact_urgence_nom: eleve['contact_urgence_nom'] || '',
+      contact_urgence_telephone: eleve['contact_urgence_telephone'] || '',
       reliquat_anterieur: Number(eleve.reliquat_anterieur || 0),
       reliquat_note:      eleve.reliquat_note || '',
     };
+    // La liste n'envoie pas les photos : on la lit sur la fiche détaillée.
+    // Tant qu'elle n'est pas arrivée, le champ reste absent du formulaire et
+    // l'enregistrement ne touche pas à la photo existante.
+    if (eleve['a_photo']) {
+      const id = eleve.id;
+      this.elevesService.getEleve(id).subscribe(d => {
+        if (this.editId === id && this.nouvelEleve.photo === undefined) {
+          this.nouvelEleve.photo = (d as any).photo || '';
+          this.cdr.markForCheck();
+        }
+      });
+    }
     this.jourInconnu = !!eleve.date_inscription_jour_estime;
     this.moisInscription = this.jourInconnu ? (eleve.date_inscription || '').slice(0, 7) : '';
     this.dialogFicheVisible = false;

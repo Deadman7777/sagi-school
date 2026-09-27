@@ -97,10 +97,12 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
     <tr><td class="reste-l">Reste à payer</td>
         <td class="reste-m">{% if reste_apres == 0 %}SOLDÉ{% else %}{{ reste_apres|fcfa }} F{% endif %}</td></tr>
     {% if reliquat_du %}
-    <tr><td class="l">Reliquat {{ reliquat_annee }}</td>
+    <tr><td class="l">Impayés antérieurs{% if reliquat_annee %} ({{ reliquat_annee }}){% endif %}</td>
         <td class="m">{% if reliquat_restant_apres == 0 %}SOLDÉ{% else %}{{ reliquat_restant_apres|fcfa }} F{% endif %}</td></tr>
     <tr><td class="reste-l">Dû total</td>
         <td class="reste-m">{% if reste_global_apres == 0 %}SOLDÉ{% else %}{{ reste_global_apres|fcfa }} F{% endif %}</td></tr>
+    {% else %}
+    <tr><td class="l">Impayés antérieurs</td><td class="m">Néant</td></tr>
     {% endif %}
   </table>
 

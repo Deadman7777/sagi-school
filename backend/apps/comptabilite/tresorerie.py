@@ -164,3 +164,59 @@ def soldes_cloture(exercice):
     }
     soldes['total'] = sum(soldes.values())
     return soldes
+
+
+# ── Encaissements par mode ───────────────────────────────────────────────────
+LIBELLES_MODE = {
+    'ESPECE':       'Espèce',
+    'WAVE':         'Wave',
+    'ORANGE_MONEY': 'Orange Money',
+    'FREE_MONEY':   'Free Money',
+    'VIREMENT':     'Virement',
+    'CHEQUE':       'Chèque',
+    'REPRISE':      'Reprise (migration)',
+}
+
+
+def encaissements_par_mode(paiements):
+    """Ventile des règlements élèves sur leurs modes réels.
+
+    Un règlement multi-mode (mode_paiement = 'MIXTE') n'est pas un mode : ses
+    30 000 en espèces entrent dans la caisse, ses 20 000 Wave sur le compte
+    Wave. Regrouper par `mode_paiement` faisait apparaître une rubrique
+    « MIXTE » au lieu de répartir le montant — et le tableau de bord, qui ne
+    connaît que les vrais canaux, perdait purement ces encaissements.
+
+    Le montant est celui réellement encaissé (`Paiement.total`, reliquat
+    antérieur compris), le même que la jambe de trésorerie du journal.
+
+    Retourne {mode: {'nb': int, 'montant': float}} ; un règlement mixte compte
+    une opération dans chacun des modes qu'il utilise.
+    """
+    resultat = {}
+    champs = ('mode_paiement', 'modes_reglement', 'montant_inscription',
+              'montant_mensualite', 'montant_uniforme', 'montant_fournitures',
+              'montant_cantine', 'montant_divers', 'montant_reliquat')
+    for p in paiements.only(*champs):
+        total = float(p.total)
+        try:
+            lignes = normaliser_ventilation(p.modes_reglement, total, p.mode_paiement)
+        except ValueError:
+            # Ventilation historique incohérente : on ne perd pas le montant,
+            # il reste sur le mode principal déclaré.
+            lignes = [{'mode': p.mode_paiement, 'montant': Decimal(str(total))}]
+        for ligne in lignes:
+            case = resultat.setdefault(ligne['mode'], {'nb': 0, 'montant': 0.0})
+            case['nb'] += 1
+            case['montant'] += float(ligne['montant'])
+    return resultat
+
+
+def liste_par_mode(paiements):
+    """encaissements_par_mode() en liste triée, prête pour l'API :
+    [{'mode', 'libelle', 'nb', 'total'}], plus gros montant en premier."""
+    return sorted(
+        ({'mode': m, 'libelle': LIBELLES_MODE.get(m, m), 'nb': v['nb'],
+          'total': round(v['montant'], 2)}
+         for m, v in encaissements_par_mode(paiements).items()),
+        key=lambda x: x['total'], reverse=True)

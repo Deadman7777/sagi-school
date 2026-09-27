@@ -3,11 +3,11 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors, HttpClient } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { providePrimeNG } from 'primeng/config';
-import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
+import { provideTranslateService, TranslateLoader, TranslateService } from '@ngx-translate/core';
 import Aura from '@primeuix/themes/aura';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import { BUILD_ID } from '../build-id';
 import { InstallationAppService } from './core/services/installation-app.service';
 
@@ -28,6 +28,15 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(),
     // Capte l'invite d'installation dès le chargement, avant la connexion.
     provideAppInitializer(() => { inject(InstallationAppService); }),
+    // Les traductions sont chargées AVANT le premier écran. Sans cela, les
+    // listes construites dans ngOnInit avec translate.instant() (rôles, types
+    // d'employé, modes de paiement…) affichaient leurs clés brutes —
+    // « parametres.admin_scolarite » — dès qu'on ouvrait une page directement.
+    provideAppInitializer(() => {
+      let langue = 'fr';
+      try { langue = localStorage.getItem('langue') || 'fr'; } catch { /* stockage indisponible */ }
+      return firstValueFrom(inject(TranslateService).use(langue)).catch(() => undefined);
+    }),
     providePrimeNG({
       theme: { preset: Aura, options: { darkModeSelector: '.dark-mode' } }
     }),

@@ -410,7 +410,21 @@
     "org_aucun_versement": "No payment",
     "org_encaisse": "{{nb}} scholarship payment(s) recorded.",
     "org_encaissement_partiel": "{{nb}} payment(s) could not be recorded.",
-    "org_releve_erreur": "Unable to generate the organisation statement."
+    "org_releve_erreur": "Unable to generate the organisation statement.",
+    "nationalite": "Nationality",
+    "nationalite_ph": "e.g. Senegalese",
+    "adresse": "Student's home address",
+    "adresse_ph": "District, street, city",
+    "etablissement_provenance": "Previous school",
+    "classe_precedente": "Class attended last year",
+    "redoublant": "Repeating the year",
+    "photo": "ID photo",
+    "photo_retirer": "Remove",
+    "photo_invalide": "Unreadable image: choose a JPEG or PNG photo.",
+    "contact_urgence": "Emergency contact",
+    "contact_urgence_ph": "Name and relationship",
+    "contact_urgence_tel": "Emergency phone",
+    "groupe_sanguin": "Blood group"
   },
   "paiements": {
     "title": "Payment Entry",
@@ -542,7 +556,7 @@
     "nom_section_requis": "Section name *",
     "section_placeholder": "E.g.: Grade 1, Grade 2, Kindergarten...",
     "nouveau_mdp": "New password *",
-    "mdp_min": "Min. 6 characters",
+    "mdp_min": "Min. 8 characters",
     "admin_ecole": "School Admin",
     "admin_comptable": "Accounting Manager",
     "admin_rh": "HR Manager",
@@ -797,7 +811,8 @@
     "password": "Password",
     "login": "Sign In",
     "logout": "Sign Out",
-    "error": "Invalid email or password"
+    "error": "Invalid email or password",
+    "trop_essais": "Too many attempts on this account. Wait a minute and try again."
   },
   "academique": {
     "title": "Academic Management",
@@ -1787,7 +1802,13 @@
     "erreur_repartition": "Computing the split failed.",
     "erreur_recu": "Producing the receipt failed.",
     "situation_pdf": "Financial statement (PDF)",
-    "erreur_situation_pdf": "Unable to generate the family's financial statement."
+    "erreur_situation_pdf": "Unable to generate the family's financial statement.",
+    "reduction": "Sibling discount",
+    "reduction_aide": "Enter each child's discount, as % or FCFA. Leave 0 for none. Each student's balance updates accordingly.",
+    "reduction_protegee": "Covered under another reason: edit it from the student's record.",
+    "tarif": "Fee:",
+    "enregistrer_reduction": "Save discounts",
+    "reduction_enregistree": "{{nb}} record(s) updated."
   },
   "encaissement": {
     "montant_verse": "Amount paid by the family",

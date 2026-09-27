@@ -180,6 +180,22 @@ class Eleve(TenantModel):
     # correctement : timidité, agitation, peurs, besoins d'attention…
     attitudes_particulieres = models.TextField(
         blank=True, help_text="Attitudes particulières à signaler chez l'enfant")
+    # ── Fiche de renseignements (version numérique de la fiche papier) ──
+    # Ce qu'une école remplit à l'inscription et que tout le personnel doit
+    # pouvoir consulter : aucune donnée financière ici.
+    photo                 = models.TextField(blank=True, default='',
+                                             help_text="Photo d'identité (data URI base64, réduite côté navigateur)")
+    nationalite           = models.CharField(max_length=80, blank=True)
+    adresse               = models.CharField(max_length=255, blank=True,
+                                             help_text="Domicile de l'élève (quartier, rue…)")
+    etablissement_provenance = models.CharField(max_length=200, blank=True)
+    classe_precedente     = models.CharField(max_length=100, blank=True,
+                                             help_text="Classe fréquentée l'année précédente")
+    redoublant            = models.BooleanField(default=False)
+    groupe_sanguin        = models.CharField(max_length=5, blank=True)
+    contact_urgence_nom   = models.CharField(max_length=200, blank=True,
+                                             help_text="Personne à prévenir en cas d'urgence")
+    contact_urgence_telephone = models.CharField(max_length=20, blank=True)
     # Réponses aux champs que l'ÉCOLE a ajoutés elle-même ({champ_id: valeur}) :
     # chaque établissement a ses réalités, et la fiche standard ne peut pas les
     # porter toutes sans devenir illisible. Voir ChampFiche.
@@ -1361,7 +1377,8 @@ class BaremeFratrie(TenantModel):
     def __str__(self):
         return f'Rang {self.rang}'
 
-    def reduction(self, forme, valeur, tarif):
+    @staticmethod
+    def reduction(forme, valeur, tarif):
         """Montant de la remise sur un tarif donné, plafonné à ce tarif.
 
         Le plafond n'est pas cosmétique : une remise supérieure au tarif

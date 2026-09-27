@@ -487,15 +487,9 @@ class ExportPDFView(APIView):
                                    exercice.solde_initial_mobile), 2)
             variation = round(flux_a + flux_b + flux_c, 2)
 
-            par_mode_qs = paiements.values('mode_paiement').annotate(
-                nb=Count('id'),
-                total=Coalesce(
-                    Sum('montant_inscription') + Sum('montant_mensualite') +
-                    Sum('montant_uniforme') + Sum('montant_fournitures') +
-                    Sum('montant_cantine') + Sum('montant_divers'),
-                    Value(0), output_field=DecimalField()
-                )
-            ).order_by('-total')
+            from .tresorerie import liste_par_mode
+            # Encaissements réels : ni annulés, ni reprises de migration (890).
+            par_mode = liste_par_mode(paiements.filter(statut='ACTIF').exclude(mode_paiement='REPRISE'))
 
             ctx.update({
                 'methode': 'Indirecte',
@@ -522,10 +516,7 @@ class ExportPDFView(APIView):
                     'variation': variation,
                     'tn_fin':    tn_fin,
                 },
-                'par_mode': [
-                    {'mode': p['mode_paiement'], 'nb': p['nb'], 'total': float(p['total'] or 0)}
-                    for p in par_mode_qs
-                ],
+                'par_mode': par_mode,
             })
 
         # ── NOTES ANNEXES ──────────────────────────────────────────────────────

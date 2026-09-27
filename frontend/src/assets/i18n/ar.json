@@ -410,7 +410,21 @@
     "org_aucun_versement": "لا توجد دفعة",
     "org_encaisse": "تم تسجيل {{nb}} دفعة بعنوان المنحة.",
     "org_encaissement_partiel": "تعذّر تسجيل {{nb}} دفعة.",
-    "org_releve_erreur": "تعذّر إنشاء كشف الجهة المانحة."
+    "org_releve_erreur": "تعذّر إنشاء كشف الجهة المانحة.",
+    "nationalite": "الجنسية",
+    "nationalite_ph": "مثال: سنغالية",
+    "adresse": "عنوان سكن التلميذ",
+    "adresse_ph": "الحي، الشارع، المدينة",
+    "etablissement_provenance": "المؤسسة السابقة",
+    "classe_precedente": "القسم في السنة الماضية",
+    "redoublant": "معيد(ة)",
+    "photo": "صورة شخصية",
+    "photo_retirer": "حذف",
+    "photo_invalide": "صورة غير مقروءة: اختر صورة JPEG أو PNG.",
+    "contact_urgence": "الشخص الذي يُتصل به في حالة الطوارئ",
+    "contact_urgence_ph": "الاسم وصلة القرابة",
+    "contact_urgence_tel": "هاتف الطوارئ",
+    "groupe_sanguin": "فصيلة الدم"
   },
   "paiements": {
     "title": "تسجيل المدفوعات",
@@ -542,7 +556,7 @@
     "nom_section_requis": "اسم القسم *",
     "section_placeholder": "مثال: الأول، الثاني، الروضة...",
     "nouveau_mdp": "كلمة المرور الجديدة *",
-    "mdp_min": "6 أحرف على الأقل",
+    "mdp_min": "8 أحرف على الأقل",
     "admin_ecole": "مسؤول المدرسة",
     "admin_comptable": "مسؤول المحاسبة",
     "admin_rh": "مسؤول الموارد البشرية",
@@ -797,7 +811,8 @@
     "password": "كلمة المرور",
     "login": "تسجيل الدخول",
     "logout": "تسجيل الخروج",
-    "error": "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+    "error": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "trop_essais": "محاولات كثيرة على هذا الحساب. انتظر دقيقة ثم أعد المحاولة."
   },
   "academique": {
     "title": "الإدارة الأكاديمية",
@@ -1787,7 +1802,13 @@
     "erreur_repartition": "فشل حساب التوزيع.",
     "erreur_recu": "فشل إصدار الوصل.",
     "situation_pdf": "الوضعية المالية (PDF)",
-    "erreur_situation_pdf": "تعذّر إنشاء الوضعية المالية للأسرة."
+    "erreur_situation_pdf": "تعذّر إنشاء الوضعية المالية للأسرة.",
+    "reduction": "تخفيض الإخوة",
+    "reduction_aide": "أدخل تخفيض كل طفل بالنسبة المئوية أو بالفرنك. اترك 0 إن لم يكن هناك تخفيض.",
+    "reduction_protegee": "تكفل بسبب آخر: يُعدَّل من بطاقة التلميذ.",
+    "tarif": "التعريفة:",
+    "enregistrer_reduction": "حفظ التخفيضات",
+    "reduction_enregistree": "تم تحديث {{nb}} بطاقة."
   },
   "encaissement": {
     "montant_verse": "المبلغ الذي دفعته الأسرة",

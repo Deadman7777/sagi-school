@@ -414,12 +414,34 @@ function checkPkgResources(python) {
   });
 }
 
+// Clés secrètes écrites en dur par d'anciens scripts d'installation : identiques
+// d'une école à l'autre, elles permettaient de fabriquer un jeton de connexion
+// valide pour n'importe quel poste installé ainsi (grave en mode réseau). On
+// les remplace par une clé propre au poste. Effet de bord unique : les
+// utilisateurs connectés doivent se reconnecter une fois.
+const CLES_SECRETES_CONNUES = [
+  'sagi-school-prod-2025-hady-gesman-secret',
+  'sagi-school-prod-2026-hady-gesman',
+  'changez-moi-absolument',
+  'changeme-in-production',
+];
+
+function remplacerCleSecreteConnue(prodFile) {
+  try {
+    const contenu = fs.readFileSync(prodFile, 'utf8');
+    const m = contenu.match(/SECRET_KEY\s*=\s*'([^']*)'/);
+    if (!m || !CLES_SECRETES_CONNUES.includes(m[1])) return;
+    const cle = require('crypto').randomBytes(48).toString('hex');
+    fs.writeFileSync(prodFile, contenu.replace(m[0], `SECRET_KEY = '${cle}'`), 'utf8');
+  } catch (_) { /* fichier illisible : la configuration existante reste en place */ }
+}
+
 async function ensureProductionConfig() {
   const backendDir  = getBackendDir();
   const prodFile    = path.join(backendDir, 'config', 'settings', 'production.py');
   const exampleFile = path.join(backendDir, 'config', 'settings', 'production.example.py');
 
-  if (fs.existsSync(prodFile)) return;
+  if (fs.existsSync(prodFile)) { remplacerCleSecreteConnue(prodFile); return; }
 
   const { win, payload } = await showSetupWindow();
   const { db: creds, install } = payload;

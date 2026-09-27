@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from core.serializers import TenantModelSerializer
 from .models import Paiement, Exercice
 
 
-class ExerciceSerializer(serializers.ModelSerializer):
+class ExerciceSerializer(TenantModelSerializer):
     solde_initial_caisse = serializers.FloatField()
     solde_initial_banque = serializers.FloatField()
     solde_initial_mobile = serializers.FloatField()
@@ -15,7 +16,7 @@ class ExerciceSerializer(serializers.ModelSerializer):
         }
 
 
-class PaiementSerializer(serializers.ModelSerializer):
+class PaiementSerializer(TenantModelSerializer):
     total     = serializers.ReadOnlyField()
     caisse_nom = serializers.CharField(source='caisse.nom', read_only=True, default='')
     # Part « frais de l'année » : total − reliquat antérieur. C'est elle qui

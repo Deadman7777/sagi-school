@@ -80,6 +80,18 @@ export interface Eleve {
   residence_mere?: string;
   /** Attitudes particulières à signaler chez l'enfant. */
   attitudes_particulieres?: string;
+  // Fiche de renseignements (version numérique de la fiche papier).
+  photo?: string;
+  /** Liste seulement : la photo n'est pas envoyée, on sait juste qu'elle existe. */
+  a_photo?: boolean;
+  nationalite?: string;
+  adresse?: string;
+  etablissement_provenance?: string;
+  classe_precedente?: string;
+  redoublant?: boolean;
+  groupe_sanguin?: string;
+  contact_urgence_nom?: string;
+  contact_urgence_telephone?: string;
   /** Réponses aux champs que l'école a ajoutés : {champ_id: valeur}. */
   champs_perso?: Record<string, any>;
   abonnements: string[];
@@ -429,6 +441,21 @@ export interface ApercuBareme {
   nb_applique?: number;
 }
 
+
+/** Réduction fratrie d'un enfant, saisie directement (sans rang). */
+export interface LigneReductionFratrie {
+  eleve_id: string;
+  nom_complet: string;
+  classe: string;
+  tarif_inscription: number;
+  tarif_mensualite: number;
+  /** Remises actuelles, en FCFA. */
+  inscription: number;
+  mensualite: number;
+  motif: string;
+  /** Prise en charge d'un autre motif : modifiable depuis la fiche seulement. */
+  protege: boolean;
+}
 
 /** Proposition de répartition d'un versement entre les enfants d'une famille.
  *  Rien n'est encaissé : chaque ligne devient ensuite un règlement normal,

@@ -12,27 +12,9 @@ import re
 import datetime
 from decimal import Decimal, InvalidOperation
 
-# Suggestion de compte de charge (6xx) d'après le libellé — sous-ensemble
-# « sorties » du mapping du journal de caisse.
-MAPPING_CHARGES = [
-    (r'RESTAURATION|GOUTER|RAVITAILLEMENT|BOUTIQUE|BOULANGERIE|MARCHE|VIANDE|POISSON|POULET|INTENDAN|LEGUME|\bGAZ\b|CHARBON|\bRIZ\b|HUILE', '604'),
-    (r'SALAIRE|MOTIVATION|PERSONNEL|OUSTAZ|\bTATA', '661'),
-    (r'LOYER|LOCATION', '622'),
-    (r'ELECTRICITE|WOYOFAL|SENELEC', '6052'),
-    (r"SEN.?'?EAU|\bEAU\b", '6051'),
-    (r'SONATEL|COMMUNICATION|CONNEXION|TELEPHONE|INTERNET|WIFI', '628'),
-    (r'FOURNITURE|MATERIEL|MATELAS|TAPIS|MOQUETTE|CONGELATEUR|FRIGO|MACHINE|CHAISE|TABLE|LIVRE', '6054'),
-    (r'ENTRETIEN|MAINTENANCE|REPAR|TOITURE|CARRELAGE|VIDANGE|DESINFECT|PEINTURE|NETTOYAGE', '624'),
-    (r'SECURIT|GARDIEN', '621'),
-    (r'TRANSP|DEPLACEMENT|DEMENAGEMENT', '618'),
-    (r'SANTE|PHARMACIE|MEDICAMENT|MEDECIN', '658'),
-    (r'AUTORISATION|NINEA|RCCM|TIMBRE|ENREGISTREMENT', '645'),
-    (r'ASSURANCE', '625'),
-    (r'FORMATION', '633'),
-    (r'BANQUE|FRAIS.?BANC', '631'),
-    (r'LINGE|SAVON|BALAI', '605'),
-]
-DEFAUT_CHARGE = '658'  # charges diverses
+# Le compte suggéré d'après le libellé vient de suggestion_compte : la même
+# table que le formulaire « Nouvelle charge ».
+from .suggestion_compte import COMPTE_DEFAUT as DEFAUT_CHARGE  # noqa: E402
 COMPTES_TRESORERIE = {'571', '5715', '521', '5521', '5522', '5523'}
 
 COLONNES = ['Date', 'Libellé', 'Compte (optionnel)', 'Montant', 'Réglé via (571 défaut)']
@@ -55,11 +37,8 @@ def _norm(s):
 
 
 def suggerer_compte(libelle):
-    txt = _norm(libelle)
-    for motif, compte in MAPPING_CHARGES:
-        if re.search(motif, txt):
-            return compte
-    return DEFAUT_CHARGE
+    from .suggestion_compte import suggerer
+    return suggerer(libelle)['compte']
 
 
 def _date(val):

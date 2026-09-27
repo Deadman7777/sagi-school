@@ -1,3 +1,4 @@
+from core.serializers import TenantModelSerializer
 from django.db.models import Count, Sum, Q
 from django.db.models.functions import ExtractMonth
 from rest_framework.views import APIView
@@ -223,7 +224,7 @@ PLAN_COMPTABLE = {
 }
 
 
-class CaisseEncaissementSerializer(serializers.ModelSerializer):
+class CaisseEncaissementSerializer(TenantModelSerializer):
     """Une caisse de l'école. Le compte est proposé par le serveur (571x) mais
     reste modifiable : une école qui a son propre plan garde la main."""
     solde = serializers.SerializerMethodField()
@@ -1010,12 +1011,10 @@ class TableauFluxView(APIView):
                                exercice.solde_initial_mobile), 2)
         variation = round(flux_a + flux_b + flux_c, 2)
 
-        par_mode = paiements.values('mode_paiement').annotate(
-            nb=Count('id'),
-            total=Sum('montant_inscription') + Sum('montant_mensualite') +
-                  Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                  Sum('montant_cantine')     + Sum('montant_divers')
-        ).order_by('-total')
+        # Ventilé sur les modes réels (un règlement multi-mode se répartit).
+        from .tresorerie import liste_par_mode
+        # Encaissements réels : ni annulés, ni reprises de migration (890).
+        par_mode = liste_par_mode(paiements.filter(statut='ACTIF').exclude(mode_paiement='REPRISE'))
 
         return Response({
             'exercice': exercice.annee_scolaire,
@@ -1043,8 +1042,7 @@ class TableauFluxView(APIView):
                 'variation': variation,
                 'tn_fin':    tn_fin,
             },
-            'par_mode': [{'mode': m['mode_paiement'], 'nb': m['nb'],
-                          'total': float(m['total'] or 0)} for m in par_mode],
+            'par_mode': par_mode,
         })
 
 
@@ -1373,7 +1371,7 @@ class ChargeView(APIView):
         if not exercice:
             return Response({'error': 'Aucun exercice actif'}, status=400)
         try:
-            entry = JournalEntry.objects.get(id=pk)
+            entry = JournalEntry.objects.get(id=pk, tenant=tenant)
         except JournalEntry.DoesNotExist:
             return Response({'error': 'Écriture introuvable'}, status=404)
 
@@ -1506,7 +1504,7 @@ class ChargeView(APIView):
         tenant   = get_tenant(request)
         exercice = get_exercice(tenant)
         try:
-            entry   = JournalEntry.objects.get(id=pk)
+            entry   = JournalEntry.objects.get(id=pk, tenant=tenant)
             source_piece = entry.source if entry.source in ('CHARGE', 'BUDGET') else 'CHARGE'
             entries = JournalEntry.objects.filter(tenant=tenant, source=source_piece, no_piece=entry.no_piece)
         except JournalEntry.DoesNotExist:
@@ -2415,3 +2413,23 @@ class ImportChargesView(APIView):
                               f"({rapport['resume']['montant_total']:,.0f} FCFA)")
         return Response({'success': True, 'crees': cree,
                          'montant_total': rapport['resume']['montant_total']})
+
+
+class SuggestionCompteView(APIView):
+    """GET ?libelle=… → compte de charge suggéré pour ce libellé.
+
+    Le formulaire « Nouvelle charge » l'appelle pendant la frappe. La table de
+    mots-clés vit côté serveur (suggestion_compte.py), la même que l'import
+    Excel : un seul classement pour une même dépense.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .suggestion_compte import LIBELLE_DEFAUT, suggerer
+        tenant = get_tenant(request)
+        plan = get_plan_dict(tenant)
+        comptes = {c for c in plan if c.startswith('6')}
+        resultat = suggerer(request.query_params.get('libelle', ''), comptes or None)
+        resultat['libelle_compte'] = plan.get(resultat['compte']) or (
+            LIBELLE_DEFAUT if not resultat['reconnu'] else resultat['compte'])
+        return Response(resultat)

@@ -1,27 +1,41 @@
 {% extends "pdf/base.html" %}
-{% load humanize_fcfa %}
-{% block doc_title %}Fiche Élève{% endblock %}
+{% comment %}Fiche de renseignements : version numérique de la fiche papier de
+l'école. Elle circule entre enseignants, surveillants, infirmerie — elle ne
+porte AUCUNE donnée financière (montants, prise en charge, reste à payer).
+La situation financière a son propre document (situation_eleve.html).{% endcomment %}
+{% block doc_title %}Fiche de renseignements{% endblock %}
+{% block page_style %}{{ block.super }}
+  /* Grille sans trait de ligne : xhtml2pdf fait traverser le texte par les
+     bordures de cellule. On sépare par l'espacement, pas par des traits. */
+  table.fiche { border:none; margin-bottom:10px; }
+  table.fiche td { border:none; padding:2px 6px 7px 0; font-size:10.5px; vertical-align:top; background:#ffffff; }
+  table.fiche .sb-label { font-size:8.5px; color:#4b5563; }
+  table.signatures td { border:none; background:#ffffff; font-size:10px; padding:0; }
+{% endblock %}
 {% block content %}
 
-<!-- Identité -->
-<div class="section-title">Identité</div>
-<table class="school-band" style="margin-bottom:14px">
+<!-- Identité, avec la photo à droite comme sur la fiche papier -->
+<div class="section-title">Identité de l'élève</div>
+<table class="fiche">
   <tr>
     <td>
       <div class="sb-label">Nom complet</div>
-      <div class="sb-value">{{ eleve.nom_complet }}</div>
+      <div class="sb-value"><strong>{{ eleve.nom_complet }}</strong></div>
     </td>
     <td>
       <div class="sb-label">Matricule</div>
       <div class="sb-value">{{ eleve.matricule|default:"—" }}</div>
     </td>
     <td>
-      <div class="sb-label">N° interne</div>
-      <div class="sb-value">{{ eleve.numero|default:"—" }}</div>
+      <div class="sb-label">Sexe</div>
+      <div class="sb-value">{% if eleve.genre == 'F' %}Féminin{% elif eleve.genre == 'G' %}Masculin{% else %}—{% endif %}</div>
     </td>
-    <td>
-      <div class="sb-label">Genre</div>
-      <div class="sb-value">{% if eleve.genre == 'F' %}Fille{% else %}Garçon{% endif %}</div>
+    <td rowspan="3" style="width:90px; text-align:right; vertical-align:top">
+      {% if eleve.photo %}
+      <img src="{{ eleve.photo }}" width="80" height="100" />
+      {% else %}
+      <table style="width:80px; margin:0 0 0 auto"><tr><td style="height:100px; border:1px solid #9ca3af; text-align:center; font-size:8px; color:#6b7280">PHOTO</td></tr></table>
+      {% endif %}
     </td>
   </tr>
   <tr>
@@ -34,113 +48,167 @@
       <div class="sb-value">{{ eleve.lieu_naissance|default:"—" }}</div>
     </td>
     <td>
-      <div class="sb-label">Section</div>
-      <div class="sb-value">{{ section_nom }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Statut</div>
-      <div class="sb-value">{{ eleve.statut }}</div>
+      <div class="sb-label">Nationalité</div>
+      <div class="sb-value">{{ eleve.nationalite|default:"—" }}</div>
     </td>
   </tr>
   <tr>
+    <td colspan="3">
+      <div class="sb-label">Domicile</div>
+      <div class="sb-value">{{ eleve.adresse|default:"—" }}</div>
+    </td>
+  </tr>
+</table>
+
+<!-- Scolarité -->
+<div class="section-title">Scolarité</div>
+<table class="fiche">
+  <tr>
+    <td>
+      <div class="sb-label">Section / niveau</div>
+      <div class="sb-value">{{ section_nom }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Classe</div>
+      <div class="sb-value">{{ classe_nom|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Statut</div>
+      <div class="sb-value">{{ statut_libelle }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Redoublant(e)</div>
+      <div class="sb-value">{% if eleve.redoublant %}Oui{% else %}Non{% endif %}</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="sb-label">Date d'entrée</div>
+      <div class="sb-value">{{ date_entree|date:"d/m/Y"|default:"—" }}</div>
+    </td>
     <td>
       <div class="sb-label">Date d'inscription</div>
       <div class="sb-value">{{ eleve.date_inscription_libelle|default:"—" }}</div>
     </td>
-    <td colspan="3"></td>
+    <td>
+      <div class="sb-label">Établissement de provenance</div>
+      <div class="sb-value">{{ eleve.etablissement_provenance|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Classe précédente</div>
+      <div class="sb-value">{{ eleve.classe_precedente|default:"—" }}</div>
+    </td>
   </tr>
+  {% if regime_libelle or eleve.date_sortie %}
+  <tr>
+    {% if regime_libelle %}
+    <td>
+      <div class="sb-label">Régime</div>
+      <div class="sb-value">{{ regime_libelle }}</div>
+    </td>
+    {% endif %}
+    {% if eleve.date_sortie %}
+    <td>
+      <div class="sb-label">Date de sortie</div>
+      <div class="sb-value">{{ eleve.date_sortie|date:"d/m/Y" }}</div>
+    </td>
+    {% endif %}
+    <td colspan="2"></td>
+  </tr>
+  {% endif %}
 </table>
 
 <!-- Parents / Tuteurs -->
-<div class="section-title">Parents / Tuteurs</div>
-<table class="school-band" style="margin-bottom:14px">
+<div class="section-title">Parents et tuteur</div>
+<table class="dense" style="margin-bottom:12px">
+  <thead>
+    <tr>
+      <th style="width:14%"></th>
+      <th style="width:28%">Nom</th>
+      <th style="width:18%">Téléphone</th>
+      <th style="width:20%">Profession</th>
+      <th style="width:20%">Résidence</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Père</strong></td>
+      <td>{{ eleve.nom_pere|default:"—" }}</td>
+      <td>{{ eleve.telephone_pere|default:"—" }}</td>
+      <td>{{ eleve.profession_pere|default:"—" }}</td>
+      <td>{{ eleve.residence_pere|default:"—" }}</td>
+    </tr>
+    <tr>
+      <td><strong>Mère</strong></td>
+      <td>{{ eleve.nom_mere|default:"—" }}</td>
+      <td>{{ eleve.telephone_mere|default:"—" }}</td>
+      <td>{{ eleve.profession_mere|default:"—" }}</td>
+      <td>{{ eleve.residence_mere|default:"—" }}</td>
+    </tr>
+    <tr>
+      <td><strong>Tuteur</strong></td>
+      <td>{{ eleve.nom_tuteur|default:"—" }}{% if eleve.lien_tuteur %} ({{ eleve.lien_tuteur }}){% endif %}</td>
+      <td>{{ eleve.telephone_tuteur|default:"—" }}</td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="fiche">
   <tr>
     <td>
-      <div class="sb-label">Père</div>
-      <div class="sb-value">{{ eleve.nom_pere|default:"—" }}</div>
+      <div class="sb-label">Personne à prévenir en cas d'urgence</div>
+      <div class="sb-value">{{ eleve.contact_urgence_nom|default:"—" }}</div>
     </td>
     <td>
-      <div class="sb-label">Tél. père</div>
-      <div class="sb-value">{{ eleve.telephone_pere|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Mère</div>
-      <div class="sb-value">{{ eleve.nom_mere|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Tél. mère</div>
-      <div class="sb-value">{{ eleve.telephone_mere|default:"—" }}</div>
+      <div class="sb-label">Téléphone d'urgence</div>
+      <div class="sb-value">{{ eleve.contact_urgence_telephone|default:"—" }}</div>
     </td>
   </tr>
 </table>
 
-{% if eleve.profession_pere or eleve.profession_mere or eleve.residence_pere or eleve.residence_mere %}
-<table class="school-band" style="margin-bottom:14px">
-  <tr>
-    <td>
-      <div class="sb-label">Profession du père</div>
-      <div class="sb-value">{{ eleve.profession_pere|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Résidence du père</div>
-      <div class="sb-value">{{ eleve.residence_pere|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Profession de la mère</div>
-      <div class="sb-value">{{ eleve.profession_mere|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Résidence de la mère</div>
-      <div class="sb-value">{{ eleve.residence_mere|default:"—" }}</div>
-    </td>
-  </tr>
-</table>
-{% endif %}
-
-{% if eleve.nom_tuteur or eleve.telephone_tuteur %}
-<table class="school-band" style="margin-bottom:14px">
-  <tr>
-    <td>
-      <div class="sb-label">Tuteur</div>
-      <div class="sb-value">{{ eleve.nom_tuteur|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Tél. tuteur</div>
-      <div class="sb-value">{{ eleve.telephone_tuteur|default:"—" }}</div>
-    </td>
-    <td>
-      <div class="sb-label">Lien avec l'élève</div>
-      <div class="sb-value">{{ eleve.lien_tuteur|default:"—" }}</div>
-    </td>
-    <td></td>
-  </tr>
+{% if fratrie %}
+<!-- Frères et sœurs dans l'établissement -->
+<div class="section-title">Frères et sœurs dans l'établissement</div>
+<table class="dense" style="margin-bottom:12px">
+  <thead><tr><th style="width:55%">Nom</th><th style="width:25%">Classe</th><th style="width:20%">Matricule</th></tr></thead>
+  <tbody>
+    {% for f in fratrie %}
+    <tr><td>{{ f.nom }}</td><td>{{ f.classe }}</td><td>{{ f.matricule }}</td></tr>
+    {% endfor %}
+  </tbody>
 </table>
 {% endif %}
 
-{% if eleve.observations_sante or eleve.attitudes_particulieres %}
 <!-- Santé et comportement : ce que l'école doit savoir pour accueillir l'enfant -->
 <div class="section-title">Santé et comportement</div>
-<table class="school-band" style="margin-bottom:14px">
-  {% if eleve.observations_sante %}
-  <tr><td colspan="4">
-    <div class="sb-label">Santé (allergies, traitements…)</div>
-    <div class="sb-value">{{ eleve.observations_sante|linebreaksbr }}</div>
+<table class="fiche">
+  <tr>
+    <td>
+      <div class="sb-label">État de santé</div>
+      <div class="sb-value">{{ sante_libelle|default:"—" }}</div>
+    </td>
+    <td>
+      <div class="sb-label">Groupe sanguin</div>
+      <div class="sb-value">{{ eleve.groupe_sanguin|default:"—" }}</div>
+    </td>
+  </tr>
+  <tr><td colspan="2">
+    <div class="sb-label">Observations médicales (allergies, traitements…)</div>
+    <div class="sb-value">{% if eleve.observations_sante %}{{ eleve.observations_sante|linebreaksbr }}{% else %}—{% endif %}</div>
   </td></tr>
-  {% endif %}
-  {% if eleve.attitudes_particulieres %}
-  <tr><td colspan="4">
+  <tr><td colspan="2">
     <div class="sb-label">Attitudes particulières à signaler</div>
-    <div class="sb-value">{{ eleve.attitudes_particulieres|linebreaksbr }}</div>
+    <div class="sb-value">{% if eleve.attitudes_particulieres %}{{ eleve.attitudes_particulieres|linebreaksbr }}{% else %}—{% endif %}</div>
   </td></tr>
-  {% endif %}
 </table>
-{% endif %}
 
 {% if champs_perso %}
 <!-- Champs ajoutés par l'école (Paramètres → Fiche élève) -->
 {% for groupe in champs_perso %}
 <div class="section-title">{{ groupe.titre }}</div>
-<table class="school-band" style="margin-bottom:14px">
+<table class="fiche">
   {% for ligne in groupe.lignes %}
   <tr>
     {% for champ in ligne.champs %}
@@ -156,64 +224,15 @@
 {% endfor %}
 {% endif %}
 
-{% if montant_pec_annuel %}
-<!-- Prise en charge -->
-<div class="section-title">Prise en charge</div>
-<table class="school-band" style="margin-bottom:14px">
+<!-- Signatures, comme au bas de la fiche papier -->
+<table class="signatures" style="margin-top:18px">
   <tr>
-    <td>
-      <div class="sb-label">Motif</div>
-      <div class="sb-value">{{ motif_pec|default:"—" }}</div>
+    <td style="width:50%; font-size:10px; vertical-align:top">
+      Signature du parent / tuteur<br/><br/><br/><br/>
     </td>
-    <td>
-      <div class="sb-label">Type</div>
-      <div class="sb-value">{{ type_pec|default:"—" }}</div>
+    <td style="width:50%; font-size:10px; text-align:right; vertical-align:top">
+      Cachet et signature de la direction<br/><br/><br/><br/>
     </td>
-    <td>
-      <div class="sb-label">Taux inscription</div>
-      <div class="sb-value">{% if eleve.taux_pec_inscription %}{{ eleve.taux_pec_inscription }} %{% else %}—{% endif %}</div>
-    </td>
-    <td>
-      <div class="sb-label">Taux mensualités</div>
-      <div class="sb-value">{% if eleve.taux_pec_mensualite %}{{ eleve.taux_pec_mensualite }} %{% else %}—{% endif %}</div>
-    </td>
-  </tr>
-</table>
-{% endif %}
-
-<!-- Situation financière -->
-<div class="section-title">Situation financière</div>
-<table class="kpi-table">
-  <tr>
-    {% if montant_pec_annuel %}
-    <td>
-      <div class="kb-label">Total théorique</div>
-      <div class="kb-val">{{ total_theorique|fcfa }}</div>
-    </td>
-    <td>
-      <div class="kb-label">Prise en charge</div>
-      <div class="kb-val red">- {{ montant_pec_annuel|fcfa }}</div>
-    </td>
-    {% endif %}
-    <td>
-      <div class="kb-label">Total attendu</div>
-      <div class="kb-val kb-blue">{{ total_attendu|fcfa }}</div>
-    </td>
-    <td>
-      <div class="kb-label">Total payé</div>
-      <div class="kb-val kb-green">{{ total_paye|fcfa }}</div>
-    </td>
-    <td>
-      <div class="kb-label">Reste à payer</div>
-      <div class="kb-val {% if reste > 0 %}red{% else %}kb-green{% endif %}">{{ reste|fcfa }}</div>
-    </td>
-  </tr>
-</table>
-
-<table class="resultat-table {% if reste == 0 %}resultat-bene{% else %}resultat-def{% endif %}" style="margin-top:6px">
-  <tr>
-    <td class="rb-label">{% if reste == 0 %}Situation soldée ✓{% else %}Reste à payer{% endif %}</td>
-    <td class="rb-val {% if reste == 0 %}green{% else %}red{% endif %}">{{ reste|fcfa }} FCFA</td>
   </tr>
 </table>
 

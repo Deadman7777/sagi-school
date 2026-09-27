@@ -12,6 +12,22 @@ from core.tenant import get_tenant
 from .models import AuditLog
 
 
+def _filtre_tresorerie():
+    """Comptes de trésorerie suivis par le tableau de bord. Par préfixe : les
+    caisses de service (5711, 5712…) sont des caisses comme la 571."""
+    from django.db.models import Q
+    return (Q(no_compte__startswith='571') | Q(no_compte__in=('5521', '5522', '5523'))
+            | Q(no_compte__startswith='521'))
+
+
+def _canal_compte(no_compte):
+    """Compte de canal auquel rattacher un sous-compte (5711 → 571)."""
+    for racine in ('571', '521'):
+        if no_compte.startswith(racine):
+            return racine
+    return no_compte
+
+
 def sum_paiements(qs):
     agg = qs.aggregate(
         t=Sum('montant_inscription') + Sum('montant_mensualite') +
@@ -179,12 +195,9 @@ class DashboardKPIView(APIView):
             compteur['CRITIQUE'], compteur['URGENT'], compteur['ATTENTION'],
             compteur['OK'], compteur['A_JOUR'])
 
-        modes_raw = paiements.values('mode_paiement').annotate(
-            nb=Count('id'),
-            total=Sum('montant_inscription') + Sum('montant_mensualite') +
-                  Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                  Sum('montant_cantine')     + Sum('montant_divers')
-        ).order_by('-total')
+        # Ventilé sur les modes réels (un règlement multi-mode se répartit).
+        from apps.comptabilite.tresorerie import liste_par_mode
+        modes_raw = liste_par_mode(paiements)
 
         mensuel_raw = paiements.annotate(
             mois=TruncMonth('date_paiement')
@@ -232,9 +245,9 @@ class DashboardKPIView(APIView):
         pec_nb = pec_qs.count()
         pec_categories = list(pec_qs.values('prise_en_charge').annotate(nb=Count('id')))
 
+        # Préfixes : les caisses de service (5711, 5712…) sont de la trésorerie.
         tresorerie_mvt = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice,
-            no_compte__in=('571', '5521', '5522', '5523', '521')
+            _filtre_tresorerie(), tenant=tenant, exercice=exercice,
         ).aggregate(t_debit=Sum('debit'), t_credit=Sum('credit'))
         tresorerie = round(
             solde_initial +
@@ -300,8 +313,8 @@ class DashboardKPIView(APIView):
                 'total':       pec_nb,
                 'categories':  [{'categorie': p['prise_en_charge'], 'nb': p['nb']} for p in pec_categories],
             },
-            'modes_paiement': [{'mode_paiement': m['mode_paiement'],
-                                 'nb': m['nb'], 'total': float(m['total'] or 0)}
+            'modes_paiement': [{'mode_paiement': m['mode'], 'libelle': m['libelle'],
+                                 'nb': m['nb'], 'total': m['total']}
                                 for m in modes_raw],
             'recettes_mensuelles': [{'mois': m['mois'].strftime('%b %Y'),
                                       'total': float(m['total'] or 0)}
@@ -413,41 +426,38 @@ class DashboardTresorerieCanauView(APIView):
         # Toute annulation (ANNUL_PAIEMENT, ANNUL_PAIE, ANNUL_AVANCE, contre-écriture charge) est
         # automatiquement prise en compte : debit/crédit se compensent.
         balance_qs = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice,
-            no_compte__in=('571', '5521', '5522', '5523', '521')
+            _filtre_tresorerie(), tenant=tenant, exercice=exercice,
         ).values('no_compte').annotate(
             total_debit=Sum('debit'),
             total_credit=Sum('credit')
         )
-        balance_by_compte = {
-            b['no_compte']: float(b['total_debit'] or 0) - float(b['total_credit'] or 0)
-            for b in balance_qs
-        }
+        balance_by_compte = {}
+        for b in balance_qs:
+            # Caisses de service (571x) rattachées au canal Espèce.
+            cpt = _canal_compte(b['no_compte'])
+            balance_by_compte[cpt] = (balance_by_compte.get(cpt, 0.0)
+                                      + float(b['total_debit'] or 0) - float(b['total_credit'] or 0))
 
-        # Encaissements actifs par canal (pour affichage nb + montant perçu)
-        enc_qs = Paiement.objects.filter(
-            tenant=tenant, exercice=exercice, statut='ACTIF'
-        ).values('mode_paiement').annotate(
-            nb=Count('id'),
-            montant=Sum('montant_inscription') + Sum('montant_mensualite') +
-                    Sum('montant_uniforme')    + Sum('montant_fournitures') +
-                    Sum('montant_cantine')     + Sum('montant_divers')
-        )
-        enc_by_canal = {
-            e['mode_paiement']: {'nb': e['nb'], 'montant': float(e['montant'] or 0)}
-            for e in enc_qs
-        }
+        # Encaissements actifs par canal (pour affichage nb + montant perçu).
+        # Un règlement multi-mode est réparti sur chacun de ses canaux ;
+        # regrouper par mode_paiement le rangeait sous « MIXTE », canal
+        # inconnu de ce tableau, et ses encaissements disparaissaient.
+        from apps.comptabilite.tresorerie import encaissements_par_mode
+        enc_by_canal = encaissements_par_mode(Paiement.objects.filter(
+            tenant=tenant, exercice=exercice, statut='ACTIF'))
 
         # Décaissements (charges/paie/invest) — crédits trésorerie hors scolarité
         dec_qs = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice,
-            no_compte__in=('571', '5521', '5522', '5523', '521'),
+            _filtre_tresorerie(), tenant=tenant, exercice=exercice,
             credit__gt=0
         ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT',
                               'TRANSFERT', 'ANNUL_TRANSFERT')).values('no_compte').annotate(
             montant=Sum('credit')
         )
-        dec_by_compte = {d['no_compte']: float(d['montant'] or 0) for d in dec_qs}
+        dec_by_compte = {}
+        for d in dec_qs:
+            cpt = _canal_compte(d['no_compte'])
+            dec_by_compte[cpt] = dec_by_compte.get(cpt, 0.0) + float(d['montant'] or 0)
 
         canaux_result = []
         compte521_attribue = False

@@ -2562,7 +2562,7 @@ chargerExercice() {
   }
 
   changerMdp() {
-    if (!this.nouveauMdp || this.nouveauMdp.length < 6) {
+    if (!this.nouveauMdp || this.nouveauMdp.length < 8) {
       this.msg.add({ severity:'warn', summary: this.translate.instant('parametres.trop_court'), detail: this.translate.instant('parametres.mdp_min') });
       return;
     }

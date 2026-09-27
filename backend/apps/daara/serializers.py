@@ -1,16 +1,17 @@
 from rest_framework import serializers
+from core.serializers import TenantModelSerializer
 
 from .models import (Sourate, Subdivision, NiveauDaara, ParcoursNongo,
                      SuiviQuotidien, bornes_hizb, nb_versets_bornes)
 
 
-class SourateSerializer(serializers.ModelSerializer):
+class SourateSerializer(TenantModelSerializer):
     class Meta:
         model = Sourate
         fields = '__all__'
 
 
-class SubdivisionSerializer(serializers.ModelSerializer):
+class SubdivisionSerializer(TenantModelSerializer):
     sourate_numero = serializers.IntegerField(source='sourate_debut.numero', read_only=True)
     sourate_nom_fr = serializers.CharField(source='sourate_debut.nom_fr', read_only=True)
     sourate_nom_ar = serializers.CharField(source='sourate_debut.nom_ar', read_only=True)
@@ -20,14 +21,14 @@ class SubdivisionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class NiveauDaaraSerializer(serializers.ModelSerializer):
+class NiveauDaaraSerializer(TenantModelSerializer):
     class Meta:
         model = NiveauDaara
         fields = '__all__'
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
-class ParcoursNongoSerializer(serializers.ModelSerializer):
+class ParcoursNongoSerializer(TenantModelSerializer):
     eleve_nom       = serializers.CharField(source='eleve.nom_complet', read_only=True)
     niveau_nom      = serializers.CharField(source='niveau.nom_fr', read_only=True)
     # Catégorie du niveau → le front bascule le suivi en mode alphabet (IDJIE).
@@ -42,7 +43,7 @@ class ParcoursNongoSerializer(serializers.ModelSerializer):
         }
 
 
-class SuiviQuotidienSerializer(serializers.ModelSerializer):
+class SuiviQuotidienSerializer(TenantModelSerializer):
     sourate_debut_nom = serializers.CharField(source='sourate_debut.nom_fr', read_only=True)
     sourate_fin_nom   = serializers.CharField(source='sourate_fin.nom_fr', read_only=True)
     # Nombre de versets couverts par l'entrée — quelle que soit la méthode de

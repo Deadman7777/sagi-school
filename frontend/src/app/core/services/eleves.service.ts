@@ -5,7 +5,7 @@ import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
          SuiviOrganisme, Famille, SituationFamille,
-         FratrieProbable, BaremeFratrie, ApercuBareme,
+         FratrieProbable, BaremeFratrie, ApercuBareme, LigneReductionFratrie,
          RepartitionVersement, EcheancesGroupe,
          PreparationEncaissement } from '../models/eleve.model';
 
@@ -337,6 +337,13 @@ export class ElevesService {
   }
 
   /** Ce que le barème changerait pour cette famille. N'écrit rien. */
+  getReductionsFamille(familleId: string) {
+    return this.api.get<{ lignes: LigneReductionFratrie[] }>(`/eleves/familles/${familleId}/reductions/`);
+  }
+  enregistrerReductionsFamille(familleId: string, lignes: any[]) {
+    return this.api.post<{ lignes: LigneReductionFratrie[]; nb_modifie: number }>(
+      `/eleves/familles/${familleId}/reductions/`, { lignes });
+  }
   apercuBareme(familleId: string) {
     return this.api.get<ApercuBareme>(`/eleves/familles/${familleId}/apercu-bareme/`);
   }

@@ -1,10 +1,11 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from core.serializers import TenantModelSerializer
 from .models import Employe, Paie, ParametresFiscaux, AvanceSalaire, BulletinPaie
 
 
-class EmployeSerializer(serializers.ModelSerializer):
+class EmployeSerializer(TenantModelSerializer):
     salaire_net = serializers.ReadOnlyField()
 
     class Meta:
@@ -35,7 +36,7 @@ class EmployeSerializer(serializers.ModelSerializer):
         return super().to_internal_value(data)
 
 
-class PaieSerializer(serializers.ModelSerializer):
+class PaieSerializer(TenantModelSerializer):
     employe_nom = serializers.CharField(source='employe.nom_complet', read_only=True)
 
     class Meta:
@@ -46,14 +47,14 @@ class PaieSerializer(serializers.ModelSerializer):
         }
 
 
-class ParametresFiscauxSerializer(serializers.ModelSerializer):
+class ParametresFiscauxSerializer(TenantModelSerializer):
     class Meta:
         model  = ParametresFiscaux
         fields = '__all__'
         extra_kwargs = {'id': {'read_only': True}}
 
 
-class AvanceSalaireSerializer(serializers.ModelSerializer):
+class AvanceSalaireSerializer(TenantModelSerializer):
     employe_nom = serializers.CharField(source='employe.nom_complet', read_only=True)
     # Solde encore à retenir : une avance trop lourde pour un seul salaire est
     # retenue sur plusieurs bulletins.
@@ -69,7 +70,7 @@ class AvanceSalaireSerializer(serializers.ModelSerializer):
         }
 
 
-class BulletinPaieSerializer(serializers.ModelSerializer):
+class BulletinPaieSerializer(TenantModelSerializer):
     employe_nom     = serializers.CharField(source='employe.nom_complet', read_only=True)
     employe_matricule = serializers.CharField(source='employe.matricule', read_only=True)
     employe_poste   = serializers.CharField(source='employe.poste', read_only=True)

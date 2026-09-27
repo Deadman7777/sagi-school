@@ -82,6 +82,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.TenantMiddleware',  # notre middleware multi-tenant
+    # Droits par rôle sur les écritures : voir core/middleware.py.
+    'core.middleware.DroitsEcritureMiddleware',
     # Aucune reponse d'API ne doit etre resservie depuis un cache : voir
     # core/middleware.py. Pose en dernier pour couvrir toutes les vues.
     'core.middleware.ApiSansCacheMiddleware',
@@ -120,6 +122,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # Seule la connexion est freinée : 10 essais par minute et par compte
+    # (apps/users/views.py, ConnexionThrottle).
+    'DEFAULT_THROTTLE_RATES': {'connexion': '10/min'},
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 500,
 }

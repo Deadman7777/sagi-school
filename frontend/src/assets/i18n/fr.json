@@ -410,7 +410,21 @@
     "org_aucun_versement": "Aucun versement",
     "org_encaisse": "{{nb}} règlement(s) enregistré(s) au titre de la bourse.",
     "org_encaissement_partiel": "{{nb}} règlement(s) n'ont pas pu être enregistrés.",
-    "org_releve_erreur": "Impossible de générer le relevé de l'organisme."
+    "org_releve_erreur": "Impossible de générer le relevé de l'organisme.",
+    "nationalite": "Nationalité",
+    "nationalite_ph": "Ex. Sénégalaise",
+    "adresse": "Domicile de l'élève",
+    "adresse_ph": "Quartier, rue, ville",
+    "etablissement_provenance": "Établissement de provenance",
+    "classe_precedente": "Classe fréquentée l'an dernier",
+    "redoublant": "Redoublant(e)",
+    "photo": "Photo d'identité",
+    "photo_retirer": "Retirer",
+    "photo_invalide": "Image illisible : choisissez une photo JPEG ou PNG.",
+    "contact_urgence": "Personne à prévenir en cas d'urgence",
+    "contact_urgence_ph": "Nom et lien avec l'élève",
+    "contact_urgence_tel": "Téléphone d'urgence",
+    "groupe_sanguin": "Groupe sanguin"
   },
   "paiements": {
     "title": "Saisie des Paiements",
@@ -542,7 +556,7 @@
     "nom_section_requis": "Nom de la section *",
     "section_placeholder": "Ex: CP1, CE1, Maternelle...",
     "nouveau_mdp": "Nouveau mot de passe *",
-    "mdp_min": "Min. 6 caractères",
+    "mdp_min": "Min. 8 caractères",
     "admin_ecole": "Admin École",
     "admin_comptable": "Responsable Comptable",
     "admin_rh": "Responsable RH",
@@ -797,7 +811,8 @@
     "password": "Mot de passe",
     "login": "Se connecter",
     "logout": "Déconnexion",
-    "error": "Email ou mot de passe incorrect"
+    "error": "Email ou mot de passe incorrect",
+    "trop_essais": "Trop de tentatives sur ce compte. Patientez une minute puis réessayez."
   },
   "academique": {
     "title": "Gestion Académique",
@@ -1787,7 +1802,13 @@
     "erreur_repartition": "Le calcul de la répartition a échoué.",
     "erreur_recu": "L'édition du reçu a échoué.",
     "situation_pdf": "Situation financière (PDF)",
-    "erreur_situation_pdf": "Impossible de générer la situation financière de la famille."
+    "erreur_situation_pdf": "Impossible de générer la situation financière de la famille.",
+    "reduction": "Réduction fratrie",
+    "reduction_aide": "Saisissez la remise de chaque enfant concerné, en % ou en FCFA. Laissez 0 pour aucun rabais. La remise vaut pour toute l'année ; le dû de chaque fiche se met à jour aussitôt.",
+    "reduction_protegee": "Prise en charge d'un autre motif : modifiable depuis la fiche de l'élève.",
+    "tarif": "Tarif :",
+    "enregistrer_reduction": "Enregistrer les réductions",
+    "reduction_enregistree": "{{nb}} fiche(s) mise(s) à jour."
   },
   "encaissement": {
     "montant_verse": "Montant versé par la famille",

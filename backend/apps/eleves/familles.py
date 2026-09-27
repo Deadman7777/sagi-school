@@ -398,6 +398,96 @@ def appliquer_bareme(famille, exercice):
     return {**apercu_bareme(famille, exercice), 'nb_applique': modifies}
 
 
+def reductions_famille(famille, exercice):
+    """La réduction fratrie de chaque enfant, telle qu'elle est aujourd'hui.
+
+    C'est la saisie directe : l'école nomme l'enfant et sa remise, sans passer
+    par un barème par rang. Une fiche dont la prise en charge relève d'un autre
+    motif (orphelin, bourse…) est signalée `protege` et reste intouchable ici.
+    """
+    from .tri import cle_nom
+
+    lignes = []
+    # Par ordre alphabétique : l'école cherche l'enfant par son nom, le rang
+    # n'intervient plus dans la saisie directe.
+    for eleve in sorted(enfants_classes(famille, exercice), key=lambda e: cle_nom(e.nom_complet)):
+        motif = (eleve.prise_en_charge or '').strip()
+        lignes.append({
+            'eleve_id':    str(eleve.id),
+            'nom_complet': eleve.nom_complet,
+            'classe':      eleve.classe.nom if eleve.classe_id else (
+                           eleve.section.nom if eleve.section else ''),
+            'tarif_inscription': float(eleve.frais_entree or 0),
+            'tarif_mensualite':  float(eleve.mensualite_brute_du_mois() or 0),
+            'inscription': float(eleve.pec_inscription or 0),
+            'mensualite':  float(eleve.pec_mensualite or 0),
+            'motif':       motif,
+            'protege':     bool(motif) and motif != MOTIF_FRATRIE,
+        })
+    return {'famille_id': str(famille.id), 'nom': famille.nom, 'lignes': lignes}
+
+
+def enregistrer_reductions(famille, exercice, saisies):
+    """Écrit la réduction fratrie saisie enfant par enfant.
+
+    `saisies` : [{eleve_id, forme_inscription, valeur_inscription,
+    forme_mensualite, valeur_mensualite}] — forme POURCENTAGE ou MONTANT.
+    Le pourcentage est converti en montant sur le tarif actuel de l'enfant,
+    exactement comme le barème : la fiche ne porte que des montants, et le dû
+    continue de se calculer en un seul endroit (« frais − prise en charge »).
+
+    Refuse (ValueError) un enfant hors de la famille ou dont la prise en
+    charge relève d'un autre motif : écraser une décision sociale par une
+    remise fratrie ne se rattrape pas auprès d'une famille.
+    """
+    from .models import BaremeFratrie
+
+    enfants = {str(e.id): e for e in enfants_classes(famille, exercice)}
+    a_ecrire = []
+    for saisie in saisies or []:
+        eleve = enfants.get(str(saisie.get('eleve_id')))
+        if eleve is None:
+            raise ValueError("Cet enfant n'appartient pas à la famille (ou a quitté l'établissement).")
+        motif = (eleve.prise_en_charge or '').strip()
+        if motif and motif != MOTIF_FRATRIE:
+            raise ValueError(f"{eleve.nom_complet} a déjà une prise en charge ({motif}) : "
+                             f"modifiez-la depuis sa fiche.")
+        formes = {'POURCENTAGE', 'MONTANT'}
+        f_ins = saisie.get('forme_inscription') or 'MONTANT'
+        f_men = saisie.get('forme_mensualite') or 'MONTANT'
+        if f_ins not in formes or f_men not in formes:
+            raise ValueError('Forme de réduction inconnue.')
+        try:
+            v_ins = float(saisie.get('valeur_inscription') or 0)
+            v_men = float(saisie.get('valeur_mensualite') or 0)
+        except (TypeError, ValueError):
+            raise ValueError(f"Réduction invalide pour {eleve.nom_complet}.")
+        if v_ins < 0 or v_men < 0 or ((f_ins == 'POURCENTAGE' and v_ins > 100)
+                                      or (f_men == 'POURCENTAGE' and v_men > 100)):
+            raise ValueError(f"Réduction invalide pour {eleve.nom_complet} (0 à 100 %).")
+        calcul = BaremeFratrie.reduction
+        a_ecrire.append((eleve,
+                         calcul(f_ins, v_ins, eleve.frais_entree),
+                         calcul(f_men, v_men, eleve.mensualite_brute_du_mois())))
+
+    modifies = 0
+    for eleve, ins, men in a_ecrire:
+        if (round(float(eleve.pec_inscription or 0), 2) == ins
+                and round(float(eleve.pec_mensualite or 0), 2) == men):
+            continue
+        eleve.pec_inscription = ins
+        eleve.pec_mensualite = men
+        # Même règle que le barème : pas de motif sans remise effective.
+        if ins or men:
+            eleve.prise_en_charge = MOTIF_FRATRIE
+        elif (eleve.prise_en_charge or '') == MOTIF_FRATRIE:
+            eleve.prise_en_charge = None
+        eleve.save(update_fields=['pec_inscription', 'pec_mensualite',
+                                  'prise_en_charge', 'updated_at'])
+        modifies += 1
+    return {**reductions_famille(famille, exercice), 'nb_modifie': modifies}
+
+
 # ── Encaissement groupé ───────────────────────────────────────────────────
 def repartir_versement(famille, exercice, montant, today=None):
     """Répartit un versement entre les enfants, le plus ancien dû d'abord.

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, inject, signal, computed } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -102,7 +102,7 @@ import { ProformasComponent } from './proformas.component';
     <!-- Stats modes -->
     <div class="modes-grid" *ngIf="stats()?.par_mode?.length">
       <div class="mode-card" *ngFor="let m of stats().par_mode">
-        <div class="mode-name">{{ m.mode }}</div>
+        <div class="mode-name">{{ m.libelle || m.mode }}</div>
         <div class="mode-total">{{ m.total | number:'1.0-0' }}</div>
         <div class="mode-nb">{{ m.nb }} opérations</div>
       </div>
@@ -152,7 +152,18 @@ import { ProformasComponent } from './proformas.component';
                              [class.annule-val]="p.statut === 'ANNULE'">
               {{ p.total | number:'1.0-0' }} FCFA
             </td>
-            <td><p-tag [value]="p.mode_paiement" severity="info" /></td>
+            <td>
+              @if (p.mode_paiement === 'MIXTE' && p.modes_reglement?.length) {
+                <!-- Multi-mode : le détail, pas un mode fictif « MIXTE ». -->
+                <div class="modes-detail">
+                  @for (mr of p.modes_reglement; track $index) {
+                    <span class="mode-chip">{{ libelleMode(mr.mode) }} {{ mr.montant | number:'1.0-0' }}</span>
+                  }
+                </div>
+              } @else {
+                <p-tag [value]="libelleMode(p.mode_paiement)" severity="info" />
+              }
+            </td>
             <td>
               <p-tag *ngIf="p.statut === 'ANNULE'" value="ANNULÉ" severity="danger" />
               <p-tag *ngIf="p.statut !== 'ANNULE'" value="Actif"  severity="success" />
@@ -840,6 +851,23 @@ import { ProformasComponent } from './proformas.component';
             {{ recuData().reste_apres === 0 ? '✅ SOLDÉ' : (recuData().reste_apres | number:'1.0-0') + ' FCFA' }}
           </strong>
         </div>
+        <!-- Impayés des années antérieures : toujours affichés, comme sur le PDF. -->
+        <div class="recu-row">
+          <span>Impayés antérieurs{{ recuData().reliquat_du && recuData().reliquat_annee ? ' (' + recuData().reliquat_annee + ')' : '' }}</span>
+          @if (!recuData().reliquat_du) {
+            <strong class="success">Néant</strong>
+          } @else {
+            <strong [class.success]="recuData().reliquat_restant_apres === 0" [class.danger]="recuData().reliquat_restant_apres > 0">
+              {{ recuData().reliquat_restant_apres === 0 ? '✅ SOLDÉ' : (recuData().reliquat_restant_apres | number:'1.0-0') + ' FCFA' }}
+            </strong>
+          }
+        </div>
+        @if (recuData().reliquat_du) {
+          <div class="recu-row">
+            <span>Dû total (toutes années)</span>
+            <strong [class.danger]="recuData().reste_global_apres > 0">{{ recuData().reste_global_apres | number:'1.0-0' }} FCFA</strong>
+          </div>
+        }
       </div>
       <ng-template pTemplate="footer">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
@@ -966,7 +994,13 @@ import { ProformasComponent } from './proformas.component';
                       optionLabel="label" optionValue="value" styleClass="w-full" [filter]="true"
                       (onChange)="compteChargeVerrouille = true; onCompteChargeChange()" />
             @if (compteSuggere) {
-              <small style="color:#00d4aa;font-size:10px">🪄 Suggéré d'après le libellé — modifiable si besoin</small>
+              @if (compteSuggere.reconnu) {
+                <small style="color:#00d4aa;font-size:10px">🪄 {{ compteSuggere.compte }} — {{ compteSuggere.libelle_compte }}
+                  (reconnu : « {{ compteSuggere.mot }} ») — modifiable si besoin</small>
+              } @else {
+                <small style="color:var(--text-3);font-size:10px">Libellé non reconnu : classé en
+                  {{ compteSuggere.compte }} — {{ compteSuggere.libelle_compte }}. Choisissez un compte plus précis si vous le connaissez.</small>
+              }
             }
           </div>
           <div class="form-group">
@@ -1098,6 +1132,9 @@ import { ProformasComponent } from './proformas.component';
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
 
+    .modes-detail { display:flex; flex-wrap:wrap; gap:4px; }
+    .mode-chip { font-size:11px; padding:2px 6px; border-radius:6px; white-space:nowrap;
+                 background:var(--surface-4); color:var(--text); border:1px solid var(--border); }
     .modes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
     .mode-card  { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; }
     .mode-name  { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
@@ -1246,6 +1283,7 @@ import { ProformasComponent } from './proformas.component';
 })
 export class PaiementsComponent implements OnInit {
   onglet = signal('paiements');
+  private cdr = inject(ChangeDetectorRef);
   private route = inject(ActivatedRoute);
   /** Synthèse du mois en cours pour le rappel visuel — même source que le cahier. */
   rappelMois = signal<{ libelle_mois: string; periode: string; jours_restants: number;
@@ -1272,7 +1310,7 @@ export class PaiementsComponent implements OnInit {
   dialogModifChargeVisible = false;
   chargeModifier: any  = null;
   modifChargeForm      = { no_compte: '', libelle: '', montant: 0, date: '', compte_credit: '571' };
-  nouvelleCharge: any  = { no_compte: '661', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401', ressource_id: null, projet_id: null };
+  nouvelleCharge: any  = { no_compte: '658', libelle: '', montant: 0, date: new Date().toISOString().split('T')[0], compte_credit: '571', compte_fournisseur: '401', ressource_id: null, projet_id: null };
   // Dimensions analytiques gouvernance (facultatives) — proposées à la saisie d'une charge.
   ressourcesGouv = signal<any[]>([]);
   projetsGouv    = signal<any[]>([]);
@@ -1378,6 +1416,13 @@ export class PaiementsComponent implements OnInit {
     private compta: ComptabiliteService,
     private msg: MessageService
   ) {}
+
+  /** Libellé lisible d'un code de mode (ESPECE → Espèce, MIXTE → Multi-mode). */
+  libelleMode(code: string): string {
+    if (code === 'MIXTE') return 'Multi-mode';
+    if (code === 'REPRISE') return 'Reprise';
+    return this.modesPaiement.find(m => m.value === code)?.label || code;
+  }
 
   ngOnInit() {
     this.modesPaiement = [
@@ -2241,8 +2286,11 @@ export class PaiementsComponent implements OnInit {
   }
 
   ouvrirDialogCharge() {
+    // 658 « Charges diverses » tant que le libellé n'a rien dit : l'ancien
+    // défaut (661 Salaires) transformait toute dépense non reconnue en
+    // charge de personnel.
     this.nouvelleCharge = {
-      no_compte: '661', libelle: '', montant: 0,
+      no_compte: '658', libelle: '', montant: 0,
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
       ressource_id: null, projet_id: null,
@@ -2268,57 +2316,47 @@ export class PaiementsComponent implements OnInit {
   }
 
   // ── Auto-remplissage du compte de charge d'après le libellé ───────────────
-  // Pour les non-comptables : « facture eau » → 6051, « salaire juillet » → 661…
-  // Le compte fournisseur suit (onCompteChargeChange). Un choix manuel du
-  // compte verrouille la suggestion jusqu'à la prochaine ouverture du dialog.
-  compteSuggere: string | null = null;
+  // Pour les non-comptables : « facture SDE » → 6051, « salaire gardien » → 661,
+  // libellé non compris → 658 Charges diverses. La table de mots-clés vit côté
+  // serveur (suggestion_compte.py), la même que l'import Excel. Le compte
+  // fournisseur suit (onCompteChargeChange). Un choix manuel du compte
+  // verrouille la suggestion jusqu'à la prochaine ouverture du dialog.
+  compteSuggere: { compte: string; reconnu: boolean; mot: string; libelle_compte: string } | null = null;
   compteChargeVerrouille = false;
-
-  private static MOTS_CLES_CHARGES: [RegExp, string][] = [
-    [/\beaux?\b|facture sde|sen ?eau/,                                  '6051'],
-    [/electricite|senelec|woyofal|courant/,                             '6052'],
-    [/craies?|cahiers?|stylos?|papier|rames?|marqueurs?|ardoises?|fournitures?/, '6054'],
-    [/marchandises?|denrees?|\briz\b|huile|sucre|cantine/,              '601'],
-    [/carburant|essence|gasoil|\bgaz\b/,                                '605'],
-    [/gardien|vigile|surveillance|sous.?traitance|prestataire/,         '621'],
-    [/loyers?|locations?|\bbail\b/,                                     '622'],
-    [/entretien|reparations?|maintenance|plomb(erie|ier)|peinture|menuis(erie|ier)|nettoyage|vidange/, '624'],
-    [/assurances?/,                                                     '625'],
-    [/etudes?|recherches?|documentation/,                               '626'],
-    [/publicite|flyers?|affiches?|banderoles?|communication|sponsor/,   '627'],
-    [/telephone|internet|wifi|\borange\b|\bfree\b|\bexpresso\b|connexion/, '628'],
-    [/banque|bancaires?|agios|tenue de compte/,                         '631'],
-    [/formations?|seminaires?|ateliers?/,                               '633'],
-    [/missions?|voyages?|receptions?|hotel|restaurant|deplacements?/,   '635'],
-    [/impots?|taxes?|patente|vignette/,                                 '641'],
-    [/timbres?|enregistrement/,                                         '645'],
-    [/salaires?|paie|appointements?|remunerations?|personnel/,          '661'],
-    [/ipres/,                                                           '662'],
-    [/\bcss\b|cotisations?|securite sociale/,                           '664'],
-    [/indemnites?|primes?|avantages?/,                                  '663'],
-    [/interets?|emprunts?|\bprets?\b/,                                  '671'],
-    [/transports?|\bbus\b|\bcar\b|navette/,                             '618'],
-  ];
+  private minuterieSuggestion: any = null;
 
   onLibelleChargeChange() {
     if (this.compteChargeVerrouille) return;
-    const brut = (this.nouvelleCharge.libelle || '');
-    const texte = brut.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const comptesDispo = new Set(this.planChargesPC().map(c => c.value));
-    for (const [motif, compte] of PaiementsComponent.MOTS_CLES_CHARGES) {
-      if (!motif.test(texte)) continue;
-      // Si le compte précis n'existe pas dans le plan du tenant, remonter au parent (3 chiffres)
-      const cible = comptesDispo.has(compte) ? compte
-                  : (comptesDispo.has(compte.slice(0, 3)) ? compte.slice(0, 3) : null);
-      if (!cible) continue;
-      if (this.nouvelleCharge.no_compte !== cible) {
-        this.nouvelleCharge.no_compte = cible;
-        this.onCompteChargeChange();          // synchronise le compte fournisseur
-      }
-      this.compteSuggere = cible;
-      return;
+    clearTimeout(this.minuterieSuggestion);
+    const libelle = (this.nouvelleCharge.libelle || '').trim();
+    if (!libelle) { this.compteSuggere = null; return; }
+    this.minuterieSuggestion = setTimeout(() => {
+      this.compta.suggererCompteCharge(libelle).subscribe({
+        next: r => {
+          // Le libellé a pu changer pendant l'appel, ou le compte été choisi à la main.
+          if (this.compteChargeVerrouille || (this.nouvelleCharge.libelle || '').trim() !== libelle) return;
+          const cible = this.compteDuPlan(r.compte);
+          if (!cible) { this.compteSuggere = null; return; }
+          if (this.nouvelleCharge.no_compte !== cible) {
+            this.nouvelleCharge.no_compte = cible;
+            this.onCompteChargeChange();          // synchronise le compte fournisseur
+          }
+          this.compteSuggere = { ...r, compte: cible };
+          // Application sans zone.js : réponse HTTP hors d'un événement d'écran.
+          this.cdr.markForCheck();
+        },
+        error: () => { this.compteSuggere = null; },
+      });
+    }, 300);
+  }
+
+  /** Le compte s'il figure dans la liste de l'école, sinon son parent le plus proche. */
+  private compteDuPlan(compte: string): string | null {
+    const dispo = new Set(this.planChargesPC().map(c => c.value));
+    for (let n = compte.length; n >= 2; n--) {
+      if (dispo.has(compte.slice(0, n))) return compte.slice(0, n);
     }
-    this.compteSuggere = null;
+    return null;
   }
 
   onCompteChargeChange() {

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from core.serializers import TenantModelSerializer
 from django.utils import timezone
 from .models import (BaremeFratrie, ChampFiche, Eleve, EleveService, Famille, FormuleEleve,
                      FormuleSection, Organisme, PriseEnChargeOrganisme, ResponsableFamille,
@@ -11,7 +12,7 @@ _NOMS_MOIS = {1: 'janvier', 2: 'février', 3: 'mars', 4: 'avril',
               9: 'septembre', 10: 'octobre', 11: 'novembre', 12: 'décembre'}
 
 
-class ServiceSerializer(serializers.ModelSerializer):
+class ServiceSerializer(TenantModelSerializer):
     montant = serializers.FloatField(required=False, default=0)
 
     class Meta:
@@ -54,7 +55,7 @@ class ServiceSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class FormuleSectionSerializer(serializers.ModelSerializer):
+class FormuleSectionSerializer(TenantModelSerializer):
     frais_mensualite = serializers.FloatField(min_value=0)
     nb_eleves = serializers.SerializerMethodField()
 
@@ -73,7 +74,7 @@ class FormuleSectionSerializer(serializers.ModelSerializer):
         return section
 
 
-class ChampFicheSerializer(serializers.ModelSerializer):
+class ChampFicheSerializer(TenantModelSerializer):
     """Un champ ajouté par l'école à la fiche élève."""
     nb_renseignes = serializers.SerializerMethodField()
 
@@ -149,7 +150,7 @@ def valider_champs_perso(tenant, valeurs, existantes=None, partiel=False):
     return propres
 
 
-class EleveSerializer(serializers.ModelSerializer):
+class EleveSerializer(TenantModelSerializer):
     section_nom                  = serializers.CharField(source='section.nom', read_only=True)
     classe_nom                   = serializers.SerializerMethodField()
     # Fratrie : le nom du foyer et le contact réellement joignable. Le contact
@@ -235,6 +236,32 @@ class EleveSerializer(serializers.ModelSerializer):
             'annee_entree':     {'read_only': True},
             'matricule_ancien': {'read_only': True},
         }
+
+    # Photo d'identité : une image réduite dans le navigateur (≈ 30 Ko). Le
+    # plafond protège la base d'un fichier brut de plusieurs Mo, et le préfixe
+    # refuse tout ce qui n'est pas une image (un SVG peut porter du script).
+    PHOTO_MAX_OCTETS = 400_000
+    PHOTO_PREFIXES = ('data:image/jpeg;base64,', 'data:image/png;base64,',
+                      'data:image/webp;base64,')
+
+    def validate_photo(self, valeur):
+        if not valeur:
+            return ''
+        if not valeur.startswith(self.PHOTO_PREFIXES):
+            raise serializers.ValidationError('Format de photo non accepté (JPEG, PNG ou WebP).')
+        if len(valeur) > self.PHOTO_MAX_OCTETS:
+            raise serializers.ValidationError('Photo trop lourde : choisissez une image plus petite.')
+        return valeur
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # La liste des élèves n'envoie pas les photos (des centaines de Ko par
+        # page) : seulement l'indication qu'il y en a une. La fiche détaillée
+        # (retrieve) et l'enregistrement les renvoient.
+        vue = self.context.get('view')
+        if vue is not None and getattr(vue, 'action', None) == 'list':
+            data['a_photo'] = bool(data.pop('photo', ''))
+        return data
 
     def validate(self, attrs):
         """Régime passager (daara) : la durée en mois est obligatoire ;
@@ -508,7 +535,7 @@ def services_deja_suivis(eleve):
     return suivis
 
 
-class SectionSerializer(serializers.ModelSerializer):
+class SectionSerializer(TenantModelSerializer):
     total_annuel = serializers.ReadOnlyField()
     formules = FormuleSectionSerializer(many=True, read_only=True)
     frais_inscription  = serializers.FloatField(required=False, default=0)
@@ -560,7 +587,7 @@ class SectionSerializer(serializers.ModelSerializer):
                     {'tarif_journee': "Indiquez au moins un tarif (½ journée ou journée)."})
         return attrs
 
-class OrganismeSerializer(serializers.ModelSerializer):
+class OrganismeSerializer(TenantModelSerializer):
     type_libelle = serializers.CharField(source='get_type_display', read_only=True)
     nb_boursiers = serializers.SerializerMethodField()
 
@@ -577,7 +604,7 @@ class OrganismeSerializer(serializers.ModelSerializer):
         return obj.prises_en_charge.count()
 
 
-class PriseEnChargeOrganismeSerializer(serializers.ModelSerializer):
+class PriseEnChargeOrganismeSerializer(TenantModelSerializer):
     organisme_nom  = serializers.CharField(source='organisme.nom', read_only=True)
     organisme_type = serializers.CharField(source='organisme.get_type_display',
                                            read_only=True)
@@ -609,7 +636,7 @@ class PriseEnChargeOrganismeSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ResponsableFamilleSerializer(serializers.ModelSerializer):
+class ResponsableFamilleSerializer(TenantModelSerializer):
     lien_libelle = serializers.CharField(source='get_lien_display', read_only=True)
 
     class Meta:
@@ -621,7 +648,7 @@ class ResponsableFamilleSerializer(serializers.ModelSerializer):
         }
 
 
-class FamilleSerializer(serializers.ModelSerializer):
+class FamilleSerializer(TenantModelSerializer):
     # Saisis avec la famille : créer le foyer puis ses responsables en deux
     # écrans obligerait l'école à enregistrer une famille sans personne à
     # appeler, ce que ce regroupement est justement censé éviter.
@@ -695,7 +722,7 @@ class FamilleSerializer(serializers.ModelSerializer):
                 premier.save(update_fields=['principal'])
 
 
-class BaremeFratrieSerializer(serializers.ModelSerializer):
+class BaremeFratrieSerializer(TenantModelSerializer):
     class Meta:
         model  = BaremeFratrie
         fields = '__all__'

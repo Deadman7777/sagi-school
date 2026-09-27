@@ -422,7 +422,9 @@ const MOIS_OPTIONS = [
           <span class="params-sub">Exercice {{ parametres()[0].annee }}</span>
         }
       </div>
-      @if (!editingParams()) {
+      <!-- Paramètres communs à toutes les écoles : seul HADY GESMAN les modifie
+           (le serveur refuse les autres). Le bouton n'est montré qu'à lui. -->
+      @if (!editingParams() && estSuperAdmin()) {
         <p-button [label]="'rh.modifier_params' | translate" severity="warn" (onClick)="editingParams.set(true)" />
       }
     </div>
@@ -1190,6 +1192,7 @@ export class RhComponent implements OnInit {
   private msg       = inject(MessageService);
   private translate = inject(TranslateService);
   private auth      = inject(AuthService);
+  estSuperAdmin = () => this.auth.currentUser()?.role === 'SUPER_ADMIN';
   private gouv      = inject(GouvernanceService);
 
   // Dimensions analytiques (gouvernance) + codes de mode pour la ventilation.
@@ -1394,7 +1397,10 @@ export class RhComponent implements OnInit {
   chargerParams() {
     this.rh.getParametresFiscaux().subscribe({
       next: r => {
-        this.parametres.set(Array.isArray(r) ? r : [r]);
+        // L'API répond en liste PAGINÉE ({count, results}) : prendre l'enveloppe
+        // pour les paramètres affichait des taux vides (« % » sans valeur).
+        const liste = Array.isArray(r) ? r : ((r as any)?.results ?? [r]);
+        this.parametres.set(liste);
         if (this.parametres()[0]) this.formParams = { ...this.parametres()[0] };
       },
     });

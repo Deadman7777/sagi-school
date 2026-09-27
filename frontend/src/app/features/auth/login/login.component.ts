@@ -48,7 +48,7 @@ import { MessageModule } from 'primeng/message';
         </div>
 
         <p-message *ngIf="erreur()" severity="error"
-                   [text]="'auth.error' | translate" styleClass="w-full mb-3" />
+                   [text]="(erreur() === 'trop' ? 'auth.trop_essais' : 'auth.error') | translate" styleClass="w-full mb-3" />
 
         <p-button [label]="'auth.login' | translate"
                   [loading]="loading()" (onClick)="login()"
@@ -90,7 +90,8 @@ export class LoginComponent {
     this.erreur.set(null);
     this.auth.login(this.email, this.password).subscribe({
       next: () => { window.location.href = '/'; },
-      error: () => { this.erreur.set('error'); this.loading.set(false); }
+      // 429 : trop d'essais sur ce compte, le serveur fait patienter une minute.
+      error: (err) => { this.erreur.set(err?.status === 429 ? 'trop' : 'error'); this.loading.set(false); }
     });
   }
 }

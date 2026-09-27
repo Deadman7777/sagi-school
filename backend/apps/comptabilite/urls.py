@@ -1,6 +1,6 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import (JournalView, GrandLivreView, BalanceView,
+from .views import (SuggestionCompteView, JournalView, GrandLivreView, BalanceView,
                     CompteResultatView, BilanView,
                     TableauFluxView, HistoriqueExercicesView, ChargeView,
                     NotesAnnexesView, PlanComptableView, BudgetView,
@@ -23,6 +23,7 @@ urlpatterns = [
     path('historique/',         HistoriqueExercicesView.as_view()),
     path('notes-annexes/',      NotesAnnexesView.as_view()),
     path('export-pdf/<str:type_doc>/', ExportPDFView.as_view()),
+    path('charges/suggerer-compte/', SuggestionCompteView.as_view()),
     path('charges/',            ChargeView.as_view()),
     path('charges/<str:pk>/',   ChargeView.as_view()),
     # Plan comptable paramétrable

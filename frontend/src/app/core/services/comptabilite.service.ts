@@ -23,6 +23,11 @@ export class ComptabiliteService {
   getTableauFlux(exercice?: string)    { return this.api.get<any>('/comptabilite/tableau-flux/', this.exParams(exercice)); }
   getHistorique()     { return this.api.get<any>('/comptabilite/historique/'); }
   getNotesAnnexes(exercice?: string)   { return this.api.get<any>('/comptabilite/notes-annexes/', this.exParams(exercice)); }
+  /** Compte de charge suggéré d'après le libellé (table unique côté serveur). */
+  suggererCompteCharge(libelle: string) {
+    return this.api.get<{ compte: string; reconnu: boolean; mot: string; libelle_compte: string }>(
+      '/comptabilite/charges/suggerer-compte/', { libelle });
+  }
   getCharges(q?: string) { return this.api.get<any[]>('/comptabilite/charges/', q ? { q } : {}); }
   creerCharge(data: any)      { return this.api.post<any>('/comptabilite/charges/', data); }
 

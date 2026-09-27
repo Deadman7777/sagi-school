@@ -8,12 +8,51 @@ class UserSerializer(serializers.ModelSerializer):
     # set_password() pour être hashé — sinon le compte est créé sans mot de
     # passe utilisable et la connexion échoue jusqu'à un « changer mot de passe ».
     password = serializers.CharField(write_only=True, required=False,
-                                     min_length=6, style={'input_type': 'password'})
+                                     min_length=8, style={'input_type': 'password'})
 
     class Meta:
         model  = User
         fields = ['id', 'nom', 'prenom', 'email', 'role', 'tenant', 'actif',
                   'created_at', 'password', 'modules_autorises']
+
+    def _demandeur(self):
+        request = self.context.get('request')
+        return getattr(request, 'user', None)
+
+    def _demandeur_super_admin(self):
+        return getattr(self._demandeur(), 'role', None) == 'SUPER_ADMIN'
+
+    def validate_role(self, role):
+        """Seul l'éditeur (SUPER_ADMIN) attribue le rôle SUPER_ADMIN.
+
+        Sans ce contrôle, l'administrateur d'une école pouvait se créer un
+        compte éditeur — et lire ou modifier TOUTES les écoles.
+        """
+        if role == 'SUPER_ADMIN' and not self._demandeur_super_admin():
+            raise serializers.ValidationError("Rôle non autorisé.")
+        return role
+
+    def validate_tenant(self, tenant):
+        """Une école ne rattache pas un compte à une autre école : le compte
+        verrait alors les données de celle-ci. Seul l'éditeur choisit l'école."""
+        if self._demandeur_super_admin():
+            return tenant
+        demandeur = self._demandeur()
+        if tenant is not None and tenant.id != getattr(demandeur, 'tenant_id', None):
+            raise serializers.ValidationError("École non autorisée.")
+        return tenant
+
+    def validate(self, attrs):
+        # Un administrateur d'école ne modifie pas son PROPRE rôle ni ne se
+        # désactive : il perdrait l'accès, et plus personne ne gérerait l'école.
+        demandeur = self._demandeur()
+        if (self.instance is not None and demandeur is not None
+                and self.instance.pk == demandeur.pk and not self._demandeur_super_admin()):
+            if 'role' in attrs and attrs['role'] != self.instance.role:
+                raise serializers.ValidationError({'role': "Vous ne pouvez pas changer votre propre rôle."})
+            if attrs.get('actif') is False:
+                raise serializers.ValidationError({'actif': "Vous ne pouvez pas désactiver votre propre compte."})
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)

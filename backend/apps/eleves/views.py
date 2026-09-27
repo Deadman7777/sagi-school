@@ -2294,8 +2294,9 @@ class PriseEnChargeStatsView(APIView):
         ids_pec = [e.id for e in eleves_pec]
         pmt_pec = {}
         if ids_pec:
+            # Paiements ACTIFS seulement : un reçu annulé n'a rien encaissé.
             rows = Paiement.objects.filter(
-                tenant=tenant, exercice=exercice, eleve_id__in=ids_pec
+                tenant=tenant, exercice=exercice, eleve_id__in=ids_pec, statut='ACTIF'
             ).values('eleve_id').annotate(
                 paye=DSum('montant_inscription') + DSum('montant_mensualite') +
                      DSum('montant_uniforme')    + DSum('montant_fournitures') +
@@ -2836,7 +2837,9 @@ DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.docu
 
 
 class FicheElevePDFView(APIView):
-    """Export PDF de la fiche complète d'un élève (identité, parents, situation)."""
+    """Fiche de renseignements PDF d'un élève — identité, scolarité, parents,
+    santé. Sans aucune donnée financière : elle est partagée avec tout le
+    personnel (la situation financière a son propre export)."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, eleve_id):
@@ -2853,35 +2856,43 @@ class FicheElevePDFView(APIView):
 
         tenant = get_tenant(request)
         try:
-            eleve = Eleve.objects.select_related('section', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
+            eleve = Eleve.objects.select_related('section', 'classe', 'exercice', 'tenant').get(id=eleve_id, tenant=tenant)
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 
-        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        # L'exercice de la FICHE, pas le dernier ouvert (école migrée).
+        exercice = eleve.exercice
 
-        total_attendu = float(eleve.total_attendu)
-        total_paye    = float(eleve.total_paye)
-        reste         = round(max(0.0, total_attendu - total_paye), 0)
+        # Frères et sœurs présents dans l'établissement cette année — sans
+        # montant : la fiche circule chez les enseignants.
+        fratrie = []
+        if eleve.famille_id:
+            for f in (Eleve.objects.filter(tenant=tenant, famille_id=eleve.famille_id,
+                                           exercice=eleve.exercice_id, fiche_creance=False)
+                      .exclude(id=eleve.id).select_related('section', 'classe')):
+                fratrie.append({'nom': f.nom_complet,
+                                'classe': f.classe.nom if f.classe_id else (f.section.nom if f.section else '—'),
+                                'matricule': f.matricule or '—'})
+            from .tri import cle_nom
+            fratrie.sort(key=lambda x: cle_nom(x['nom']))
 
-        motif_pec = dict(Eleve.PRISE_EN_CHARGE_CHOICES).get(eleve.prise_en_charge, eleve.prise_en_charge or '')
-        type_pec  = dict(Eleve.TYPE_PEC_CHOICES).get(eleve.type_pec, eleve.type_pec or '')
-
+        # Aucune donnée financière dans ce contexte : c'est la garantie
+        # qu'aucune ne peut réapparaître dans le gabarit par mégarde.
         context = {
-            'tenant':            tenant,
-            'eleve':             eleve,
-            'section_nom':       eleve.section.nom if eleve.section else '—',
-            'exercice':          exercice,
-            'date_edition':      timezone.now(),
-            'total_theorique':   round(float(eleve.total_theorique), 0),
-            'montant_pec_annuel': round(float(eleve.montant_pec_annuel), 0),
-            'total_attendu':     round(total_attendu, 0),
-            'total_paye':        round(total_paye, 0),
-            'reste':             reste,
-            'motif_pec':         motif_pec,
-            'type_pec':          type_pec,
+            'tenant':         tenant,
+            'eleve':          eleve,
+            'section_nom':    eleve.section.nom if eleve.section else '—',
+            'classe_nom':     eleve.classe.nom if eleve.classe_id else '',
+            'statut_libelle': eleve.get_statut_display(),
+            'regime_libelle': eleve.get_regime_display() if eleve.regime == 'PASSAGER' else '',
+            'sante_libelle':  eleve.get_etat_sante_display() if eleve.etat_sante else '',
+            'date_entree':    eleve.date_entree or eleve.date_inscription,
+            'fratrie':        fratrie,
+            'exercice':       exercice,
+            'date_edition':   timezone.now(),
             # Champs ajoutés par l'école, groupés et par lignes de quatre :
             # le gabarit ne calcule rien, il place ce qu'on lui donne.
-            'champs_perso':      champs_perso_pour_pdf(tenant, eleve),
+            'champs_perso':   champs_perso_pour_pdf(tenant, eleve),
         }
 
         html_str = render_to_string('pdf/fiche_eleve.html', context)
@@ -3267,6 +3278,35 @@ class FamilleViewSet(viewsets.ModelViewSet):
                       f"Barème fratrie appliqué — {rapport['nb_applique']} fiche(s)")
         return Response(rapport)
 
+    @action(detail=True, methods=['get', 'post'], url_path='reductions')
+    def reductions_action(self, request, pk=None):
+        """Réduction fratrie saisie directement, enfant par enfant.
+
+        GET : la remise actuelle de chaque enfant. POST {lignes: [...]} :
+        l'enregistre (voir familles.enregistrer_reductions). Pas de rang à
+        configurer : l'école nomme l'enfant et sa remise.
+        """
+        from apps.comptabilite.views import get_exercice
+        from core.models import log_audit
+
+        from .familles import enregistrer_reductions, reductions_famille
+
+        tenant   = get_tenant(request)
+        exercice = get_exercice(tenant)
+        if not exercice:
+            return Response({'error': "Aucun exercice ouvert."}, status=400)
+        famille = self.get_object()
+        if request.method == 'GET':
+            return Response(reductions_famille(famille, exercice))
+        try:
+            rapport = enregistrer_reductions(famille, exercice, request.data.get('lignes'))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        if rapport['nb_modifie']:
+            log_audit(request, 'MODIFICATION', 'Famille', famille.id,
+                      f"Réduction fratrie — {rapport['nb_modifie']} fiche(s)")
+        return Response(rapport)
+
     @action(detail=True, methods=['post'])
     def repartir(self, request, pk=None):
         """Propose la répartition d'un versement entre les enfants.
@@ -3355,9 +3395,18 @@ class FamilleViewSet(viewsets.ModelViewSet):
                 'no_piece': paiement.no_piece,
                 'detail': ', '.join(postes) or 'règlement',
                 'montant': float(paiement.total),
+                # Ce qui reste des années antérieures pour cet enfant, à la
+                # date d'impression : 0 s'imprime « néant ».
+                'impaye_anterieur_restant': eleve.reliquat_restant,
             })
 
-        modes = sorted({p.get_mode_paiement_display() for p in paiements})
+        # Modes réels : un règlement multi-mode se lit « Espèce, Wave », pas
+        # « Multi-mode ».
+        from apps.comptabilite.tresorerie import LIBELLES_MODE
+        modes = sorted({LIBELLES_MODE.get(m.get('mode'), m.get('mode'))
+                        for p in paiements for m in (p.modes_reglement or [])}
+                       | {p.get_mode_paiement_display() for p in paiements
+                          if not p.modes_reglement})
         contexte = {
             'tenant':  tenant,
             'famille': famille,

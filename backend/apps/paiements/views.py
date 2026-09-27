@@ -62,7 +62,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
         if eleve_id := self.request.query_params.get('eleve'):
             qs = qs.filter(eleve_id=eleve_id)
         if mode := self.request.query_params.get('mode'):
-            qs = qs.filter(mode_paiement=mode)
+            # Un règlement multi-mode appartient aussi à chacun de ses modes.
+            from django.db.models import Q as _Qm
+            qs = qs.filter(_Qm(mode_paiement=mode)
+                           | _Qm(modes_reglement__contains=[{'mode': mode}]))
         # Recherche : élève, matricule, n° de reçu ou observations. Retrouver un
         # règlement supposait jusqu'ici de faire défiler toute l'année.
         if q := (self.request.query_params.get('q') or '').strip():
@@ -225,18 +228,18 @@ class PaiementViewSet(viewsets.ModelViewSet):
             )
             return float(a['t'] or 0)
 
-        par_mode = []
-        for m in paiements.values('mode_paiement').annotate(nb=Count('id')):
-            par_mode.append({
-                'mode':  m['mode_paiement'],
-                'nb':    m['nb'],
-                'total': total(paiements.filter(mode_paiement=m['mode_paiement']))
-            })
+        # Ventilé sur les modes réels : un règlement multi-mode se répartit
+        # entre espèces, Wave… au lieu d'apparaître en bloc sous « MIXTE ».
+        from apps.comptabilite.tresorerie import liste_par_mode
+        par_mode = liste_par_mode(paiements)
 
         return Response({
-            'total':           total(paiements),
+            # Montant réellement encaissé (reliquats antérieurs compris) :
+            # la somme des cartes par mode, au franc près.
+            'total':           round(sum(m['total'] for m in par_mode), 2),
+            'total_exercice':  total(paiements),
             'nb_transactions': paiements.count(),
-            'par_mode':        sorted(par_mode, key=lambda x: x['total'], reverse=True),
+            'par_mode':        par_mode,
         })
 
     def _build_recu_context(self, p):
@@ -250,15 +253,17 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
         }
 
-        # Cumul des paiements AVANT ce reçu
+        # Cumul des paiements AVANT ce reçu. Les reçus ANNULÉS n'ont rien
+        # encaissé : les compter gonflait « déjà versé » et faisait imprimer un
+        # reste à payer trop faible, voire « SOLDÉ » à tort.
         paiements_avant = Paiement.objects.filter(
             tenant=p.tenant, eleve=p.eleve, exercice=p.exercice,
-            date_paiement__lt=p.date_paiement,
+            date_paiement__lt=p.date_paiement, statut='ACTIF',
         ).exclude(id=p.id)
         # Inclure les paiements du même jour avec un no_piece inférieur
         meme_jour = Paiement.objects.filter(
             tenant=p.tenant, eleve=p.eleve, exercice=p.exercice,
-            date_paiement=p.date_paiement,
+            date_paiement=p.date_paiement, statut='ACTIF',
         ).exclude(id=p.id).filter(no_piece__lt=p.no_piece)
 
         def _sum_qs(qs):
@@ -390,7 +395,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         # Numéro séquentiel du reçu pour cet élève
         nb_recu_eleve = Paiement.objects.filter(
-            tenant=p.tenant, eleve=p.eleve, exercice=p.exercice
+            tenant=p.tenant, eleve=p.eleve, exercice=p.exercice, statut='ACTIF'
         ).filter(date_paiement__lte=p.date_paiement).count()
 
         return {
@@ -398,6 +403,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'no_piece':          p.no_piece,
             'date':              str(p.date_paiement),
             'heure_edition':     _tz.now().strftime('%H:%M'),
+            # Heure de la SAISIE du règlement : « date & heure de la
+            # transaction » portait l'heure d'impression du reçu.
+            'heure_saisie':      _tz.localtime(p.created_at).strftime('%H:%M') if p.created_at else '',
             'date_edition':      _tz.now().strftime('%d/%m/%Y à %H:%M'),
             # Élève
             'eleve':             p.eleve.nom_complet,
@@ -426,6 +434,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'mois_regles':       mois_regles,
             'services_regles':   services_regles,
             'total':             total_paiement,
+            # Part de CE reçu qui porte sur l'année en cours : c'est elle qui
+            # s'ajoute au « déjà versé » du bloc de suivi de l'exercice. Le
+            # total (reliquat compris) y faisait une addition fausse à l'œil.
+            'part_exercice':     round(part_exercice, 2),
             # Suivi financier
             'total_attendu':     round(total_attendu, 2),
             'deja_paye_avant':   round(deja_paye_avant, 2),

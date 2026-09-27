@@ -17,7 +17,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { ApercuBareme, BaremeFratrie, Famille, FratrieProbable,
+import { Famille, FratrieProbable, LigneReductionFratrie,
          ResponsableFamille, SituationFamille } from '../../../core/models/eleve.model';
 import { ElevesService } from '../../../core/services/eleves.service';
 import { EncaissementGroupeComponent, FinEncaissement }
@@ -39,6 +39,11 @@ import { EncaissementGroupeComponent, FinEncaissement }
  * C'est ce qui permet à une école de commencer à regrouper quand elle veut,
  * sans rien bousculer de sa comptabilité.
  */
+type LigneReduction = LigneReductionFratrie & {
+  forme_inscription: string; valeur_inscription: number;
+  forme_mensualite: string;  valeur_mensualite: number;
+};
+
 @Component({
   selector: 'app-familles',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,10 +67,6 @@ import { EncaissementGroupeComponent, FinEncaissement }
       <!-- Une école qui arrive avec deux mille fiches ne créera pas ses
            familles une par une : on lui propose les groupes déduits des
            numéros de parents, à elle de valider. -->
-      <p-button icon="pi pi-percentage" [label]="'familles.bareme' | translate" size="small"
-                severity="secondary" [outlined]="true"
-                [pTooltip]="'familles.bareme_aide' | translate"
-                (onClick)="ouvrirBareme()" />
       <p-button icon="pi pi-sitemap" [label]="'familles.regrouper' | translate" size="small"
                 severity="info" [outlined]="true"
                 [pTooltip]="'familles.regrouper_aide' | translate"
@@ -229,52 +230,56 @@ import { EncaissementGroupeComponent, FinEncaissement }
           </ng-template>
         </p-table>
 
-        <!-- La remise fratrie de cette famille. On montre d'abord ce qui
-             changerait : les rangs bougent dès qu'un enfant arrive ou part,
-             et appliquer en silence modifierait des remises déjà consommées
-             sur des mois payés. -->
-        <h4 class="titre-section">{{ 'familles.bareme' | translate }}</h4>
-        @if (apercu(); as a) {
-          @if (!a.bareme_defini) {
-            <p class="aide">{{ 'familles.bareme_absent' | translate }}</p>
-          } @else {
-            <p-table [value]="a.lignes" styleClass="p-datatable-sm">
-              <ng-template pTemplate="header">
-                <tr>
-                  <th>{{ 'familles.rang' | translate }}</th>
-                  <th>{{ 'familles.enfant' | translate }}</th>
-                  <th class="droite">{{ 'familles.remise_actuelle' | translate }}</th>
-                  <th class="droite">{{ 'familles.remise_proposee' | translate }}</th>
-                </tr>
-              </ng-template>
-              <ng-template pTemplate="body" let-l>
-                <tr>
-                  <td>{{ l.rang }}</td>
-                  <td>{{ l.nom_complet }}
-                    @if (l.protege) {
-                      <p-tag severity="warn" [value]="l.actuel.motif"
-                             [pTooltip]="'familles.protege_aide' | translate" />
-                    }
+        <!-- Réduction fratrie : l'école nomme l'enfant et sa remise, sans
+             barème par rang. Une prise en charge d'un autre motif (orphelin,
+             bourse…) reste intouchable ici : elle se modifie sur la fiche. -->
+        <h4 class="titre-section">{{ 'familles.reduction' | translate }}</h4>
+        @if (reductions().length) {
+          <p-table [value]="reductions()" styleClass="p-datatable-sm">
+            <ng-template pTemplate="header">
+              <tr>
+                <th>{{ 'familles.enfant' | translate }}</th>
+                <th>{{ 'familles.sur_inscription' | translate }}</th>
+                <th>{{ 'familles.sur_mensualite' | translate }}</th>
+              </tr>
+            </ng-template>
+            <ng-template pTemplate="body" let-l>
+              <tr>
+                <td>{{ l.nom_complet }} <span class="mat">{{ l.classe }}</span>
+                  @if (l.protege) {
+                    <p-tag severity="warn" [value]="l.motif"
+                           [pTooltip]="'familles.protege_aide' | translate" />
+                  }
+                </td>
+                @if (l.protege) {
+                  <td colspan="2" class="aide">{{ 'familles.reduction_protegee' | translate }}</td>
+                } @else {
+                  <td>
+                    <div class="saisie-remise">
+                      <p-inputNumber [(ngModel)]="l.valeur_inscription" [min]="0" [fluid]="true"
+                                     styleClass="champ-valeur" />
+                      <p-select [(ngModel)]="l.forme_inscription" [options]="formes" optionLabel="label"
+                                optionValue="value" appendTo="body" />
+                    </div>
+                    <span class="aide">{{ 'familles.tarif' | translate }} {{ l.tarif_inscription | number:'1.0-0' }}</span>
                   </td>
-                  <td class="droite">{{ l.actuel.inscription | number:'1.0-0' }}
-                    / {{ l.actuel.mensualite | number:'1.0-0' }}</td>
-                  <td class="droite" [class.change]="l.change">
-                    @if (l.protege) { — } @else {
-                      {{ l.propose.inscription | number:'1.0-0' }}
-                      / {{ l.propose.mensualite | number:'1.0-0' }}
-                    }
+                  <td>
+                    <div class="saisie-remise">
+                      <p-inputNumber [(ngModel)]="l.valeur_mensualite" [min]="0" [fluid]="true"
+                                     styleClass="champ-valeur" />
+                      <p-select [(ngModel)]="l.forme_mensualite" [options]="formes" optionLabel="label"
+                                optionValue="value" appendTo="body" />
+                    </div>
+                    <span class="aide">{{ 'familles.tarif' | translate }} {{ l.tarif_mensualite | number:'1.0-0' }}</span>
                   </td>
-                </tr>
-              </ng-template>
-            </p-table>
-            <p class="aide">{{ 'familles.remise_colonnes' | translate }}</p>
-            <p-button [label]="'familles.appliquer_bareme' | translate" size="small"
-                      severity="warn" [outlined]="true" [loading]="applicationBareme()"
-                      [disabled]="a.nb_change === 0" (onClick)="appliquerBareme()" />
-            @if (a.nb_change === 0) {
-              <span class="aide"> {{ 'familles.bareme_a_jour' | translate }}</span>
-            }
-          }
+                }
+              </tr>
+            </ng-template>
+          </p-table>
+          <p class="aide">{{ 'familles.reduction_aide' | translate }}</p>
+          <p-button [label]="'familles.enregistrer_reduction' | translate" icon="pi pi-check" size="small"
+                    severity="success" [loading]="enregistrementReduction()"
+                    (onClick)="enregistrerReductions()" />
         }
 
         <h4 class="titre-section">{{ 'familles.rattacher' | translate }}</h4>
@@ -306,44 +311,6 @@ import { EncaissementGroupeComponent, FinEncaissement }
       }
     </p-dialog>
 
-    <!-- ══ BARÈME DE RÉDUCTION FRATRIE ══
-         Une ligne par rang. Ce barème ne calcule aucun dû : il produit la
-         prise en charge des fiches, que le calcul unique du dû déduit. -->
-    <p-dialog [(visible)]="baremeVisible" [modal]="true" [style]="{ width: '760px' }"
-              [header]="'familles.bareme' | translate">
-      <p class="aide">{{ 'familles.bareme_explication' | translate }}</p>
-
-      @for (l of bareme(); track $index) {
-        <div class="ligne-bareme">
-          <span class="rang-lbl">{{ 'familles.rang_n' | translate: { rang: l.rang } }}</span>
-          <p-inputNumber [(ngModel)]="l.rang" [min]="1" [max]="20" [showButtons]="true"
-                         [fluid]="true" styleClass="champ-rang" />
-          <span class="sur">{{ 'familles.sur_inscription' | translate }}</span>
-          <p-inputNumber [(ngModel)]="l.valeur_inscription" [min]="0" [fluid]="true"
-                         styleClass="champ-valeur" />
-          <p-select [(ngModel)]="l.forme_inscription" [options]="formes" optionLabel="label"
-                    optionValue="value" appendTo="body" />
-          <span class="sur">{{ 'familles.sur_mensualite' | translate }}</span>
-          <p-inputNumber [(ngModel)]="l.valeur_mensualite" [min]="0" [fluid]="true"
-                         styleClass="champ-valeur" />
-          <p-select [(ngModel)]="l.forme_mensualite" [options]="formes" optionLabel="label"
-                    optionValue="value" appendTo="body" />
-          <p-button icon="pi pi-times" size="small" severity="danger" [text]="true"
-                    (onClick)="retirerLigneBareme($index)"
-                    [ariaLabel]="'common.supprimer' | translate" />
-        </div>
-      }
-      <p-button icon="pi pi-plus" [label]="'familles.ajouter_rang' | translate" size="small"
-                severity="secondary" [outlined]="true" (onClick)="ajouterLigneBareme()" />
-      <p class="aide">{{ 'familles.bareme_dernier_rang' | translate }}</p>
-
-      <ng-template pTemplate="footer">
-        <p-button [label]="'common.annuler' | translate" severity="secondary" [text]="true"
-                  (onClick)="baremeVisible = false" />
-        <p-button [label]="'common.enregistrer' | translate" severity="success"
-                  [loading]="enregistrementBareme()" (onClick)="enregistrerBareme()" />
-      </ng-template>
-    </p-dialog>
 
     <!-- ══ REGROUPEMENT ASSISTÉ ══
          Rien n'est créé tant que l'école n'a pas validé : fusionner deux
@@ -440,13 +407,10 @@ import { EncaissementGroupeComponent, FinEncaissement }
     .cl { font-size:.74rem; color:var(--text-color-secondary); margin-left:6px; }
     .avertissement { margin-top:10px; font-size:.84rem; color:var(--orange-700);
                      background:var(--orange-50); border-radius:6px; padding:8px 10px; }
-    .ligne-bareme { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
-    .rang-lbl { min-width:74px; font-weight:600; font-size:.85rem; }
+    .saisie-remise { display:flex; gap:4px; align-items:center; }
     /* [fluid] + largeur explicite : un p-inputNumber garde sinon sa largeur
        naturelle et recouvre ses voisins sur la ligne. */
-    .ligne-bareme :is(.champ-rang, .champ-valeur) { width:96px; position:relative; }
-    .sur { font-size:.8rem; color:var(--text-color-secondary); }
-    .change { font-weight:700; color:var(--orange-600); }
+    .saisie-remise .champ-valeur { width:96px; position:relative; }
     @media (max-width: 640px) {
       .form-grid { grid-template-columns:1fr; }
       .champ-recherche { min-width:0; flex:1 1 100%; }
@@ -474,11 +438,9 @@ export class FamillesComponent implements OnInit {
   dernierVersement  = signal<string | null>(null);
   responsablesFamille = signal<ResponsableFamille[]>([]);
   encaissementVisible = false;
-  bareme            = signal<BaremeFratrie[]>([]);
-  apercu            = signal<ApercuBareme | null>(null);
-  enregistrementBareme = signal(false);
-  applicationBareme = signal(false);
-  baremeVisible = false;
+  /** Remise fratrie de chaque enfant, en cours de saisie. */
+  reductions        = signal<LigneReduction[]>([]);
+  enregistrementReduction = signal(false);
   formes = [
     { label: '%',    value: 'POURCENTAGE' },
     { label: 'FCFA', value: 'MONTANT' },
@@ -591,16 +553,13 @@ export class FamillesComponent implements OnInit {
     this.situationVisible = true;
     this.situation.set(null);
     this.aRattacher = [];
-    this.apercu.set(null);
+    this.reductions.set([]);
     this.dernierVersement.set(null);
     this.eleves.getSituationFamille(famille.id).subscribe({
       next: s => this.situation.set(s),
       error: () => { this.situationVisible = false; this.erreur('familles.erreur_situation'); },
     });
-    this.eleves.apercuBareme(famille.id).subscribe({
-      next: a => this.apercu.set(a),
-      error: () => this.apercu.set(null),
-    });
+    this.chargerReductions(famille.id);
     this.chargerElevesLibres();
   }
 
@@ -642,7 +601,7 @@ export class FamillesComponent implements OnInit {
     this.eleves.getSituationFamille(familleId).subscribe({
       next: s => this.situation.set(s),
     });
-    this.eleves.apercuBareme(familleId).subscribe({ next: a => this.apercu.set(a) });
+    this.chargerReductions(familleId);
     this.chargerElevesLibres();
     this.charger();
   }
@@ -708,80 +667,41 @@ export class FamillesComponent implements OnInit {
     URL.revokeObjectURL(url);
   }
 
-  // ── Barème de réduction fratrie ───────────────────────────────────────
-  ouvrirBareme() {
-    this.baremeVisible = true;
-    this.eleves.getBaremeFratrie().subscribe({
-      next: b => {
-        // Copie : annuler le dialog ne doit pas laisser des lignes modifiées.
-        this.bareme.set(b.map(l => ({ ...l })));
-        if (this.bareme().length === 0) this.ajouterLigneBareme();
-      },
-      error: () => this.erreur('familles.erreur_bareme'),
+  // ── Réduction fratrie (saisie directe) ───────────────────────────────
+  /** La fiche ne garde que des montants : on les réaffiche en FCFA. */
+  private chargerReductions(familleId: string) {
+    this.eleves.getReductionsFamille(familleId).subscribe({
+      next: r => this.reductions.set(r.lignes.map(l => ({
+        ...l,
+        forme_inscription: 'MONTANT', valeur_inscription: l.inscription,
+        forme_mensualite:  'MONTANT', valeur_mensualite:  l.mensualite,
+      }))),
+      error: () => this.reductions.set([]),
     });
   }
 
-  ajouterLigneBareme() {
-    const suivant = Math.max(1, ...this.bareme().map(l => l.rang)) + 1;
-    this.bareme.update(b => [...b, {
-      rang: this.bareme().length === 0 ? 2 : suivant,
-      forme_inscription: 'POURCENTAGE', valeur_inscription: 0,
-      forme_mensualite: 'POURCENTAGE', valeur_mensualite: 0, actif: true }]);
-  }
-
-  retirerLigneBareme(index: number) {
-    const ligne = this.bareme()[index];
-    this.bareme.update(b => b.filter((_, i) => i !== index));
-    if (ligne?.id) {
-      this.eleves.supprimerLigneBareme(ligne.id).subscribe({
-        error: () => this.erreur('familles.erreur_bareme'),
-      });
-    }
-  }
-
-  enregistrerBareme() {
-    this.enregistrementBareme.set(true);
-    // Une ligne à la fois : le barème compte deux ou trois rangs, et un
-    // envoi groupé demanderait un endpoint de plus pour rien.
-    const appels = this.bareme().map(l => l.id
-      ? this.eleves.majLigneBareme(l.id, l)
-      : this.eleves.creerLigneBareme(l));
-    let restants = appels.length;
-    if (restants === 0) { this.enregistrementBareme.set(false); this.baremeVisible = false; return; }
-    let erreur = false;
-    appels.forEach(appel => appel.subscribe({
-      next: () => { if (--restants === 0) this.finBareme(erreur); },
-      error: () => { erreur = true; if (--restants === 0) this.finBareme(erreur); },
-    }));
-  }
-
-  private finBareme(erreur: boolean) {
-    this.enregistrementBareme.set(false);
-    if (erreur) { this.erreur('familles.erreur_bareme'); return; }
-    this.baremeVisible = false;
-    this.msg.add({ severity: 'success',
-                   summary: this.translate.instant('familles.bareme_enregistre') });
-  }
-
-  appliquerBareme() {
+  enregistrerReductions() {
     const s = this.situation();
     if (!s) return;
-    this.applicationBareme.set(true);
-    this.eleves.appliquerBareme(s.famille_id).subscribe({
-      next: a => {
-        this.applicationBareme.set(false);
-        this.apercu.set(a);
-        this.msg.add({ severity: 'success', life: 7000,
-                       summary: this.translate.instant('familles.bareme_applique',
-                                                       { nb: a.nb_applique || 0 }),
-                       detail: a.nb_protege
-                         ? this.translate.instant('familles.bareme_protege',
-                                                  { nb: a.nb_protege })
-                         : undefined });
+    const lignes = this.reductions().filter(l => !l.protege).map(l => ({
+      eleve_id: l.eleve_id,
+      forme_inscription: l.forme_inscription, valeur_inscription: Number(l.valeur_inscription) || 0,
+      forme_mensualite:  l.forme_mensualite,  valeur_mensualite:  Number(l.valeur_mensualite) || 0,
+    }));
+    this.enregistrementReduction.set(true);
+    this.eleves.enregistrerReductionsFamille(s.famille_id, lignes).subscribe({
+      next: r => {
+        this.enregistrementReduction.set(false);
+        this.msg.add({ severity: 'success',
+                       summary: this.translate.instant('familles.reduction_enregistree', { nb: r.nb_modifie }) });
         // Le dû des fiches a changé : la situation affichée doit suivre.
         this.rafraichirSituation(s.famille_id);
       },
-      error: () => { this.applicationBareme.set(false); this.erreur('familles.erreur_bareme'); },
+      error: err => {
+        this.enregistrementReduction.set(false);
+        this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                       detail: err?.error?.error || this.translate.instant('familles.erreur_bareme') });
+      },
     });
   }
 

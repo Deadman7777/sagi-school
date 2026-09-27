@@ -1,15 +1,16 @@
 from rest_framework import serializers
+from core.serializers import TenantModelSerializer
 from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache
 
 
-class NiveauScolaireSerializer(serializers.ModelSerializer):
+class NiveauScolaireSerializer(TenantModelSerializer):
     class Meta:
         model = NiveauScolaire
         fields = '__all__'
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
-class ClasseSerializer(serializers.ModelSerializer):
+class ClasseSerializer(TenantModelSerializer):
     niveau_nom  = serializers.SerializerMethodField()
     section_nom = serializers.SerializerMethodField()
     note_max    = serializers.SerializerMethodField()
@@ -33,14 +34,14 @@ class ClasseSerializer(serializers.ModelSerializer):
         return float(obj.niveau.note_max) if obj.niveau_id else 20.0
 
 
-class TypeEvaluationSerializer(serializers.ModelSerializer):
+class TypeEvaluationSerializer(TenantModelSerializer):
     class Meta:
         model = TypeEvaluation
         fields = '__all__'
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
-class MatiereSerializer(serializers.ModelSerializer):
+class MatiereSerializer(TenantModelSerializer):
     classe_nom = serializers.CharField(source='classe.nom', read_only=True)
 
     class Meta:
@@ -49,7 +50,7 @@ class MatiereSerializer(serializers.ModelSerializer):
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
-class EvaluationSerializer(serializers.ModelSerializer):
+class EvaluationSerializer(TenantModelSerializer):
     matiere_nom   = serializers.CharField(source='matiere.nom', read_only=True)
     type_eval_nom = serializers.CharField(source='type_eval.nom', read_only=True)
     type_eval_poids = serializers.FloatField(source='type_eval.poids', read_only=True)
@@ -114,7 +115,7 @@ def erreur_bareme(valeur, note_max):
     return None
 
 
-class NoteSerializer(serializers.ModelSerializer):
+class NoteSerializer(TenantModelSerializer):
     eleve_nom      = serializers.CharField(source='eleve.nom_complet', read_only=True)
     evaluation_nom = serializers.CharField(source='evaluation.matiere.nom', read_only=True)
 
