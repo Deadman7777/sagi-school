@@ -1,12 +1,15 @@
-"""Construit le guide de formation à partir de sa source.
+"""Construit le guide utilisateur et le manuel du formateur, séparément.
 
-Source : `guide.html`, qui référence `captures/*.webp` et `assets/*.woff2`.
-Produits :
-  - docs/guide-formation-sagi-school.html    (un seul fichier, tout embarqué)
-  - sama_assistant_hady/guide-formation-sagi-school.html  (même fichier)
-  - docs/guide-formation-sagi-school.pdf     (les deux volets)
-  - docs/guide-utilisateur-sagi-school.pdf   (volet 1)
-  - docs/manuel-formateur-sagi-school.pdf    (volet 2)
+Sources :
+  - `guide.html`            : Guide d'utilisation, REMIS AUX ÉCOLES.
+  - `manuel-formateur.html` : Manuel du formateur, document INTERNE HADY GESMAN.
+Les deux référencent `captures/*.webp` et `assets/*.woff2`.
+
+Produits (chaque fichier autonome, images et polices embarquées) :
+  - docs/guide-utilisateur-sagi-school.html / .pdf
+  - docs/manuel-formateur-sagi-school.html  / .pdf
+  - sama_assistant_hady/guide-utilisateur-sagi-school.html (copie du guide
+    utilisateur SEUL : le manuel formateur ne sort pas de HADY GESMAN)
 
 Usage : python3 docs/formation/build.py   (Chrome et Ghostscript requis)
 """
@@ -21,7 +24,6 @@ ICI = Path(__file__).resolve().parent
 DOCS = ICI.parent
 RACINE = DOCS.parent
 CHROME = shutil.which('google-chrome') or shutil.which('chromium')
-MARQUE_VOLET_2 = '<!-- VOLET 2 -->'
 
 TYPES = {'.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg',
          '.woff2': 'font/woff2'}
@@ -35,17 +37,6 @@ def embarquer(html):
             base64.b64encode(fichier.read_bytes()).decode()
     html = re.sub(r'src="(captures/[^"]+)"', lambda m: f'src="{data_uri(m.group(1))}"', html)
     return re.sub(r'url\((assets/[^)]+)\)', lambda m: f'url({data_uri(m.group(1))})', html)
-
-
-def volet(html, numero):
-    """Le même document réduit à un volet : même style, même couverture."""
-    coupe = html.index(MARQUE_VOLET_2)
-    fin = html.index('</div><!-- /bloc -->')
-    if numero == 1:
-        return html[:coupe] + html[fin:]
-    couverture = html[:html.index('</header>') + len('</header>')].replace(
-        "Guide d'utilisation<br>et support de formation", 'Manuel du formateur')
-    return couverture + '\n' + html[coupe:fin] + html[fin:]
 
 
 def imprimer(html, pdf):
@@ -70,16 +61,22 @@ def imprimer(html, pdf):
     print(f'  {pdf.relative_to(RACINE)} — {pages} pages')
 
 
+def ecrire(html, cible):
+    cible.write_text(html, encoding='utf-8')
+    print(f'  {cible.relative_to(RACINE)} — {len(html) / 1e6:.1f} Mo')
+
+
 def main():
-    source = (ICI / 'guide.html').read_text(encoding='utf-8')
-    complet = embarquer(source)
-    for cible in (DOCS / 'guide-formation-sagi-school.html',
-                  RACINE / 'sama_assistant_hady' / 'guide-formation-sagi-school.html'):
-        cible.write_text(complet, encoding='utf-8')
-        print(f'  {cible.relative_to(RACINE)} — {len(complet) / 1e6:.1f} Mo')
-    imprimer(complet, DOCS / 'guide-formation-sagi-school.pdf')
-    imprimer(embarquer(volet(source, 1)), DOCS / 'guide-utilisateur-sagi-school.pdf')
-    imprimer(embarquer(volet(source, 2)), DOCS / 'manuel-formateur-sagi-school.pdf')
+    guide = embarquer((ICI / 'guide.html').read_text(encoding='utf-8'))
+    manuel = embarquer((ICI / 'manuel-formateur.html').read_text(encoding='utf-8'))
+    # Garde-fou : le guide remis aux écoles ne contient rien du manuel interne.
+    assert 'Manuel du formateur' not in guide, 'le manuel formateur a fui dans le guide utilisateur'
+
+    ecrire(guide, DOCS / 'guide-utilisateur-sagi-school.html')
+    ecrire(guide, RACINE / 'sama_assistant_hady' / 'guide-utilisateur-sagi-school.html')
+    ecrire(manuel, DOCS / 'manuel-formateur-sagi-school.html')
+    imprimer(guide, DOCS / 'guide-utilisateur-sagi-school.pdf')
+    imprimer(manuel, DOCS / 'manuel-formateur-sagi-school.pdf')
 
 
 if __name__ == '__main__':

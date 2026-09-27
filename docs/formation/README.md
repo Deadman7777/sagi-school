@@ -1,7 +1,12 @@
 # Guide de formation SAGI SCHOOL — source
 
-`guide.html` est la source du guide utilisateur et du manuel formateur. Les
-captures (`captures/*.webp`) et les polices (`assets/`) restent à côté ;
+Deux sources séparées :
+
+- `guide.html` — le **Guide d'utilisation**, remis aux écoles ;
+- `manuel-formateur.html` — le **Manuel du formateur**, document interne
+  HADY GESMAN, qui ne doit jamais être remis à une école.
+
+Les captures (`captures/*.webp`) et les polices (`assets/`) restent à côté ;
 `build.py` produit les fichiers distribués.
 
 ## Refaire le guide pour une nouvelle version
@@ -26,7 +31,7 @@ captures (`captures/*.webp`) et les polices (`assets/`) restent à côté ;
 
        python ../docs/formation/documents.py
 
-5. **Texte** : modifier `guide.html`. Les nouveautés d'une version portent
+5. **Texte** : modifier `guide.html` (ou `manuel-formateur.html`). Les nouveautés d'une version portent
    `<span class="nouveau">Nouveau</span>` ; retirer les pastilles de l'édition
    précédente.
 
@@ -34,9 +39,10 @@ captures (`captures/*.webp`) et les polices (`assets/`) restent à côté ;
 
        python3 docs/formation/build.py
 
-   Produit `docs/guide-formation-sagi-school.html` (autonome), sa copie dans
-   `sama_assistant_hady/`, et les trois PDF (complet, guide utilisateur,
-   manuel formateur).
+   Produit, chacun autonome : `docs/guide-utilisateur-sagi-school.html` et
+   `.pdf` (plus une copie du guide seul dans `sama_assistant_hady/`), et
+   `docs/manuel-formateur-sagi-school.html` et `.pdf`. Le script refuse de
+   construire si le manuel formateur apparaît dans le guide utilisateur.
 
 ## Règles
 

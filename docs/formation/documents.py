@@ -66,6 +66,7 @@ cm2 = Classe.objects.get(nom='CM2')
 rendre('doc-recu-a5', f'/api/paiements/paiements/{paiement.id}/recu-pdf/?taille=A5')
 rendre('doc-recu-ticket', f'/api/paiements/paiements/{paiement.id}/recu-pdf/?taille=80MM', 600)
 rendre('doc-certificat', f'/api/eleves/{eleve.id}/certificat/')
+rendre('doc-fiche-eleve', f'/api/eleves/{eleve.id}/fiche-pdf/')
 rendre('doc-bulletins-classe', f'/api/academique/bulletins-classe/{cm2.id}/T1/', 1600)
 rendre('doc-bulletin-paie',
        f'/api/rh/bulletins/{BulletinPaie.objects.filter(statut="VALIDE").order_by("-annee", "-mois").first().id}/pdf/')

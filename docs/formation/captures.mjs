@@ -154,9 +154,10 @@ const CAPTURES = {
     await aller('/dashboard', 3500);
     await defiler('🧩', 'h3', 20);
   },
-  'eleves-famille-bareme': async () => {
+  'eleves-famille-reduction': async () => {
     await aller('/eleves', 2500); await cliquer('Familles');
-    await composant('app-familles', 'c.ouvrirBareme()');
+    await composant('app-familles', "c.ouvrirSituation(c.familles().find(f => f.nom.includes('NDIAYE')))");
+    await defiler('Réduction fratrie', 'h4', 20);
   },
 
   'garderie-appel': async () => {
@@ -242,6 +243,58 @@ const CAPTURES = {
   'gouv-ressources': async () => { await aller('/gouvernance', 2000); await cliquer('Ressources', 'button.tab'); },
   'gouv-flux': async () => { await aller('/gouvernance', 2000); await cliquer('Flux internes', 'button.tab'); },
   'gouv-tracabilite': async () => { await aller('/gouvernance', 2000); await cliquer('Traçabilité', 'button.tab'); },
+
+  // ─── Paramétrage de A à Z (chapitre « parametrage-az » du guide) ──────────
+  // Les formulaires sont pré-remplis avec l'exemple que cite le texte.
+  'az-ecole-logo': async () => { await aller('/parametres'); await defiler('Civilité', 'label', 30); },
+  'az-section-nouvelle': async () => {
+    await aller('/parametres'); await cliquer('Sections', '.tab-btn');
+    await composant('app-parametres', "c.ouvrirDialogSection(); c.newSection.nom = 'Préscolaire'");
+  },
+  'az-section-composition': async () => {
+    await aller('/parametres'); await cliquer('Sections', '.tab-btn');
+    await composant('app-parametres', "c.ouvrirComposition(c.sections().find(s => s.nom === 'Élémentaire')); c.compoRows = [{ libelle: 'Frais de dossier', montant: 45000 }, { libelle: 'Carte scolaire', montant: 5000 }, { libelle: 'Assurance', montant: 5000 }, { libelle: 'Tenue de sport', montant: 20000 }]");
+  },
+  'az-service-nouveau': async () => {
+    await aller('/parametres'); await cliquer('Services', '.tab-btn');
+    await composant('app-parametres', "c.ouvrirDialogService(); Object.assign(c.newService, { nom: 'Transport scolaire', montant: 10000, periodicite: 'MENSUEL' })");
+  },
+  'az-acad-classe': async () => {
+    await aller('/academique', 2500);
+    await composant('app-academique', "c.ouvrirDialogClasse(); Object.assign(c.formClasse, { nom: 'CE1 B', code: 'CE1B', niveau: (c.niveaux().find(n => n.nom.startsWith('Élém')) || {}).id || '' })");
+  },
+  'az-acad-matiere': async () => {
+    await aller('/academique', 2500);
+    await composant('app-academique', "c.ouvrirDialogMatiere(); Object.assign(c.formMatiere, { nom: 'Mathématiques', classe: c.classes().find(k => k.nom === 'CM2').id, coefficient: 3 })");
+  },
+  'az-utilisateur': async () => {
+    await aller('/parametres'); await cliquer('Utilisateurs', '.tab-btn');
+    await composant('app-parametres', "c.ouvrirDialogUser(); Object.assign(c.newUser, { prenom: 'Awa', nom: 'SECK', email: 'scolarite@lespalmiers.sn', role: 'ADMIN_SCOLARITE' })");
+  },
+  'az-champ-fiche': async () => {
+    await aller('/parametres'); await cliquer('Fiche élève', '.tab-btn');
+    await composant('app-parametres', "c.ajouterChamp(); const l = c.champsFiche(); Object.assign(l[l.length - 1], { libelle: 'Personne autorisée à récupérer l’enfant', groupe: 'PARENTS' })");
+    await defiler('Personne autorisée', 'div, span, input', 200);
+  },
+  'az-rh-employe': async () => {
+    await aller('/rh', 2500);
+    await composant('app-rh', "c.ouvrirDialogEmploye(); Object.assign(c.formEmploye, { nom_complet: 'Mamadou DIOP', poste: 'Instituteur CM2', date_embauche: '2025-10-01', salaire_base: 180000, telephone: '77 123 45 67' })");
+  },
+  'eleves-nouveau': async () => { await aller('/eleves', 2500); await cliquer('Nouvel Élève'); },
+  'az-eleve-fiche': async () => {
+    await aller('/eleves', 2500); await cliquer('Nouvel Élève');
+    await composant('app-eleves-liste', "Object.assign(c.nouvelEleve, { nom_complet: 'Mariama BA', genre: 'F', nationalite: 'Sénégalaise', adresse: 'Liberté 6, Dakar', etablissement_provenance: 'École Sainte-Marie', classe_precedente: 'CE1' })");
+    await defiler('Nationalité', 'label', 60);
+  },
+  'az-import-eleves': async () => {
+    await aller('/eleves', 2500);
+    await composant('app-eleves-liste', 'c.dialogImportVisible = true');
+  },
+  'az-charge-suggestion': async () => {
+    await aller('/paiements', 2500); await cliquer('Charges', '.tab-btn');
+    await composant('app-paiements', "c.ouvrirDialogCharge(); c.nouvelleCharge.libelle = 'Facture SDE septembre'; c.nouvelleCharge.montant = 48500; c.onLibelleChargeChange()");
+    await pause(1500);
+  },
 };
 
 // ─── Exécution ──────────────────────────────────────────────────────────────

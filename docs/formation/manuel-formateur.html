@@ -1,0 +1,1115 @@
+<title>Manuel formateur SAGI</title>
+
+<style>
+/* ── Fontes embarquées ────────────────────────────────────────────────── */
+@font-face { font-family: 'Lato'; font-weight: 400; font-style: normal; font-display: swap;
+  src: url(assets/font-0.woff2) format('woff2'); }
+@font-face { font-family: 'Lato'; font-weight: 700; font-style: normal; font-display: swap;
+  src: url(assets/font-1.woff2) format('woff2'); }
+@font-face { font-family: 'Ubuntu'; font-weight: 500; font-style: normal; font-display: swap;
+  src: url(assets/font-2.woff2) format('woff2'); }
+@font-face { font-family: 'Ubuntu'; font-weight: 700; font-style: normal; font-display: swap;
+  src: url(assets/font-3.woff2) format('woff2'); }
+@font-face { font-family: 'UbuntuMono'; font-weight: 400; font-style: normal; font-display: swap;
+  src: url(assets/font-4.woff2) format('woff2'); }
+
+/* ── Jetons ───────────────────────────────────────────────────────────── */
+:root {
+  --tamarin:  #0B5E4A;
+  --tamarin-2:#0E7458;
+  --mint:     #00A97F;
+  --papier:   #F5F7F5;
+  --carte:    #FFFFFF;
+  --encre:    #16211E;
+  --encre-2:  #46564F;
+  --encre-3:  #74857D;
+  --trait:    #DDE3DE;
+  --trait-2:  #EBEFEA;
+  --ocre:     #8A5E00;
+  --ocre-bg:  #FBF3DF;
+  --brique:   #9E2F23;
+  --brique-bg:#FBEAE7;
+  --info-bg:  #E6F2EE;
+  --ecran-bg: #0E1A17;
+
+  --pas: clamp(1rem, 0.72rem + 1.1vw, 1.6rem);
+  --colonne: 68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tamarin:  #3FD9B0;
+    --tamarin-2:#5FE3C0;
+    --mint:     #3FD9B0;
+    --papier:   #0C1412;
+    --carte:    #121D1A;
+    --encre:    #E7EEEA;
+    --encre-2:  #A5B5AE;
+    --encre-3:  #7C8D86;
+    --trait:    #24332E;
+    --trait-2:  #1A2723;
+    --ocre:     #E3B457;
+    --ocre-bg:  #2A2312;
+    --brique:   #F0897B;
+    --brique-bg:#2C1815;
+    --info-bg:  #142621;
+    --ecran-bg: #0A100E;
+  }
+}
+:root[data-theme="light"] {
+  --tamarin:#0B5E4A; --tamarin-2:#0E7458; --mint:#00A97F; --papier:#F5F7F5;
+  --carte:#FFFFFF; --encre:#16211E; --encre-2:#46564F; --encre-3:#74857D;
+  --trait:#DDE3DE; --trait-2:#EBEFEA; --ocre:#8A5E00; --ocre-bg:#FBF3DF;
+  --brique:#9E2F23; --brique-bg:#FBEAE7; --info-bg:#E6F2EE; --ecran-bg:#0E1A17;
+}
+:root[data-theme="dark"] {
+  --tamarin:#3FD9B0; --tamarin-2:#5FE3C0; --mint:#3FD9B0; --papier:#0C1412;
+  --carte:#121D1A; --encre:#E7EEEA; --encre-2:#A5B5AE; --encre-3:#7C8D86;
+  --trait:#24332E; --trait-2:#1A2723; --ocre:#E3B457; --ocre-bg:#2A2312;
+  --brique:#F0897B; --brique-bg:#2C1815; --info-bg:#142621; --ecran-bg:#0A100E;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--papier);
+  color: var(--encre);
+  font-family: 'Lato', system-ui, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, .eyebrow, .rail a, .pastille, .nav-titre {
+  font-family: 'Ubuntu', system-ui, sans-serif;
+}
+h1, h2, h3, h4 { text-wrap: balance; margin: 0; font-weight: 700; letter-spacing: -0.012em; }
+p { margin: 0; }
+a { color: var(--tamarin); }
+:focus-visible { outline: 2.5px solid var(--mint); outline-offset: 3px; border-radius: 3px; }
+
+.mono, td.n, th.n { font-family: 'UbuntuMono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+/* ── Ossature ─────────────────────────────────────────────────────────── */
+.page { display: grid; grid-template-columns: 268px minmax(0, 1fr); align-items: start; }
+
+.rail {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  background: var(--carte); border-right: 1px solid var(--trait);
+  padding: 26px 16px 40px; font-size: 13.5px;
+}
+.rail .marque { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; }
+.rail .marque .logo { width: 34px; height: 34px; flex: none; }
+.rail .marque b { display: block; font-family: 'Ubuntu'; font-size: 15px; letter-spacing: -0.01em; line-height: 1.15; }
+.rail .marque span { font-size: 10.5px; color: var(--encre-3); letter-spacing: 0.09em; text-transform: uppercase; }
+.nav-titre {
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--encre-3); padding: 20px 10px 7px; font-weight: 700;
+}
+.nav-titre.v1 { color: var(--tamarin); }
+.rail a {
+  display: block; padding: 6px 10px; border-radius: 6px; color: var(--encre-2);
+  text-decoration: none; font-weight: 500; border-left: 2px solid transparent;
+}
+.rail a:hover { background: var(--trait-2); color: var(--encre); }
+.rail a.on { color: var(--tamarin); background: var(--trait-2); border-left-color: var(--tamarin); font-weight: 700; }
+
+.corps { padding: 0 var(--pas) 120px; min-width: 0; }
+.bloc { max-width: 1020px; margin: 0 auto; }
+section { scroll-margin-top: 24px; padding-top: 60px; }
+section > * + * { margin-top: 18px; }
+.texte { max-width: var(--colonne); }
+.texte > * + * { margin-top: 13px; }
+
+/* ── Couverture ───────────────────────────────────────────────────────── */
+.couv { padding: 74px 0 46px; border-bottom: 3px solid var(--tamarin); }
+.couv .logo-grand { width: 76px; height: 76px; margin-bottom: 26px; }
+.couv h1 { font-size: clamp(2.1rem, 1.3rem + 3.1vw, 3.5rem); line-height: 1.06; max-width: 17ch; }
+.couv .sous { font-size: clamp(1.05rem, 0.95rem + 0.5vw, 1.3rem); color: var(--encre-2); max-width: 56ch; margin-top: 18px; }
+.couv .meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 20px 26px; margin: 34px 0 0; max-width: 820px;
+  font-size: 14px; color: var(--encre);
+  border-top: 1px solid var(--trait); padding-top: 22px;
+}
+.couv .meta div { display: flex; flex-direction: column; gap: 3px; }
+.couv .meta dt {
+  font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--encre-3); font-family: 'Ubuntu'; font-weight: 700;
+}
+.couv .meta dd { margin: 0; }
+
+/* ── Titres de section ────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: 10.5px; letter-spacing: 0.17em; text-transform: uppercase;
+  color: var(--tamarin); font-weight: 700; display: block; margin-bottom: 8px;
+}
+h2 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.05rem); line-height: 1.14; }
+h3 { font-size: 1.16rem; margin-top: 12px; }
+h4 { font-size: 0.96rem; letter-spacing: 0.02em; }
+.chapeau { font-size: 1.06rem; color: var(--encre-2); max-width: var(--colonne); }
+
+.separateur { height: 1px; background: var(--trait); border: 0; margin: 0; }
+
+/* ── Écrans (captures) ────────────────────────────────────────────────── */
+figure { margin: 0; }
+figure.ecran { background: var(--ecran-bg); border: 1px solid var(--trait); border-radius: 10px; padding: 12px; }
+figure.ecran img { display: block; width: 100%; height: auto; border-radius: 5px; }
+figure.papier-doc { background: var(--trait-2); border: 1px solid var(--trait); border-radius: 10px; padding: 18px; }
+figure.papier-doc img { display: block; width: 100%; max-width: 620px; margin: 0 auto; height: auto;
+  box-shadow: 0 2px 14px rgba(0,0,0,.14); }
+figcaption {
+  margin-top: 11px; font-size: 12.8px; color: var(--encre-3); line-height: 1.5;
+  display: flex; gap: 9px; align-items: baseline;
+}
+figcaption b { color: var(--encre-2); font-family: 'Ubuntu'; font-weight: 500; white-space: nowrap; }
+
+.duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; }
+
+/* ── Pastilles de licence ─────────────────────────────────────────────── */
+.pastilles { display: flex; flex-wrap: wrap; gap: 6px; }
+.pastille {
+  font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
+  padding: 3px 9px; border-radius: 20px; border: 1px solid var(--trait);
+  color: var(--encre-3); white-space: nowrap;
+}
+.pastille.oui { color: var(--tamarin); border-color: var(--tamarin); background: var(--info-bg); }
+
+/* ── Encadrés ─────────────────────────────────────────────────────────── */
+.note { border-left: 3px solid; padding: 14px 16px; border-radius: 0 8px 8px 0; font-size: 15px; max-width: var(--colonne); }
+.note h4 { font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase; margin-bottom: 6px; }
+.note.piege { border-color: var(--ocre); background: var(--ocre-bg); }
+.note.piege h4 { color: var(--ocre); }
+.note.erreur { border-color: var(--brique); background: var(--brique-bg); }
+.note.erreur h4 { color: var(--brique); }
+.note.info { border-color: var(--tamarin); background: var(--info-bg); }
+.note.info h4 { color: var(--tamarin); }
+.note > * + * { margin-top: 7px; }
+
+/* ── Pas-à-pas ────────────────────────────────────────────────────────── */
+ol.pas { list-style: none; counter-reset: p; padding: 0; margin: 0; max-width: var(--colonne); }
+ol.pas li {
+  counter-increment: p; position: relative; padding: 0 0 15px 44px;
+  border-left: 1px solid var(--trait); margin-left: 13px;
+}
+ol.pas li:last-child { border-left-color: transparent; padding-bottom: 0; }
+ol.pas li::before {
+  content: counter(p); position: absolute; left: -13px; top: 0;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--tamarin); color: var(--papier);
+  font-family: 'Ubuntu'; font-weight: 700; font-size: 12.5px;
+  display: grid; place-items: center;
+}
+ol.pas li b { font-family: 'Ubuntu'; font-weight: 500; }
+
+ul.puces { margin: 0; padding-left: 1.15em; max-width: var(--colonne); }
+ul.puces li { margin-bottom: 5px; }
+ul.puces li::marker { color: var(--tamarin); }
+
+/* ── Cas concret ──────────────────────────────────────────────────────── */
+.cas {
+  background: var(--carte); border: 1px solid var(--trait); border-radius: 10px;
+  padding: 20px 22px; max-width: 780px;
+}
+.cas > * + * { margin-top: 12px; }
+.cas .titre-cas {
+  font-family: 'Ubuntu'; font-weight: 700; font-size: 11px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--tamarin);
+}
+
+/* ── Tableaux ─────────────────────────────────────────────────────────── */
+.defile { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14.4px; min-width: 520px; }
+caption { text-align: left; font-size: 12.6px; color: var(--encre-3); padding-bottom: 8px; }
+th, td { padding: 9px 13px; text-align: left; border-bottom: 1px solid var(--trait); vertical-align: top; }
+thead th {
+  font-family: 'Ubuntu'; font-weight: 700; font-size: 10.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--encre-3); border-bottom: 1.5px solid var(--trait);
+}
+th.n, td.n { text-align: right; }
+tbody tr:hover { background: var(--trait-2); }
+td.oui { color: var(--tamarin); font-weight: 700; }
+td.non { color: var(--encre-3); }
+
+/* ── Table des licences ───────────────────────────────────────────────── */
+.tarif { font-family: 'UbuntuMono'; font-size: 15px; font-weight: 700; color: var(--encre); }
+
+@media (max-width: 900px) {
+  .page { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--trait); }
+  .rail nav { columns: 2; column-gap: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+@media print {
+  .rail { display: none; }
+  .page { display: block; }
+  body { font-size: 10.4pt; background: #fff; }
+  .corps { padding: 0; }
+  section { padding-top: 22px; break-inside: auto; }
+  section { break-before: page; }
+  h2 { break-after: avoid; }
+  .eyebrow { break-after: avoid; }
+  .couv + section, .couv h1 { break-before: auto; }
+  h3, h4 { break-after: avoid; }
+  figure, .cas, .note, tr { break-inside: avoid; }
+  figure.ecran { background: #F0F3F1; border-color: #D5DDD8; }
+  .defile { overflow: visible; }
+  table { min-width: 0; }
+}
+
+/* ── Pastille « Nouveau » : ce qui a changé depuis l'édition précédente ── */
+.nouveau {
+  display: inline-block; vertical-align: 0.12em; margin: 0 2px;
+  font-family: 'Ubuntu', system-ui, sans-serif; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.5;
+  padding: 1px 7px; border-radius: 20px;
+  color: var(--ocre); background: var(--ocre-bg); border: 1px solid var(--ocre);
+}
+h3 .nouveau, .titre-cas .nouveau { font-size: 9px; }
+</style>
+
+
+<div class="page">
+
+<aside class="rail">
+  <div class="marque">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="30" fill="#0B5E4A"/>
+      <path d="M30 44h4l1.6-19h-7.2z" fill="#E9C46A"/>
+      <g stroke="#F5FCF8" stroke-width="3.4" stroke-linecap="round" fill="none">
+        <path d="M32 26 19 21M32 26 23 15M32 26 32 12M32 26 41 15M32 26 45 21"/>
+      </g>
+    </svg>
+    <div>
+      <b>SAGI SCHOOL</b>
+      <span>by Hady Gesman</span>
+    </div>
+  </div>
+
+  <nav aria-label="Sommaire">
+    <div class="nav-titre v1">Manuel du formateur</div>
+    <a href="#pedagogie">Principes de la formation</a>
+    <a href="#parcours">Parcours par licence</a>
+    <a href="#seances">Les séances, une par une</a>
+    <a href="#exercices">Exercices pratiques</a>
+    <a href="#erreurs">Erreurs fréquentes</a>
+    <a href="#deploiement">Checklist de déploiement</a>
+    <a href="#kit">Kit de démarrage client</a>
+  </nav>
+</aside>
+
+<main class="corps">
+<div class="bloc">
+
+<header class="couv">
+  <svg class="logo-grand" viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="30" fill="#0B5E4A"/>
+    <path d="M30 44h4l1.6-19h-7.2z" fill="#E9C46A"/>
+    <g stroke="#F5FCF8" stroke-width="3.4" stroke-linecap="round" fill="none">
+      <path d="M32 26 19 21M32 26 23 15M32 26 32 12M32 26 41 15M32 26 45 21"/>
+    </g>
+  </svg>
+  <h1>Manuel du formateur</h1>
+  <p class="sous">Document interne HADY GESMAN : comment mener la formation d'une école,
+  dans quel ordre, avec quels exercices, et ce qui risque de mal se passer. Il se lit
+  avec le Guide d'utilisation, remis à l'école.</p>
+  <dl class="meta">
+    <div><dt>Logiciel</dt><dd>SAGI SCHOOL 1.53</dd></div>
+    <div><dt>Édition</dt><dd>Septembre 2026</dd></div>
+    <div><dt>Éditeur</dt><dd>HADY GESMAN</dd></div>
+    <div><dt>Comptabilité</dt><dd>SYSCOHADA Révisé</dd></div>
+    <div><dt>Cadre social &amp; fiscal</dt><dd>Sénégal</dd></div>
+  </dl>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<section id="pedagogie">
+  <span class="eyebrow">Méthode</span>
+  <h2>Principes de la formation</h2>
+
+  <h3>Former sur les données de l'école, jamais sur une démo</h3>
+  <div class="texte">
+    <p>C'est la règle la plus importante de ce manuel. Une formation menée sur
+    une démonstration produit des stagiaires qui savent cliquer, mais qui ne
+    savent plus rien faire une fois seuls devant leur vraie école. On installe,
+    on paramètre avec eux, on saisit leurs vrais élèves et leurs vrais tarifs. À
+    la fin de la formation, l'établissement est <b>en production</b>, pas en
+    exercice.</p>
+    <p>On n'utilise une école fictive que pour les opérations irréversibles (une
+    clôture d'exercice, une annulation en série) qu'on ne peut pas faire répéter
+    sur des données réelles. L'école de démonstration des Palmiers, celle de ce
+    guide, se reconstruit à l'identique en une minute (voir
+    <span class="mono">docs/formation/README.md</span>).</p>
+  </div>
+
+  <h3>Un stagiaire, un clavier</h3>
+  <div class="texte">
+    <p>Le formateur montre une fois, puis se tait et regarde faire. Un stagiaire
+    qui n'a pas fait l'opération lui-même ne l'a pas apprise. Prévoyez autant de
+    postes que de personnes à former, ou formez en deux groupes. Dans une école
+    équipée du mode réseau, chaque poste ouvre la même base : c'est l'occasion de
+    le montrer.</p>
+  </div>
+
+  <h3>Former les bonnes personnes</h3>
+  <div class="defile">
+    <table>
+      <thead><tr><th>Qui</th><th>Sur quoi</th><th>Combien de temps</th></tr></thead>
+      <tbody>
+        <tr><td><b>Le directeur / fondateur</b></td><td>Tableau de bord, cahier mensuel, Suivi mensuel, Gouvernance, clôture. Il doit savoir <i>lire</i>, pas saisir.</td><td>Une demi-journée</td></tr>
+        <tr><td><b>Le secrétariat / la caisse</b></td><td>Élèves, familles, garderie, Paiements, reçus, certificats. C'est la personne qui utilisera le logiciel tous les jours.</td><td>Une journée complète</td></tr>
+        <tr><td><b>Le comptable</b></td><td>Comptabilité, charges, investissements, budget, états financiers, fiscal.</td><td>Une journée</td></tr>
+        <tr><td><b>Le censeur / directeur des études</b></td><td>Académique : classes, matières, barèmes, notes, bulletins, suivi pédagogique.</td><td>Une demi-journée</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note info">
+    <h4>Le piège de la personne unique</h4>
+    <p>Beaucoup d'écoles envoient une seule personne « qui expliquera aux
+    autres ». Elle n'expliquera pas : elle deviendra le point de passage obligé,
+    et quand elle partira, l'école appellera le support. Exigez au moins deux
+    personnes formées, dont une de la direction.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="parcours">
+  <span class="eyebrow">Organisation</span>
+  <h2>Parcours par licence</h2>
+  <p class="chapeau">Le périmètre à couvrir dépend de la formule souscrite. Ne formez
+  jamais sur un module que le client n'a pas : il en garderait de la
+  frustration.</p>
+
+  <div class="defile">
+    <table>
+      <thead><tr><th>Formule</th><th>Durée</th><th>Séances à mener</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>Basic</b></td><td><b>1 journée</b></td>
+          <td>Séances 1 à 4 : paramétrage, élèves et familles, encaissements, pilotage du recouvrement.</td>
+        </tr>
+        <tr>
+          <td><b>Pro</b></td><td><b>2 journées</b></td>
+          <td>Séances 1 à 5, plus la séance 10. La comptabilité justifie à elle seule la deuxième journée.</td>
+        </tr>
+        <tr>
+          <td><b>Avancé</b></td><td><b>3 journées</b></td>
+          <td>Les dix séances.</td>
+        </tr>
+        <tr>
+          <td><b>Taxawu Daara</b></td><td><b>3 journées</b></td>
+          <td>Les dix séances, avec la mémorisation coranique et le bulletin arabe en séance 8, le renouvellement annuel en séance 1, et le régime de paie simplifié en séance 6 : la plupart des daaras ne sont pas affiliés.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note piege">
+    <h4>Crèches et écoles avec garderie</h4>
+    <p>Ajoutez une heure à la séance 3 pour la garderie : sections à la journée,
+    appel du jour, garde du soir, caisse séparée. C'est ce qui décide de l'adoption
+    dans une crèche : si l'appel du matin est plus long que le cahier papier,
+    l'équipe abandonnera.</p>
+  </div>
+
+  <h3>Découpage d'une journée type</h3>
+  <div class="defile">
+    <table>
+      <thead><tr><th>Horaire</th><th>Contenu</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">09h00 — 10h30</td><td>Séance du matin, partie 1</td></tr>
+        <tr><td class="mono">10h30 — 10h45</td><td>Pause</td></tr>
+        <tr><td class="mono">10h45 — 12h30</td><td>Séance du matin, partie 2, et exercice</td></tr>
+        <tr><td class="mono">12h30 — 14h00</td><td>Déjeuner</td></tr>
+        <tr><td class="mono">14h00 — 16h00</td><td>Séance de l'après-midi</td></tr>
+        <tr><td class="mono">16h00 — 16h45</td><td>Exercice noté et reprise des points ratés</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="seances">
+  <span class="eyebrow">Déroulé</span>
+  <h2>Les séances, une par une</h2>
+  <p class="chapeau">Chaque séance a un objectif formulé du point de vue du
+  stagiaire : ce qu'il doit savoir faire seul en sortant de la salle.</p>
+
+  <div class="defile">
+    <table>
+      <caption>Les dix séances. Un parcours Avancé complet fait 27 heures, soit trois journées avec les exercices.</caption>
+      <thead><tr><th>Nº</th><th>Séance</th><th class="n">Durée</th><th>Pour qui</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">1</td><td>Prise en main et paramétrage</td><td class="n mono">3 h</td><td>Tous</td></tr>
+        <tr><td class="mono">2</td><td>Élèves, familles et inscriptions</td><td class="n mono">3 h</td><td>Secrétariat, direction</td></tr>
+        <tr><td class="mono">3</td><td>Encaisser au quotidien</td><td class="n mono">3 h</td><td>Secrétariat, caisse</td></tr>
+        <tr><td class="mono">4</td><td>Piloter le recouvrement</td><td class="n mono">2 h</td><td>Direction</td></tr>
+        <tr><td class="mono">5</td><td>Lire sa comptabilité</td><td class="n mono">3 h</td><td>Comptable, direction</td></tr>
+        <tr><td class="mono">6</td><td>La paie</td><td class="n mono">3 h</td><td>RH, comptable</td></tr>
+        <tr><td class="mono">7</td><td>Fiscalité et obligations</td><td class="n mono">2 h</td><td>Comptable, direction</td></tr>
+        <tr><td class="mono">8</td><td>Notes et bulletins</td><td class="n mono">4 h</td><td>Censeur, enseignants</td></tr>
+        <tr><td class="mono">9</td><td>Ressources et gouvernance</td><td class="n mono">2 h</td><td>Direction, fondateur</td></tr>
+        <tr><td class="mono">10</td><td>Clôture, sauvegarde, autonomie</td><td class="n mono">2 h</td><td>Direction</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Séance 1 — Prise en main et paramétrage</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · l'école est configurée et prête à recevoir ses élèves</div>
+    <ul class="puces">
+      <li>Connexion, barre latérale, pastille de licence, changement de mot de
+      passe, choix du thème.</li>
+      <li>Infos École au complet : <b>logo importé</b>, IA, IEF, nom du directeur.
+      On imprime un certificat à blanc pour que la salle voie le résultat.</li>
+      <li>Exercice : année scolaire, dates, nombre de mensualités, soldes
+      initiaux. Faites dire à voix haute combien de mois l'école facture.</li>
+      <li>Sections et tarifs, saisis par le stagiaire à partir de la grille
+      tarifaire papier de l'école. Formules horaires si l'école en a. Mode « à la
+      journée » pour une garderie. Renouvellement annuel pour un daara.</li>
+      <li>Services réellement proposés, avec leurs frais d'adhésion. Caisses
+      séparées si l'école encaisse un service à part.</li>
+      <li>Règle d'échéance : posez la question « quand considérez-vous qu'une
+      famille est en retard ? » et réglez selon la réponse. Garde du soir si
+      besoin.</li>
+      <li>Champs propres à l'école dans la fiche élève ; modèle Word du certificat
+      si l'école en a un.</li>
+      <li>Comptes utilisateurs avec les bons rôles, et les modules par personne
+      si nécessaire.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : ouvrir Paramètres › Frais Sections et faire
+    vérifier chaque montant par le directeur. Tant qu'il n'a pas validé, on
+    n'avance pas.</p>
+  </div>
+
+  <h3>Séance 2 — Élèves, familles et inscriptions</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · inscrire un élève seul, de bout en bout, et le rattacher à sa famille</div>
+    <ul class="puces">
+      <li>Organisation de l'écran : les vues (première ligne), les actions
+      (deuxième ligne), les compteurs, les filtres, les couleurs d'alerte.</li>
+      <li>Inscription complète d'un élève réel de l'école, du nom (« Prénom NOM »)
+      jusqu'au service souscrit.</li>
+      <li>Entrée en cours d'année : vérifier le prorata obtenu.</li>
+      <li>Ouverture de la fiche, lecture du détail mois par mois, certificat,
+      fiche PDF.</li>
+      <li>Prise en charge sociale et bourse d'organisme. Insistez sur la
+      différence : c'est le point le plus mal compris du module.</li>
+      <li><b>Familles</b> : lancer « Regrouper les fratries », relire les groupes
+      « à vérifier » avec le secrétariat, désigner le responsable principal, puis
+      saisir la réduction fratrie de chaque enfant concerné si l'école en accorde.</li>
+      <li>Sortie d'un élève (transfert ou abandon, avec la date) et
+      réintégration depuis « Anciens élèves ».</li>
+      <li>Import Excel et impayés antérieurs si l'école arrive avec un
+      fichier.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : le stagiaire inscrit trois élèves sans aide,
+    en regroupe deux dans une famille, et explique de tête pourquoi l'un est
+    « à jour » et l'autre en « attention ».</p>
+  </div>
+
+  <h3>Séance 3 — Encaisser au quotidien</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · tenir la caisse une journée sans hésiter</div>
+    <ul class="puces">
+      <li>Saisie d'un règlement d'inscription (avec l'adhésion aux services), puis
+      d'une mensualité avec cantine.</li>
+      <li>Paiement de plusieurs mois d'avance : montrer que les mois cochés
+      disparaissent du dû.</li>
+      <li>Règlement multi-mode (espèces et Wave dans la même opération) et choix
+      de la caisse.</li>
+      <li>Encaissement pour une famille entière : répartition, un seul reçu.</li>
+      <li>Impression du reçu (A5 ou ticket) et lecture du suivi financier avec le
+      parent.</li>
+      <li>Annulation et modification d'un règlement : montrer les
+      contre-écritures au journal, pour que personne ne cherche à
+      « supprimer ».</li>
+      <li>Une proforma pour une famille qui veut régler l'année.</li>
+      <li>Onglet Charges : saisir une vraie facture d'électricité avec sa pièce
+      jointe.</li>
+      <li>Si l'école a une garderie : l'appel du jour, le récapitulatif,
+      l'encaissement à la caisse garderie, un départ tardif.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : dix règlements saisis par les stagiaires, dont
+    un multi-mode, un familial et une annulation. Le total encaissé du jour doit
+    correspondre à l'argent en caisse.</p>
+  </div>
+
+  <h3>Séance 4 — Piloter le recouvrement</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · savoir qui relancer lundi matin</div>
+    <ul class="puces">
+      <li>Tableau de bord : la carte <b>Pilotage du mois</b>, puis les indicateurs
+      un par un.</li>
+      <li><b>Mon cahier mensuel</b> : les filtres Pas encore payé, Partiel, Déjà
+      payé, et le PDF de relance.</li>
+      <li>Suivi mensuel : évolution, par section, créances, charges et marge.</li>
+      <li>Rappels SMS : réglages, texte du message, un seul SMS par famille, et
+      <b>démonstration du mode simulation</b> avant toute activation réelle.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : le directeur sort de la séance avec la liste
+    imprimée des familles à convoquer, tirée du cahier mensuel.</p>
+  </div>
+
+  <h3>Séance 5 — Lire sa comptabilité</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · retrouver l'origine de n'importe quel chiffre</div>
+    <ul class="puces">
+      <li>Le principe : aucune saisie ici, tout vient des modules métier.</li>
+      <li>Le journal, et surtout ses filtres par nature d'opération.</li>
+      <li>Prendre un règlement saisi en séance 3 et retrouver ses écritures, y
+      compris la part cantine en 758.</li>
+      <li>Grand livre, balance, les quatre états financiers et leur export
+      PDF.</li>
+      <li>Budget prévisionnel : saisir le vrai budget de l'école, lire
+      l'écart.</li>
+      <li>Investissement : enregistrer un bien de l'école et lire son
+      amortissement.</li>
+      <li>Le sélecteur d'exercice pour relire une année passée.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : le comptable retrouve seul, dans le journal,
+    les écritures d'un reçu précis et explique chaque ligne.</p>
+  </div>
+
+  <h3>Séance 6 — La paie</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · sortir la paie du mois sans assistance</div>
+    <ul class="puces">
+      <li>Régime de paie de l'établissement : <b>à trancher avant tout le
+      reste</b>.</li>
+      <li>Création des vrais salariés avec contrat, situation familiale et mode de
+      paiement.</li>
+      <li>Avance sur salaire, puis génération du bulletin qui l'impute.</li>
+      <li>Un bulletin avec deux jours d'absence : la retenue proposée, la note
+      obligatoire, l'impression.</li>
+      <li>Le cycle brouillon, validé, payé, en insistant sur le fait que la
+      validation est définitive. Annulation d'un bulletin validé par erreur.</li>
+      <li>Départ d'un salarié ; filtre Présents / Partis.</li>
+      <li>Retour au journal pour voir les écritures de paie.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : toute la paie du mois en cours est produite et
+    payée pendant la séance.</p>
+  </div>
+
+  <h3>Séance 7 — Fiscalité et obligations</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · savoir ce qu'on doit, et pour quand</div>
+    <ul class="puces">
+      <li>Déclarations sociales : le BRS du mois, ligne par ligne.</li>
+      <li>Les obligations de l'établissement, leurs bases, leurs échéances.</li>
+      <li>Comptabiliser une obligation et vérifier l'écriture produite.</li>
+      <li>Onglet Conseils : lire les alertes et les traiter une par une.</li>
+      <li>Rappeler la limite : ce sont des estimations, pas un avis fiscal.</li>
+    </ul>
+  </div>
+
+  <h3>Séance 8 — Notes et bulletins</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · produire les bulletins d'une classe entière</div>
+    <ul class="puces">
+      <li>Découpage de l'année ; établissement hybride si l'école enseigne en
+      français et en arabe.</li>
+      <li><b>Calcul de la moyenne</b> : décider avec la direction de la règle
+      (moyenne des matières ou total des points), du barème et de l'arrondi.
+      Montrer sur une feuille papier de l'école que le logiciel retombe sur le
+      même chiffre.</li>
+      <li>Classes, matières avec coefficient et barème, copie des matières d'une
+      classe à l'autre, types d'évaluation et poids.</li>
+      <li><b>Rattacher les élèves à leur classe</b>, sans quoi rien ne
+      fonctionnera ensuite. Vérifier classe par classe.</li>
+      <li>Saisie d'une évaluation complète par un enseignant ; correction d'une
+      évaluation créée avec le mauvais barème.</li>
+      <li>Calcul des moyennes, lecture des rangs et du taux de réussite.</li>
+      <li>Bulletins de la classe (deux par feuille), historique, suivi
+      pédagogique d'un élève.</li>
+      <li>Daaras : parcours de mémorisation et rapport bilingue.</li>
+    </ul>
+    <p><b>Point de contrôle</b> : les bulletins d'une vraie classe sont imprimés
+    à la fin de la séance.</p>
+  </div>
+
+  <h3>Séance 9 — Ressources et gouvernance</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · rendre compte à un bailleur</div>
+    <ul class="puces">
+      <li>Enregistrer un vrai don et une vraie subvention de l'école.</li>
+      <li>Un prêt : simulation, tableau d'amortissement, règlement d'une
+      échéance.</li>
+      <li>Une tontine, si l'école en pratique une, ce qui est fréquent.</li>
+      <li>Créer un projet et une ressource, puis saisir une dépense rattachée aux
+      deux. <b>Provoquer exprès un dépassement d'enveloppe</b> pour montrer le
+      refus du système.</li>
+      <li>Un dépôt d'espèces en banque par Flux internes.</li>
+      <li>L'écran Pilotage, présenté comme la diapositive d'un conseil
+      d'administration.</li>
+    </ul>
+  </div>
+
+  <h3>Séance 10 — Clôture, sauvegarde, autonomie</h3>
+  <div class="cas">
+    <div class="titre-cas">Objectif · l'école n'a plus besoin de nous</div>
+    <ul class="puces">
+      <li>Sauvegarde : la déclencher, vérifier la date, expliquer la
+      restauration.</li>
+      <li>Santé de la migration : lire chaque voyant.</li>
+      <li>Clôture d'exercice, <b>sur l'école de démonstration, jamais sur l'école
+      réelle</b>.</li>
+      <li>Report des impayés et réinscription des élèves débiteurs.</li>
+      <li>Consultation d'un exercice clôturé.</li>
+      <li>Ma Licence : échéance, pastille, délai de grâce, demande de
+      renouvellement.</li>
+      <li>Remise du kit de démarrage et des contacts du support.</li>
+    </ul>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="exercices">
+  <span class="eyebrow">Évaluation</span>
+  <h2>Exercices pratiques</h2>
+  <p class="chapeau">Chaque exercice a une réponse vérifiable. Le formateur ne
+  demande pas « avez-vous compris ? » : il fait produire un résultat et le
+  compare. Les montants sont ceux de l'école de démonstration ; sur l'école
+  réelle, refaites le calcul avec ses tarifs.</p>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 1 · le prorata d'un arrivant</div>
+    <p>Inscrire en Élémentaire (inscription 75 000 F, uniforme 18 000 F,
+    fournitures 12 000 F, mensualité 30 000 F) un élève arrivé le 5 février,
+    dans une école qui facture 9 mois d'octobre à juin.</p>
+    <p><b>Attendu</b> : le logiciel facture 5 mensualités (février à juin), soit
+    75 000 + 18 000 + 12 000 + 5 × 30 000 = <span class="mono">255 000 FCFA</span>,
+    plus les services éventuels. Le stagiaire doit savoir montrer où lire ce
+    chiffre sur la fiche. Une proforma « futur élève » avec la même date d'entrée
+    donne le même total : c'est un bon moyen de vérifier.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 2 · le règlement multi-mode</div>
+    <p>Un parent règle 42 000 F : 30 000 en espèces et 12 000 par Wave.</p>
+    <p><b>Attendu</b> : un seul reçu, un mode affiché « Mixte », et deux canaux
+    crédités séparément. Le stagiaire doit retrouver les deux lignes au journal
+    et voir chaque montant sur son canal dans Gouvernance › Flux internes.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 3 · l'erreur de caisse</div>
+    <p>Un règlement de 50 000 F a été saisi à 500 000 F. Corriger.</p>
+    <p><b>Attendu</b> : le stagiaire utilise <i>Modifier</i>, jamais une
+    suppression. Il montre ensuite au journal les écritures d'origine, les
+    contre-écritures et les nouvelles. Trois jeux d'écritures, aucune ligne
+    effacée : c'est la bonne réponse.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 4 · la bourse</div>
+    <p>Un élève du Collège (dû annuel 490 000 F avec l'assurance) est pris en
+    charge par une fondation à hauteur de la moitié de sa mensualité.</p>
+    <p><b>Attendu</b> : le dû total reste 490 000 F. Il se répartit entre la
+    part de l'organisme (9 × 20 000 = 180 000 F) et la part de la famille.
+    L'alerte de retard ne se déclenche que si la <i>famille</i> ne règle pas sa
+    part. Le stagiaire doit expliquer pourquoi on ne saisit pas cela comme une
+    remise.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 5 · la fratrie</div>
+    <p>Trois enfants d'un même père sont inscrits séparément, avec le même
+    numéro de téléphone. L'école accorde 10 % sur la mensualité au 2ᵉ enfant et
+    20 % à partir du 3ᵉ.</p>
+    <p><b>Attendu</b> : « Regrouper les fratries » propose le groupe. Une fois la
+    famille créée et le barème appliqué, l'aîné (rang 1, le plus ancien dans
+    l'école) ne change pas, le 2ᵉ a une prise en charge FRATRIE de 10 %, le 3ᵉ de
+    20 %. Un encaissement familial produit un seul reçu, et un seul SMS de
+    rappel part pour les trois. Dernier geste : le père règle aussi le mois
+    suivant d'avance. On le coche dans la fenêtre, et ce mois passe « Soldé » sur
+    la fiche de chaque enfant.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 6 · la garderie</div>
+    <p>Un enfant de la section Garderie (½ journée 3 000 F, journée 5 000 F) est
+    présent 4 journées et 3 demi-journées en juin. Il est récupéré un soir à
+    18 h 40 (limite 17 h 30, facturation dès 17 h 45, 1 000 F la tranche).</p>
+    <p><b>Attendu</b> : 4 × 5 000 + 3 × 3 000 = 29 000 F de garderie, plus
+    2 000 F de garde du soir (deux tranches), soit 31 000 F dus pour juin. Encaissé
+    à la caisse garderie, le montant apparaît au compte 5716 et en produit
+    accessoire (758).</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 7 · charge ou investissement</div>
+    <p>Classer six dépenses : 60 tables-bancs à 1 800 000 F, une ramette de
+    papier, un minibus, l'électricité du mois, douze ordinateurs, la peinture
+    d'une salle.</p>
+    <p><b>Attendu</b> : tables-bancs, minibus et ordinateurs en investissement ;
+    papier, électricité et peinture en charges. Faites justifier chaque réponse
+    par la durée d'utilisation, pas par le montant.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 8 · l'avance qui dépasse le net</div>
+    <p>Accorder à une agente d'entretien payée 120 000 F une avance de
+    150 000 F, puis générer son bulletin.</p>
+    <p><b>Attendu</b> : l'imputation est plafonnée au net à payer ; le reste de
+    l'avance est reporté sur le bulletin suivant. Le net ne devient jamais
+    négatif. Le stagiaire doit retrouver le restant dû dans l'onglet
+    Avances.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 9 · le dépassement d'enveloppe</div>
+    <p>Créer une ressource « Subvention cantine » de 1 200 000 F et un projet
+    « Programme cantine », puis saisir deux dépenses de 640 000 F et 615 000 F
+    rattachées aux deux.</p>
+    <p><b>Attendu</b> : la seconde est refusée avec le message
+    <span class="mono">« Dépassement : disponible 560 000, demandé 615 000 »</span>.
+    Le stagiaire doit expliquer à quoi sert ce refus devant un bailleur.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 10 · deux barèmes dans une matière</div>
+    <p>En mathématiques, créer deux évaluations de même type : une composition
+    notée sur 20 et une interrogation notée sur 10. Un élève obtient 15/20 et
+    8/10. Calculer les moyennes, puis imprimer son bulletin.</p>
+    <p><b>Attendu</b> : 8/10 vaut 16/20 ; la moyenne de la matière est
+    (15 + 16) / 2 = <span class="mono">15,5/20</span>. Si le stagiaire trouve
+    11,5, c'est qu'il a fait la moyenne des notes brutes : c'est l'erreur que le
+    logiciel évite. Autre cas à faire : l'évaluation a été créée sur 20 alors
+    qu'elle était sur 10. La corriger avec l'icône crayon, sans ressaisir les
+    notes.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Exercice 11 · le bulletin d'une classe</div>
+    <p>Saisir une composition dans trois matières d'une vraie classe, calculer
+    les moyennes et imprimer les bulletins de la classe.</p>
+    <p><b>Attendu</b> : un PDF avec deux bulletins par feuille, les
+    coefficients, les rangs par matière, la moyenne générale et le rang dans la
+    classe. Si un élève manque, le stagiaire doit savoir que c'est sa
+    <b>classe</b> qui n'est pas renseignée.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="erreurs">
+  <span class="eyebrow">Support</span>
+  <h2>Erreurs fréquentes et points de vigilance</h2>
+  <p class="chapeau">Ce que les écoles font mal, ce pour quoi elles appellent, et
+  la réponse en une phrase. Ce tableau sert de script pour l'assistance au
+  téléphone.</p>
+
+  <div class="defile">
+    <table>
+      <thead><tr><th>Ce que dit l'école</th><th>Cause réelle</th><th>Réponse</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>« Tous mes élèves sont en critique »</td>
+          <td>Tarifs de section à zéro, ou règle d'échéance mal réglée.</td>
+          <td>Paramètres › Frais Sections, puis Paramètres › Échéances.</td>
+        </tr>
+        <tr>
+          <td>« Mon taux de recouvrement est à 100 % alors que personne ne paie »</td>
+          <td>Le dû annuel vaut zéro : les tarifs n'ont jamais été saisis.</td>
+          <td>Même correction. Paramètres › Santé de la migration le signale.</td>
+        </tr>
+        <tr>
+          <td>« Un élève parti continue d'accumuler des retards »</td>
+          <td>Sa sortie n'a pas été enregistrée, ou sans date.</td>
+          <td>Statut Transféré ou Abandonné, avec la date de sortie : il ne doit plus que ce qui était exigible ce jour-là.</td>
+        </tr>
+        <tr>
+          <td>« Un élève n'apparaît pas dans les bulletins »</td>
+          <td>Il n'est rattaché à aucune classe.</td>
+          <td>Fiche élève › Modifier › Classe.</td>
+        </tr>
+        <tr>
+          <td>« Mes moyennes ne correspondent pas à celles de la directrice »</td>
+          <td>La règle de calcul, le barème ou l'arrondi ne sont pas ceux de l'école ; ou la feuille papier compte une matière au numérateur mais pas au dénominateur.</td>
+          <td>Académique › Paramétrage › Calcul de la moyenne, puis relancer Calculer Moyennes. Si les totaux de points coïncident mais pas les moyennes, divisez le total par la moyenne : vous trouverez le diviseur réellement utilisé.</td>
+        </tr>
+        <tr>
+          <td>« J'ai changé un barème et les moyennes n'ont pas bougé »</td>
+          <td>Les moyennes déjà calculées ne se recalculent pas seules.</td>
+          <td>Relancer Calculer Moyennes pour chaque classe et chaque période.</td>
+        </tr>
+        <tr>
+          <td>« Le suivi pédagogique est vide »</td>
+          <td>Aucun élève n'est choisi.</td>
+          <td>Choisir la classe, <i>puis</i> l'élève.</td>
+        </tr>
+        <tr>
+          <td>« Je n'arrive pas à supprimer un reçu »</td>
+          <td>C'est voulu : le SYSCOHADA interdit d'effacer une écriture.</td>
+          <td>Utiliser <i>Annuler</i> ou <i>Modifier</i>.</td>
+        </tr>
+        <tr>
+          <td>« Ma trésorerie ne correspond pas à ma caisse »</td>
+          <td>Les soldes initiaux n'ont pas été saisis, ou un dépôt en banque a été saisi comme une charge.</td>
+          <td>Paramètres › Exercice ; les dépôts passent par Gouvernance › Flux internes.</td>
+        </tr>
+        <tr>
+          <td>« L'argent de la garderie n'est pas dans ma caisse »</td>
+          <td>Il a été encaissé sur une autre caisse (ou l'inverse).</td>
+          <td>Vérifier la caisse choisie sur le règlement ; chaque caisse a son solde dans Paramètres › Caisses.</td>
+        </tr>
+        <tr>
+          <td>« Les SMS de relance ne partent pas »</td>
+          <td>Mode simulation actif, ou passerelle SMS non renseignée.</td>
+          <td>Paramètres › Échéances : renseigner la passerelle <i>et</i> cocher l'envoi réel.</td>
+        </tr>
+        <tr>
+          <td>« Mon bénéfice paraît énorme »</td>
+          <td>La paie n'a pas encore été saisie pour l'exercice.</td>
+          <td>Vérifier que les bulletins du mois sont validés.</td>
+        </tr>
+        <tr>
+          <td>« L'assistant d'installation redemande la base de données »</td>
+          <td>Une mise à jour a réécrit le fichier de configuration.</td>
+          <td>Ressaisir <b>les mêmes</b> identifiants de base : rien n'est perdu.</td>
+        </tr>
+        <tr>
+          <td>« Le logiciel ne s'ouvre plus après une réinstallation de Windows »</td>
+          <td>La base PostgreSQL n'a pas été recréée.</td>
+          <td>Relancer le script d'installation fourni : l'application ne crée pas la base toute seule.</td>
+        </tr>
+        <tr>
+          <td>« Le deuxième poste n'arrive pas à se connecter »</td>
+          <td>Le partage réseau n'est pas activé sur le poste serveur, ou ce poste est éteint.</td>
+          <td>Sur le poste serveur : Réseau › Partager avec les autres postes du réseau, puis ouvrir l'adresse affichée sur l'autre poste.</td>
+        </tr>
+        <tr>
+          <td>« Un module a disparu de mon menu »</td>
+          <td>Licence expirée depuis plus de sept jours, changement de formule, ou modules restreints pour cet utilisateur.</td>
+          <td>Écran Ma Licence ; sinon Paramètres › Utilisateurs.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Deux contrôles à faire devant un comptable attentif</h3>
+  <div class="texte">
+    <p>Ce sont les deux vérifications qui gagnent la confiance d'un
+    expert-comptable en trois minutes. Faites-les <b>devant lui</b>, pas à sa
+    place.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Contrôle 1 · le résultat est le même partout</div>
+    <p>Ouvrir Comptabilité › ETAFI › Compte de résultat et noter le résultat net,
+    puis le comparer à celui du tableau de bord, du pilotage de la gouvernance et
+    de l'onglet Clôture de l'exercice. <b>Tous doivent afficher le même chiffre,
+    au franc près.</b> Aux Palmiers : 20 291 904 FCFA partout.</p>
+    <p>Si l'un d'eux diffère, ce n'est pas un problème de paramétrage :
+    signalez-le à HADY GESMAN avec une capture de chaque écran.</p>
+  </div>
+
+  <div class="cas">
+    <div class="titre-cas">Contrôle 2 · le bilan est équilibré</div>
+    <p>Comptabilité › ETAFI › Bilan : le total de l'actif et celui du passif
+    doivent être égaux, et le bandeau doit indiquer « Équilibré ». C'est le
+    premier contrôle que fait tout comptable, et celui qui décide s'il prend le
+    logiciel au sérieux.</p>
+  </div>
+
+  <div class="note info">
+    <h4>La question qui revient chaque année</h4>
+    <p>« Le logiciel dit que j'ai fait un bénéfice, mais je n'ai pas d'argent. »
+    Ce n'est pas une contradiction : voir l'encadré <i>Marge de trésorerie et
+    résultat comptable</i> du volet 1. Un investissement vide la caisse l'année
+    de l'achat et ne pèse sur le résultat que par son amortissement. Préparez
+    cette réponse avant la séance 5 : la question viendra.</p>
+  </div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="deploiement">
+  <span class="eyebrow">Terrain</span>
+  <h2>Checklist de déploiement</h2>
+  <p class="chapeau">À dérouler dans l'ordre. Tout ce qui n'est pas coché avant
+  de partir chez le client se paie en appels au support le mois suivant.</p>
+
+  <h3>Avant de partir — la veille</h3>
+  <ul class="puces">
+    <li>Clé USB avec l'installateur de la version en cours et le script
+    d'installation.</li>
+    <li>Modèle Excel d'import des élèves.</li>
+    <li>Clé de licence du client, générée et vérifiée.</li>
+    <li>Installation d'essai sur une machine vierge, pas sur une machine de
+    développement.</li>
+    <li>Ce guide, imprimé ou disponible hors ligne.</li>
+    <li>Confirmation écrite de qui sera formé, et à quelle heure.</li>
+  </ul>
+
+  <h3>À demander à l'école avant le jour J</h3>
+  <ul class="puces">
+    <li>La grille tarifaire complète par niveau, avec les formules horaires et
+    les services (cantine, garderie, transport, activités).</li>
+    <li>Le RCCM, le NINEA, le numéro d'autorisation d'ouverture, l'IA et l'IEF de
+    rattachement.</li>
+    <li>Le logo au format image, en bonne définition, et le modèle Word du
+    certificat si l'école en a un.</li>
+    <li>La liste des élèves (fichier ou registre), avec les numéros des parents :
+    ce sont eux qui permettent de regrouper les fratries.</li>
+    <li>Un bulletin papier récent : il fixe la règle de calcul de la moyenne, le
+    barème et l'arrondi.</li>
+    <li>La liste du personnel avec les salaires et les situations
+    familiales.</li>
+    <li>Les soldes de caisse et de banque au premier jour de l'exercice.</li>
+    <li>Le nombre de postes à équiper, pour choisir entre poste unique, mode
+    réseau et cloud.</li>
+    <li>Le nom et le téléphone de la personne qui utilisera le logiciel tous les
+    jours.</li>
+  </ul>
+
+  <h3>Sur place — installation</h3>
+  <ol class="pas">
+    <li><b>Vérifier la machine</b> : Windows à jour, disque non saturé, antivirus
+    qui ne bloque pas l'installation.</li>
+    <li><b>Installer</b> avec le script fourni : il crée la base de données, ce
+    que l'application ne fait pas seule.</li>
+    <li><b>Noter les identifiants de base</b> sur la fiche d'intervention. Ils
+    seront redemandés à la prochaine mise à jour.</li>
+    <li><b>Assistant de première installation</b> : établissement, exercice,
+    compte administrateur.</li>
+    <li><b>Activer la licence</b> et vérifier dans Ma Licence que la formule et
+    la date d'échéance sont les bonnes.</li>
+    <li><b>Mode réseau</b>, s'il y a plusieurs postes : activer le partage sur le
+    poste serveur, ouvrir l'adresse sur chaque autre poste et l'ajouter aux
+    favoris de Chrome.</li>
+    <li><b>Déclencher une sauvegarde</b> et vérifier qu'elle réussit. Si la
+    connexion de l'école ne le permet pas, c'est un point à régler avant de
+    partir.</li>
+    <li><b>Imprimer un reçu à blanc</b> (A5 et, si l'école a une imprimante de
+    caisse, ticket 80 mm) pour valider l'imprimante, le logo et la mise en
+    page.</li>
+  </ol>
+
+  <div class="note info">
+    <h4>En mode cloud</h4>
+    <p>Rien à installer sur le poste. Ouvrez l'adresse de l'application dans
+    Chrome ou Edge, connectez-vous, puis cliquez sur <b>Installer l'app</b> pour
+    mettre l'icône SAGI SCHOOL sur le bureau. Rappelez que c'est un raccourci :
+    internet reste nécessaire.</p>
+  </div>
+
+  <h3>Avant de quitter l'école</h3>
+  <ul class="puces">
+    <li>Le paramétrage complet a été validé à voix haute par le directeur.</li>
+    <li>Les vrais élèves sont saisis ou importés, et les fratries regroupées.</li>
+    <li>Paramètres › Santé de la migration ne montre plus de voyant rouge.</li>
+    <li>Au moins vingt vrais règlements ont été encaissés par le secrétariat,
+    seul.</li>
+    <li>Une sauvegarde a réussi, et sa date est visible à l'écran.</li>
+    <li>Deux personnes au moins savent se connecter et travailler.</li>
+    <li>Les contacts du support sont affichés près du poste.</li>
+    <li>La date du point de suivi à trente jours est fixée avec le
+    directeur.</li>
+  </ul>
+
+  <div class="note info">
+    <h4>Le suivi à trente jours n'est pas facultatif</h4>
+    <p>C'est ce rendez-vous qui décide du renouvellement. Une école qui a
+    décroché pendant le premier mois ne le dira pas : elle abandonnera le
+    logiciel sans bruit et ne renouvellera pas l'année suivante. Un appel de
+    vingt minutes suffit à le détecter.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<section id="kit">
+  <span class="eyebrow">À laisser au client</span>
+  <h2>Kit de démarrage</h2>
+
+  <h3>La fiche à coller près du poste</h3>
+  <div class="cas">
+    <div class="titre-cas">Les gestes du quotidien</div>
+    <div class="defile">
+      <table>
+        <tbody>
+          <tr><td><b>Encaisser</b></td><td>Paiements › Nouveau Paiement › chercher l'élève › cocher les mois › Enregistrer + Reçu</td></tr>
+          <tr><td><b>Encaisser pour une famille</b></td><td>Élèves › Familles › la famille › Encaisser pour la famille › cocher les mois › Encaisser</td></tr>
+          <tr><td><b>Encaisser une bourse</b></td><td>Élèves › Organismes › portefeuille › montant du virement › Répartir › Encaisser</td></tr>
+          <tr><td><b>Inscrire</b></td><td>Élèves › Nouvel Élève › section, date d'entrée, parents › Enregistrer</td></tr>
+          <tr><td><b>Appel de la garderie</b></td><td>Élèves › Garderie › Appel du jour › Enregistrer l'appel</td></tr>
+          <tr><td><b>Certificat</b></td><td>Élèves › œil de l'élève › Certificat de scolarité</td></tr>
+          <tr><td><b>Qui relancer</b></td><td>Paiements › Mon cahier mensuel › Pas encore payé</td></tr>
+          <tr><td><b>Payer une facture</b></td><td>Paiements › Charges › Nouvelle charge</td></tr>
+          <tr><td><b>Où en est l'école</b></td><td>Tableau de bord › Pilotage du mois</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Le calendrier de l'établissement</h3>
+  <div class="defile">
+    <table>
+      <thead><tr><th>Quand</th><th>Ce qu'on fait dans SAGI SCHOOL</th></tr></thead>
+      <tbody>
+        <tr><td><b>Chaque jour</b></td><td>Saisir les encaissements et les dépenses du jour, faire l'appel de la garderie. Vérifier que le total de chaque caisse correspond à l'argent réel.</td></tr>
+        <tr><td><b>Chaque semaine</b></td><td>Ouvrir le cahier mensuel et relancer les familles qui n'ont pas payé. Déposer les espèces en banque par Flux internes.</td></tr>
+        <tr><td><b>Chaque mois</b></td><td>Produire la paie, déposer le BRS avant le 15, contrôler le budget par rapport au réalisé, vérifier la date de la dernière sauvegarde.</td></tr>
+        <tr><td><b>Chaque trimestre</b></td><td>Saisir les notes, calculer les moyennes, imprimer les bulletins de chaque classe.</td></tr>
+        <tr><td><b>En fin d'année</b></td><td>Exporter les états financiers, relire les impayés, sauvegarder, puis clôturer l'exercice.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Support HADY GESMAN</h3>
+  <div class="cas">
+    <div class="defile">
+      <table>
+        <tbody>
+          <tr><td><b>Téléphone</b></td><td class="mono">+221 70 328 61 51 &nbsp;·&nbsp; +221 78 429 78 30</td></tr>
+          <tr><td><b>Courriel</b></td><td class="mono">hadygesman@gmail.com</td></tr>
+          <tr><td><b>Renouvellement</b></td><td>Pastille <i>Licence</i> en haut de l'écran, ou Ma Licence › Demander un renouvellement</td></tr>
+          <tr><td><b>Avant d'appeler</b></td><td>Notez le message exact affiché, l'écran concerné et ce que vous veniez de faire. Une capture d'écran vaut dix minutes d'explication.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:56px;padding-top:26px;border-top:1px solid var(--trait);font-size:13px;color:var(--encre-3)">
+    <p><b style="font-family:'Ubuntu';color:var(--encre-2)">SAGI SCHOOL 1.51</b> — Guide d'utilisation et
+    support de formation · Édition de septembre 2026 · Édité par HADY GESMAN ·
+    Comptabilité conforme au SYSCOHADA Révisé · Cadre social et fiscal du
+    Sénégal.</p>
+    <p style="margin-top:8px">Les captures de ce document proviennent d'un établissement de
+    démonstration entièrement inventé (Groupe Scolaire Les Palmiers, Dakar). Aucune
+    donnée d'une école cliente n'y figure.</p>
+  </div>
+</section>
+
+</div><!-- /bloc -->
+</main>
+</div><!-- /page -->
+
+
+<script>
+(function () {
+  var liens = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+  var cibles = liens.map(function (a) { return document.querySelector(a.getAttribute('href')); });
+
+  function surligner() {
+    var y = window.scrollY + 130, actif = 0;
+    for (var i = 0; i < cibles.length; i++) {
+      if (cibles[i] && cibles[i].offsetTop <= y) actif = i;
+    }
+    liens.forEach(function (a, i) { a.classList.toggle('on', i === actif); });
+  }
+
+  var enAttente = false;
+  window.addEventListener('scroll', function () {
+    if (enAttente) return;
+    enAttente = true;
+    requestAnimationFrame(function () { surligner(); enAttente = false; });
+  }, { passive: true });
+  surligner();
+})();
+</script>
