@@ -74,7 +74,9 @@ class Ressource(TenantModel):
     saisie ; dans ce cas l'encaissement est comptabilisé par GMRF, pas ici.
 
     Ce modèle est une COUCHE DE GESTION (affectation + suivi de consommation) :
-    il ne génère AUCUNE écriture d'encaissement. La consommation réelle est lue
+    il ne génère lui-même AUCUNE écriture d'encaissement. L'encaissement passe
+    TOUJOURS par GMRF (un Financement ou un Prêt, qui écrit D trésorerie / C
+    ressource) ; la ressource y est reliée d'office — voir liaison_gmrf.py. La consommation réelle est lue
     par agrégation des débits taggés `JournalEntry.ressource = self` (comptes 6xx
     et 2xx) — une seule source de vérité, le ledger, comme pour la dimension
     `projet`. Zéro double comptage."""
@@ -103,7 +105,10 @@ class Ressource(TenantModel):
     organisme       = models.CharField(max_length=200, blank=True, default='')  # financeur / origine
     montant         = models.DecimalField(max_digits=15, decimal_places=2)
     date_ressource  = models.DateField(null=True, blank=True)
-    compte_tresorerie = models.CharField(max_length=10, blank=True, default='')  # informatif
+    # Compte de trésorerie qui a reçu les fonds (571, 5521, 521…). Renseigné
+    # d'office quand la ressource vient d'un financement ou d'un prêt GMRF ;
+    # obligatoire pour toute ressource encaissée depuis Gouvernance.
+    compte_tresorerie = models.CharField(max_length=10, blank=True, default='')
     convention      = models.CharField(max_length=200, blank=True, default='')
     taux            = models.DecimalField(max_digits=6, decimal_places=3, default=0)  # si prêt
     statut          = models.CharField(max_length=10, choices=STATUT_CHOICES, default='ACTIVE')
@@ -121,6 +126,12 @@ class Ressource(TenantModel):
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'reference'],
                                     name='uniq_ressource_ref_par_tenant'),
+            # Un financement ou un prêt GMRF n'est suivi que par UNE ressource :
+            # c'est ce qui rend la double saisie impossible.
+            models.UniqueConstraint(fields=['financement'], condition=models.Q(financement__isnull=False),
+                                    name='uniq_ressource_par_financement'),
+            models.UniqueConstraint(fields=['pret'], condition=models.Q(pret__isnull=False),
+                                    name='uniq_ressource_par_pret'),
         ]
         ordering = ['-date_ressource', 'reference']
 

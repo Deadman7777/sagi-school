@@ -243,6 +243,11 @@ const CAPTURES = {
   'gouv-ressources': async () => { await aller('/gouvernance', 2000); await cliquer('Ressources', 'button.tab'); },
   'gouv-flux': async () => { await aller('/gouvernance', 2000); await cliquer('Flux internes', 'button.tab'); },
   'gouv-tracabilite': async () => { await aller('/gouvernance', 2000); await cliquer('Traçabilité', 'button.tab'); },
+  'gouv-ressource-mobiliser': async () => {
+    await aller('/gouvernance', 2000); await cliquer('Ressources', 'button.tab');
+    await composant('app-gouvernance', "c.ouvrirRessource(); Object.assign(c.fr, { type_ressource: 'DON', libelle: 'Don de la fondation Sonatel', organisme: 'Fondation Sonatel', montant: 750000, compte_tresorerie: '521' })");
+    await pause(1200);
+  },
 
   // ─── Paramétrage de A à Z (chapitre « parametrage-az » du guide) ──────────
   // Les formulaires sont pré-remplis avec l'exemple que cite le texte.

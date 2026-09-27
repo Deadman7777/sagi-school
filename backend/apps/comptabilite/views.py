@@ -125,6 +125,7 @@ PLAN_COMPTABLE = {
     '467':   'Autres débiteurs divers',
     '47':    'Créditeurs divers',
     '4718':  'Créances sur tontines (NATT)',
+    '4621':  'Associés — comptes courants (avances de trésorerie)',
     '4798':  'Dettes sur tontines (NATT)',
     '471':   'Comptes transitoires ou d\'attente (débit)',
     '472':   'Comptes transitoires ou d\'attente (crédit)',

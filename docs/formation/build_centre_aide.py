@@ -186,6 +186,22 @@ def main():
     json_donnees = json.dumps(donnees, ensure_ascii=False).replace('</', '<\\/')
     SORTIE.parent.mkdir(parents=True, exist_ok=True)
     SORTIE.write_text(gabarit.replace('/*__DONNEES__*/null', json_donnees), encoding='utf-8')
+    # Version AUTONOME : captures et polices intégrées, un seul fichier à
+    # envoyer ou à ouvrir depuis n'importe quel dossier. La version
+    # centre-aide/index.html, elle, attend ses fichiers à côté (publication
+    # en ligne) : ouverte seule, elle n'affiche aucune capture.
+    import base64
+    page = SORTIE.read_text(encoding='utf-8')
+    def data_uri(chemin, type_mime):
+        return f'data:{type_mime};base64,' + base64.b64encode((ICI / chemin).read_bytes()).decode()
+    page = re.sub(r'captures/[\w.-]+\.webp', lambda m: data_uri(m.group(0), 'image/webp'), page)
+    page = re.sub(r'url\((assets/[^)]+)\)', lambda m: f"url({data_uri(m.group(1), 'font/woff2')})", page)
+    autonome = ICI.parent / 'centre-aide-sagi-school.html'
+    autonome.write_text('<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n'
+                        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+                        + page.replace('</style>', '</style>\n</head>\n<body>', 1) + '\n</body>\n</html>\n',
+                        encoding='utf-8')
+    print(f'  {autonome.relative_to(ICI.parent.parent)} — {autonome.stat().st_size / 1e6:.1f} Mo (autonome)')
     images = sorted(set(re.findall(r'captures/[\w.-]+\.webp', json_donnees)))
     (SORTIE.parent / 'fichiers.json').write_text(json.dumps(
         {**{i: f'docs/formation/{i}' for i in images},

@@ -428,6 +428,17 @@ class TransfertView(APIView):
 
 
 # ── Ressources financières unifiées + affectations (Lot 2) ───────────────────
+def _origine_dict(r):
+    from .liaison_gmrf import origine
+    code, reference, statut = origine(r)
+    plan = get_plan_dict(r.tenant)
+    return {
+        'origine': code, 'origine_reference': reference, 'origine_statut': statut,
+        'compte_tresorerie_libelle': plan.get(r.compte_tresorerie, '') if r.compte_tresorerie else '',
+        'liee_gmrf': code != 'SAISIE',
+    }
+
+
 def _ressource_to_dict(r, consomme=None, affecte=None):
     montant   = r.montant or Decimal('0')
     consomme  = Decimal('0') if consomme is None else consomme
@@ -446,12 +457,25 @@ def _ressource_to_dict(r, consomme=None, affecte=None):
         'projet_id': str(r.projet_id) if r.projet_id else None,
         'financement_id': str(r.financement_id) if r.financement_id else None,
         'pret_id': str(r.pret_id) if r.pret_id else None,
+        # D'où viennent les fonds et où ils sont entrés : le financement ou le
+        # prêt GMRF qui les a encaissés, et le compte de trésorerie crédité.
+        **_origine_dict(r),
         'montant_consomme': float(consomme),
         'montant_affecte': float(affecte),
         'montant_restant': float(restant),
         'disponible_a_affecter': float(montant - affecte),
         'taux_consommation': taux,
     }
+
+
+def _champ_modifie(r, champ, valeur):
+    """La requête change-t-elle vraiment ce champ ? (l'écran renvoie tout le
+    formulaire, valeurs inchangées comprises)."""
+    if champ == 'montant':
+        return _d(valeur) != r.montant
+    if champ == 'date_ressource':
+        return str(valeur or '')[:10] != (str(r.date_ressource) if r.date_ressource else '')
+    return str(valeur or '').strip() != str(getattr(r, champ) or '').strip()
 
 
 class RessourceView(APIView):
@@ -485,7 +509,7 @@ class RessourceView(APIView):
             conso, affect = self._stats_bulk(tenant, [r.id])
             return Response(_ressource_to_dict(r, conso.get(r.id, Decimal('0')),
                                                affect.get(r.id, Decimal('0'))))
-        qs = list(Ressource.objects.filter(tenant=tenant))
+        qs = list(Ressource.objects.filter(tenant=tenant).select_related('financement', 'pret', 'tenant'))
         conso, affect = self._stats_bulk(tenant, [r.id for r in qs])
         return Response([_ressource_to_dict(r, conso.get(r.id, Decimal('0')),
                                             affect.get(r.id, Decimal('0'))) for r in qs])
@@ -499,20 +523,37 @@ class RessourceView(APIView):
             return Response({'error': 'Libellé requis'}, status=400)
         if montant is None or montant <= 0:
             return Response({'error': 'Montant invalide'}, status=400)
-        reference = (d.get('reference') or '').strip() or _next_code(tenant, Ressource, 'RES', field='reference')
-        if Ressource.objects.filter(tenant=tenant, reference=reference).exists():
+        reference = (d.get('reference') or '').strip()
+        if reference and Ressource.objects.filter(tenant=tenant, reference=reference).exists():
             return Response({'error': f'La référence {reference} existe déjà'}, status=400)
 
         projet = Projet.objects.filter(tenant=tenant, id=d['projet_id']).first() if d.get('projet_id') else None
-        r = Ressource.objects.create(
-            tenant=tenant, reference=reference,
-            type_ressource=d.get('type_ressource', 'AUTRE'),
-            libelle=libelle, organisme=d.get('organisme', ''),
-            montant=montant, date_ressource=d.get('date_ressource') or None,
-            compte_tresorerie=d.get('compte_tresorerie', ''),
-            convention=d.get('convention', ''), taux=_d(d.get('taux', 0)) or Decimal('0'),
-            observations=d.get('observations', ''), projet=projet,
-        )
+        # Mobiliser = encaisser : par GMRF, qui écrit D trésorerie / C ressource,
+        # puis la ressource reliée. Plus de ressource « en l'air », hors
+        # trésorerie et hors comptabilité.
+        from .liaison_gmrf import LiaisonRefusee, mobiliser
+        try:
+            with transaction.atomic():
+                r, financement = mobiliser(tenant, {
+                    'type_ressource': d.get('type_ressource', 'AUTRE'), 'libelle': libelle,
+                    'organisme': d.get('organisme', ''), 'montant': montant,
+                    'date_ressource': d.get('date_ressource') or None,
+                    'compte_tresorerie': d.get('compte_tresorerie', ''),
+                    'encaissement': d.get('encaissement') or 'RECU',
+                    'convention': d.get('convention', ''), 'observations': d.get('observations', ''),
+                    'taux': _d(d.get('taux', 0)) or Decimal('0'),
+                    'projet': projet, 'reference': reference,
+                })
+        except LiaisonRefusee as exc:
+            return Response({'error': str(exc)}, status=400)
+        if r is None:
+            log_audit(request, 'CREATION', 'Financement', financement.id,
+                      f'{financement.reference} attendu — {libelle}')
+            return Response({'attendu': True, 'financement_reference': financement.reference,
+                             'message': f"Financement {financement.reference} enregistré comme attendu "
+                                        f"dans Ressources financières. La ressource apparaîtra ici "
+                                        f"à l'encaissement."}, status=201)
+        reference = r.reference
         log_audit(request, 'CREATION', 'Ressource', r.id, f'{reference} — {libelle}')
         return Response(_ressource_to_dict(r), status=201)
 
@@ -523,6 +564,18 @@ class RessourceView(APIView):
         except Ressource.DoesNotExist:
             return Response({'error': 'Non trouvé'}, status=404)
         d = request.data
+        # Montant, compte, date et type d'une ressource reliée appartiennent au
+        # financement ou au prêt qui l'a encaissée : on les change dans GMRF,
+        # jamais ici — sinon la ressource et l'écriture divergent.
+        if r.financement_id or r.pret_id:
+            verrouilles = [c for c in ('montant', 'compte_tresorerie', 'date_ressource', 'type_ressource',
+                                       'libelle', 'organisme', 'statut')
+                           if c in d and _champ_modifie(r, c, d[c])]
+            if verrouilles:
+                return Response({'error': "Cette ressource vient de Ressources financières "
+                                          f"({_origine_dict(r)['origine_reference']}) : modifiez-y le montant, "
+                                          "le compte, la date ou le statut. Ici, seuls le projet, la "
+                                          "convention et les observations se modifient."}, status=400)
         for f in ('type_ressource', 'libelle', 'organisme', 'compte_tresorerie',
                   'convention', 'statut', 'observations'):
             if f in d:
@@ -553,6 +606,10 @@ class RessourceView(APIView):
             r = Ressource.objects.get(tenant=tenant, id=pk)
         except Ressource.DoesNotExist:
             return Response({'error': 'Non trouvé'}, status=404)
+        if r.financement_id or r.pret_id:
+            return Response({'error': "Cette ressource suit une opération de Ressources financières "
+                                      f"({_origine_dict(r)['origine_reference']}). Annulez l'opération là-bas : "
+                                      "la ressource suivra."}, status=400)
         # Ressource déjà consommée en compta : clôturée plutôt que supprimée
         # (les écritures qui la référencent conservent leur traçabilité).
         if JournalEntry.objects.filter(tenant=tenant, ressource_id=r.id).exists():

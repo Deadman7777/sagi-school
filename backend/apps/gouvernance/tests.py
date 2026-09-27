@@ -241,7 +241,7 @@ class TransfertTresorerieTest(GouvernanceBaseTest):
 class RessourceTest(GouvernanceBaseTest):
     def _creer_ressource(self, montant=1000000, **extra):
         r = self.client.post('/api/gouvernance/ressources/', {
-            'type_ressource': 'PRET', 'libelle': 'Prêt équipement',
+            'type_ressource': 'SUBVENTION', 'compte_tresorerie': '521', 'libelle': 'Prêt équipement',
             'montant': montant, **extra}, format='json')
         return r
 
@@ -281,8 +281,10 @@ class RessourceTest(GouvernanceBaseTest):
             'no_compte': '6054', 'montant': 150000, 'libelle': 'Trop',
             'ressource_id': rid}, format='json')
         self.assertEqual(c.status_code, 400)
-        # Aucune écriture ne doit avoir été créée pour cette ressource.
-        self.assertFalse(JournalEntry.objects.filter(tenant=self.tenant, ressource_id=rid).exists())
+        # Aucune charge ne doit avoir été écrite sur cette ressource (seul son
+        # encaissement, en trésorerie, lui est rattaché).
+        self.assertFalse(JournalEntry.objects.filter(tenant=self.tenant, ressource_id=rid,
+                                                     no_compte__startswith='6').exists())
 
     def test_charge_sans_ressource_inchangee(self):
         """Non-régression : une charge sans dimension fonctionne comme avant."""
@@ -322,7 +324,10 @@ class RessourceTest(GouvernanceBaseTest):
         self.assertEqual(r.data['consommations'][0]['montant'], 120000.0)
 
     def test_suppression_ressource_consommee_cloturee(self):
-        rid = self._creer_ressource(montant=1000000).data['id']
+        # Ressource saisie à la main (avant la liaison GMRF) : seule sorte qu'on
+        # supprime encore depuis Gouvernance ; reliée, elle s'annule dans GMRF.
+        rid = str(Ressource.objects.create(tenant=self.tenant, reference='RES-0001', libelle='Ancienne',
+                                           montant=Decimal('1000000')).id)
         self.client.post('/api/comptabilite/charges/', {
             'no_compte': '6054', 'montant': 10000, 'libelle': 'x',
             'ressource_id': rid}, format='json')
@@ -356,9 +361,13 @@ class RessourceTest(GouvernanceBaseTest):
 
 class Lot3TracabiliteTest(GouvernanceBaseTest):
     def _ressource(self, montant=2000000):
-        return self.client.post('/api/gouvernance/ressources/', {
-            'type_ressource': 'PRET', 'libelle': 'Prêt BNDE', 'organisme': 'BNDE',
-            'montant': montant}, format='json').data['id']
+        # Un prêt se saisit dans GMRF (tableau d'amortissement) ; sa ressource
+        # apparaît d'office dans Gouvernance.
+        pret = self.client.post('/api/gmrf/prets/', {
+            'organisme_preteur': 'BNDE', 'objet': 'Prêt BNDE', 'montant': montant,
+            'taux_interet': 0, 'duree_mois': 12, 'date_deblocage': '2026-01-10',
+            'compte_tresorerie': '521'}, format='json').data['id']
+        return str(Ressource.objects.get(pret_id=pret).id)
 
     def _projet(self):
         return self.client.post('/api/gouvernance/projets/', {
@@ -588,7 +597,7 @@ class DashboardGouvernanceTest(GouvernanceBaseTest):
     def test_dashboard_consolide(self):
         # Une ressource (prêt 1M) et deux dépenses liées : charge 300k + immo 400k.
         rid = self.client.post('/api/gouvernance/ressources/', {
-            'type_ressource': 'PRET', 'libelle': 'Prêt', 'montant': 1000000}, format='json').data['id']
+            'type_ressource': 'SUBVENTION', 'compte_tresorerie': '521', 'libelle': 'Prêt', 'montant': 1000000}, format='json').data['id']
         self.client.post('/api/comptabilite/charges/', {
             'no_compte': '661', 'montant': 300000, 'libelle': 'Salaires', 'ressource_id': rid}, format='json')
         self.client.post('/api/comptabilite/immobilisations/', {
@@ -606,9 +615,10 @@ class DashboardGouvernanceTest(GouvernanceBaseTest):
         # Investissements
         self.assertEqual(d['investissements']['nombre'], 1)
         self.assertEqual(d['investissements']['valeur_brute'], 400000.0)
-        # Trésorerie : seule la charge réglée (571) est un flux sortant ; le
-        # virement interne de 50 000 est bien EXCLU (sinon on aurait 350 000).
-        self.assertEqual(d['tresorerie']['flux_entrants'], 0.0)
+        # Trésorerie : la subvention mobilisée entre en banque (1 000 000 en
+        # flux entrant depuis la liaison GMRF) ; seule la charge réglée (571) est
+        # un flux sortant ; le virement interne de 50 000 est bien EXCLU.
+        self.assertEqual(d['tresorerie']['flux_entrants'], 1000000.0)
         self.assertEqual(d['tresorerie']['flux_sortants'], 300000.0)
         # Pilotage
         self.assertEqual(d['pilotage']['taux_consommation'], 70.0)
@@ -618,7 +628,7 @@ class DashboardGouvernanceTest(GouvernanceBaseTest):
 
     def test_alerte_ressource_quasi_epuisee(self):
         rid = self.client.post('/api/gouvernance/ressources/', {
-            'type_ressource': 'DON', 'libelle': 'Don limité', 'montant': 100000}, format='json').data['id']
+            'type_ressource': 'DON', 'libelle': 'Don limité', 'montant': 100000, 'compte_tresorerie': '571'}, format='json').data['id']
         self.client.post('/api/comptabilite/charges/', {
             'no_compte': '6054', 'montant': 95000, 'libelle': 'Achat', 'ressource_id': rid}, format='json')
         d = self.client.get('/api/gouvernance/dashboard/').data

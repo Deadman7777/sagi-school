@@ -865,12 +865,14 @@ def creer_gouvernance(client):
     _poster(client, '/api/gouvernance/projets/', {
         'code': 'BIB-26', 'libelle': 'Réfection de la bibliothèque',
         'responsable': 'Aminata Ndiaye', 'budget_prevu': 900000, 'statut': 'PLANIFIE'})
-    ressource = _poster(client, '/api/gouvernance/ressources/', {
-        'type_ressource': 'SUBVENTION', 'libelle': 'Subvention communale — cantine',
-        'organisme': 'Commune de Grand Dakar', 'montant': 1200000,
-        'date_ressource': '2026-01-20', 'projet_id': cantine['id']})
+    # La subvention cantine, encaissée dans GMRF, est déjà une ressource : on
+    # la rattache au projet au lieu de la ressaisir (la double saisie que la
+    # liaison GMRF ↔ Gouvernance supprime).
+    ressource = next(r for r in client.get('/api/gouvernance/ressources/').data
+                     if r['libelle'] == 'Subvention cantine scolaire')
+    _patcher(client, f"/api/gouvernance/ressources/{ressource['id']}/", {'projet_id': cantine['id']})
     _poster(client, '/api/gouvernance/ressources/', {
-        'type_ressource': 'FONDS_PROPRES', 'libelle': 'Recettes scolaires affectées',
+        'type_ressource': 'RECETTES_SCOLAIRES', 'libelle': 'Recettes scolaires affectées',
         'montant': 3600000, 'date_ressource': '2025-10-01', 'projet_id': numerique['id']})
     for mois, montant in ((2, 320000), (3, 320000)):
         _poster(client, '/api/comptabilite/charges/', {

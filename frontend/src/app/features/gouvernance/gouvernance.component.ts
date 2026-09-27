@@ -35,6 +35,9 @@ interface Ressource {
   convention: string; statut: string; observations: string;
   montant_consomme: number; montant_affecte: number; montant_restant: number;
   disponible_a_affecter: number; taux_consommation: number;
+  compte_tresorerie: string; compte_tresorerie_libelle: string;
+  origine: 'FINANCEMENT' | 'PRET' | 'SAISIE'; origine_reference: string; origine_statut: string;
+  liee_gmrf: boolean; projet_id: string | null;
 }
 interface Affectation {
   id: string; type_emploi: string; type_label: string; libelle: string; montant_affecte: number;
@@ -198,7 +201,7 @@ interface Transfert {
   @if (tab() === 'ressources') {
     <div class="barre">
       <button pButton label="Nouvelle ressource" icon="pi pi-plus" (click)="ouvrirRessource()"></button>
-      <span class="hint">Prêts, subventions, dons, fonds propres… — suivi affecté / consommé / disponible, lié aux dépenses</span>
+      <span class="hint">Chaque ressource est encaissée et comptabilisée par Ressources financières, puis suivie ici : affecté / consommé / disponible. Les prêts et financements saisis là-bas apparaissent d'office.</span>
     </div>
     <div class="kpis">
       <div class="kpi"><span class="lbl">Ressources</span><span class="val">{{ ressources().length }}</span></div>
@@ -210,16 +213,30 @@ interface Transfert {
     <p-table [value]="ressources()" [loading]="chargementRes()" styleClass="p-datatable-sm" [paginator]="ressources().length > 12" [rows]="12">
       <ng-template pTemplate="header">
         <tr>
-          <th>Réf.</th><th>Libellé</th><th>Type</th>
+          <th>Réf.</th><th>Libellé</th><th>Type</th><th>Trésorerie</th>
           <th class="r">Mobilisé</th><th class="r">Affecté</th><th class="r">Consommé</th>
           <th style="width:170px">Consommation</th><th></th>
         </tr>
       </ng-template>
       <ng-template pTemplate="body" let-r>
         <tr [class.inactif]="r.statut !== 'ACTIVE'">
-          <td><strong>{{ r.reference }}</strong></td>
+          <td><strong>{{ r.reference }}</strong>
+            @if (r.liee_gmrf) {
+              <div class="resp" pTooltip="Encaissé et comptabilisé dans Ressources financières">↳ {{ r.origine_reference }}</div>
+            }
+          </td>
           <td>{{ r.libelle }}@if (r.organisme) {<div class="resp">{{ r.organisme }}</div>}</td>
           <td><p-tag [value]="r.type_label"></p-tag></td>
+          <td>
+            @if (r.compte_tresorerie) {
+              <strong class="mono">{{ r.compte_tresorerie }}</strong>
+              <div class="resp">{{ r.compte_tresorerie_libelle }}</div>
+            } @else if (r.type_ressource === 'RECETTES_SCOLAIRES') {
+              <span class="resp">Paiements des familles</span>
+            } @else {
+              <p-tag severity="warn" value="Hors trésorerie" pTooltip="Saisie avant la liaison : aucun encaissement enregistré. Encaissez-la dans Ressources financières."></p-tag>
+            }
+          </td>
           <td class="r">{{ r.montant | number:'1.0-0' }}</td>
           <td class="r">{{ r.montant_affecte | number:'1.0-0' }}</td>
           <td class="r">{{ r.montant_consomme | number:'1.0-0' }}</td>
@@ -236,7 +253,7 @@ interface Transfert {
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="8" class="vide">Aucune ressource. Enregistrez vos prêts, subventions, dons…</td></tr>
+        <tr><td colspan="9" class="vide">Aucune ressource. Enregistrez vos prêts, subventions, dons…</td></tr>
       </ng-template>
     </p-table>
   }
@@ -441,26 +458,60 @@ interface Transfert {
 </p-dialog>
 
 <!-- Dialog ressource création / édition -->
-<p-dialog [(visible)]="dlgRessource" [modal]="true" [style]="{width:'560px'}" [header]="editionRes() ? 'Modifier la ressource' : 'Nouvelle ressource'">
+<p-dialog [(visible)]="dlgRessource" [modal]="true" [style]="{width:'600px', maxWidth:'96vw'}" [header]="editionRes() ? 'Modifier la ressource' : 'Mobiliser une ressource'">
+  @if (editionRes()?.liee_gmrf) {
+    <p class="note-liaison">Cette ressource vient de <strong>{{ editionRes()!.origine_reference }}</strong> (Ressources financières).
+      Le montant, le compte de trésorerie, la date et le statut se modifient là-bas ; ici, seuls la convention et les observations.</p>
+  }
   <div class="form-grid">
     <label>Type *</label>
-    <p-select [(ngModel)]="fr.type_ressource" [options]="typesRessource" optionLabel="label" optionValue="value" appendTo="body"></p-select>
-    <label>Libellé *</label>
-    <input pInputText [(ngModel)]="fr.libelle" placeholder="Ex. Prêt BNDE équipement 2026" />
-    <label>Organisme / origine</label>
-    <input pInputText [(ngModel)]="fr.organisme" />
-    <label>Montant mobilisé (FCFA) *</label>
-    <p-inputNumber [(ngModel)]="fr.montant" [min]="0" [useGrouping]="true" mode="decimal"></p-inputNumber>
-    <label>Date</label>
-    <p-datepicker [(ngModel)]="fr.date_ressource" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body"></p-datepicker>
-    <label>Convention / réf.</label>
-    <input pInputText [(ngModel)]="fr.convention" />
-    <label>Observations</label>
-    <textarea pTextarea [(ngModel)]="fr.observations" rows="2"></textarea>
+    <p-select [(ngModel)]="fr.type_ressource" [options]="typesRessource" optionLabel="label" optionValue="value" appendTo="body" [disabled]="!!editionRes()?.liee_gmrf"></p-select>
+    @if (fr.type_ressource === 'PRET' && !editionRes()) {
+      <p class="note-liaison">Un prêt s'enregistre dans <strong>Ressources financières › Prêts</strong>, avec son tableau d'amortissement.
+        Il apparaît ensuite ici automatiquement, avec son compte de trésorerie.</p>
+    } @else {
+      <label>Libellé *</label>
+      <input pInputText [(ngModel)]="fr.libelle" placeholder="Ex. Subvention mairie équipement 2026" [disabled]="!!editionRes()?.liee_gmrf" />
+      <label>Organisme / origine</label>
+      <input pInputText [(ngModel)]="fr.organisme" [disabled]="!!editionRes()?.liee_gmrf" />
+      <label>Montant (FCFA) *</label>
+      <p-inputNumber [(ngModel)]="fr.montant" [min]="0" [useGrouping]="true" mode="decimal" [disabled]="!!editionRes()?.liee_gmrf"></p-inputNumber>
+      @if (!editionRes() && fr.type_ressource !== 'RECETTES_SCOLAIRES') {
+        <label>Encaissement</label>
+        <p-select [(ngModel)]="fr.encaissement" [options]="modesEncaissement" optionLabel="label" optionValue="value" appendTo="body"></p-select>
+        @if (fr.encaissement === 'RECU') {
+          <label>Reçu sur le compte *</label>
+          <p-select [(ngModel)]="fr.compte_tresorerie" [options]="canaux()" optionValue="compte" appendTo="body"
+                    placeholder="Caisse, banque, Wave…" [optionLabel]="'libelle'">
+            <ng-template let-c pTemplate="item">{{ c.compte }} — {{ c.libelle }} <span class="resp">(solde {{ c.solde | number:'1.0-0' }})</span></ng-template>
+            <ng-template let-c pTemplate="selectedItem">{{ c.compte }} — {{ c.libelle }}</ng-template>
+          </p-select>
+        }
+        <p class="note-liaison">
+          @if (fr.encaissement === 'RECU') {
+            L'encaissement est enregistré dans Ressources financières et comptabilisé aussitôt : débit du compte choisi,
+            crédit du compte de la ressource ({{ compteRessource(fr.type_ressource) }}). Rien à ressaisir là-bas.
+          } @else {
+            Le financement est noté comme attendu dans Ressources financières. La ressource apparaîtra ici quand il sera encaissé.
+          }
+        </p>
+      }
+      @if (fr.type_ressource === 'RECETTES_SCOLAIRES' && !editionRes()) {
+        <p class="note-liaison">Enveloppe de suivi : l'argent est déjà entré par les paiements des familles, aucun nouvel encaissement n'est écrit.</p>
+      }
+      <label>Date</label>
+      <p-datepicker [(ngModel)]="fr.date_ressource" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" [disabled]="!!editionRes()?.liee_gmrf"></p-datepicker>
+      <label>Convention / réf.</label>
+      <input pInputText [(ngModel)]="fr.convention" />
+      <label>Observations</label>
+      <textarea pTextarea [(ngModel)]="fr.observations" rows="2"></textarea>
+    }
   </div>
   <ng-template pTemplate="footer">
     <button pButton label="Annuler" [text]="true" (click)="dlgRessource.set(false)"></button>
-    <button pButton label="Enregistrer" icon="pi pi-check" (click)="enregistrerRessource()" [disabled]="!fr.libelle || !fr.montant"></button>
+    <button pButton [label]="editionRes() ? 'Enregistrer' : (fr.encaissement === 'ATTENDU' && fr.type_ressource !== 'RECETTES_SCOLAIRES' ? 'Noter comme attendu' : 'Mobiliser')" icon="pi pi-check" (click)="enregistrerRessource()"
+            [disabled]="!fr.libelle || !fr.montant || (fr.type_ressource === 'PRET' && !editionRes())
+                        || (!editionRes() && fr.type_ressource !== 'RECETTES_SCOLAIRES' && fr.encaissement === 'RECU' && !fr.compte_tresorerie)"></button>
   </ng-template>
 </p-dialog>
 
@@ -747,6 +798,9 @@ interface Transfert {
     .kpi { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:10px; padding:12px 16px; display:flex; flex-direction:column; }
     .kpi .lbl { font-size:.8rem; color:var(--text-4); }
     .kpi .val { font-size:1.35rem; font-weight:700; }
+    .note-liaison { margin:0; font-size:12.5px; line-height:1.45; color:var(--text-2); background:var(--surface-2);
+                    border-left:3px solid #10b981; border-radius:6px; padding:8px 10px; grid-column:1 / -1; }
+    .mono { font-family:monospace; }
     .canaux { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
     .canal { background:var(--surface-card,#fff); border:1px solid var(--surface-border,#e5e7eb); border-radius:8px; padding:8px 14px; display:flex; flex-direction:column; min-width:120px; }
     .c-lbl { font-size:.78rem; color:var(--text-4); }
@@ -1019,8 +1073,9 @@ export class GouvernanceComponent implements OnInit {
 
   // ── Ressources ──
   ressourceVide() {
-    return { type_ressource: 'PRET', libelle: '', organisme: '', montant: null,
-             date_ressource: new Date(), convention: '', observations: '' };
+    return { type_ressource: 'SUBVENTION', libelle: '', organisme: '', montant: null,
+             date_ressource: new Date(), convention: '', observations: '',
+             encaissement: 'RECU', compte_tresorerie: '' };
   }
   allerRessources() { this.tab.set('ressources'); this.chargerRessources(); }
   chargerRessources() {
@@ -1030,7 +1085,22 @@ export class GouvernanceComponent implements OnInit {
       error: () => { this.chargementRes.set(false); this.erreur('Chargement impossible'); },
     });
   }
-  ouvrirRessource() { this.editionRes.set(null); this.fr = this.ressourceVide(); this.dlgRessource.set(true); }
+  ouvrirRessource() {
+    this.editionRes.set(null); this.fr = this.ressourceVide(); this.dlgRessource.set(true);
+    // Les comptes de trésorerie proposés, avec leur solde.
+    this.gouv.getCanaux().subscribe({ next: d => this.canaux.set(d?.canaux || []), error: () => {} });
+  }
+  modesEncaissement = [
+    { value: 'RECU', label: 'Fonds reçus maintenant' },
+    { value: 'ATTENDU', label: 'Fonds attendus (promesse, convention signée)' },
+  ];
+  /** Compte crédité à l'encaissement, selon le type (types GMRF par défaut). */
+  compteRessource(type: string): string {
+    return ({ DON: '7588 Dons', SUBVENTION: "71 Subventions d'exploitation", PARTENAIRE: '7588 Partenariats',
+              PROJET: "71 Subventions d'exploitation", COTISATION_EXCEPT: '848 Revenus exceptionnels',
+              FONDS_PROPRES: '101 Capital (apport)', AVANCE_TRESO: '4621 Associés, comptes courants',
+              AUTRE: '7588 Produits divers' } as Record<string, string>)[type] || '7588';
+  }
   ouvrirRessourceEdit(r: Ressource) {
     this.editionRes.set(r);
     this.fr = {
@@ -1042,16 +1112,23 @@ export class GouvernanceComponent implements OnInit {
   }
   enregistrerRessource() {
     if (!this.fr.libelle?.trim() || !this.fr.montant) return;
-    const payload = {
+    const r = this.editionRes();
+    const payload: any = {
       type_ressource: this.fr.type_ressource, libelle: this.fr.libelle.trim(),
       organisme: this.fr.organisme || '', montant: this.fr.montant,
       convention: this.fr.convention || '', observations: this.fr.observations || '',
       date_ressource: this.isoDate(this.fr.date_ressource),
     };
-    const r = this.editionRes();
+    if (!r) {
+      payload.encaissement = this.fr.encaissement;
+      payload.compte_tresorerie = this.fr.compte_tresorerie || '';
+    }
     const obs = r ? this.gouv.modifierRessource(r.id, payload) : this.gouv.creerRessource(payload);
     obs.subscribe({
-      next: () => { this.dlgRessource.set(false); this.chargerRessources(); this.ok(r ? 'Ressource modifiée' : 'Ressource créée'); },
+      next: (res: any) => {
+        this.dlgRessource.set(false); this.chargerRessources();
+        this.ok(res?.attendu ? res.message : r ? 'Ressource modifiée' : 'Ressource mobilisée et comptabilisée');
+      },
       error: (e) => this.erreur(e?.error?.error || 'Enregistrement impossible'),
     });
   }
@@ -1059,7 +1136,7 @@ export class GouvernanceComponent implements OnInit {
     if (!confirm(`Supprimer la ressource « ${r.libelle} » ?`)) return;
     this.gouv.supprimerRessource(r.id).subscribe({
       next: (res: any) => { this.chargerRessources(); this.ok(res?.cloturee ? 'Ressource clôturée (dépenses liées)' : 'Ressource supprimée'); },
-      error: () => this.erreur('Suppression impossible'),
+      error: (e) => this.erreur(e?.error?.error || 'Suppression impossible'),
     });
   }
   ouvrirAffectations(r: Ressource) {

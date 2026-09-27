@@ -48,6 +48,38 @@ def _cotisations_versees(cycle):
 
 
 # ── Financement simple (dons, subventions, partenariats, revenus…) ───────────
+def creer_financement(tenant, type_financement, montant, *, libelle, source='',
+                      type_source='AUTRE', statut='ATTENDU', date_reception=None,
+                      compte_tresorerie=None, compte_ressource=None, observations='',
+                      coordonnees='', devise='XOF', documents=None):
+    """Crée un financement et, s'il est reçu, son écriture d'encaissement.
+
+    Seul chemin de création : l'écran GMRF et la mobilisation depuis
+    Gouvernance passent tous deux par ici. Un financement reçu sans exercice
+    ouvert est refusé : il serait marqué « reçu » sans aucune écriture, donc
+    absent de la trésorerie.
+    """
+    import datetime
+    from .models import Financement
+    from .views import _next_ref
+
+    if statut == 'RECU' and not _exercice_actif(tenant):
+        raise ValueError("Aucun exercice ouvert : ouvrez l'exercice avant d'enregistrer un encaissement.")
+    f = Financement.objects.create(
+        tenant=tenant, reference=_next_ref(tenant, Financement, 'GRF'),
+        type_financement=type_financement, libelle=(libelle or type_financement.libelle).strip(),
+        source=source or '', type_source=type_source, coordonnees=coordonnees or '',
+        montant=montant, devise=devise,
+        date_reception=date_reception or (datetime.date.today() if statut == 'RECU' else None),
+        compte_tresorerie=compte_tresorerie or type_financement.compte_tresorerie_defaut,
+        compte_ressource=compte_ressource or type_financement.compte_ressource,
+        statut=statut, observations=observations or '', documents=documents or [],
+    )
+    if f.statut == 'RECU':
+        generer_ecriture_financement(f, tenant)
+    return f
+
+
 def generer_ecriture_financement(financement, tenant):
     """Réception de fonds : D compte_tresorerie / C compte_ressource."""
     from apps.comptabilite.models import JournalEntry

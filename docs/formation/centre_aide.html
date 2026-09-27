@@ -406,6 +406,19 @@ mark { background: color-mix(in srgb, var(--mint) 30%, transparent); color: inhe
 </div>
 
 <script>
+
+// Captures introuvables : ce fichier a été ouvert hors de son dossier. On le
+// dit, au lieu d'afficher des cadres vides avec leur texte de remplacement.
+document.addEventListener('error', e => {
+  if (e.target.tagName !== 'IMG' || document.getElementById('alerte-captures')) return;
+  const b = document.createElement('div');
+  b.id = 'alerte-captures';
+  b.setAttribute('role', 'alert');
+  b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;padding:12px 16px;border-radius:10px;background:#9E2F23;color:#fff;font:14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+  b.textContent = "Les captures d'écran ne se chargent pas : ce fichier a été ouvert hors de son dossier. Ouvrez plutôt « centre-aide-sagi-school.html », qui contient toutes les images.";
+  document.body.appendChild(b);
+}, true);
+
 const D = /*__DONNEES__*/null;
 
 // ── Petits outils ──────────────────────────────────────────────────────

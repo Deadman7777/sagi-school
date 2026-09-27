@@ -26,6 +26,8 @@ TYPES_DEFAUT = [
     ('CROWDFUNDING',  'Financement participatif',     'CROWDFUNDING',  'PRODUIT',  '7588'),
     ('REVENU_EXCEPT', 'Revenu exceptionnel',          'REVENU_EXCEPT', 'PRODUIT',  '848'),
     ('NATT',          'NATT / Tontine',               'NATT',          'DETTE',    '4718'),
+    ('APPORT',        'Apport des fondateurs',        'APPORT',        'CAPITAUX', '101'),
+    ('AVANCE',        "Avance d'associé",              'AVANCE',        'DETTE',    '4621'),
     ('AUTRE',         'Autre source de financement',  'AUTRE',         'PRODUIT',  '7588'),
 ]
 
@@ -134,6 +136,8 @@ def _fin_to_dict(f):
         'date_reception': str(f.date_reception) if f.date_reception else None,
         'compte_tresorerie': f.compte_tresorerie, 'compte_ressource': f.compte_ressource,
         'statut': f.statut, 'observations': f.observations, 'documents': f.documents,
+        # Ressource qui en suit l'emploi dans Gouvernance (vide tant que non reçu).
+        'ressource_reference': next((r.reference for r in f.ressources_gouv.all()), ''),
     }
 
 
@@ -147,7 +151,8 @@ class FinancementView(APIView):
                 return Response(_fin_to_dict(Financement.objects.get(tenant=tenant, id=pk)))
             except Financement.DoesNotExist:
                 return Response({'error': 'Non trouvé'}, status=404)
-        qs = Financement.objects.filter(tenant=tenant).select_related('type_financement')
+        qs = (Financement.objects.filter(tenant=tenant).select_related('type_financement')
+              .prefetch_related('ressources_gouv'))
         cat = request.query_params.get('categorie')
         if cat:
             qs = qs.filter(type_financement__categorie=cat)
@@ -173,21 +178,20 @@ class FinancementView(APIView):
         except (TypeFinancement.DoesNotExist, ValueError):
             return Response({'error': 'Type de financement invalide'}, status=400)
 
-        statut = d.get('statut', 'ATTENDU')
-        f = Financement.objects.create(
-            tenant=tenant, reference=_next_ref(tenant, Financement, 'GRF'),
-            type_financement=tf, libelle=(d.get('libelle') or tf.libelle).strip(),
-            source=d.get('source', ''), type_source=d.get('type_source', 'AUTRE'),
-            coordonnees=d.get('coordonnees', ''), montant=montant,
-            devise=d.get('devise', 'XOF'),
-            date_reception=d.get('date_reception') or (datetime.date.today() if statut == 'RECU' else None),
-            compte_tresorerie=d.get('compte_tresorerie', tf.compte_tresorerie_defaut),
-            compte_ressource=d.get('compte_ressource', tf.compte_ressource),
-            statut=statut, observations=d.get('observations', ''),
-            documents=d.get('documents', []),
-        )
-        if f.statut == 'RECU':
-            services.generer_ecriture_financement(f, tenant)
+        try:
+            f = services.creer_financement(
+                tenant, tf, montant, libelle=d.get('libelle') or tf.libelle,
+                source=d.get('source', ''), type_source=d.get('type_source', 'AUTRE'),
+                coordonnees=d.get('coordonnees', ''), devise=d.get('devise', 'XOF'),
+                statut=d.get('statut', 'ATTENDU'), date_reception=d.get('date_reception') or None,
+                compte_tresorerie=d.get('compte_tresorerie'), compte_ressource=d.get('compte_ressource'),
+                observations=d.get('observations', ''), documents=d.get('documents', []))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        # Fonds reçus : la ressource correspondante apparaît dans Gouvernance,
+        # avec son compte de trésorerie — plus de double saisie.
+        from apps.gouvernance.liaison_gmrf import suivre_financement
+        suivre_financement(f)
         log_audit(request, 'CREATION', 'Financement', f.id, f.libelle)
         return Response(_fin_to_dict(f), status=201)
 
@@ -206,6 +210,8 @@ class FinancementView(APIView):
             f.date_reception = request.data.get('date_reception') or datetime.date.today()
             if request.data.get('compte_tresorerie'):
                 f.compte_tresorerie = request.data['compte_tresorerie']
+            if not services._exercice_actif(tenant):
+                return Response({'error': "Aucun exercice ouvert : ouvrez l'exercice avant d'encaisser."}, status=400)
             f.save()
             services.generer_ecriture_financement(f, tenant)
         elif action == 'annuler' and f.statut == 'RECU':
@@ -214,6 +220,9 @@ class FinancementView(APIView):
             f.save()
         else:
             return Response({'error': 'Action invalide pour ce statut'}, status=400)
+        # La ressource suivie dans Gouvernance suit l'état du financement.
+        from apps.gouvernance.liaison_gmrf import suivre_financement
+        suivre_financement(f)
         log_audit(request, 'MODIFICATION', 'Financement', f.id, action)
         return Response(_fin_to_dict(f))
 
@@ -557,6 +566,9 @@ class PretView(APIView):
         ])
         # Déblocage des fonds
         services.generer_ecriture_deblocage_pret(pret, tenant)
+        # Le prêt apparaît dans Gouvernance comme ressource, avec son compte.
+        from apps.gouvernance.liaison_gmrf import suivre_pret
+        suivre_pret(pret)
         log_audit(request, 'CREATION', 'Pret', pret.id, pret.organisme_preteur)
         pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
         return Response(_pret_to_dict(pret, detail=True), status=201)

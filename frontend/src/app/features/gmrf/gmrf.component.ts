@@ -206,7 +206,11 @@ import { GmrfService } from '../../core/services/gmrf.service';
       </ng-template>
       <ng-template pTemplate="body" let-f>
         <tr>
-          <td>{{ f.reference }}</td>
+          <td>{{ f.reference }}
+            @if (f.ressource_reference) {
+              <div class="muted" style="font-size:11px" title="Emploi des fonds suivi dans Gouvernance › Ressources">↳ suivi : {{ f.ressource_reference }}</div>
+            }
+          </td>
           <td>{{ f.type_libelle }}</td>
           <td>{{ f.libelle }}</td>
           <td>{{ f.source || '—' }}</td>

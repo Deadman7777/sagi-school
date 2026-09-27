@@ -35,6 +35,10 @@ class TypeFinancement(TenantModel):
         ('REVENU_EXCEPT', 'Revenu exceptionnel'),
         ('PRET',          'Prêt / crédit'),
         ('NATT',          'NATT / Tontine'),
+        # Fonds apportés par le fondateur ou les associés : capitaux propres
+        # (apport) ou dette envers eux (avance remboursable).
+        ('APPORT',        'Apport des fondateurs'),
+        ('AVANCE',        "Avance d'associé / de fondateur"),
         ('AUTRE',         'Autre source de financement'),
     ]
     # Sens comptable de la ressource (compte crédité à la réception)

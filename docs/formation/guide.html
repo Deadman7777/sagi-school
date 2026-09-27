@@ -2462,6 +2462,23 @@ h3 .nouveau, .titre-cas .nouveau { font-size: 9px; }
     <p>Une <b>ressource</b> est une enveloppe : recettes scolaires, prêt,
     subvention, don. Un <b>projet</b> est ce qu'on en fait : programme de cantine,
     équipement numérique, réfection de la bibliothèque.</p>
+    <p><span class="nouveau">Nouveau</span> <b>Une ressource entre toujours en
+    trésorerie et en comptabilité.</b> Ressources financières encaisse, Gouvernance
+    suit l'emploi des fonds, et les deux sont reliés : un financement reçu ou un
+    prêt débloqué dans Ressources financières apparaît ici tout seul, avec le
+    compte qui a reçu l'argent. À l'inverse, <b>Nouvelle ressource</b> demande le
+    compte de trésorerie (caisse, banque, Wave…) et enregistre l'encaissement dans
+    Ressources financières, écriture comprise. Rien n'est à saisir deux fois.</p>
+    <ul class="puces">
+      <li>Un <b>prêt</b> se saisit dans Ressources financières › Prêts, pour son
+      tableau d'amortissement.</li>
+      <li>Des fonds <b>promis</b> se notent « attendus » : la ressource apparaît à
+      l'encaissement.</li>
+      <li>Les <b>recettes scolaires</b> sont une enveloppe de suivi, sans nouvel
+      encaissement : l'argent est déjà entré par les paiements des familles.</li>
+      <li>Le montant, le compte et la date d'une ressource reliée se modifient
+      dans Ressources financières ; l'annuler là-bas l'annule ici.</li>
+    </ul>
     <p>Quand on saisit une charge, un investissement, une avance ou une ligne de
     budget, deux champs facultatifs indiquent le projet et la ressource. Le
     logiciel <b>refuse la dépense qui dépasse l'enveloppe</b> et affiche le
@@ -2471,7 +2488,7 @@ h3 .nouveau, .titre-cas .nouveau { font-size: 9px; }
   <div class="note erreur">
     <h4>Message réel du logiciel</h4>
     <p class="mono" style="font-size:14px">Dépassement : disponible 560 000, demandé 615 000
-    sur « Subvention communale — cantine »</p>
+    sur « Subvention cantine scolaire »</p>
     <p>Ce n'est pas un blocage arbitraire : c'est la garantie qu'on ne dépensera
     jamais plus que ce qu'une subvention a apporté. C'est ce contrôle qui rend la
     traçabilité crédible devant un bailleur.</p>
@@ -2484,9 +2501,14 @@ h3 .nouveau, .titre-cas .nouveau { font-size: 9px; }
     </figure>
     <figure class="ecran">
       <img src="captures/gouv-ressources.webp" alt="Onglet Ressources : les enveloppes avec leur type, montant mobilisé, affecté, consommé et le taux de consommation.">
-      <figcaption><b>Ressources</b><span>Chaque enveloppe, et ce qu'elle a déjà financé.</span></figcaption>
+      <figcaption><b>Ressources</b><span>Chaque enveloppe, le compte qui a reçu les fonds et l'opération de Ressources financières qui l'a encaissée (GRF-…, PRET-…).</span></figcaption>
     </figure>
   </div>
+
+  <figure class="ecran">
+    <img src="captures/gouv-ressource-mobiliser.webp" alt="Fenêtre Mobiliser une ressource : type Don, libellé, organisme, montant 750 000, fonds reçus maintenant sur le compte 521 Banque, et la mention de l'écriture passée : débit du compte choisi, crédit 7588 Dons.">
+    <figcaption><b>Mobiliser une ressource</b><span>Le compte de trésorerie est obligatoire ; l'écriture d'encaissement est passée aussitôt dans Ressources financières.</span></figcaption>
+  </figure>
 
   <h3>Pilotage</h3>
   <div class="texte">
@@ -2599,6 +2621,18 @@ h3 .nouveau, .titre-cas .nouveau { font-size: 9px; }
 
 
 <script>
+// Captures introuvables : ce fichier a été ouvert hors de son dossier. On le
+// dit, au lieu d'afficher des cadres vides avec leur texte de remplacement.
+document.addEventListener('error', e => {
+  if (e.target.tagName !== 'IMG' || document.getElementById('alerte-captures')) return;
+  const b = document.createElement('div');
+  b.id = 'alerte-captures';
+  b.setAttribute('role', 'alert');
+  b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:99;padding:12px 16px;border-radius:10px;background:#9E2F23;color:#fff;font:14px/1.45 system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+  b.textContent = "Les captures d'écran ne se chargent pas : ce fichier est la SOURCE du guide. Ouvrez « docs/guide-utilisateur-sagi-school.html » (ou le PDF), qui contient toutes les images.";
+  document.body.appendChild(b);
+}, true);
+
 (function () {
   var liens = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
   var cibles = liens.map(function (a) { return document.querySelector(a.getAttribute('href')); });

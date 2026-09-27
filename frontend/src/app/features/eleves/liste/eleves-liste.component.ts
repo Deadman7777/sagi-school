@@ -3502,31 +3502,39 @@ export class ElevesListeComponent implements OnInit {
   groupesSanguins = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
   /** Photo d'identité : réduite à 300 px de large en JPEG (≈ 30 Ko), pour
-   *  qu'un appareil photo de téléphone ne remplisse pas la base. */
+   *  qu'un appareil photo de téléphone ne remplisse pas la base.
+   *  Lue en data URI (FileReader) et non en blob: — la politique de sécurité
+   *  de l'application (img-src 'self' data:) bloque les blob:, et l'image
+   *  n'était alors jamais chargée : la photo restait vide, sans message. */
   choisirPhoto(ev: Event) {
     const input = ev.target as HTMLInputElement;
     const fichier = input.files?.[0];
     if (!fichier) return;
-    const url = URL.createObjectURL(fichier);
-    const img = new Image();
-    img.onload = () => {
-      const largeur = Math.min(300, img.width);
-      const hauteur = Math.round(img.height * largeur / img.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = largeur; canvas.height = hauteur;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, largeur, hauteur);
-      this.nouvelEleve.photo = canvas.toDataURL('image/jpeg', 0.85);
-      URL.revokeObjectURL(url);
-      input.value = '';
-      // Application sans zone.js : un rappel d'image ne rafraîchit pas l'écran seul.
-      this.cdr.markForCheck();
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
+    const echec = () => {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('common.attention'),
                      detail: this.translate.instant('eleves.photo_invalide') });
+      input.value = '';
+      this.cdr.markForCheck();
     };
-    img.src = url;
+    const lecteur = new FileReader();
+    lecteur.onerror = echec;
+    lecteur.onload = () => {
+      const img = new Image();
+      img.onerror = echec;
+      img.onload = () => {
+        const largeur = Math.min(300, img.width);
+        const hauteur = Math.round(img.height * largeur / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = largeur; canvas.height = hauteur;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, largeur, hauteur);
+        this.nouvelEleve.photo = canvas.toDataURL('image/jpeg', 0.85);
+        input.value = '';
+        // Application sans zone.js : un rappel d'image ne rafraîchit pas l'écran seul.
+        this.cdr.markForCheck();
+      };
+      img.src = lecteur.result as string;
+    };
+    lecteur.readAsDataURL(fichier);
   }
 
   ouvrirModifier(eleve: Eleve | null) {
