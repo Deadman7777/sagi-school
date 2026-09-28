@@ -99,3 +99,71 @@ class RecuImpayesAnterieursTest(ReportReliquatsBase):
         liste = self.client.get('/api/paiements/paiements/?mode=WAVE').data
         lignes = liste['results'] if isinstance(liste, dict) else liste
         self.assertEqual({l['id'] for l in lignes}, {str(mixte.id), str(wave.id)})
+
+    def test_ticket_thermique_a_la_hauteur_du_contenu(self):
+        """Une page de 297 mm sur un rouleau réglé plus court était réduite à
+        l'impression : le ticket sortait à moitié de la largeur du papier."""
+        p = self._encaisser(montant_inscription=50000, montant_mensualite=1250000,
+                            montant_reliquat=30000, mode_paiement='MIXTE',
+                            modes_reglement=[{'mode': 'ESPECE', 'montant': 660000},
+                                             {'mode': 'WAVE', 'montant': 670000}])
+        for taille, largeur_mm in (('80MM', 80), ('58MM', 58)):
+            pdf = self._pdf(p, taille)
+            self.assertEqual(len(pdf.pages), 1, taille)
+            boite = pdf.pages[0].mediabox
+            self.assertAlmostEqual(float(boite.width) * 25.4 / 72, largeur_mm, places=0)
+            hauteur_mm = float(boite.height) * 25.4 / 72
+            self.assertLess(hauteur_mm, 200, taille)   # plus de page A4 de haut
+            self.assertGreater(hauteur_mm, 60, taille)
+            texte = pdf.pages[0].extract_text()
+            # Rien de rogné : l'en-tête et le pied sont sur la page.
+            self.assertIn('REÇU DE PAIEMENT', texte, taille)
+            self.assertIn('Merci de conserver', texte, taille)
+            self.assertIn('1 250 000', texte, taille)
+
+    def test_autres_formats_papier(self):
+        p = self._encaisser(montant_inscription=50000, montant_reliquat=30000,
+                            observations='Versement du père')
+        for taille, largeur_pt in (('A6', 297.6), ('LETTER', 612), ('LEGAL', 612)):
+            pdf = self._pdf(p, taille)
+            self.assertAlmostEqual(float(pdf.pages[0].mediabox.width), largeur_pt,
+                                   delta=1, msg=taille)
+            self.assertEqual(len(pdf.pages), 1, taille)
+            self.assertIn('Impayés antérieurs', pdf.pages[0].extract_text(), taille)
+
+    def test_ticket_logo_en_noir_pur(self):
+        """Tête thermique : un logo en couleur sortait délavé, presque invisible."""
+        import base64
+        from PIL import Image
+        from apps.tenants.logo import logo_noir_et_blanc
+        from core.tenant import oublier_tenant
+
+        image = Image.new('RGB', (120, 60), (255, 255, 255))
+        image.paste((30, 110, 60), (10, 10, 110, 50))      # vert moyen
+        tampon = BytesIO()
+        image.save(tampon, format='PNG')
+        logo = 'data:image/png;base64,' + base64.b64encode(tampon.getvalue()).decode()
+
+        net = Image.open(BytesIO(base64.b64decode(logo_noir_et_blanc(logo).split(',', 1)[1])))
+        self.assertEqual(set(net.getdata()), {0, 255})      # noir ou blanc, rien d'autre
+        self.assertEqual(net.getpixel((60, 30)), 0)          # le vert est devenu noir
+        self.assertEqual(net.getpixel((2, 2)), 255)
+
+        # Logo clair sur fond brun : inversé, jamais un pavé noir.
+        sombre = Image.new('RGB', (120, 60), (160, 60, 20))
+        sombre.paste((255, 255, 255), (40, 20, 80, 40))
+        tampon2 = BytesIO()
+        sombre.save(tampon2, format='PNG')
+        inverse = Image.open(BytesIO(base64.b64decode(logo_noir_et_blanc(
+            'data:image/png;base64,' + base64.b64encode(tampon2.getvalue()).decode()
+        ).split(',', 1)[1])))
+        self.assertEqual(inverse.getpixel((2, 2)), 255)      # fond blanc
+        self.assertEqual(inverse.getpixel((60, 30)), 0)      # motif noir
+
+        self.tenant.logo = logo
+        self.tenant.save()
+        oublier_tenant(self.tenant.id)
+        p = self._encaisser(montant_inscription=50000)
+        pdf = self._pdf(p, '80MM')
+        self.assertEqual(len(pdf.pages), 1)
+        self.assertIn('Merci de conserver', pdf.pages[0].extract_text())

@@ -14,33 +14,52 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
 - montants mis en forme (« 16 000 ») : sur un ticket, « 16000 » se lit mal.
 {% endcomment %}
 <style>
-  @page { size: {{ page_size|default:"80mm 297mm" }}; margin: 4mm 4mm 4mm 4mm; }
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 9.5px; color: #000; }
+  /* Une SEULE règle @page (une seconde est ignorée ou écrase la première). */
+  @page { size: {{ page_size|default:"80mm 1500mm" }}; margin: {% if ticket_etroit %}3mm{% else %}4mm{% endif %}; }
+  /* Tête thermique : noir ou rien. Aucun gris (il sort pâle, voire pas du
+     tout), des traits épais, des corps assez grands pour rester lisibles. */
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5px; color: #000; }
   .center { text-align: center; }
-  .ecole { font-size: 12.5px; font-weight: bold; text-transform: uppercase; line-height: 1.25; }
-  .coord { font-size: 8.5px; color: #222; line-height: 1.35; }
-  .titre { font-size: 11.5px; font-weight: bold; margin-top: 5px; letter-spacing: 0.5px; }
-  .numero { font-size: 10px; font-weight: bold; }
-  hr.sep { border: 0; border-top: 0.8px dashed #000; color: #000; height: 0; margin-top: 4px; margin-bottom: 4px; }
-  hr.sep-fort { border: 0; border-top: 1.4px solid #000; color: #000; height: 0; margin-top: 3px; margin-bottom: 3px; }
+  .ecole { font-size: 13.5px; font-weight: bold; text-transform: uppercase; line-height: 1.25; }
+  .coord { font-size: 9.5px; color: #000; line-height: 1.35; }
+  .titre { font-size: 12.5px; font-weight: bold; margin-top: 5px; letter-spacing: 0.5px; }
+  .numero { font-size: 11px; font-weight: bold; }
+  hr.sep { border: 0; border-top: 1.2px dashed #000; color: #000; height: 0; margin-top: 4px; margin-bottom: 4px; }
+  hr.sep-fort { border: 0; border-top: 2px solid #000; color: #000; height: 0; margin-top: 3px; margin-bottom: 3px; }
 
   table.t { width: 100%; }
-  td.l { width: 64%; font-size: 9.5px; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; color: #111; }
-  td.m { width: 36%; font-size: 9.5px; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; text-align: right; }
+  td.l { width: 60%; font-size: 10.5px; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; color: #000; }
+  td.m { width: 40%; font-size: 10.5px; font-weight: bold; padding-top: 1.5px; padding-bottom: 1.5px; vertical-align: top; text-align: right; color: #000; }
   td.gras { font-weight: bold; }
-  td.info-l { width: 38%; font-size: 9px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; color: #333; }
-  td.info-v { width: 62%; font-size: 9px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; text-align: right; }
-  td.total-l { width: 50%; font-size: 11.5px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; }
-  td.total-m { width: 50%; font-size: 11.5px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; text-align: right; }
-  td.reste-l { width: 50%; font-size: 10.5px; font-weight: bold; padding-top: 2px; }
-  td.reste-m { width: 50%; font-size: 10.5px; font-weight: bold; padding-top: 2px; text-align: right; }
-  .pied { text-align: center; font-size: 8.5px; color: #333; line-height: 1.4; }
+  td.info-l { width: 34%; font-size: 10px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; color: #000; }
+  td.info-v { width: 66%; font-size: 10px; font-weight: bold; padding-top: 1px; padding-bottom: 1px; vertical-align: top; text-align: right; color: #000; }
+  td.total-l { width: 45%; font-size: 13px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; }
+  td.total-m { width: 55%; font-size: 13px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; text-align: right; }
+  td.reste-l { width: 62%; font-size: 11.5px; font-weight: bold; padding-top: 2px; }
+  td.reste-m { width: 38%; font-size: 11.5px; font-weight: bold; padding-top: 2px; text-align: right; }
+  .pied { text-align: center; font-size: 9.5px; color: #000; line-height: 1.4; }
+  {% if ticket_etroit %}
+  /* 58 mm : ~50 mm imprimables. Polices réduites et colonne des montants
+     élargie, sinon « 1 250 000 F » passe à la ligne. */
+  body { font-size: 8.5px; }
+  .ecole { font-size: 11px; }
+  .coord, .pied { font-size: 8px; }
+  .titre { font-size: 10.5px; }
+  .numero { font-size: 9.5px; }
+  td.l { width: 52%; font-size: 8.5px; }
+  td.m { width: 48%; font-size: 8.5px; }
+  td.info-l { width: 30%; font-size: 8px; }
+  td.info-v { width: 70%; font-size: 8px; }
+  td.total-l { width: 40%; font-size: 10.5px; }
+  td.total-m { width: 60%; font-size: 10.5px; }
+  td.reste-l, td.reste-m { font-size: 9.5px; }
+  {% endif %}
 </style>
 </head>
 <body>
 
   <div class="center">
-    {% if tenant_logo %}{% logo_ecole tenant_logo 150 48 %}<br>{% endif %}
+    {% if tenant_logo %}{% if ticket_etroit %}{% logo_ecole tenant_logo 110 36 %}{% else %}{% logo_ecole tenant_logo 150 48 %}{% endif %}<br>{% endif %}
     <div class="ecole">{{ tenant_nom }}</div>
     <div class="coord">
       {% if tenant_ville %}{{ tenant_ville }}<br>{% endif %}
@@ -111,6 +130,8 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
     Merci de conserver ce reçu.<br>
     {{ date_edition }}
   </div>
+  {# Repère de coupe, invisible (formats_recu.REPERE_FIN) : toujours en dernier. #}
+  <div style="color:#ffffff; font-size:2px;">FIN-DU-RECU</div>
 
 </body>
 </html>

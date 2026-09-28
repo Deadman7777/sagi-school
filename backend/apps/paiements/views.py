@@ -697,23 +697,30 @@ class PaiementViewSet(viewsets.ModelViewSet):
         context = self._build_recu_context(p)
         context['p'] = p  # accès direct à l'objet pour le template
 
-        # Format choisi au tirage : A5 (défaut), A4, ou 80mm thermique.
+        # Format choisi au tirage : A5 (défaut), A4, A6, Letter, Legal, ou
+        # ticket thermique 58/80 mm (hauteur ajustée au contenu).
         # NB : on n'utilise PAS le param 'format' (réservé par DRF → Http404), mais 'taille'.
+        from .formats_recu import FORMATS_RECU, rogner_a_la_hauteur_du_contenu
         fmt = (request.query_params.get('taille') or 'A5').upper()
-        if fmt == '80MM':
-            template   = 'pdf/recu_ticket.html'
-            context['page_size'] = '80mm 297mm'
-        else:
-            template   = 'pdf/recu_paiement.html'
-            context['page_size'] = 'A4 portrait' if fmt == 'A4' else 'A5 portrait'
+        if fmt not in FORMATS_RECU:
+            fmt = 'A5'
+        template, context['page_size'], largeur_ticket = FORMATS_RECU[fmt]
+        context['ticket_etroit'] = largeur_ticket == 58
+        if template == 'pdf/recu_ticket.html' and context.get('tenant_logo'):
+            # Tête thermique : noir ou rien, un logo en couleur sort délavé.
+            from apps.tenants.logo import logo_noir_et_blanc
+            context['tenant_logo'] = logo_noir_et_blanc(context['tenant_logo'])
 
         html_str = render_to_string(template, context)
         buf      = BytesIO()
         result   = pisa.CreatePDF(html_str, dest=buf, encoding='utf-8')
         if result.err:
             return HttpResponse('Erreur génération PDF reçu.', status=500)
+        contenu = buf.getvalue()
+        if largeur_ticket:
+            contenu = rogner_a_la_hauteur_du_contenu(contenu)
 
-        response = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        response = HttpResponse(contenu, content_type='application/pdf')
         # « Ousseynou NDOUR » → « OusseynouNDOUR » : ASCII sans espaces, sûr
         # dans un en-tête HTTP et dans un nom de fichier Windows.
         import re, unicodedata

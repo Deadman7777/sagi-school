@@ -1355,7 +1355,11 @@ export class PaiementsComponent implements OnInit {
   formatsRecu = [
     { label: 'A5 (demi-A4)',     value: 'A5' },
     { label: 'A4 (page entière)', value: 'A4' },
+    { label: 'A6 (quart de A4)',  value: 'A6' },
+    { label: 'Letter (US)',       value: 'LETTER' },
+    { label: 'Legal (US)',        value: 'LEGAL' },
     { label: '80 mm (thermique)', value: '80mm' },
+    { label: '58 mm (thermique)', value: '58mm' },
   ];
   saisieDonnees     = signal<any | null>(null);
   eleveSelectionne: any = null;
