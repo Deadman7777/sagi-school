@@ -17,6 +17,22 @@ import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
+/** Début + 1 an − 1 jour (2026-10-01 → 2027-09-30), ou '' si la date est illisible. */
+function finExercice(debut: string): string {
+  const [a, m, j] = String(debut || '').split('-').map(Number);
+  if (!a || !m || !j) return '';
+  const fin = new Date(Date.UTC(a + 1, m - 1, j - 1));
+  return fin.toISOString().slice(0, 10);
+}
+
+/** Année scolaire en cours ou à venir : octobre à septembre. */
+function exerciceParDefaut() {
+  const now = new Date();
+  const a = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const date_debut = `${a}-10-01`;
+  return { annee_scolaire: `${a}-${a + 1}`, date_debut, date_fin: finExercice(date_debut) };
+}
+
 @Component({
   selector: 'app-licences',
   standalone: true,
@@ -229,7 +245,11 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </div>
         <div class="form-group">
           <label>{{ 'licences.debut_exercice' | translate }}</label>
-          <input pInputText [(ngModel)]="form.date_debut" class="w-full" type="date" />
+          <input pInputText [(ngModel)]="form.date_debut" (ngModelChange)="debutExerciceChange($event)" class="w-full" type="date" />
+        </div>
+        <div class="form-group">
+          <label>Fin exercice</label>
+          <input pInputText [(ngModel)]="form.date_fin" class="w-full" type="date" />
         </div>
         <div class="form-group">
           <label>Code Établissement</label>
@@ -506,8 +526,7 @@ export class LicencesComponent implements OnInit {
     nom: '', ville: '', telephone: '', email: '',
     rccm: '', ninea: '', code_etablissement: 'ETB',
     type_licence: 'ESSAI', mois_licence: 1, cycle: 'ANNUEL',
-    annee_scolaire: '2025-2026',
-    date_debut: '2025-10-01', date_fin: '2026-09-30',
+    ...exerciceParDefaut(),
   };
 
   // Dialog changement type
@@ -648,10 +667,20 @@ ouvrirDialog() {
     nom: '', ville: '', telephone: '', email: '',
     rccm: '', ninea: '', code_etablissement: 'ETB',
     type_licence: 'ESSAI', mois_licence: 1, cycle: 'ANNUEL',
-    annee_scolaire: '2025-2026', date_debut: '2025-10-01', date_fin: '2026-09-30',
+    ...exerciceParDefaut(),
   };
   this.dialogVisible = true;
 }
+
+  // La fin suit le début : sans cela, changer le début laissait une fin
+  // antérieure et le serveur refusait la création.
+  debutExerciceChange(debut: string) {
+    const fin = finExercice(debut);
+    if (!fin) return;
+    this.form.date_fin = fin;
+    const [a, b] = [debut.slice(0, 4), fin.slice(0, 4)];
+    this.form.annee_scolaire = a === b ? a : `${a}-${b}`;
+  }
 
   ouvrirRenouvellement(l: any) {
     this.licenceSelectionnee = l;

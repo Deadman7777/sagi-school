@@ -63,3 +63,13 @@ class CreationEcoleTest(APITestCase):
             r = self.client.post(URL, self._data(**extra), format='json')
             self.assertEqual(r.status_code, 400, extra)
             self.assertIn(attendu, r.data['error'])
+
+    def test_sans_fin_saisie_la_fin_suit_le_debut(self):
+        # Bug 30/09 : le formulaire n'envoyait pas de fin, le défaut figé
+        # (2026-09-30) précédait un début au 01/10/2026 → création refusée.
+        data = self._data(date_debut='2026-10-01')
+        del data['date_fin']
+        r = self.client.post(URL, data, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        exercice = Exercice.objects.get(tenant_id=r.data['tenant_id'])
+        self.assertEqual(str(exercice.date_fin), '2027-09-30')

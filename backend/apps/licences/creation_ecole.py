@@ -75,7 +75,10 @@ def valider(data):
     if len(annee) > Exercice._meta.get_field('annee_scolaire').max_length:
         raise CreationEcoleErreur('Année scolaire : valeur trop longue (ex. 2026-2027).')
     debut = _date(data.get('date_debut') or '2025-10-01', "Début de l'année scolaire")
-    fin = _date(data.get('date_fin') or '2026-09-30', "Fin de l'année scolaire")
+    # Sans fin saisie : un an après le début, jamais une date figée qui
+    # précéderait un début choisi plus tard.
+    fin = (_date(data['date_fin'], "Fin de l'année scolaire") if data.get('date_fin')
+           else debut + relativedelta(years=1, days=-1))
     if fin <= debut:
         raise CreationEcoleErreur("La fin de l'année scolaire doit suivre son début.")
 
