@@ -629,6 +629,14 @@ import { MessageService } from 'primeng/api';
             <!-- Ce que paie un ANCIEN élève de ce niveau à la place de
                  l'inscription. Masqué tant que l'école n'a pas activé le
                  renouvellement : inutile d'encombrer les autres. -->
+            <!-- Classe d'examen (3ème) : un mois de plus que le reste de l'école. -->
+            <div class="sc-frais" *ngIf="s.mode_tarif !== 'JOURNEE'">
+              <span>{{ 'parametres.nb_mensualites_section' | translate }}</span>
+              <p-inputNumber [(ngModel)]="s.nb_mensualites" [min]="1" [max]="12"
+                             [useGrouping]="false" [fluid]="true" inputStyleClass="text-right"
+                             [placeholder]="'' + (exercice()?.nb_mensualites || 10)" />
+              <small class="fc-hint">{{ 'parametres.nb_mensualites_section_aide' | translate: { nb: exercice()?.nb_mensualites || 10 } }}</small>
+            </div>
             <div class="sc-frais" *ngIf="ecole()?.renouvellement_actif">
               <span>{{ ecole()!.libelle_renouvellement || ('parametres.renouv_frais' | translate) }}</span>
               <p-inputNumber [(ngModel)]="s.frais_renouvellement" mode="decimal"
@@ -1592,13 +1600,15 @@ export class ParametresComponent implements OnInit {
 
   /** Les mois réellement facturés par l'exercice, dans l'ordre du calendrier
    *  scolaire — octobre à juin pour une année qui démarre en octobre. */
+  /*  Ceux de la section du barème quand elle fixe ses propres mensualités
+   *  (3ème jusqu'en juillet). */
   moisExercice = computed(() => {
     const ex = this.exercice();
     if (!ex?.date_debut) return [];
     const noms = ['Janvier','Février','Mars','Avril','Mai','Juin',
                   'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
     const premier = new Date(ex.date_debut).getMonth();   // 0-indexé
-    const nb = ex.nb_mensualites || 10;
+    const nb = this.baremeSection()?.nb_mensualites || ex.nb_mensualites || 10;
     return Array.from({ length: nb }, (_, i) => {
       const idx = (premier + i) % 12;
       return { numero: idx + 1, nom: noms[idx] };
@@ -2115,6 +2125,7 @@ chargerExercice() {
         mode_tarif:         s.mode_tarif || 'MENSUEL',
         tarif_demi_journee: +(s.tarif_demi_journee || 0),
         tarif_journee:      +(s.tarif_journee || 0),
+        nb_mensualites:     s.nb_mensualites ?? null,
       }));
       this.sections.set(sections);
     }

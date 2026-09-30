@@ -54,7 +54,7 @@ def creer_paiement_reprise(tenant, exercice, eleve, user=None, *,
         return None
 
     if montants is None:
-        nb = min(int(nb_mensualites or 0), exercice.nb_mensualites)
+        nb = min(int(nb_mensualites or 0), eleve.nb_mensualites_annee)
         montants = {
             # Frais d'entrée réellement dus : le renouvellement chez un ancien
             # élève. Reprendre l'inscription lui recréerait une dette qu'il n'a
@@ -72,7 +72,7 @@ def creer_paiement_reprise(tenant, exercice, eleve, user=None, *,
     # pour que le suivi mensuel marque les bons mois.
     frais_m = float(section.frais_mensualite) or 0
     nb = (min(int(round(float(montants.get('montant_mensualite', 0)) / frais_m)),
-              exercice.nb_mensualites) if frais_m else 0)
+              eleve.nb_mensualites_annee) if frais_m else 0)
 
     paiement = Paiement.objects.create(
         tenant=tenant, exercice=exercice, eleve=eleve,

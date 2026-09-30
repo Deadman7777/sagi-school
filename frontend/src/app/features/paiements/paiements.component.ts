@@ -533,17 +533,20 @@ import { ProformasComponent } from './proformas.component';
               <div class="aide-adhesion">{{ 'paiements.premiere_adhesion_aide' | translate }}</div>
             </div>
           }
-          <!-- Premier mois réglé avec l'inscription : le mois passe payé. -->
-          @if (premierMoisProposable(); as pm) {
+          <!-- Premier et/ou dernier mois réglés avec l'inscription (réglages de
+               l'école) : chaque mois coché passe payé. -->
+          @if (moisInscriptionProposables().length) {
             <div class="premier-mois">
-              <label class="premier-mois-case">
-                <input type="checkbox" [(ngModel)]="form.inclure_premier_mois" (ngModelChange)="togglePremierMois()" />
-                {{ 'paiements.inclure_premier_mois' | translate:{ mois: pm.label } }}
-                <span class="fee-hint">{{ 'paiements.reste_mois' | translate }} {{ pm.reste | number:'1.0-0' }}</span>
-              </label>
-              @if (form.inclure_premier_mois) {
+              @for (pm of moisInscriptionProposables(); track pm.mois.num) {
+                <label class="premier-mois-case">
+                  <input type="checkbox" [checked]="moisSelected(pm.mois.num)" (change)="toggleMois(pm.mois.num)" />
+                  {{ (pm.role === 'dernier' ? 'paiements.inclure_dernier_mois' : 'paiements.inclure_premier_mois') | translate:{ mois: pm.mois.label } }}
+                  <span class="fee-hint">{{ 'paiements.reste_mois' | translate }} {{ pm.mois.reste | number:'1.0-0' }}</span>
+                </label>
+              }
+              @if (form.mois_regles.length) {
                 <div class="form-group">
-                  <label>{{ saisieDonnees()!.formule_nom ? ('Mensualité — ' + saisieDonnees()!.formule_nom) : 'Mensualité' }} ({{ pm.label }})</label>
+                  <label>{{ saisieDonnees()!.formule_nom ? ('Mensualité — ' + saisieDonnees()!.formule_nom) : 'Mensualité' }} ({{ libelleMoisChoisis() }})</label>
                   <p-inputNumber [(ngModel)]="form.montant_mensualite" [min]="0" mode="decimal" styleClass="w-full" />
                 </div>
               }
@@ -1557,11 +1560,11 @@ export class PaiementsComponent implements OnInit {
     if (this.typePaiement === 'INSCRIPTION') {
       this.form.montant_mensualite   = 0;
       this.form.montant_cantine      = 0;
-      // Premier mois à régler avec l'inscription : proposé coché, et c'est ce
-      // mois-là que le paiement désigne — il passe payé sur la fiche.
-      const premier = this.premierMoisProposable();
-      this.form.inclure_premier_mois = !!premier;
-      this.form.mois_regles          = premier ? [premier.num] : [];
+      // Mois à régler avec l'inscription (premier et/ou dernier) : proposés
+      // cochés, et ce sont eux que le paiement désigne — ils passent payés.
+      const aInscription = this.moisInscriptionProposables().map(p => p.mois.num);
+      this.form.inclure_premier_mois = aInscription.length > 0;
+      this.form.mois_regles          = aInscription;
     } else {
       this.form.inclure_premier_mois = false;
       // Tous les mois ÉCHUS non soldés, pas seulement le premier : un reliquat
@@ -1593,12 +1596,27 @@ export class PaiementsComponent implements OnInit {
                       + (Number(this.form.montant_divers) || 0);
   }
 
-  /** Le premier mois, s'il se règle à l'inscription et reste dû. */
-  premierMoisProposable(): any | null {
+  /** Les mois qui se règlent à l'inscription et restent dus : le premier et/ou
+   *  le dernier, selon les réglages de l'école. Un élève à un seul mois dû ne
+   *  le voit qu'une fois. */
+  moisInscriptionProposables(): { role: 'premier' | 'dernier'; mois: any }[] {
     const d = this.saisieDonnees();
-    if (!d?.premier_mois_a_inscription || !d.premier_mois) return null;
-    const m = (d.mois_ecole || []).find((x: any) => x.num === d.premier_mois);
-    return m && m.du && m.reste > 0 ? m : null;
+    if (!d) return [];
+    const trouver = (num: number | null) => {
+      const m = num ? (d.mois_ecole || []).find((x: any) => x.num === num) : null;
+      return m && m.du && m.reste > 0 ? m : null;
+    };
+    const res: { role: 'premier' | 'dernier'; mois: any }[] = [];
+    const premier = d.premier_mois_a_inscription ? trouver(d.premier_mois) : null;
+    if (premier) res.push({ role: 'premier', mois: premier });
+    const dernier = d.dernier_mois_a_inscription ? trouver(d.dernier_mois) : null;
+    if (dernier && dernier.num !== premier?.num) res.push({ role: 'dernier', mois: dernier });
+    return res;
+  }
+
+  /** « Octobre + Juin », pour le libellé de la mensualité à l'inscription. */
+  libelleMoisChoisis(): string {
+    return this.moisChoisis().map((m: any) => m.label).join(' + ');
   }
 
   /** « Kimono 10 000 », pour la case du guichet. */
@@ -1628,13 +1646,6 @@ export class PaiementsComponent implements OnInit {
         this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'), detail: this.messageErreur(err) });
       },
     });
-  }
-
-  togglePremierMois() {
-    const premier = this.premierMoisProposable();
-    this.form.mois_regles = this.form.inclure_premier_mois && premier ? [premier.num] : [];
-    this.construireServices();
-    this.proposerLeResteDu();
   }
 
   // Services abonnés proposés selon le contexte du paiement :

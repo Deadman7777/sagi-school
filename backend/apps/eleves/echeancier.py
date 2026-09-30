@@ -123,7 +123,7 @@ def mois_de_base(eleve):
     else:
         nb = eleve.nb_mensualites_dues
         debut = eleve.exercice.date_debut.month
-        premier = eleve.exercice.nb_mensualites - nb
+        premier = eleve.nb_mensualites_annee - nb
         mois = [((debut - 1 + premier + i) % 12) + 1 for i in range(nb)]
     eleve._mois_base_cache = mois
     return mois

@@ -205,16 +205,10 @@ class EleveSerializer(TenantModelSerializer):
 
     def get_mois_dus_effectifs(self, obj):
         """Les mois facturés, saisis ou déduits du prorata."""
-        if obj.mois_dus:
-            return sorted(int(m) for m in obj.mois_dus)
-        if not obj.exercice_id:
-            return []
-        debut = obj.exercice.date_debut
-        nb    = obj.nb_mensualites_dues
-        # Les mois dus courent depuis le premier mois facturé jusqu'au bout du
-        # compte : le prorata ne dit qu'un NOMBRE, on le déroule en calendrier.
-        premier = obj.exercice.nb_mensualites - nb
-        return [((debut.month - 1 + premier + i) % 12) + 1 for i in range(nb)]
+        # Le calendrier de l'échéancier, et non une copie : une copie ignorait
+        # déjà les mensualités propres à la section (3ème jusqu'en juillet).
+        from .echeancier import mois_de_base
+        return list(mois_de_base(obj))
 
     def get_mois_dus_origine(self, obj):
         return 'SAISI' if obj.mois_dus else 'PRORATA'
@@ -548,6 +542,9 @@ class SectionSerializer(TenantModelSerializer):
     tarif_demi_journee = serializers.FloatField(required=False, default=0, min_value=0)
     tarif_journee      = serializers.FloatField(required=False, default=0, min_value=0)
     niveau_nom         = serializers.CharField(source='niveau.nom', read_only=True, default='')
+    # Vide = les mensualités de l'exercice ; renseigné = celles de la section.
+    nb_mensualites     = serializers.IntegerField(required=False, allow_null=True,
+                                                  min_value=1, max_value=12)
 
     class Meta:
         model  = Section

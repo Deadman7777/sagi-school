@@ -1722,7 +1722,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         par_mois   = {ligne['mois']: ligne for ligne in ech['lignes']}
         mois_ecole = []
         if exercice:
-            nb_total = exercice.nb_mensualites
+            nb_total = eleve.nb_mensualites_annee
             debut    = exercice.date_debut
             y, mo = debut.year, debut.month
             # Fenêtre affichée : les mois de l'exercice, plus tout mois facturé
@@ -1890,6 +1890,12 @@ class EleveViewSet(viewsets.ModelViewSet):
             # dans le paiement d'inscription, et le mois passe payé.
             'premier_mois_a_inscription': eleve.premier_mois_a_inscription,
             'premier_mois': ech['lignes'][0]['mois'] if ech['lignes'] else None,
+            # Même chose pour la DERNIÈRE mensualité (réglage de l'école) : elle
+            # était exigible dès l'entrée dans l'échéancier, mais le guichet
+            # d'inscription ne la proposait pas — la famille repartait sans
+            # l'avoir réglée, et elle tombait aussitôt en retard.
+            'dernier_mois_a_inscription': bool(getattr(eleve.tenant, 'dernier_mois_a_inscription', False)),
+            'dernier_mois': ech['lignes'][-1]['mois'] if ech['lignes'] else None,
             'formule_nom': eleve.formule_actuelle.nom if eleve.formule_actuelle else '',
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',

@@ -24,6 +24,11 @@ class Section(TenantModel):
     # d'un niveau à l'autre comme l'inscription. Sans effet tant que le réglage
     # de l'école est désactivé.
     frais_renouvellement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Mensualités de la section quand elles diffèrent de celles de l'école :
+    # une classe d'examen (3ème) paie juillet en plus des 9 mois des autres.
+    # VIDE = le nombre de l'exercice. Lu par Eleve.nb_mensualites_annee, seul
+    # point d'entrée — ne jamais relire exercice.nb_mensualites pour un élève.
+    nb_mensualites     = models.PositiveSmallIntegerField(null=True, blank=True)
     ordre              = models.IntegerField(default=0)
 
     # ── Facturation à la journée (garderie ponctuelle) ───────────────────
@@ -486,6 +491,15 @@ class Eleve(TenantModel):
         return round(min(float(self.pec_mensualite or 0), self.mensualite_brute_du_mois(mois)), 2)
 
     @property
+    def nb_mensualites_annee(self):
+        """Mensualités d'une année COMPLÈTE pour cet élève, avant prorata :
+        celles de sa section si elle en fixe (3ème : 10, juillet compris),
+        sinon celles de l'exercice. Tout calcul par élève part d'ici."""
+        if self.section_id and self.section.nb_mensualites:
+            return self.section.nb_mensualites
+        return self.exercice.nb_mensualites if self.exercice_id else 10
+
+    @property
     def nb_mensualites_dues(self):
         """Nombre de mensualités réellement dues, au prorata de la date d'entrée.
         Ex. exercice débutant en octobre, élève inscrit en janvier → on ne compte
@@ -503,7 +517,7 @@ class Eleve(TenantModel):
             return self.nb_mois_passager
         if not self.exercice_id:
             return 10
-        nb    = self.exercice.nb_mensualites
+        nb    = self.nb_mensualites_annee
         debut = self.exercice.date_debut
         insc  = self.date_inscription or debut
         if insc <= debut:

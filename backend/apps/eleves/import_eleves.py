@@ -269,14 +269,21 @@ def _tel(val):
     return t, warn
 
 
-def _mois_echus_import(exercice, date_insc, today):
+def _nb_mensualites_import(exercice, section):
+    """Réplique Eleve.nb_mensualites_annee : celles de la section si elle en
+    fixe, sinon celles de l'exercice."""
+    return (section.nb_mensualites if section is not None and section.nb_mensualites
+            else exercice.nb_mensualites)
+
+
+def _mois_echus_import(exercice, date_insc, today, section=None):
     """Mensualités échues à ce jour (mois courant inclus), plafonnées au nombre
     dû au prorata de l'entrée. Réplique Eleve.mois_echus pour l'import (les
     élèves importés sont en régime EXERCICE)."""
     debut = exercice.date_debut
     insc = date_insc or debut
     mois_avant = max(0, (insc.year - debut.year) * 12 + (insc.month - debut.month)) if insc > debut else 0
-    nb_dues = max(0, exercice.nb_mensualites - mois_avant)
+    nb_dues = max(0, _nb_mensualites_import(exercice, section) - mois_avant)
     elapsed_incl = (today.year - debut.year) * 12 + (today.month - debut.month) + 1
     return max(0, min(elapsed_incl - mois_avant, nb_dues))
 
@@ -538,10 +545,11 @@ def analyser(fichier, tenant, exercice):
                        (w3, 'Fournitures déjà payées'), (w4, 'Mensualités déjà payées')):
             if w:
                 avert.append(f'{col} : {w}')
-        if rep_mensualites > exercice.nb_mensualites:
+        nb_annee = _nb_mensualites_import(exercice, section)
+        if rep_mensualites > nb_annee:
             avert.append(f'Mensualités déjà payées : {rep_mensualites} > '
-                         f'{exercice.nb_mensualites} mensualités de l\'exercice — plafonné')
-            rep_mensualites = exercice.nb_mensualites
+                         f'{nb_annee} mensualités de l\'année — plafonné')
+            rep_mensualites = nb_annee
 
         a_jour, _wj = _oui_non(brut.get('a_jour'))
         dette_val, wd = _montant(brut.get('dette_actuelle'))
@@ -562,7 +570,7 @@ def analyser(fichier, tenant, exercice):
             if detaille_fourni:
                 avert.append('Colonnes « déjà payé » ignorées au profit de '
                              '« À jour » / « Dette actuelle »')
-            me = _mois_echus_import(exercice, date_insc, today)
+            me = _mois_echus_import(exercice, date_insc, today, section)
             fi = _frais_entree_import(tenant, exercice, section, date_insc)
             fm = float(section.frais_mensualite)
             fu = float(section.frais_uniforme);    ff = float(section.frais_fournitures)
