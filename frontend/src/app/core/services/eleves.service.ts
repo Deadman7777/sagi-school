@@ -257,6 +257,10 @@ export class ElevesService {
     return this.api.post<{ eleve_id: string; cas: string; exercice: string; dette: number;
                            mois_retires_noms: string[] }>(`/eleves/${id}/reintegrer/`, data);
   }
+  /** Annule une sortie posée par erreur : l'élève n'est jamais parti. */
+  annulerSortie(id: string, motif: string) {
+    return this.api.post<{ eleve_id: string; statut: string }>(`/eleves/${id}/annuler-sortie/`, { motif });
+  }
   getMouvements(id: string) { return this.api.get<any[]>(`/eleves/${id}/mouvements/`); }
 
   // Base historique des sortis — indépendante de l'exercice actif.
@@ -286,6 +290,10 @@ export class ElevesService {
     return this.api.get<Famille[] | PaginatedResponse<Famille>>('/eleves/familles/',
                                                                 q ? { search: q } : undefined)
       .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
+  }
+  /** Coordonnées des parents pour la fiche d'un nouvel enfant de la famille. */
+  coordonneesFamille(id: string) {
+    return this.api.get<Record<string, string>>(`/eleves/familles/${id}/coordonnees/`);
   }
   creerFamille(f: Partial<Famille>)  { return this.api.post<Famille>('/eleves/familles/', f); }
   majFamille(id: string, f: Partial<Famille>) {

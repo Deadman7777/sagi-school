@@ -607,9 +607,10 @@ const MOIS_ANNEE = [
                             [pTooltip]="'eleves.parcours_pdf' | translate"
                             [loading]="exportantParcours()"
                             (onClick)="telechargerParcoursPDF(a.eleve_id)" />
-                  @if (a.statut === 'ABANDONNE' || a.statut === 'TRANSFERE') {
+                  @if (a.statut === 'ABANDONNE' || a.statut === 'TRANSFERE' || a.statut === 'DIPLOME') {
                     <p-button icon="pi pi-replay" [rounded]="true" [text]="true" severity="success"
-                              pTooltip="Réintégrer l'élève" (onClick)="ouvrirReintegration(a.eleve_id, a.nom_complet)" />
+                              [pTooltip]="a.statut === 'DIPLOME' ? 'Annuler la sortie (erreur)' : 'Réintégrer / annuler la sortie'"
+                              (onClick)="ouvrirReintegration(a.eleve_id, a.nom_complet, a.statut === 'DIPLOME')" />
                   }
                 </div>
               </td>
@@ -1456,6 +1457,19 @@ const MOIS_ANNEE = [
             <input type="file" accept="image/jpeg,image/png,image/webp" (change)="choisirPhoto($event)" />
           </div>
         </div>
+        <!-- Frère ou sœur d'un élève déjà inscrit : choisir la famille reprend
+             les coordonnées des parents, modifiables avant d'enregistrer. -->
+        @if (!editId) {
+          <div class="form-group full famille-choix">
+            <label for="nv-famille">{{ 'eleves.famille_existante' | translate }}</label>
+            <p-select appendTo="body" inputId="nv-famille" [options]="famillesChoix()" optionLabel="libelle"
+                      optionValue="id" [ngModel]="nouvelEleve.famille" (ngModelChange)="choisirFamille($event)"
+                      [filter]="true" filterBy="libelle" [showClear]="true" styleClass="w-full"
+                      [placeholder]="'eleves.famille_existante_ph' | translate"
+                      [emptyMessage]="'eleves.famille_aucune' | translate" />
+            <small class="stat-aide">{{ 'eleves.famille_existante_aide' | translate }}</small>
+          </div>
+        }
         <div class="form-group full" style="margin-top:2px">
           <small style="color:var(--text-3);font-size:11px">⚑ {{ 'eleves.parent_obligatoire' | translate }}</small>
         </div>
@@ -1790,6 +1804,24 @@ const MOIS_ANNEE = [
               [style]="{ width: '560px', maxWidth: '95vw' }" [draggable]="false">
       <div class="reint">
         <div class="reint-nom">{{ reintegrationNom }}</div>
+        <!-- Statut changé par erreur : on annule la sortie, sans date de retour
+             ni mois retirés — la fiche reprend son état d'avant. -->
+        <label class="reint-check reint-erreur">
+          <p-checkbox [(ngModel)]="formReintegration.erreur_saisie" [binary]="true" inputId="reint-erreur" />
+          <span><strong>L'élève n'est jamais parti</strong> — le statut a été changé par erreur</span>
+        </label>
+        @if (formReintegration.erreur_saisie) {
+          <div class="reint-info">
+            La sortie sera annulée : l'élève revient dans la liste avec son statut d'avant, sans
+            nouvelle inscription et sans toucher à ses mois ni à ses paiements. L'annulation reste
+            tracée dans son historique.
+          </div>
+          <div class="field reint-full">
+            <label for="reint-motif-err">Motif *</label>
+            <input pInputText id="reint-motif-err" [(ngModel)]="formReintegration.motif" class="w-full"
+                   placeholder="Ex. statut « Transféré » coché par erreur" />
+          </div>
+        } @else {
         <div class="reint-grid">
           <div class="field">
             <label for="reint-date">Date de retour *</label>
@@ -1840,11 +1872,17 @@ const MOIS_ANNEE = [
             }
           }
         }
+        }
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogReintegrationVisible=false" />
-        <p-button label="Réintégrer" icon="pi pi-replay" severity="success" [loading]="saving()"
-                  [disabled]="!peutReintegrer()" (onClick)="confirmerReintegration()" />
+        @if (formReintegration.erreur_saisie) {
+          <p-button label="Annuler la sortie" icon="pi pi-undo" severity="success" [loading]="saving()"
+                    [disabled]="!formReintegration.motif.trim()" (onClick)="confirmerAnnulationSortie()" />
+        } @else {
+          <p-button label="Réintégrer" icon="pi pi-replay" severity="success" [loading]="saving()"
+                    [disabled]="!peutReintegrer()" (onClick)="confirmerReintegration()" />
+        }
       </ng-template>
     </p-dialog>
 
@@ -2559,15 +2597,16 @@ export class ElevesListeComponent implements OnInit {
   dialogReintegrationVisible = false;
   reintegrationId  = '';
   reintegrationNom = '';
-  formReintegration = { date_retour: '', motif: '', section_id: null as string | null, dette_reconnue: false };
+  formReintegration = { date_retour: '', motif: '', section_id: null as string | null, dette_reconnue: false,
+                        erreur_saisie: false };
   apercuReintegration     = signal<any | null>(null);
   chargementReintegration = signal(false);
 
-  ouvrirReintegration(eleveId: string, nom: string) {
+  ouvrirReintegration(eleveId: string, nom: string, erreurSaisie = false) {
     this.reintegrationId = eleveId;
     this.reintegrationNom = nom;
     this.formReintegration = { date_retour: new Date().toISOString().slice(0, 10), motif: '',
-                               section_id: null, dette_reconnue: false };
+                               section_id: null, dette_reconnue: false, erreur_saisie: erreurSaisie };
     this.apercuReintegration.set(null);
     this.dialogFicheVisible = false;
     this.dialogReintegrationVisible = true;
@@ -2611,6 +2650,25 @@ export class ElevesListeComponent implements OnInit {
         this.saving.set(false);
         this.msg.add({ severity: 'error', summary: 'Réintégration refusée',
                        detail: err?.error?.error || 'Erreur lors de la réintégration.', life: 7000 });
+      },
+    });
+  }
+
+  confirmerAnnulationSortie() {
+    this.saving.set(true);
+    this.elevesService.annulerSortie(this.reintegrationId, this.formReintegration.motif.trim()).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogReintegrationVisible = false;
+        this.msg.add({ severity: 'success', summary: 'Sortie annulée',
+                       detail: `${this.reintegrationNom} est de nouveau dans la liste des élèves.`, life: 6000 });
+        this.chargerEleves();
+        if (this.onglet() === 'anciens') this.chargerAnciens();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'error', summary: 'Annulation refusée',
+                       detail: err?.error?.error || "Erreur lors de l'annulation.", life: 7000 });
       },
     });
   }
@@ -3496,7 +3554,39 @@ export class ElevesListeComponent implements OnInit {
                          etat_sante: 'SAIN', date_inscription_jour_estime: false,
                          reliquat_anterieur: 0, reliquat_note: '' };
     this.champsSaisis = {};
+    this.chargerFamillesChoix();
     this.dialogVisible = true;
+  }
+
+  // ── Famille d'un nouvel inscrit ─────────────────────────────────────────
+  famillesChoix = signal<{ id: string; libelle: string }[]>([]);
+
+  private chargerFamillesChoix() {
+    this.elevesService.getFamilles().subscribe({
+      next: fs => this.famillesChoix.set(fs.filter(f => f.actif !== false).map(f => ({
+        id: f.id,
+        libelle: [f.code, f.nom, f.contact?.telephone].filter(Boolean).join(' — '),
+      }))),
+    });
+  }
+
+  /** Rattache l'enfant à la famille et reprend les coordonnées des parents.
+   *  Seuls les champs vides de la fiche sont remplis : ce que l'école a déjà
+   *  tapé n'est jamais écrasé. */
+  choisirFamille(id: string | null) {
+    this.nouvelEleve.famille = id || null;
+    if (!id) return;
+    this.elevesService.coordonneesFamille(id).subscribe({
+      next: c => {
+        const e = this.nouvelEleve as Record<string, any>;
+        for (const [champ, valeur] of Object.entries(c)) {
+          if (valeur && !e[champ]) e[champ] = valeur;
+        }
+        this.cdr.markForCheck();
+        this.msg.add({ severity: 'info', summary: this.translate.instant('eleves.famille_reprise'),
+                       detail: this.translate.instant('eleves.famille_reprise_detail'), life: 4000 });
+      },
+    });
   }
 
   groupesSanguins = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];

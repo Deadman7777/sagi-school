@@ -70,6 +70,52 @@ def contact_effectif(eleve):
     return {'nom': nom, 'telephone': '', 'origine': 'FICHE' if nom else 'AUCUN'}
 
 
+# Coordonnées des parents recopiées sur la fiche d'un nouvel enfant.
+CHAMPS_PARENTS = (
+    'nom_pere', 'telephone_pere', 'profession_pere', 'residence_pere',
+    'nom_mere', 'telephone_mere', 'profession_mere', 'residence_mere',
+    'nom_tuteur', 'telephone_tuteur', 'lien_tuteur',
+    'contact_urgence_nom', 'contact_urgence_telephone', 'adresse',
+)
+
+
+def coordonnees_nouvel_enfant(famille):
+    """Les champs « parents » d'une nouvelle fiche, pré-remplis depuis la famille.
+
+    Un frère ou une sœur qui arrive ne doit pas faire retaper le père, la mère
+    et le tuteur déjà connus. Deux sources, dans cet ordre :
+
+      1. les RESPONSABLES de la famille — ce que l'école tient à jour une fois
+         le foyer regroupé (Père → champs du père, Mère → de la mère, Tuteur ou
+         Autre → du tuteur, le principal d'abord) ;
+      2. la fiche la plus récente d'un enfant de la famille, pour tout ce qui
+         reste vide — une famille née du regroupement automatique n'a souvent
+         que ses enfants, sans responsable saisi.
+
+    Rien n'est imposé : l'écran pré-remplit, l'école corrige avant d'enregistrer.
+    """
+    valeurs = {champ: '' for champ in CHAMPS_PARENTS}
+    for r in famille.responsables.all():          # principal d'abord (Meta.ordering)
+        if r.lien in ('PERE', 'MERE'):
+            suffixe = 'pere' if r.lien == 'PERE' else 'mere'
+            for champ, v in ((f'nom_{suffixe}', r.nom), (f'telephone_{suffixe}', r.telephone),
+                             (f'profession_{suffixe}', r.profession),
+                             (f'residence_{suffixe}', r.residence)):
+                valeurs[champ] = valeurs[champ] or (v or '')
+        elif not valeurs['nom_tuteur']:
+            valeurs['nom_tuteur'] = r.nom or ''
+            valeurs['telephone_tuteur'] = r.telephone or ''
+            valeurs['lien_tuteur'] = r.get_lien_display() if r.lien == 'TUTEUR' else ''
+    if famille.adresse:
+        valeurs['adresse'] = famille.adresse[:255]
+
+    aine = famille.eleves.order_by('-created_at').first()
+    if aine is not None:
+        for champ in CHAMPS_PARENTS:
+            valeurs[champ] = valeurs[champ] or (getattr(aine, champ, '') or '')
+    return valeurs
+
+
 def situation_famille(famille, exercice):
     """Ce que la famille doit et a payé, tous enfants confondus.
 

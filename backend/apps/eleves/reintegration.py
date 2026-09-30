@@ -126,7 +126,8 @@ def analyser(eleve, date_retour, today=None):
         raise ReintegrationRefusee('La date de retour ne peut pas être dans le futur.', code='DATE')
     if source.date_sortie and date_retour <= source.date_sortie:
         raise ReintegrationRefusee(
-            f"Le retour doit être postérieur à la sortie du {source.date_sortie:%d/%m/%Y}.",
+            f"Le retour doit être postérieur à la sortie du {source.date_sortie:%d/%m/%Y}. "
+            "Si le statut a été changé par erreur, cochez « L'élève n'est jamais parti ».",
             code='DATE')
 
     cible = _exercice_ouvert_couvrant(source.tenant, date_retour)
@@ -233,6 +234,54 @@ def reintegrer(eleve, date_retour, motif, *, dette_reconnue=False, utilisateur='
             utilisateur=utilisateur,
         )
     return fiche, a
+
+
+def annuler_sortie(eleve, motif, *, utilisateur=''):
+    """Annule une sortie posée PAR ERREUR : l'élève n'est jamais parti.
+
+    Ce n'est pas une réintégration. Il n'y a ni date de retour, ni mois
+    d'absence à retirer, ni dette à faire reconnaître : la fiche reprend
+    exactement l'état d'avant la sortie. Sans cette voie, un statut
+    « Transféré » cliqué par erreur envoyait l'enfant chez les anciens, et la
+    réintégration — qui exige un retour POSTÉRIEUR à la sortie — le refusait
+    le jour même ; l'école finissait par le réinscrire en double.
+
+    Règles : la fiche doit être la dernière de l'enfant, sur un exercice
+    OUVERT (une année clôturée ne se réécrit pas) ; le motif est obligatoire ;
+    la sortie annulée reste tracée (MouvementEleve).
+    """
+    from .parcours import STATUTS_SORTIE
+
+    motif = (motif or '').strip()
+    source, _ = _fiche_source(eleve)
+    if source.statut not in STATUTS_SORTIE:
+        raise ReintegrationRefusee(f"{source.nom_complet} est déjà présent dans l'établissement.",
+                                   code='DEJA_PRESENT')
+    if source.exercice.cloture:
+        raise ReintegrationRefusee(
+            f"La sortie date de l'exercice {source.exercice.annee_scolaire}, déjà clôturé : "
+            "utilisez « Réintégrer » pour le faire revenir sur l'année en cours.",
+            code='EXERCICE')
+    if not motif:
+        raise ReintegrationRefusee("Le motif de l'annulation est obligatoire.", code='MOTIF')
+
+    # Le statut d'avant la sortie, tel que la trace l'a noté (INSCRIT, ou
+    # NOUVEAU…) ; INSCRIT à défaut de trace.
+    trace = (MouvementEleve.objects.filter(eleve=source, type_mouvement='SORTIE')
+             .order_by('-date_mouvement', '-created_at').first())
+    statut_avant = (trace.statut_avant if trace and trace.statut_avant
+                    and trace.statut_avant not in STATUTS_SORTIE else 'INSCRIT')
+    statut_sortie = source.statut
+
+    with transaction.atomic():
+        source.statut = statut_avant
+        source.date_sortie = None
+        source.save(update_fields=['statut', 'date_sortie'])
+        MouvementEleve.objects.create(
+            tenant=source.tenant, eleve=source, type_mouvement='ANNULATION',
+            date_mouvement=datetime.date.today(), statut_avant=statut_sortie,
+            statut_apres=statut_avant, motif=motif, utilisateur=utilisateur)
+    return source
 
 
 def tracer_sortie(eleve, statut_avant, motif='', utilisateur=''):

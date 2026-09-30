@@ -130,6 +130,8 @@ export interface Eleve {
   nb_mensualites_dues: number;
   // Bourse : le dû ne diminue pas, il change de débiteur.
   part_organisme: number;
+  /** Famille (foyer payeur) à laquelle l'enfant est rattaché. */
+  famille?: string | null;
   part_famille: number;
   reste_organisme: number;
   reste_famille: number;

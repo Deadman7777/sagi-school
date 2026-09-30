@@ -1105,6 +1105,7 @@ class MouvementEleve(TenantModel):
     TYPE_CHOICES = [
         ('SORTIE',        'Sortie'),
         ('REINTEGRATION', 'Réintégration'),
+        ('ANNULATION', 'Sortie annulée (erreur de saisie)'),
     ]
     eleve         = models.ForeignKey(Eleve, on_delete=models.CASCADE,
                                       related_name='mouvements')

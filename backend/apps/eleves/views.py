@@ -681,6 +681,20 @@ class EleveViewSet(viewsets.ModelViewSet):
             'dette': a['dette'], 'mois_retires_noms': a['mois_retires_noms'],
         })
 
+    @action(detail=True, methods=['post'], url_path='annuler-sortie')
+    def annuler_sortie(self, request, pk=None):
+        """Annule une sortie posée par erreur — voir reintegration.annuler_sortie."""
+        from core.models import log_audit
+        from .reintegration import ReintegrationRefusee, annuler_sortie
+        try:
+            fiche = annuler_sortie(self._fiche_du_tenant(pk), request.data.get('motif'),
+                                   utilisateur=getattr(request.user, 'email', ''))
+        except ReintegrationRefusee as exc:
+            return Response({'error': exc.message, 'code': exc.code}, status=400)
+        log_audit(request, 'UPDATE', 'Eleve', str(fiche.id),
+                  f"Sortie annulée {fiche.nom_complet} — {request.data.get('motif')}")
+        return Response({'eleve_id': str(fiche.id), 'statut': fiche.statut})
+
     @action(detail=True, methods=['get'], url_path='mouvements')
     def mouvements(self, request, pk=None):
         """Historique des sorties et retours de l'enfant, toutes années confondues."""
@@ -3162,6 +3176,12 @@ class FamilleViewSet(viewsets.ModelViewSet):
             log_audit(request, 'SUPPRESSION', 'Famille', famille.id,
                       f'{famille.nom} — {nb} élève(s) détaché(s)')
         return reponse
+
+    @action(detail=True, methods=['get'])
+    def coordonnees(self, request, pk=None):
+        """Coordonnées des parents pour la fiche d'un nouvel enfant de la famille."""
+        from .familles import coordonnees_nouvel_enfant
+        return Response(coordonnees_nouvel_enfant(self.get_object()))
 
     @action(detail=True, methods=['get'])
     def situation(self, request, pk=None):
