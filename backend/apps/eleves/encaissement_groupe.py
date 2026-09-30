@@ -114,22 +114,9 @@ def _postes_hors_mensualite(eleve, hors, regle):
 
 
 def _composition_du_mois(eleve, mois):
-    """Le dû d'un mois découpé : services mensuels, suppléments, scolarité."""
-    from .garde_soir import du_garde_soir_du_mois
-
-    du = float(eleve.du_du_mois(mois))
-    services = []
-    if eleve._mois_du_calendrier(mois):
-        services = [{'nom': ab.service.nom, 'montant': float(ab.service.montant or 0)}
-                    for ab in eleve.abonnements.all()
-                    if ab.service.periodicite == 'MENSUEL' and float(ab.service.montant or 0) > 0]
-    supplements = float(du_garde_soir_du_mois(eleve, mois))
-    if eleve.a_la_journee:
-        from .garderie import du_presences_du_mois
-        supplements += float(du_presences_du_mois(eleve, mois))
-    total_services = sum(s['montant'] for s in services)
-    scolarite = max(du - total_services - supplements, 0.0)
-    return du, scolarite, services, supplements
+    """Le dû d'un mois découpé — voir echeancier.composition_du_mois."""
+    from .echeancier import composition_du_mois
+    return composition_du_mois(eleve, mois)
 
 
 def echeances_eleve(eleve, today=None):

@@ -1770,6 +1770,10 @@ class EleveViewSet(viewsets.ModelViewSet):
                         'paye':    bool(ligne) and ligne['statut'] == 'SOLDE',
                         'echu':    bool(ligne['echu']) if ligne else False,
                         'montant_saisi': bool(ligne and ligne['montant_saisi']),
+                        # Ce qui se règle À L'INSCRIPTION sur ce mois (réglages
+                        # premier/dernier mois de l'école, case « 1er mois » d'un
+                        # service) — le guichet d'inscription ne réclame que ça.
+                        'entree': _part_entree_guichet(eleve, mo, ligne),
                     })
                 mo += 1
                 if mo > 12:
@@ -1796,8 +1800,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                            else 0.0, 2)
         arr_mois = [
             {'num': l['mois'], 'label': MOIS_FR.get(l['mois'], str(l['mois'])),
-             'annee': l['annee'], 'reste': round(l['reste'], 2)}
-            for l in ech['lignes'] if l['echu'] and l['reste'] > 0
+             'annee': l['annee'], 'reste': round(l['reste_echu'], 2)}
+            for l in ech['lignes'] if l['reste_echu'] > 0
         ]
         arrieres = {
             # Frais d'entrée partiellement réglés : « Inscription » ou le mot
@@ -1914,6 +1918,21 @@ class EleveViewSet(viewsets.ModelViewSet):
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
         })
+
+
+def _part_entree_guichet(eleve, mois, ligne):
+    """Part d'un mois exigible à l'inscription, pour le guichet : scolarité et
+    services qui l'exigent, brut, prise en charge (sur la scolarité), net,
+    versé et reste. Zéro partout pour un mois ordinaire."""
+    if not ligne or not ligne.get('a_inscription'):
+        return {'scolarite': 0.0, 'services': 0.0, 'du_brut': 0.0, 'pec': 0.0,
+                'montant': 0.0, 'verse': 0.0, 'reste': 0.0}
+    scol, svc = ligne['entree_scolarite'], ligne['entree_services']
+    pec = 0.0 if (scol <= 0 or ligne['montant_saisi']) else float(eleve.pec_du_mois(mois))
+    net = round(scol + svc, 2)
+    reste = ligne['reste_entree']
+    return {'scolarite': scol, 'services': svc, 'du_brut': round(net + pec, 2),
+            'pec': round(pec, 2), 'montant': net, 'verse': round(net - reste, 2), 'reste': reste}
 
 
 MOIS_FR = {

@@ -541,7 +541,7 @@ import { ProformasComponent } from './proformas.component';
                 <label class="premier-mois-case">
                   <input type="checkbox" [checked]="moisSelected(pm.mois.num)" (change)="toggleMois(pm.mois.num)" />
                   {{ (pm.role === 'dernier' ? 'paiements.inclure_dernier_mois' : 'paiements.inclure_premier_mois') | translate:{ mois: pm.mois.label } }}
-                  <span class="fee-hint">{{ 'paiements.reste_mois' | translate }} {{ pm.mois.reste | number:'1.0-0' }}</span>
+                  <span class="fee-hint">{{ 'paiements.reste_mois' | translate }} {{ pm.mois.entree?.reste | number:'1.0-0' }}</span>
                 </label>
               }
               @if (form.mois_regles.length) {
@@ -1602,14 +1602,16 @@ export class PaiementsComponent implements OnInit {
   moisInscriptionProposables(): { role: 'premier' | 'dernier'; mois: any }[] {
     const d = this.saisieDonnees();
     if (!d) return [];
+    // La part d'entrée du mois (calculée par le serveur) : scolarité si le
+    // réglage de l'école la vise, services dont la case « 1er mois » est cochée.
     const trouver = (num: number | null) => {
       const m = num ? (d.mois_ecole || []).find((x: any) => x.num === num) : null;
-      return m && m.du && m.reste > 0 ? m : null;
+      return m && m.du && (m.entree?.reste || 0) > 0 ? m : null;
     };
     const res: { role: 'premier' | 'dernier'; mois: any }[] = [];
-    const premier = d.premier_mois_a_inscription ? trouver(d.premier_mois) : null;
+    const premier = trouver(d.premier_mois);
     if (premier) res.push({ role: 'premier', mois: premier });
-    const dernier = d.dernier_mois_a_inscription ? trouver(d.dernier_mois) : null;
+    const dernier = trouver(d.dernier_mois);
     if (dernier && dernier.num !== premier?.num) res.push({ role: 'dernier', mois: dernier });
     return res;
   }
@@ -1674,8 +1676,12 @@ export class PaiementsComponent implements OnInit {
           .filter((a: any) => a.reste > 0)
           .map((a: any) => ({ id: 'adh:' + a.cle, nom: `${a.service} — ${a.libelle}`, periodicite: 'UNIQUE',
                               nature: 'ADHESION', cle: a.cle, tarif: a.montant, du: Math.round(a.reste) })),
-        // Premier mois inclus : les services mensuels de ce mois aussi.
-        ...(nb ? mensuels : []),
+        // Premier mois inclus : seuls les services qui l'exigent (case « 1er
+        // mois payé à l'inscription »). Les autres se paient à leur échéance.
+        ...(this.form.mois_regles.includes(data.premier_mois)
+            ? mensuels.filter((m: any) => tous.find((s: any) => s.id === m.id)?.premier_mois_a_inscription)
+                      .map((m: any) => ({ ...m, du: Math.round(m.tarif) }))
+            : []),
       ];
     } else {
       retenus = [
@@ -1748,6 +1754,11 @@ export class PaiementsComponent implements OnInit {
 
   /** Dû de la seule ligne « Mensualité » pour les mois cochés. */
   private duMensualite(): number {
+    if (this.typePaiement === 'INSCRIPTION') {
+      // À l'inscription : la scolarité que le réglage de l'école fait payer
+      // d'avance, rien de plus.
+      return this.moisChoisis().reduce((a, m) => a + (Number(m.entree?.scolarite) || 0), 0);
+    }
     const svc = this.servicesMensuelsDus();
     return this.moisChoisis()
       .reduce((a, m) => a + Math.max((Number(m.montant) || 0) - svc, 0), 0);
@@ -1771,9 +1782,10 @@ export class PaiementsComponent implements OnInit {
       const b = d.fees_bruts || {}, n = d.fees_nets || {},
             p = d.deja_paye  || {}, r = d.reste     || {};
       const somme = (o: any) => (o.inscription || 0) + (o.uniforme || 0) + (o.fournitures || 0);
-      // Premier mois inclus dans l'inscription : son dû s'ajoute à l'échéance.
+      // Mois pris à l'inscription : seule leur PART D'ENTRÉE s'ajoute à
+      // l'échéance — la cantine sans « 1er mois » se paiera à son terme.
       const premier = this.moisChoisis();
-      const mois = (cle: string) => premier.reduce((a, m) => a + (Number(m[cle]) || 0), 0);
+      const mois = (cle: string) => premier.reduce((a, m) => a + (Number(m.entree?.[cle]) || 0), 0);
       return {
         brut:  Math.round(somme(b) + svc + mois('du_brut')),
         pec:   Math.round((d.pec?.inscription?.pec || 0) + mois('pec')),

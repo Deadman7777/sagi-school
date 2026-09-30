@@ -164,6 +164,50 @@ def mois_factures(eleve, jusqu_a_la_sortie=True):
     return mois
 
 
+def composition_du_mois(eleve, mois):
+    """Le dû d'un mois découpé : (dû, scolarité, [services mensuels], suppléments)."""
+    from .garde_soir import du_garde_soir_du_mois
+
+    du = float(eleve.du_du_mois(mois))
+    services = []
+    if eleve._mois_du_calendrier(mois):
+        services = [{'nom': ab.service.nom, 'montant': float(ab.service.montant or 0),
+                     'premier_mois_a_inscription': bool(ab.service.premier_mois_a_inscription)}
+                    for ab in eleve.abonnements.all()
+                    if ab.service.periodicite == 'MENSUEL' and float(ab.service.montant or 0) > 0]
+    supplements = float(du_garde_soir_du_mois(eleve, mois))
+    if eleve.a_la_journee:
+        from .garderie import du_presences_du_mois
+        supplements += float(du_presences_du_mois(eleve, mois))
+    total_services = sum(s['montant'] for s in services)
+    scolarite = max(du - total_services - supplements, 0.0)
+    return du, scolarite, services, supplements
+
+
+def part_a_l_entree(eleve, m, mois):
+    """(scolarité, services) du mois `m` exigibles dès l'entrée de l'élève.
+
+    Chaque réglage ne vise que ce qu'il nomme :
+      - « 1re / dernière mensualité à l'inscription » (école) : la SCOLARITÉ
+        du premier / dernier mois ;
+      - « 1er mois payé à l'inscription » (service) : CE service, pour le
+        premier mois seulement.
+    Le reste du mois — la cantine sans cette case, les soirs de garde — suit
+    son échéance ordinaire. Avant, tout le mois basculait à l'entrée : la
+    cantine de juin était réclamée à l'inscription et, décochée au guichet,
+    passait aussitôt en retard alors qu'elle se paie à terme échu.
+    """
+    if not mois or m not in (mois[0], mois[-1]):
+        return 0.0, 0.0
+    tenant = eleve.tenant
+    _du, scolarite, services, _supp = composition_du_mois(eleve, m)
+    scol = ((m == mois[0] and getattr(tenant, 'premier_mois_a_inscription', False))
+            or (m == mois[-1] and getattr(tenant, 'dernier_mois_a_inscription', False)))
+    svc = (sum(s['montant'] for s in services if s['premier_mois_a_inscription'])
+           if m == mois[0] else 0.0)
+    return (round(scolarite, 2) if scol else 0.0), round(svc, 2)
+
+
 def _tronquer_a_la_sortie(eleve, mois):
     """Retire les mois devenus exigibles APRÈS la sortie de l'élève.
 
@@ -178,11 +222,7 @@ def _tronquer_a_la_sortie(eleve, mois):
         return mois
     tenant = eleve.tenant
     entree = eleve.date_entree or eleve.date_inscription or eleve.exercice.date_debut
-    a_inscription = set()
-    if eleve.premier_mois_a_inscription:
-        a_inscription.add(mois[0])
-    if getattr(tenant, 'dernier_mois_a_inscription', False):
-        a_inscription.add(mois[-1])
+    a_inscription = {m for m in (mois[0], mois[-1]) if sum(part_a_l_entree(eleve, m, mois)) > 0}
     garde = []
     for m in mois:
         exigible = (entree if m in a_inscription
@@ -409,15 +449,12 @@ def construire_echeancier(eleve, today=None):
     # Mois encaissés dès l'inscription : leur échéance est la date d'entrée de
     # l'élève, pas leur tour dans le calendrier. Une école qui prend la
     # dernière mensualité à l'inscription la réclame en septembre, pas en juin.
+    #
+    # Seule la part que le réglage nomme bascule à l'entrée (part_a_l_entree) :
+    # le reste du mois garde son échéance ordinaire. Le payé du mois solde
+    # d'abord la part d'entrée — c'est celle qu'on a encaissée au guichet.
     tenant = eleve.tenant
     entree = eleve.date_entree or eleve.date_inscription or exercice.date_debut
-    a_inscription = set()
-    if mois:
-        # Réglage de l'école, ou service choisi dont le premier mois se paie d'avance.
-        if eleve.premier_mois_a_inscription:
-            a_inscription.add(mois[0])
-        if getattr(tenant, 'dernier_mois_a_inscription', False):
-            a_inscription.add(mois[-1])
 
     # L'horloge des retards S'ARRÊTE à la date de sortie : un élève parti en
     # mars ne doit pas voir ses arriérés grossir jusqu'en décembre. Sans ce
@@ -432,15 +469,33 @@ def construire_echeancier(eleve, today=None):
         ligne = lignes[m]
         paye = round(ligne['paye'], 2)
         reste = round(max(ligne['du'] - paye, 0.0), 2)
-        exigible = (entree if m in a_inscription
-                    else date_exigibilite(tenant, ligne['annee'], m))
+        ordinaire = date_exigibilite(tenant, ligne['annee'], m)
+        scol_entree, svc_entree = part_a_l_entree(eleve, m, mois)
+        part_entree = round(min(scol_entree + svc_entree, ligne['du']), 2)
+        reste_entree = round(max(part_entree - paye, 0.0), 2)
+        reste_ordinaire = round(reste - reste_entree, 2)
+        entree_echue, ordinaire_echu = entree <= reference, ordinaire <= reference
+        reste_echu = round((reste_entree if entree_echue else 0.0)
+                           + (reste_ordinaire if ordinaire_echu else 0.0), 2)
+        # La part d'entrée tant qu'elle reste due (ou si le mois n'a qu'elle),
+        # l'échéance ordinaire ensuite.
+        par_l_entree = part_entree > 0 and (reste_entree > 0 or part_entree >= ligne['du'])
+        exigible = entree if par_l_entree else ordinaire
         sortie.append({
             **ligne,
             'paye':       paye,
             'reste':      reste,
             'exigible_le': exigible,
-            'a_inscription': m in a_inscription,
-            'echu':       exigible <= reference,
+            'a_inscription': part_entree > 0,
+            # Part réglée à l'inscription : scolarité et services qui l'exigent.
+            'entree_scolarite': round(min(scol_entree, ligne['du']), 2),
+            'entree_services':  round(min(svc_entree, max(ligne['du'] - scol_entree, 0.0)), 2),
+            'reste_entree':     reste_entree,
+            # Ce qui est réclamable AUJOURD'HUI sur ce mois : c'est lui que les
+            # retards, alertes et rappels additionnent — pas `reste`, qui peut
+            # porter une part pas encore échue (cantine d'un mois pris à l'entrée).
+            'reste_echu': reste_echu,
+            'echu':       ordinaire_echu or (entree_echue and par_l_entree),
             'statut': 'SOLDE' if reste <= 0 else ('PARTIEL' if paye > 0 else 'IMPAYE'),
         })
 
@@ -477,9 +532,9 @@ def construire_echeancier(eleve, today=None):
     # leur propre échéance : dès l'entrée pour une inscription, au mois fixé par
     # l'école pour un renouvellement différé.
     retards = round((hors['reste'] if hors['echu'] else 0.0)
-                    + sum(l['reste'] for l in sortie if l['echu']), 2)
+                    + sum(l['reste_echu'] for l in sortie), 2)
     a_venir = round((0.0 if hors['echu'] else hors['reste'])
-                    + sum(l['reste'] for l in sortie if not l['echu']), 2)
+                    + sum(l['reste'] - l['reste_echu'] for l in sortie), 2)
     anterieur = round(float(eleve.reliquat_restant or 0), 2)
 
     return {
@@ -578,7 +633,7 @@ def alerte_depuis_echeancier(ech):
                           else 'A_JOUR',
                 'nb_mois': 0, 'montant': 0.0, 'mois': []}
 
-    impayes = [l for l in ech['lignes'] if l['echu'] and l['reste'] >= SEUIL_ALERTE]
+    impayes = [l for l in ech['lignes'] if l['reste_echu'] >= SEUIL_ALERTE]
     nb = len(impayes)
     if nb >= 3:
         niveau = 'CRITIQUE'

@@ -373,28 +373,34 @@ def chiffrer_nouvel_eleve(tenant, exercice, section, formule=None, date_entree=N
             l['nature'] = 'SERVICE'
 
     # Échéancier : ce qui se règle à l'inscription, puis mois par mois selon
-    # le réglage d'exigibilité de l'école.
-    a_inscription = set()
+    # le réglage d'exigibilité de l'école. Même règle que la fiche
+    # (echeancier.part_a_l_entree) : le réglage de l'école avance la
+    # SCOLARITÉ du premier / dernier mois, la case d'un service avance CE
+    # service au premier mois ; le reste du mois garde son échéance.
+    entree_du_mois = {}
     if mois:
-        if getattr(tenant, 'premier_mois_a_inscription', False) \
-                or any(s.premier_mois_a_inscription for s in services):
-            a_inscription.add(mois[0])
-        if getattr(tenant, 'dernier_mois_a_inscription', False):
-            a_inscription.add(mois[-1])
+        if getattr(tenant, 'premier_mois_a_inscription', False) and mensualite > 0:
+            entree_du_mois[mois[0]] = mensualite
+        svc_premier = sum(float(s.montant or 0) for s in mensuels if s.premier_mois_a_inscription)
+        if svc_premier > 0:
+            entree_du_mois[mois[0]] = entree_du_mois.get(mois[0], 0.0) + svc_premier
+        if getattr(tenant, 'dernier_mois_a_inscription', False) and mensualite > 0:
+            entree_du_mois[mois[-1]] = entree_du_mois.get(mois[-1], 0.0) + mensualite
     echeances = []
-    montant_entree = sum(a_l_entree) + sum(dus_du_mois[m] for m in a_inscription)
+    montant_entree = sum(a_l_entree) + sum(entree_du_mois.values())
     if montant_entree > EPSILON:
-        noms = ', '.join(MOIS[m].lower() for m in mois if m in a_inscription)
+        noms = ', '.join(MOIS[m].lower() for m in mois if m in entree_du_mois)
         echeances.append({'libelle': "À l'inscription" + (f' (dont {noms})' if noms else ''),
                           'date': entree, 'montant': montant_entree})
     for m in mois:
-        if m in a_inscription or dus_du_mois[m] <= 0:
+        reste_mois = dus_du_mois[m] - entree_du_mois.get(m, 0.0)
+        if reste_mois <= EPSILON:
             continue
         annee = _annee_du_mois(ex, m)
         # Un mois déjà entamé à l'arrivée ne peut pas être exigible avant elle.
         echeances.append({'libelle': f'{MOIS[m]} {annee}',
                           'date': max(date_exigibilite(tenant, annee, m), entree),
-                          'montant': dus_du_mois[m]})
+                          'montant': reste_mois})
 
     if not lignes:
         raise ProformaErreur("Aucun frais n'est paramétré pour cette section.")

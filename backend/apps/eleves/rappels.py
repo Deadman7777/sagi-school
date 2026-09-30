@@ -70,7 +70,7 @@ def eleves_a_rappeler(tenant, exercice, today=None, seuil=1.0):
         # la famille d'un boursier reçoit un SMS pour la dette de l'État.
         if synth['total_exigible_famille'] < seuil:
             continue
-        retard_mois = [l for l in ech['lignes'] if l['echu'] and l['reste'] > 0]
+        retard_mois = [l for l in ech['lignes'] if l['reste_echu'] > 0]
         contact = contact_effectif(eleve)
         lignes.append({
             'eleve_id':    str(eleve.id),

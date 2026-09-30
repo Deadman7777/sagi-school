@@ -578,10 +578,10 @@ def repartir_versement(famille, exercice, montant, today=None):
                               'libelle': hors.get('libelle') or 'Inscription',
                               'mois': None, 'reste': round(hors['reste'], 2)})
         for ordre, ligne in enumerate(ech['lignes']):
-            if ligne['reste'] > 0 and ligne['echu']:
+            if ligne['reste_echu'] > 0:
                 echeances.append({'eleve': eleve, 'poste': 'MENSUALITE',
                                   'rang': 2 + ordre, 'libelle': ligne['nom'],
-                                  'mois': ligne['mois'], 'reste': round(ligne['reste'], 2)})
+                                  'mois': ligne['mois'], 'reste': round(ligne['reste_echu'], 2)})
 
     echeances.sort(key=lambda e: e['rang'])
 
