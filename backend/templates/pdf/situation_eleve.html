@@ -36,13 +36,48 @@
       <div class="kb-val kb-green">{{ total_paye|floatformat:0 }} FCFA</div>
     </td>
     <td>
-      <div class="kb-label">Reste à Payer</div>
+      <div class="kb-label">Reste de l'année</div>
       <div class="kb-val {% if reste > 0 %}red{% else %}kb-green{% endif %}">{{ reste|floatformat:0 }} FCFA</div>
     </td>
     <td>
       <div class="kb-label">Nb Paiements</div>
       <div class="kb-val kb-teal">{{ nb_paiements }}</div>
     </td>
+  </tr>
+</table>
+
+{% comment %}Ce qui reste dû, décomposé AVANT le total : la famille distingue l'ardoise des années passées, ce qui est déjà échu cette année (mois en retard ou payés en partie), et ce qui ne l'est pas encore.{% endcomment %}
+<div class="section-title">Ce qui reste dû</div>
+<table>
+  <tbody>
+    <tr>
+      <td style="width:70%">1. Impayés des années antérieures{% if reliquat_annee %} ({{ reliquat_annee }}){% endif %}</td>
+      <td class="text-right {% if synthese.impaye_anterieur > 0 %}red{% endif %}">{{ synthese.impaye_anterieur|floatformat:0 }} FCFA</td>
+    </tr>
+    <tr>
+      <td>2. Impayés de l'année en cours — échéances passées (mois en retard ou partiels{% if hors_mensualite.reste and hors_mensualite.echu %}, {{ libelle_entree|default:"inscription"|lower }}{% endif %})</td>
+      <td class="text-right {% if synthese.retards > 0 %}red{% endif %}">{{ synthese.retards|floatformat:0 }} FCFA</td>
+    </tr>
+    <tr>
+      <td>3. Non encore échu (mois à venir de l'année)</td>
+      <td class="text-right">{{ synthese.mois_a_venir|floatformat:0 }} FCFA</td>
+    </tr>
+    {% if synthese.reste_organisme %}
+    <tr>
+      <td>Pris en charge par {{ synthese.organisme_nom }} — à sa charge</td>
+      <td class="text-right green">- {{ synthese.reste_organisme|floatformat:0 }} FCFA</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td class="bold">Dont exigible aujourd'hui{% if not synthese.reste_organisme %} (1 + 2){% endif %}</td>
+      <td class="text-right bold {% if synthese.total_exigible_famille > 0 %}red{% endif %}">{{ synthese.total_exigible_famille|floatformat:0 }} FCFA</td>
+    </tr>
+  </tbody>
+</table>
+<table class="resultat-table" style="margin-top:6px; border:2px solid {% if synthese.total_restant_du_famille == 0 %}#10b981{% else %}#ef4444{% endif %}; background:{% if synthese.total_restant_du_famille == 0 %}#f0fdf4{% else %}#fef2f2{% endif %}">
+  <tr>
+    <td class="rb-label">{% if synthese.total_restant_du_famille == 0 %}Rien à votre charge ✓{% else %}TOTAL RESTANT DÛ{% if synthese.reste_organisme %} PAR LA FAMILLE{% else %} (1 + 2 + 3){% endif %}{% endif %}</td>
+    <td class="rb-val" style="color:{% if synthese.total_restant_du_famille == 0 %}#047857{% else %}#b91c1c{% endif %}">{{ synthese.total_restant_du_famille|floatformat:0 }} FCFA</td>
   </tr>
 </table>
 
@@ -144,50 +179,6 @@ cours. Affiché même sans aucun paiement, c'est là qu'il est le plus utile.
   </tfoot>
 </table>
 
-{% comment %}Cascade volontaire : la famille doit distinguer ce qu'on lui
-réclame AUJOURD'HUI de ce qui viendra à échéance plus tard dans l'année.
-{% endcomment %}
-<div class="section-title" style="margin-top:14px">Situation récapitulative</div>
-<table>
-  <tbody>
-    <tr>
-      <td style="width:70%">Scolarité en retard (mois échus non réglés)</td>
-      <td class="text-right {% if synthese.retards > 0 %}red{% endif %}">{{ synthese.retards|floatformat:0 }} FCFA</td>
-    </tr>
-    <tr>
-      <td>Impayé des années antérieures{% if reliquat_annee %} ({{ reliquat_annee }}){% endif %}</td>
-      <td class="text-right {% if synthese.impaye_anterieur > 0 %}red{% endif %}">{{ synthese.impaye_anterieur|floatformat:0 }} FCFA</td>
-    </tr>
-    <tr>
-      <td class="bold">Total des reliquats antérieurs</td>
-      <td class="text-right bold {% if synthese.total_anterieurs > 0 %}red{% endif %}">{{ synthese.total_anterieurs|floatformat:0 }} FCFA</td>
-    </tr>
-    <tr>
-      <td>Reste des mois de l'année (non encore échus)</td>
-      <td class="text-right">{{ synthese.mois_a_venir|floatformat:0 }} FCFA</td>
-    </tr>
-    {% if synthese.reste_organisme %}
-    <tr>
-      <td>Pris en charge par {{ synthese.organisme_nom }} — à sa charge</td>
-      <td class="text-right green">- {{ synthese.reste_organisme|floatformat:0 }} FCFA</td>
-    </tr>
-    {% endif %}
-  </tbody>
-</table>
-{% comment %}Bordure et fond EN LIGNE : xhtml2pdf n'applique pas la
-surcharge de classe (.resultat-def par-dessus .resultat-table), l'encadré
-restait vert en annonçant une dette.
-{% endcomment %}
-{% comment %}Le total mis en avant est celui de la FAMILLE : lui annoncer la
-dette d'un organisme serait faux, et blessant pour une famille boursière qui
-n'a rien à régler. La part du tiers reste visible juste au-dessus.
-{% endcomment %}
-<table class="resultat-table" style="margin-top:6px; border:2px solid {% if synthese.total_restant_du_famille == 0 %}#10b981{% else %}#ef4444{% endif %}; background:{% if synthese.total_restant_du_famille == 0 %}#f0fdf4{% else %}#fef2f2{% endif %}">
-  <tr>
-    <td class="rb-label">{% if synthese.total_restant_du_famille == 0 %}Rien à votre charge ✓{% else %}TOTAL RESTANT DÛ{% if synthese.organisme_nom %} PAR LA FAMILLE{% else %} POUR L'ANNÉE{% endif %}{% endif %}</td>
-    <td class="rb-val" style="color:{% if synthese.total_restant_du_famille == 0 %}#047857{% else %}#b91c1c{% endif %}">{{ synthese.total_restant_du_famille|floatformat:0 }} FCFA</td>
-  </tr>
-</table>
 {% endif %}
 
 {% endblock %}

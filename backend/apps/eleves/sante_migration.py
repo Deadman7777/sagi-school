@@ -40,10 +40,10 @@ def diagnostiquer(tenant, exercice):
         return Coalesce(expr, Value(0), output_field=DecimalField())
 
     actif = Q(paiements__statut='ACTIF')
+    from .echeancier import precharger
+    # `precharger` : sans lui, trois requêtes par élève (340 pour 110 élèves).
     eleves = list(
-        Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
-        .select_related('section', 'exercice')
-        .prefetch_related('abonnements__service')
+        precharger(Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False))
         .annotate(
             nb_paiements=Count('paiements', filter=actif),
             total_paye_sql=zero(
@@ -53,7 +53,6 @@ def diagnostiquer(tenant, exercice):
                 Sum('paiements__montant_fournitures', filter=actif) +
                 Sum('paiements__montant_cantine',     filter=actif) +
                 Sum('paiements__montant_divers',      filter=actif)),
-            reliquat_paye_sql=zero(Sum('paiements__montant_reliquat', filter=actif)),
         ))
     total = len(eleves)
     controles = []

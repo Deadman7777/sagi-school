@@ -64,13 +64,15 @@ const MOIS_ANNEE = [
   { num: 11, nom: 'Novembre' },  { num: 12, nom: 'Décembre' },
 ];
 
+import { EtatImpayesComponent } from './etat-impayes.component';
+
 @Component({
   selector: 'app-eleves-liste',
   changeDetection: ChangeDetectionStrategy.Default,
   imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
             TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent,
-            FamillesComponent, EncaissementGroupeComponent],
+            FamillesComponent, EncaissementGroupeComponent, EtatImpayesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -257,6 +259,8 @@ const MOIS_ANNEE = [
           </div>
         }
       </div>
+
+      <app-etat-impayes [exercice]="exerciceSel" />
 
       <!-- Effectifs par classe : visible quand on trie par classe, c'est là que
            la question « combien dans chaque classe ? » se pose. -->

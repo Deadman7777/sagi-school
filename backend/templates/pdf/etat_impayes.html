@@ -1,0 +1,89 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}État des impayés par statut — au {{ date_arret|date:"d/m/Y" }}{% endblock %}
+{% block content %}
+
+<div style="font-size:10px;color:#374151;margin-bottom:8px">
+  {{ etat.nb_eleves }} élèves présents, dont {{ etat.nb_a_jour }} sans impayé exigible. Montants en FCFA :
+  ce qui est réclamé aujourd'hui à la famille (années antérieures + échéances passées de l'année).
+  Les élèves sont classés du plus urgent au moins urgent, puis par montant décroissant.
+</div>
+
+<div class="section-title">Récapitulatif pour le recouvrement</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th>Statut</th>
+      <th class="text-right" style="width:60px">Élèves</th>
+      <th class="text-right" style="width:95px">Années antérieures</th>
+      <th class="text-right" style="width:95px">Année en cours (échu)</th>
+      <th class="text-right" style="width:95px">Total exigible</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in etat.lignes %}
+    <tr>
+      {% if l.type == 'sous_total' %}
+      <td style="background-color:#dce6f1;font-weight:bold">{{ l.libelle }}</td>
+      <td class="text-right" style="background-color:#dce6f1;font-weight:bold">{{ l.nb }}</td>
+      <td class="text-right" style="background-color:#dce6f1;font-weight:bold">{{ l.anterieur|floatformat:"0g" }}</td>
+      <td class="text-right" style="background-color:#dce6f1;font-weight:bold">{{ l.annee|floatformat:"0g" }}</td>
+      <td class="text-right" style="background-color:#dce6f1;font-weight:bold">{{ l.montant|floatformat:"0g" }}</td>
+      {% else %}
+      <td>{{ l.libelle }}</td>
+      <td class="text-right">{{ l.nb }}</td>
+      <td class="text-right">{{ l.anterieur|floatformat:"0g" }}</td>
+      <td class="text-right">{{ l.annee|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ l.montant|floatformat:"0g" }}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>TOTAL GÉNÉRAL</td>
+      <td class="text-right">{{ etat.total.nb }}</td>
+      <td class="text-right">{{ etat.total.anterieur|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.annee|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.montant|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+{% for l in etat.lignes %}{% if l.type == 'groupe' and l.nb %}
+<div class="section-title">{{ l.libelle }} — {{ l.nb }} élève(s) — {{ l.montant|floatformat:"0g" }} FCFA</div>
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th style="width:22px">N°</th>
+      <th>Élève</th>
+      <th style="width:70px">Classe</th>
+      <th style="width:75px">Téléphone</th>
+      <th style="width:110px">Mois impayés</th>
+      <th class="text-right" style="width:65px">Antérieur</th>
+      <th class="text-right" style="width:70px">Total exigible</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in l.eleves %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ e.nom_complet }}</td>
+      <td>{{ e.classe|default:"—" }}</td>
+      <td>{{ e.telephone|default:"—" }}</td>
+      <td>{{ e.mois|default:"—" }}</td>
+      <td class="text-right">{{ e.anterieur|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ e.montant|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="5">Sous-total {{ l.libelle }}</td>
+      <td class="text-right">{{ l.anterieur|floatformat:"0g" }}</td>
+      <td class="text-right">{{ l.montant|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+{% endif %}{% endfor %}
+
+{% endblock %}

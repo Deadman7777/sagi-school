@@ -3,7 +3,7 @@ from django.urls import path
 from .views import (BaremeFratrieViewSet, ChampFicheViewSet, EleveViewSet, FamilleViewSet, FormuleSectionViewSet, OrganismeViewSet, PriseEnChargeOrganismeViewSet,
                     SectionViewSet, ServiceViewSet, SuiviMensuelView,
                     CertificatScolariteView, PriseEnChargeStatsView,
-                    ElevesListePDFView, SituationElevePDFView, FicheElevePDFView,
+                    ElevesListePDFView, EtatImpayesView, SituationElevePDFView, FicheElevePDFView,
                     ParcoursElevePDFView, ModeleCertificatView,
                     GarderieAppelView, GarderieRecapView, GarderieRepriseView,
                     GardeSoirView)
@@ -29,6 +29,7 @@ urlpatterns = [
     path('garde-soir/', GardeSoirView.as_view()),
     path('suivi-mensuel/', SuiviMensuelView.as_view()),
     path('export-pdf/', ElevesListePDFView.as_view()),
+    path('etat-impayes/', EtatImpayesView.as_view()),
     path('prises-en-charge/stats/', PriseEnChargeStatsView.as_view()),
     path('certificat-modele/', ModeleCertificatView.as_view()),
     path('<str:eleve_id>/certificat/', CertificatScolariteView.as_view()),

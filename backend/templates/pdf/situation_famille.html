@@ -121,6 +121,39 @@ déclarés sur une ligne sont écrasés par le CSS des cellules.
 </table>
 {% endfor %}
 
+<div class="enfant">Ce qui reste dû</div>
+<table class="tbl" style="margin-top:4pt">
+  <tr>
+    <td class="h" style="width:190pt">ENFANT</td>
+    <td class="h droite" style="width:80pt">1. ANNÉES ANTÉRIEURES</td>
+    <td class="h droite" style="width:85pt">2. ANNÉE EN COURS — ÉCHU</td>
+    <td class="h droite" style="width:80pt">3. NON ENCORE ÉCHU</td>
+    <td class="h droite" style="width:85pt">TOTAL</td>
+  </tr>
+  {% for e in enfants %}{% if e.ventilation %}
+  <tr>
+    <td>{{ e.nom_complet }}</td>
+    <td class="droite{% if e.ventilation.anterieur %} retard{% endif %}">{{ e.ventilation.anterieur|fcfa }}</td>
+    <td class="droite{% if e.ventilation.annee_echue %} retard{% endif %}">{{ e.ventilation.annee_echue|fcfa }}</td>
+    <td class="droite">{{ e.ventilation.a_venir|fcfa }}</td>
+    <td class="droite">{{ e.ventilation.total|fcfa }}</td>
+  </tr>
+  {% endif %}{% endfor %}
+  {% if ventilation.organisme %}
+  <tr>
+    <td colspan="4">Part encore attendue des organismes boursiers (non réclamée à la famille)</td>
+    <td class="droite solde">- {{ ventilation.organisme|fcfa }}</td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td class="sous-total">Total famille</td>
+    <td class="sous-total droite">{{ ventilation.anterieur|fcfa }}</td>
+    <td class="sous-total droite">{{ ventilation.annee_echue|fcfa }}</td>
+    <td class="sous-total droite">{{ ventilation.a_venir|fcfa }}</td>
+    <td class="sous-total droite">{{ ventilation.total|fcfa }}</td>
+  </tr>
+</table>
+
 <table class="tbl-total" style="margin-top:10pt">
   <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
   {% if reste_organismes %}
@@ -134,13 +167,18 @@ déclarés sur une ligne sont écrasés par le CSS des cellules.
   </tr>
   {% endif %}
   <tr>
-    <td>RESTE À PAYER PAR LA FAMILLE</td>
-    <td class="droite">{{ reste_famille|fcfa }} FCFA</td>
+    <td>DONT EXIGIBLE AUJOURD'HUI (1 + 2)</td>
+    <td class="droite">{{ ventilation.exigible|fcfa }} FCFA</td>
+  </tr>
+  <tr>
+    <td>RESTE À PAYER PAR LA FAMILLE (1 + 2 + 3)</td>
+    <td class="droite">{{ ventilation.total|fcfa }} FCFA</td>
   </tr>
 </table>
 
 <div class="note">
-  « En retard » : échéance passée et non réglée. « À venir » : échéance pas encore
+  1. Impayés des années antérieures. 2. Impayés de l'année déjà échus : mois en retard ou payés
+  en partie. 3. Ce qui n'est pas encore échu. « En retard » : échéance passée et non réglée. « À venir » : échéance pas encore
   exigible, que la famille peut régler d'avance. La part d'une bourse encore attendue
   d'un organisme n'est pas réclamée à la famille.
 </div>

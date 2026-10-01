@@ -481,7 +481,7 @@ class ContenuSituationPdfTest(OrganismeBase):
 
     def test_sans_bourse_le_total_est_celui_de_l_annee(self):
         html = self._html()
-        self.assertIn("TOTAL RESTANT DÛ POUR L'ANNÉE", html)
+        self.assertIn("TOTAL RESTANT DÛ (1 + 2 + 3)", html)
         self.assertNotIn('PAR LA FAMILLE', html)
 
     def test_avec_bourse_le_total_est_celui_de_la_famille(self):

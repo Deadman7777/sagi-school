@@ -163,9 +163,11 @@ class DashboardKPIView(APIView):
         # transferts, diplômés), ni les fiches de créance. L'effectif, le
         # recouvrement et les impayés se lisent sur les élèves PRÉSENTS.
         _pf = Q(paiements__statut='ACTIF')
-        eleves = eleves_presents(Eleve.objects.filter(
+        # `precharger` : formules, gardes du soir, bourse… — sans lui, deux
+        # requêtes de plus par élève à chaque ouverture du tableau de bord.
+        eleves = precharger(eleves_presents(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
-        )).annotate(
+        ))).annotate(
             paye_recouvrement=Coalesce(
                 Sum('paiements__montant_inscription', filter=_pf) +
                 Sum('paiements__montant_mensualite',  filter=_pf) +

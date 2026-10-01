@@ -59,10 +59,16 @@ class Section(TenantModel):
         `frais_entree` remplace l'inscription — c'est le renouvellement pour un
         ancien élève d'une école qui en pratique un."""
         from decimal import Decimal
-        entree = (self.frais_inscription if frais_entree is None
-                  else Decimal(str(frais_entree)))
-        return (entree + self.frais_uniforme +
-                self.frais_fournitures + (self.frais_mensualite * nb_mois))
+
+        def dec(v):
+            # Le serializer pose des float (FloatField) ; la base rend des
+            # Decimal. Juste après un PATCH partiel, les deux coexistent sur
+            # l'instance, et float + Decimal levait une erreur 500.
+            return v if isinstance(v, Decimal) else Decimal(str(v or 0))
+
+        entree = dec(self.frais_inscription if frais_entree is None else frais_entree)
+        return (entree + dec(self.frais_uniforme) +
+                dec(self.frais_fournitures) + (dec(self.frais_mensualite) * nb_mois))
 
     @property
     def a_la_journee(self):

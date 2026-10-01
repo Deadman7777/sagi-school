@@ -493,53 +493,23 @@ class EleveViewSet(viewsets.ModelViewSet):
         if not tenant:
             return Eleve.objects.none()
 
-        from .echeancier import PREFETCH_PAIEMENTS
-
-        qs = Eleve.objects.filter(tenant=tenant).select_related(
-            # `tenant` : l'échéancier y lit le réglage d'exigibilité, et
-            # l'alerte de chaque fiche vient désormais de l'échéancier.
-            'tenant', 'section', 'exercice', 'reliquat_exercice_origine'
-        ).prefetch_related(
-            'paiements', 'abonnements__service', 'formules_eleve__formule',
-            # Sans ce prefetch, part_organisme déclenche une requête par élève.
-            'prises_en_charge_organisme__organisme',
-            # Les paiements actifs, sous le nom que l'échéancier va chercher.
-            Prefetch('paiements',
-                     queryset=Paiement.objects.filter(statut='ACTIF'),
-                     to_attr=PREFETCH_PAIEMENTS),
-        ).annotate(
+        # Le préchargement COMMUN de l'échéancier (classe, formules, gardes du
+        # soir, présences, paiements actifs, bourse, reliquat réglé) : la liste
+        # avait le sien, incomplet, et faisait trois requêtes de plus PAR élève
+        # — 333 pour 110 élèves, des milliers pour une école de 900.
+        from .echeancier import precharger
+        actif = Q(paiements__statut='ACTIF')
+        qs = precharger(Eleve.objects.filter(tenant=tenant)).select_related(
+            'reliquat_exercice_origine',
+        ).prefetch_related('paiements').annotate(
             # Les paiements annulés ne comptent pas dans le payé.
             total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription', filter=Q(paiements__statut='ACTIF')) +
-                Sum('paiements__montant_mensualite',  filter=Q(paiements__statut='ACTIF')) +
-                Sum('paiements__montant_uniforme',    filter=Q(paiements__statut='ACTIF')) +
-                Sum('paiements__montant_fournitures', filter=Q(paiements__statut='ACTIF')) +
-                Sum('paiements__montant_cantine',     filter=Q(paiements__statut='ACTIF')) +
-                Sum('paiements__montant_divers',      filter=Q(paiements__statut='ACTIF')),
-                Value(0), output_field=DecimalField()
-            ),
-            # Reliquat déjà encaissé — annoté pour que le reliquat restant de
-            # chaque élève se lise sans une requête par ligne (cf. reliquat_paye).
-            reliquat_paye_sql=Coalesce(
-                Sum('paiements__montant_reliquat',
-                    filter=Q(paiements__statut='ACTIF')),
-                Value(0), output_field=DecimalField()
-            ),
-            # Ce qu'un organisme a versé pour cet élève — distingué du reste
-            # pour que l'alerte ne juge que la famille.
-            paye_organisme_sql=Coalesce(
-                Sum('paiements__montant_inscription',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
-                Sum('paiements__montant_mensualite',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
-                Sum('paiements__montant_uniforme',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
-                Sum('paiements__montant_fournitures',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
-                Sum('paiements__montant_cantine',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)) +
-                Sum('paiements__montant_divers',
-                    filter=Q(paiements__statut='ACTIF', paiements__organisme__isnull=False)),
+                Sum('paiements__montant_inscription', filter=actif) +
+                Sum('paiements__montant_mensualite',  filter=actif) +
+                Sum('paiements__montant_uniforme',    filter=actif) +
+                Sum('paiements__montant_fournitures', filter=actif) +
+                Sum('paiements__montant_cantine',     filter=actif) +
+                Sum('paiements__montant_divers',      filter=actif),
                 Value(0), output_field=DecimalField()
             ),
         )
@@ -2566,7 +2536,7 @@ class SituationElevePDFView(APIView):
         except ImportError:
             return HttpResponse('xhtml2pdf non installé', status=500)
 
-        from apps.paiements.models import Paiement, Exercice as _Exercice
+        from apps.paiements.models import Paiement
 
         tenant = get_tenant(request)
         try:
@@ -2574,10 +2544,12 @@ class SituationElevePDFView(APIView):
         except Eleve.DoesNotExist:
             return HttpResponse('Élève introuvable', status=404)
 
-        exercice = _Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        # L'exercice de la FICHE (pas « le dernier ouvert ») et les seuls
+        # reçus actifs : un reçu annulé n'a jamais été payé.
+        exercice = eleve.exercice
 
         paiements_qs = Paiement.objects.filter(
-            tenant=tenant, eleve=eleve, exercice=exercice
+            tenant=tenant, eleve=eleve, exercice=exercice, statut='ACTIF'
         ).order_by('date_paiement') if exercice else Paiement.objects.none()
 
         paiements_list = []
@@ -3560,7 +3532,7 @@ class FamilleViewSet(viewsets.ModelViewSet):
         from xhtml2pdf import pisa
 
         from apps.comptabilite.views import get_exercice
-        from .echeancier import construire_echeancier, precharger
+        from .echeancier import construire_echeancier, precharger, ventilation_du
         from .familles import situation_famille
         from .pdf_nom import nom_fichier
 
@@ -3576,13 +3548,18 @@ class FamilleViewSet(viewsets.ModelViewSet):
             eleve = fiches.get(ligne['eleve_id'])
             ech = construire_echeancier(eleve) if eleve else None
             enfants.append({**ligne, 'echeancier': ech,
+                            'ventilation': ventilation_du(eleve, ech) if eleve else None,
                             'organisme': (eleve.pec_organisme.organisme.nom
                                           if eleve and eleve.pec_organisme else ''),
                             'part_organisme': eleve.part_organisme if eleve else 0,
                             'reste_organisme': eleve.reste_organisme if eleve else 0,
                             'reliquat': eleve.reliquat_restant if eleve else 0})
+        ventilations = [e['ventilation'] for e in enfants if e['ventilation']]
         contexte = {
             'tenant': tenant, 'famille': famille, 'exercice': exercice,
+            'ventilation': {k: round(sum(v[k] for v in ventilations), 2)
+                            for k in ('anterieur', 'annee_echue', 'a_venir', 'organisme',
+                                      'exigible', 'total')},
             'responsables': list(famille.responsables.all()),
             'situation': situation, 'enfants': enfants,
             'reste_organismes': round(sum(float(e['reste_organisme'] or 0) for e in enfants), 2),
@@ -3638,3 +3615,114 @@ class BaremeFratrieViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
+
+
+class EtatImpayesView(APIView):
+    """État des impayés par statut, pour le comité de gestion (etat_impayes.py).
+
+    GET /api/eleves/etat-impayes/[?export=pdf|xlsx][&exercice=<id>]
+    (« export » et non « format » : DRF réserve ?format= au choix du rendu.)
+    Mêmes chiffres à l'écran, en PDF et en Excel.
+    """
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        from django.http import HttpResponse
+        from apps.comptabilite.views import get_exercice
+        from .etat_impayes import etat_impayes
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'error': 'Aucun exercice.'}, status=404)
+        etat = etat_impayes(tenant, exercice)
+        fmt = request.query_params.get('export')
+        nom = f"etat_impayes_{exercice.annee_scolaire}_{etat['date']}"
+        if fmt == 'pdf':
+            return self._pdf(request, tenant, exercice, etat, nom)
+        if fmt == 'xlsx':
+            return self._xlsx(tenant, etat, nom)
+        return Response(etat)
+
+    def _pdf(self, request, tenant, exercice, etat, nom):
+        from io import BytesIO
+        import datetime
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from xhtml2pdf import pisa
+        html = render_to_string('pdf/etat_impayes.html', {
+            'tenant': tenant, 'exercice': exercice, 'etat': etat,
+            'date_arret': datetime.date.fromisoformat(etat['date']),
+            'date_edition': timezone.localtime(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{nom}.pdf"'
+        return resp
+
+    def _xlsx(self, tenant, etat, nom):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Impayés par statut'
+        gras = Font(bold=True)
+        fond_groupe = PatternFill('solid', fgColor='DCE6F1')
+        fond_total = PatternFill('solid', fgColor='1A3C5E')
+        ws.append([f"{tenant.nom} — État des impayés par statut — exercice {etat['exercice']}"])
+        ws['A1'].font = Font(bold=True, size=13)
+        ws.append([f"Arrêté au {etat['date']} · {etat['nb_eleves']} élèves présents, "
+                   f"{etat['nb_a_jour']} sans impayé exigible"])
+        ws.append([])
+
+        ws.append(['Récapitulatif', 'Élèves', 'Années antérieures', 'Année en cours (échu)', 'Total exigible'])
+        for c in ws[ws.max_row]:
+            c.font = gras
+        for l in etat['lignes']:
+            ws.append([l['libelle'], l['nb'], l['anterieur'], l['annee'], l['montant']])
+            if l['type'] == 'sous_total':
+                for c in ws[ws.max_row]:
+                    c.font, c.fill = gras, fond_groupe
+        t = etat['total']
+        ws.append(['TOTAL GÉNÉRAL', t['nb'], t['anterieur'], t['annee'], t['montant']])
+        for c in ws[ws.max_row]:
+            c.font, c.fill = Font(bold=True, color='FFFFFF'), fond_total
+
+        entete = ['N°', 'Élève', 'Matricule', 'Classe', 'Contact', 'Téléphone', 'Mois impayés',
+                  'Années antérieures', 'Année en cours (échu)', 'Total exigible']
+        for l in etat['lignes']:
+            if l['type'] != 'groupe':
+                continue
+            ws.append([])
+            ws.append([f"{l['libelle']} — {l['nb']} élève(s) — {l['montant']:,.0f} FCFA".replace(',', ' ')])
+            ws.cell(ws.max_row, 1).font = Font(bold=True, size=12)
+            ws.append(entete)
+            for c in ws[ws.max_row]:
+                c.font, c.fill = gras, fond_groupe
+            for i, e in enumerate(l['eleves'], start=1):
+                ws.append([i, e['nom_complet'], e['matricule'], e['classe'], e['contact'],
+                           e['telephone'], e['mois'], e['anterieur'], e['annee'], e['montant']])
+            ws.append(['', f"Sous-total {l['libelle']}", '', '', '', '', '',
+                       l['anterieur'], l['annee'], l['montant']])
+            for c in ws[ws.max_row]:
+                c.font = gras
+
+        for col, largeur in zip('ABCDEFGHIJ', (6, 30, 18, 14, 22, 15, 28, 16, 18, 16)):
+            ws.column_dimensions[col].width = largeur
+        for row in ws.iter_rows(min_row=4):
+            for c in row:
+                if isinstance(c.value, float):
+                    c.number_format = '#,##0'
+                    c.alignment = Alignment(horizontal='right')
+
+        buf = BytesIO()
+        wb.save(buf)
+        resp = HttpResponse(buf.getvalue(), content_type=(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))
+        resp['Content-Disposition'] = f'attachment; filename="{nom}.xlsx"'
+        return resp

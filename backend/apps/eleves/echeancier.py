@@ -578,6 +578,36 @@ def construire_echeancier(eleve, today=None):
     }
 
 
+def ventilation_du(eleve, ech=None):
+    """Ce qui reste dû, en trois parts, pour les documents remis aux familles.
+
+      anterieur   — impayés des années antérieures ;
+      annee_echue — impayés de l'année déjà échus (mois en retard ou partiels,
+                    frais d'entrée échus) ;
+      a_venir     — ce qui n'est pas encore échu ;
+      organisme   — part encore attendue d'un organisme boursier (à déduire) ;
+      exigible    — ce qu'on réclame à la famille aujourd'hui ;
+      total       — ce que la famille devra en tout.
+
+    Reprend la synthèse de l'échéancier (un seul calcul). Seule exception :
+    une fiche de créance n'a pas d'échéancier, mais son ardoise est réelle —
+    elle est lue sur la fiche.
+    """
+    ech = ech or construire_echeancier(eleve)
+    s = ech['synthese']
+    anterieur = (round(float(eleve.reliquat_restant or 0), 2) if eleve.fiche_creance
+                 else s['impaye_anterieur'])
+    organisme = round(float(s['reste_organisme'] or 0), 2)
+    return {
+        'anterieur':   anterieur,
+        'annee_echue': s['retards'],
+        'a_venir':     s['mois_a_venir'],
+        'organisme':   organisme,
+        'exigible':    round(max(anterieur + s['retards'] - organisme, 0.0), 2),
+        'total':       round(max(anterieur + s['retards'] + s['mois_a_venir'] - organisme, 0.0), 2),
+    }
+
+
 def lignes_retenues(eleve, lignes):
     """Les mois qu'on attend réellement de cet élève.
 

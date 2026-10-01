@@ -248,12 +248,19 @@ class EleveSerializer(TenantModelSerializer):
         return valeur
 
     def to_representation(self, instance):
+        vue = self.context.get('view')
+        liste = vue is not None and getattr(vue, 'action', None) == 'list'
+        # Sur la LISTE, le payé est déjà annoté pour toute la page : sans ce
+        # relais, chaque propriété qui le lit relançait une requête par élève.
+        # Pas ailleurs : une fiche modifiée puis relue dans la même requête
+        # (correction de reprise) garderait l'ancien total annoté.
+        if liste and getattr(instance, 'total_paye_sql', None) is not None:
+            instance._total_paye_cache = instance.total_paye_sql
         data = super().to_representation(instance)
         # La liste des élèves n'envoie pas les photos (des centaines de Ko par
         # page) : seulement l'indication qu'il y en a une. La fiche détaillée
         # (retrieve) et l'enregistrement les renvoient.
-        vue = self.context.get('view')
-        if vue is not None and getattr(vue, 'action', None) == 'list':
+        if liste:
             data['a_photo'] = bool(data.pop('photo', ''))
         return data
 
