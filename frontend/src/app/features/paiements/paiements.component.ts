@@ -24,6 +24,7 @@ import { ApiService } from '../../core/services/api.service';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ImportChargesDialogComponent } from './import-charges-dialog.component';
 import { CahierMensuelComponent } from './cahier-mensuel.component';
+import { PointTresorerieComponent } from './point-tresorerie.component';
 import { ProformasComponent } from './proformas.component';
 
 @Component({
@@ -32,7 +33,7 @@ import { ProformasComponent } from './proformas.component';
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
             InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, PiecesJustificativesComponent,
-            ImportChargesDialogComponent, CahierMensuelComponent, ProformasComponent],
+            ImportChargesDialogComponent, CahierMensuelComponent, PointTresorerieComponent, ProformasComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -63,6 +64,10 @@ import { ProformasComponent } from './proformas.component';
           @if (r.nb_impayes > 0) { <span class="tab-badge">{{ r.nb_impayes }}</span> }
         }
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'tresorerie'"
+              (click)="onglet.set('tresorerie')">
+        🧾 Point de trésorerie
+      </button>
       <button class="tab-btn" [class.active]="onglet() === 'proformas'"
               (click)="onglet.set('proformas')">
         📄 Proformas
@@ -90,6 +95,10 @@ import { ProformasComponent } from './proformas.component';
 
     @if (onglet() === 'cahier') {
       <app-cahier-mensuel />
+    }
+
+    @if (onglet() === 'tresorerie') {
+      <app-point-tresorerie />
     }
 
     @if (onglet() === 'proformas') {
@@ -1443,7 +1452,7 @@ export class PaiementsComponent implements OnInit {
     this.chargerCaisses();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
     const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
-    if (ongletDemande === 'cahier' || ongletDemande === 'charges' || ongletDemande === 'proformas') this.onglet.set(ongletDemande);
+    if (['cahier', 'charges', 'proformas', 'tresorerie'].includes(ongletDemande ?? '')) this.onglet.set(ongletDemande!);
     this.chargerPaiements();
     this.chargerStats();
     this.chargerRappelMois();

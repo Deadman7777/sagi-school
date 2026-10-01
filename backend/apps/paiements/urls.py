@@ -2,7 +2,8 @@ from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views_proformas import ProformaViewSet
 from .views import (PaiementViewSet, ExerciceViewSet, CloturerExerciceView,
-                    ReporterReliquatsView, CahierMensuelView, CahierMensuelPdfView)
+                    ReporterReliquatsView, CahierMensuelView, CahierMensuelPdfView,
+                    PointTresorerieView, PointTresoreriePdfView)
 
 router = DefaultRouter()
 router.register('paiements', PaiementViewSet, basename='paiement')
@@ -14,5 +15,7 @@ urlpatterns = router.urls + [
     path('reporter-reliquats/', ReporterReliquatsView.as_view()),
     path('cahier-mensuel/', CahierMensuelView.as_view()),
     path('cahier-mensuel/pdf/', CahierMensuelPdfView.as_view()),
+    path('point-tresorerie/', PointTresorerieView.as_view()),
+    path('point-tresorerie/pdf/', PointTresoreriePdfView.as_view()),
     path('stats/', PaiementViewSet.as_view({'get': 'stats'})),
 ]

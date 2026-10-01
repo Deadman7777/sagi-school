@@ -82,6 +82,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.TenantMiddleware',  # notre middleware multi-tenant
+    # Auteur de chaque écriture comptable : voir core/auteur.py.
+    'core.auteur.AuteurMiddleware',
     # Droits par rôle sur les écritures : voir core/middleware.py.
     'core.middleware.DroitsEcritureMiddleware',
     # Aucune reponse d'API ne doit etre resservie depuis un cache : voir

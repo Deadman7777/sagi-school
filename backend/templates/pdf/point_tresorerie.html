@@ -1,0 +1,261 @@
+{% extends "pdf/base.html" %}
+{% block page_style %}
+@page {
+  size: A4 landscape;
+  @frame contenu { left: 28pt; top: 28pt; width: 786pt; height: 523pt; }
+  @frame pied {
+    -pdf-frame-content: pied-de-page;
+    left: 28pt; top: 555pt; width: 786pt; height: 28pt;
+  }
+}
+{% endblock %}
+{% block doc_title %}Point de trésorerie — {% if un_jour %}{{ debut|date:"l d F Y" }}{% else %}du {{ debut|date:"d/m/Y" }} au {{ fin|date:"d/m/Y" }}{% endif %}{% endblock %}
+{% block content %}
+{% with t=p.totaux %}
+
+<table class="kpi-table" cellspacing="0" cellpadding="0">
+  <tr>
+    <td>
+      <div class="kb-label">Trésorerie à l'ouverture</div>
+      <div class="kb-val kb-blue">{{ p.solde_ouverture.total|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Opérations</div>
+      <div class="kb-val kb-teal">{{ t.nb_operations }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total entrées</div>
+      <div class="kb-val kb-green">{{ t.entrees.total|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Total sorties</div>
+      <div class="kb-val kb-orange">{{ t.sorties.total|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Solde de la période</div>
+      <div class="kb-val {% if t.solde < 0 %}red{% else %}kb-green{% endif %}">{{ t.solde|floatformat:"0g" }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Trésorerie à la clôture</div>
+      <div class="kb-val kb-blue">{{ p.solde_cloture.total|floatformat:"0g" }}</div>
+    </td>
+  </tr>
+</table>
+
+<div style="font-size:10px;color:#374151;margin-bottom:6px">
+  Montants en FCFA, lus dans le journal sur les comptes de trésorerie.
+  {% if t.nb_annulations %}{{ t.nb_annulations }} annulation(s) : une opération annulée le jour même est une erreur de saisie, retirée des totaux ; annulée un autre jour, elle figure en colonne « Annulations » ce jour-là.{% endif %}
+  Les transferts internes entre caisse, banque et mobile money changent la répartition par mode, pas le total.
+</div>
+
+<div class="section-title">Par mode de paiement</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th style="width:28%">Mode</th>
+      <th class="text-right" style="width:18%">Ouverture</th>
+      <th class="text-right" style="width:18%">Entrées</th>
+      <th class="text-right" style="width:18%">Sorties</th>
+      {% if v.a_annulations %}<th class="text-right" style="width:18%">Annulations</th>{% endif %}
+      <th class="text-right" style="width:18%">Clôture</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in v.modes %}
+    <tr>
+      <td>{{ m.libelle }}</td>
+      <td class="text-right">{{ m.ouverture|floatformat:"0g" }}</td>
+      <td class="text-right">{{ m.entrees|floatformat:"0g" }}</td>
+      <td class="text-right">{{ m.sorties|floatformat:"0g" }}</td>
+      {% if v.a_annulations %}<td class="text-right">{{ m.annulations|floatformat:"0g" }}</td>{% endif %}
+      <td class="text-right bold">{{ m.cloture|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>TOTAL</td>
+      <td class="text-right">{{ p.solde_ouverture.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ t.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ t.sorties.total|floatformat:"0g" }}</td>
+      {% if v.a_annulations %}<td class="text-right">{{ t.annulations.total|floatformat:"0g" }}</td>{% endif %}
+      <td class="text-right">{{ p.solde_cloture.total|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<div class="section-title">Par responsable</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th>Responsable</th>
+      <th class="text-right" style="width:66px">Opérations</th>
+      <th class="text-right" style="width:66px">Annulations</th>
+      {% for lib in v.libelles_modes %}<th class="text-right" style="width:66px">Entrées {{ lib }}</th>{% endfor %}
+      <th class="text-right" style="width:66px">Total entrées</th>
+      <th class="text-right" style="width:66px">Sorties</th>
+      <th class="text-right" style="width:66px">Solde</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in v.responsables %}
+    <tr>
+      <td class="bold">{{ r.nom }}</td>
+      <td class="text-right">{{ r.nb_operations }}</td>
+      <td class="text-right">{{ r.nb_annulations }}</td>
+      {% for x in r.entrees_modes %}<td class="text-right">{{ x|floatformat:"0g" }}</td>{% endfor %}
+      <td class="text-right bold">{{ r.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ r.sorties.total|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ r.solde|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if not v.responsables %}<div style="font-size:10px;margin-bottom:8px">Aucune opération sur la période.</div>{% endif %}
+
+{% if un_jour %}
+<div class="section-title">Opérations de la journée ({{ p.operations|length }})</div>
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th style="width:40px">Heure</th>
+      <th style="width:75px">Pièce</th>
+      <th>Libellé</th>
+      <th style="width:80px">Mode</th>
+      <th class="text-right" style="width:75px">Entrée</th>
+      <th class="text-right" style="width:75px">Sortie</th>
+      <th style="width:120px">Responsable</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in p.operations %}
+    <tr>
+      <td>{{ o.heure }}</td>
+      <td>{{ o.piece }}</td>
+      <td>{% if o.annulee_jour %}<span class="bold">[Annulé le jour même, hors totaux]</span> {% elif o.nature == 'ANNULATION' %}<span class="red bold">Annulation</span> — {% elif o.nature == 'TRANSFERT' %}<span class="bold">Transfert</span> — {% endif %}{{ o.libelle|truncatechars:70 }}</td>
+      <td>{{ o.mode_libelle }}</td>
+      <td class="text-right">{% if o.entree %}{{ o.entree|floatformat:"0g" }}{% else %}&nbsp;{% endif %}</td>
+      <td class="text-right">{% if o.sortie %}{{ o.sortie|floatformat:"0g" }}{% else %}&nbsp;{% endif %}</td>
+      <td>{{ o.responsable }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="7" class="text-center">Aucune opération ce jour.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="section-title">Jour par jour</div>
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th class="text-right" style="width:12%">Opérations</th>
+      <th class="text-right" style="width:16%">Entrées</th>
+      <th class="text-right" style="width:16%">Sorties</th>
+      {% if v.a_annulations %}<th class="text-right" style="width:12%">Annulations</th>{% endif %}
+      <th class="text-right" style="width:16%">Solde du jour</th>
+      <th class="text-right" style="width:20%">Trésorerie en fin de journée</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for j in v.jours %}
+    <tr>
+      <td>{{ j.date|date:"d/m/Y" }}</td>
+      <td class="text-right">{{ j.nb_operations }}</td>
+      <td class="text-right">{{ j.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ j.sorties.total|floatformat:"0g" }}</td>
+      {% if v.a_annulations %}<td class="text-right">{{ j.annulations.total|floatformat:"0g" }}</td>{% endif %}
+      <td class="text-right {% if j.solde < 0 %}red{% endif %}">{{ j.solde|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ j.solde_fin.total|floatformat:"0g" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="text-center">Aucune opération sur la période.</td></tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>TOTAL</td>
+      <td class="text-right">{{ t.nb_operations }}</td>
+      <td class="text-right">{{ t.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ t.sorties.total|floatformat:"0g" }}</td>
+      {% if v.a_annulations %}<td class="text-right">{{ t.annulations.total|floatformat:"0g" }}</td>{% endif %}
+      <td class="text-right">{{ t.solde|floatformat:"0g" }}</td>
+      <td class="text-right">{{ p.solde_cloture.total|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+{% if v.jours_responsables %}
+<div class="section-title">Jour par jour et par responsable</div>
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th style="width:65px">Date</th>
+      <th>Responsable</th>
+      <th class="text-right" style="width:66px">Opérations</th>
+      {% for lib in v.libelles_modes %}<th class="text-right" style="width:66px">Entrées {{ lib }}</th>{% endfor %}
+      <th class="text-right" style="width:66px">Total entrées</th>
+      <th class="text-right" style="width:66px">Sorties</th>
+      <th class="text-right" style="width:66px">Solde</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in v.jours_responsables %}
+    <tr>
+      <td>{% if r.premier %}{{ r.date|date:"d/m/Y" }}{% else %}&nbsp;{% endif %}</td>
+      <td>{{ r.nom }}</td>
+      <td class="text-right">{{ r.nb_operations }}</td>
+      {% for x in r.entrees_modes %}<td class="text-right">{{ x|floatformat:"0g" }}</td>{% endfor %}
+      <td class="text-right bold">{{ r.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ r.sorties.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ r.solde|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="section-title">Trésorerie mois par mois — exercice {{ p.exercice }}</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th>Mois</th>
+      <th class="text-right" style="width:12%">Opérations</th>
+      <th class="text-right" style="width:16%">Entrées</th>
+      <th class="text-right" style="width:16%">Sorties</th>
+      <th class="text-right" style="width:12%">Annulations</th>
+      <th class="text-right" style="width:16%">Solde du mois</th>
+      <th class="text-right" style="width:20%">Trésorerie en fin de mois</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in p.mois %}
+    <tr>
+      <td>{{ m.libelle }}</td>
+      <td class="text-right">{{ m.nb_operations }}</td>
+      <td class="text-right">{{ m.entrees.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ m.sorties.total|floatformat:"0g" }}</td>
+      <td class="text-right">{{ m.annulations.total|floatformat:"0g" }}</td>
+      <td class="text-right {% if m.solde < 0 %}red{% endif %}">{{ m.solde|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ m.solde_fin.total|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<table cellspacing="0" cellpadding="0" style="margin-top:14px">
+  <tr>
+    {% for r in v.responsables %}
+    <td style="padding:6px;border:1px solid #9ca3af;height:60px;vertical-align:top;font-size:10px">
+      Le responsable : <b>{{ r.nom }}</b><br>Signature
+    </td>
+    {% endfor %}
+    <td style="padding:6px;border:1px solid #9ca3af;height:60px;vertical-align:top;font-size:10px">
+      Visa de la direction<br>Signature et cachet
+    </td>
+  </tr>
+</table>
+
+{% endwith %}
+{% endblock %}

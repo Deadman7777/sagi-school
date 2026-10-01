@@ -962,3 +962,84 @@ class CahierMensuelPdfView(APIView):
         resp['Content-Disposition'] = (
             f'attachment; filename="cahier_mensuel_{cahier["annee"]}_{cahier["mois"]:02d}.pdf"')
         return resp
+
+
+def _point_depuis_requete(request):
+    """Résout exercice + période et construit le point. Rend (point, exercice, erreur).
+
+    Période : ?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ ; par défaut, le mois en cours
+    (ou le plus proche dans l'exercice). Un seul jour : debut = fin, et le
+    point détaille alors chaque opération.
+    """
+    import calendar
+    import datetime
+    from apps.comptabilite.views import get_exercice
+    from .cahier_mensuel import mois_par_defaut
+    from .point_tresorerie import point_tresorerie
+
+    tenant = get_tenant(request)
+    exercice = get_exercice(tenant, request)
+    if not exercice:
+        return None, None, Response({'error': 'Aucun exercice actif.'}, status=404)
+    try:
+        debut = request.query_params.get('debut')
+        fin = request.query_params.get('fin')
+        debut = datetime.date.fromisoformat(debut) if debut else None
+        fin = datetime.date.fromisoformat(fin) if fin else None
+    except ValueError:
+        return None, None, Response({'error': 'Dates attendues au format AAAA-MM-JJ.'}, status=400)
+    if debut is None:
+        annee, mois = mois_par_defaut(exercice)
+        debut = datetime.date(annee, mois, 1)
+        if fin is None:
+            fin = datetime.date(annee, mois, calendar.monthrange(annee, mois)[1])
+    fin = fin or debut
+    if fin < debut:
+        return None, None, Response({'error': 'La date de fin précède la date de début.'}, status=400)
+    if (fin - debut).days > 400:
+        return None, None, Response({'error': 'Période limitée à un exercice.'}, status=400)
+    return point_tresorerie(tenant, exercice, debut, fin), exercice, None
+
+
+class PointTresorerieView(APIView):
+    """GET /api/paiements/point-tresorerie/?debut=…&fin=…[&exercice=<id>]"""
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        point, _, erreur = _point_depuis_requete(request)
+        return erreur or Response(point)
+
+
+class PointTresoreriePdfView(APIView):
+    """Le même point, en PDF à signer — exactement les chiffres de l'écran."""
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        import datetime
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        try:
+            from xhtml2pdf import pisa
+        except ImportError:
+            return HttpResponse('xhtml2pdf non installé', status=500)
+
+        point, exercice, erreur = _point_depuis_requete(request)
+        if erreur:
+            return erreur
+        debut = datetime.date.fromisoformat(point['debut'])
+        fin = datetime.date.fromisoformat(point['fin'])
+        from .point_tresorerie import pour_pdf
+        html = render_to_string('pdf/point_tresorerie.html', {
+            'tenant': get_tenant(request), 'exercice': exercice, 'p': point, 'v': pour_pdf(point),
+            'debut': debut, 'fin': fin, 'un_jour': debut == fin,
+            'date_edition': timezone.localtime(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        nom = point['debut'] if debut == fin else f"{point['debut']}_{point['fin']}"
+        resp['Content-Disposition'] = f'attachment; filename="point_tresorerie_{nom}.pdf"'
+        return resp

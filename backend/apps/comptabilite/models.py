@@ -2,6 +2,16 @@ from django.db import models
 from core.models import TenantModel
 
 
+class JournalEntryQuerySet(models.QuerySet):
+    def bulk_create(self, objs, *args, **kwargs):
+        # bulk_create ne passe pas par save() : l'auteur est posé ici aussi,
+        # sinon la plupart des écritures (paiements, extournes) en seraient privées.
+        objs = list(objs)
+        for e in objs:
+            e._poser_auteur()
+        return super().bulk_create(objs, *args, **kwargs)
+
+
 class JournalEntry(TenantModel):
     exercice      = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE, related_name='journal')
     no_piece      = models.CharField(max_length=30)
@@ -31,6 +41,14 @@ class JournalEntry(TenantModel):
     # « hors budget » reste le cas normal, et rien n'oblige à imputer.
     budget_ligne  = models.ForeignKey('comptabilite.BudgetLigne', null=True, blank=True,
                                       on_delete=models.SET_NULL, related_name='ecritures')
+    # Qui a passé l'écriture : le point de trésorerie de chaque chargé de
+    # scolarité se lit là. Posé tout seul à l'enregistrement, d'après la
+    # requête en cours (core/auteur.py) ; vide hors requête et avant octobre 2026
+    # (sauf les encaissements, repris du saisi_par de leur reçu).
+    saisi_par     = models.ForeignKey('users.User', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+')
+
+    objects = JournalEntryQuerySet.as_manager()
 
     class Meta:
         db_table = 'journal_entries'
@@ -38,6 +56,15 @@ class JournalEntry(TenantModel):
 
     def __str__(self):
         return f"{self.no_piece} — {self.libelle}"
+
+    def _poser_auteur(self):
+        if self.saisi_par_id is None:
+            from core.auteur import utilisateur_courant
+            self.saisi_par = utilisateur_courant()
+
+    def save(self, *args, **kwargs):
+        self._poser_auteur()
+        super().save(*args, **kwargs)
 
 
 class CaisseEncaissement(TenantModel):
