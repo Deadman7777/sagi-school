@@ -17,7 +17,7 @@ from apps.comptabilite.models import JournalEntry, CompteComptable, BudgetLigne,
 
 from apps.comptabilite.views import (
     get_plan_dict, get_tenant, get_exercice,
-    _mobile_aggregate, _sum_paiements, _detecter_systeme,
+    _mobile_aggregate, _ecritures_synthese, _sum_paiements, _detecter_systeme,
     _compte_sort_key, _immo_to_dict,
     _compute_account_sfs, _sum_sf_side,
     PLAN_COMPTABLE, MOBILE_ACCOUNTS, SEUIL_SMT_SERVICES, MOIS_CHAMPS, MOIS_NOMS,
@@ -96,6 +96,7 @@ class ExportPDFView(APIView):
         # ── GRAND LIVRE ────────────────────────────────────────────────────────
         elif type_doc == 'grand_livre':
             mob_d, mob_c = _mobile_aggregate(tenant, exercice)
+            entries = _ecritures_synthese(tenant, exercice)
             comptes = entries.exclude(
                 no_compte__in=('5521', '5522', '5523')
             ).values('no_compte').annotate(
@@ -156,7 +157,7 @@ class ExportPDFView(APIView):
                 '571': float(exercice.solde_initial_caisse),
                 '552': float(exercice.solde_initial_mobile),
             }
-            comptes = entries.exclude(
+            comptes = _ecritures_synthese(tenant, exercice).exclude(
                 no_compte__in=('5521', '5522', '5523')
             ).values('no_compte').annotate(
                 mvt_debit=Sum('debit'), mvt_credit=Sum('credit')

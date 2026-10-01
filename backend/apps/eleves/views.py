@@ -508,13 +508,14 @@ class EleveViewSet(viewsets.ModelViewSet):
                      queryset=Paiement.objects.filter(statut='ACTIF'),
                      to_attr=PREFETCH_PAIEMENTS),
         ).annotate(
+            # Les paiements annulés ne comptent pas dans le payé.
             total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription') +
-                Sum('paiements__montant_mensualite')  +
-                Sum('paiements__montant_uniforme')    +
-                Sum('paiements__montant_fournitures') +
-                Sum('paiements__montant_cantine')     +
-                Sum('paiements__montant_divers'),
+                Sum('paiements__montant_inscription', filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_mensualite',  filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_uniforme',    filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_fournitures', filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_cantine',     filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_divers',      filter=Q(paiements__statut='ACTIF')),
                 Value(0), output_field=DecimalField()
             ),
             # Reliquat déjà encaissé — annoté pour que le reliquat restant de
@@ -2450,13 +2451,14 @@ class ElevesListePDFView(APIView):
         qs = precharger(Eleve.objects.filter(
             tenant=tenant, exercice=exercice
         )).annotate(
+            # Les paiements annulés ne comptent pas dans le payé.
             total_paye_sql=Coalesce(
-                Sum('paiements__montant_inscription') +
-                Sum('paiements__montant_mensualite')  +
-                Sum('paiements__montant_uniforme')    +
-                Sum('paiements__montant_fournitures') +
-                Sum('paiements__montant_cantine')     +
-                Sum('paiements__montant_divers'),
+                Sum('paiements__montant_inscription', filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_mensualite',  filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_uniforme',    filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_fournitures', filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_cantine',     filter=Q(paiements__statut='ACTIF')) +
+                Sum('paiements__montant_divers',      filter=Q(paiements__statut='ACTIF')),
                 Value(0), output_field=DecimalField()
             )
         )

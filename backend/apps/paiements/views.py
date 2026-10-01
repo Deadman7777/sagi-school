@@ -47,6 +47,25 @@ def _mois_deja_entames(paiement, mois_regles, paiements_avant, meme_jour):
     return deja & set(mois_regles)
 
 
+def _exercice_extourne(paiement, tenant):
+    """L'exercice où passer l'annulation d'un règlement : le SIEN tant qu'il
+    est ouvert, comme à l'encaissement (voir perform_create).
+
+    Prendre « le dernier exercice ouvert » envoyait l'extourne sur un autre
+    exercice dès qu'une école en avait deux ouverts : le règlement annulé
+    restait entier dans le 411, le 706 et la caisse de son exercice.
+    """
+    if paiement.exercice_id and not paiement.exercice.cloture:
+        return paiement.exercice
+    return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+
+def _date_extourne(exercice):
+    """Aujourd'hui, ramené dans les bornes de l'exercice de l'extourne."""
+    import datetime
+    return min(datetime.date.today(), exercice.date_fin)
+
+
 class PaiementViewSet(viewsets.ModelViewSet):
     serializer_class   = PaiementSerializer
     permission_classes = [IsAuthenticated]
@@ -490,7 +509,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             paiement.save()
             return Response({'success': True, 'message': 'Paiement marqué annulé (contre-écritures déjà existantes).'})
 
-        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        exercice = _exercice_extourne(paiement, tenant)
         if not exercice:
             return Response({'error': 'Aucun exercice actif pour enregistrer les contre-écritures.'}, status=400)
 
@@ -509,7 +528,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         nums = [re.findall(r'\d+', p) for p in last_ann if re.findall(r'\d+', p)]
         next_n = int(nums[0][-1]) + 1 if nums else 1
         no_piece_annul = f"ANN-REC-{next_n:04d}"
-        date_annul = datetime.date.today()
+        date_annul = _date_extourne(exercice)
 
         # Créer les contre-écritures (extourne : inverser débit/crédit)
         contre_ecritures = []
@@ -551,7 +570,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
 
         tenant = self.get_tenant()
-        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        exercice = _exercice_extourne(paiement, tenant)
         if not exercice:
             return Response({'error': 'Aucun exercice actif.'}, status=400)
 
@@ -609,7 +628,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             contre_ecritures = [
                 JournalEntry(
                     tenant=tenant, exercice=exercice,
-                    no_piece=no_piece_annul, date_ecriture=datetime.date.today(),
+                    no_piece=no_piece_annul, date_ecriture=_date_extourne(exercice),
                     no_compte=e.no_compte, libelle=f"MODIF — {e.libelle}",
                     debit=e.credit, credit=e.debit,
                     source='ANNUL_PAIEMENT', source_id=paiement.id, ordre=i,

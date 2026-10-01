@@ -702,7 +702,8 @@ class Eleve(TenantModel):
         if hasattr(self, '_total_paye_cache'):
             return self._total_paye_cache
         from django.db.models import Sum
-        result = self.paiements.aggregate(
+        # Un paiement annulé n'a plus d'effet : ni sur la fiche, ni en compta.
+        result = self.paiements.filter(statut='ACTIF').aggregate(
             t=Sum('montant_inscription') + Sum('montant_mensualite') +
             Sum('montant_uniforme')    + Sum('montant_fournitures') +
             Sum('montant_cantine')     + Sum('montant_divers')

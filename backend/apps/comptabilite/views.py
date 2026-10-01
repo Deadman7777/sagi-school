@@ -378,15 +378,24 @@ def _compte_sort_key(no):
     return '99999999'  # comptes non numériques en fin
 
 
+def _ecritures_synthese(tenant, exercice):
+    """Écritures de l'exercice pour les cumuls par compte (grand livre,
+    balance) : sans les paiements annulés ni leur extourne."""
+    from .annulations import sans_paiements_annules
+    return sans_paiements_annules(
+        JournalEntry.objects.filter(tenant=tenant, exercice=exercice), tenant, exercice)
+
+
 def _mobile_aggregate(tenant, exercice):
-    agg = JournalEntry.objects.filter(
-        tenant=tenant, exercice=exercice, no_compte__in=MOBILE_ACCOUNTS
+    agg = _ecritures_synthese(tenant, exercice).filter(
+        no_compte__in=MOBILE_ACCOUNTS
     ).aggregate(d=Sum('debit'), c=Sum('credit'))
     return float(agg['d'] or 0), float(agg['c'] or 0)
 
 
 def _sum_paiements(qs):
-    a = qs.aggregate(
+    # Un paiement annulé n'est pas un chiffre d'affaires.
+    a = qs.filter(statut='ACTIF').aggregate(
         t=Sum('montant_inscription') + Sum('montant_mensualite') +
           Sum('montant_uniforme')    + Sum('montant_fournitures') +
           Sum('montant_cantine')     + Sum('montant_divers')
@@ -438,9 +447,8 @@ class GrandLivreView(APIView):
         if not exercice:
             return Response([])
 
-        comptes = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).exclude(
+        ecritures = _ecritures_synthese(tenant, exercice)
+        comptes = ecritures.exclude(
             no_compte__in=('5521', '5522', '5523')
         ).values('no_compte').annotate(
             total_debit=Sum('debit'),
@@ -480,8 +488,8 @@ class GrandLivreView(APIView):
                 }
 
         for sub in ('5521', '5522', '5523'):
-            agg = JournalEntry.objects.filter(
-                tenant=tenant, exercice=exercice, no_compte=sub
+            agg = ecritures.filter(
+                no_compte=sub
             ).aggregate(d=Sum('debit'), c=Sum('credit'))
             sub_d = float(agg['d'] or 0)
             sub_c = float(agg['c'] or 0)
@@ -517,9 +525,7 @@ class BalanceView(APIView):
             '552': float(exercice.solde_initial_mobile),
         }
 
-        comptes = JournalEntry.objects.filter(
-            tenant=tenant, exercice=exercice
-        ).exclude(
+        comptes = _ecritures_synthese(tenant, exercice).exclude(
             no_compte__in=('5521', '5522', '5523')
         ).values('no_compte').annotate(
             mvt_debit=Sum('debit'),

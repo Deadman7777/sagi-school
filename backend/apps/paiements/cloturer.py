@@ -2,7 +2,7 @@
 Service de clôture d'exercice — SAGI SCHOOL
 """
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from .models import Exercice, Paiement
 from apps.eleves.models import Eleve
 from apps.comptabilite.models import JournalEntry
@@ -26,13 +26,14 @@ def verifier_avant_cloture(exercice):
         problemes.append(f"Journal déséquilibré — écart de {ecart:,.0f} FCFA entre débit et crédit")
 
     # 2. Compter élèves avec solde impayé
+    actif = Q(paiements__statut='ACTIF')  # un paiement annulé n'est pas payé
     eleves = Eleve.objects.filter(tenant=tenant, exercice=exercice).annotate(
-        total_paye_sql=Sum('paiements__montant_inscription') +
-                       Sum('paiements__montant_mensualite')  +
-                       Sum('paiements__montant_uniforme')    +
-                       Sum('paiements__montant_fournitures') +
-                       Sum('paiements__montant_cantine')     +
-                       Sum('paiements__montant_divers')
+        total_paye_sql=Sum('paiements__montant_inscription', filter=actif) +
+                       Sum('paiements__montant_mensualite',  filter=actif) +
+                       Sum('paiements__montant_uniforme',    filter=actif) +
+                       Sum('paiements__montant_fournitures', filter=actif) +
+                       Sum('paiements__montant_cantine',     filter=actif) +
+                       Sum('paiements__montant_divers',      filter=actif)
     ).select_related('section', 'exercice').prefetch_related('abonnements__service')
 
     eleves_impayes = 0
