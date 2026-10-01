@@ -19,11 +19,12 @@ import { ToastModule } from 'primeng/toast';
 import { CheckboxModule } from 'primeng/checkbox';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { MessageService } from 'primeng/api';
+import { PassageAnneeComponent } from './passage-annee.component';
 
 @Component({
   selector: 'app-parametres',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, InputTextModule, ButtonModule,
+  imports: [CommonModule, FormsModule, TranslateModule, InputTextModule, ButtonModule, PassageAnneeComponent,
             SelectModule, InputNumberModule, TableModule, TagModule,
             DialogModule, ToastModule, CheckboxModule, MultiSelectModule],
   providers: [MessageService],
@@ -1082,6 +1083,12 @@ import { MessageService } from 'primeng/api';
 
   </div>
 
+  <!-- Passage de fin d'année : passe / redouble / sort, sans ressaisie.
+       Remonté après chaque clôture pour lire le nouvel exercice. -->
+  @for (v of [passageVersion()]; track v) {
+    <app-passage-annee />
+  }
+
   <!-- ── Report des reliquats (rattrapage) ──────────────────────────────
        Sert quand l'exercice précédent est DÉJÀ clôturé : on reconduit ses
        impayés sans jamais y toucher (les à-nouveaux vont dans l'exercice
@@ -1979,6 +1986,8 @@ export class ParametresComponent implements OnInit {
   }
 
   verification  = signal<any>(null);
+  /** Change après une clôture : l'assistant de passage se recharge. */
+  passageVersion = signal(0);
 creerSuivant  = true;
 reporterImpayes = true;
 
@@ -2076,6 +2085,7 @@ confirmerCloture() {
       });
       this.saving.set(false);
       this.verification.set(null);
+      this.passageVersion.update(v => v + 1);
       // Recharger pour voir le nouvel exercice
       setTimeout(() => this.chargerVerification(), 1000);
     },

@@ -85,6 +85,21 @@ def verifier_avant_cloture(exercice):
     }
 
 
+def annee_suivante(annee_scolaire):
+    """« 2025-2026 » → « 2026-2027 » ; « 2026 » → « 2027 » (daaras, Shoumoul).
+
+    Une année d'un seul nombre tombait dans le repli et l'école ouvrait un
+    exercice nommé « Exercice 2027 ».
+    """
+    import re
+    nombres = re.findall(r'\d{4}', annee_scolaire or '')
+    if len(nombres) == 2:
+        return f"{int(nombres[0]) + 1}-{int(nombres[1]) + 1}"
+    if len(nombres) == 1:
+        return re.sub(r'\d{4}', str(int(nombres[0]) + 1), annee_scolaire, count=1)
+    return f"Exercice {timezone.now().year + 1}"
+
+
 def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
     """
     Clôture l'exercice et optionnellement crée le suivant.
@@ -105,14 +120,7 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
     nouvel_exercice = None
 
     if creer_suivant:
-        # Parser l'année scolaire ex: "2025-2026" → "2026-2027"
-        try:
-            annees        = exercice.annee_scolaire.split('-')
-            annee1        = int(annees[0]) + 1
-            annee2        = int(annees[1]) + 1
-            nouvelle_annee = f"{annee1}-{annee2}"
-        except Exception:
-            nouvelle_annee = f"Exercice {timezone.now().year + 1}"
+        nouvelle_annee = annee_suivante(exercice.annee_scolaire)
 
         # Trésorerie reportée sur le nouvel exercice : le solde RÉEL de chaque
         # poste, lu au journal (apps/comptabilite/tresorerie.py) — le même

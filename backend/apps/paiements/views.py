@@ -1043,3 +1043,58 @@ class PointTresoreriePdfView(APIView):
         nom = point['debut'] if debut == fin else f"{point['debut']}_{point['fin']}"
         resp['Content-Disposition'] = f'attachment; filename="point_tresorerie_{nom}.pdf"'
         return resp
+
+
+class PassageAnneeView(APIView):
+    """Passage de fin d'année : passe, redouble ou sort (voir passage.py).
+
+    GET  ?source=<id> — l'assistant : élèves présents de l'exercice source,
+         décision proposée, section suivante, fiche déjà créée sur la cible.
+         Par défaut, source = le dernier exercice clôturé qui a un successeur.
+    POST {source, decisions: [{eleve_id, decision, section_id?, motif?}]}
+         — applique ; rejouable (les fiches déjà créées sont mises à jour).
+    """
+    permission_classes = [IsAdminEcole]
+
+    def _exercices(self, request, params):
+        from .passage import exercice_source_par_defaut, exercice_suivant
+        tenant = get_tenant(request)
+        if sid := params.get('source'):
+            source = Exercice.objects.filter(tenant=tenant, id=sid).first()
+            if source is None:
+                return None, None, Response({'error': 'Exercice source introuvable.'}, status=404)
+        else:
+            source = exercice_source_par_defaut(tenant)
+            if source is None:
+                return None, None, Response(
+                    {'error': "Aucun exercice clôturé n'a d'exercice suivant ouvert. "
+                              "Clôturez l'année en créant le nouvel exercice."}, status=404)
+        cible = exercice_suivant(source)
+        if cible is None:
+            return None, None, Response(
+                {'error': f"Aucun exercice ouvert après {source.annee_scolaire}."}, status=400)
+        return source, cible, None
+
+    def get(self, request):
+        from .passage import apercu
+        source, cible, erreur = self._exercices(request, request.query_params)
+        return erreur or Response(apercu(source, cible))
+
+    def post(self, request):
+        from core.models import log_audit
+        from .passage import appliquer
+        source, cible, erreur = self._exercices(request, request.data)
+        if erreur:
+            return erreur
+        decisions = request.data.get('decisions')
+        if not isinstance(decisions, list) or not decisions:
+            return Response({'error': 'Aucune décision transmise.'}, status=400)
+        try:
+            rapport = appliquer(source, cible, decisions, utilisateur=str(request.user))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        log_audit(request, 'CREATE', 'PassageAnnee', str(cible.id),
+                  f"{source.annee_scolaire} → {cible.annee_scolaire} : {rapport['passes']} passent, "
+                  f"{rapport['redoublants']} redoublent, {rapport['sortis']} sortent, "
+                  f"{rapport['nb_erreurs']} erreur(s)")
+        return Response(rapport)

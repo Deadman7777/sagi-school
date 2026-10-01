@@ -272,6 +272,11 @@ class Eleve(TenantModel):
     eleve_precedent    = models.ForeignKey('self', null=True, blank=True,
                                            on_delete=models.SET_NULL, related_name='reinscriptions',
                                            help_text="Fiche du même élève sur l'exercice précédent")
+    # Quand le passage de fin d'année a statué sur cette fiche (passe ou
+    # redouble). La distingue d'une fiche ouverte par le seul report des
+    # impayés, dans la même section : sans cette marque, l'assistant prenait
+    # cette copie pour une décision déjà prise (apps/paiements/passage.py).
+    passage_le         = models.DateTimeField(null=True, blank=True)
     # Reste dû antérieur à l'exercice en cours, figé. Deux origines :
     #   - le report automatique d'un exercice à l'autre (reliquat_exercice_origine) ;
     #   - une SAISIE de migration, quand l'année d'avant n'existe pas dans le
