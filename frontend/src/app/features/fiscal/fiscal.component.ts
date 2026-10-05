@@ -10,6 +10,7 @@ import { SelectModule } from 'primeng/select';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { ToastModule } from 'primeng/toast';
+import { ProfilFiscalComponent } from './profil-fiscal.component';
 import { MessageService } from 'primeng/api';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -18,7 +19,7 @@ import { TranslateModule } from '@ngx-translate/core';
   standalone: true,
   imports: [CommonModule, DecimalPipe, FormsModule, TableModule, TagModule, ButtonModule,
             DialogModule, SelectModule, InputNumberModule, InputTextModule, ToastModule,
-            TranslateModule],
+            TranslateModule, ProfilFiscalComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -38,9 +39,14 @@ import { TranslateModule } from '@ngx-translate/core';
               (click)="onglet.set('obligations'); chargerObligations()">🏛️ Obligations de l'établissement</button>
       <button class="tab-btn" [class.active]="onglet() === 'conseils'"
               (click)="onglet.set('conseils'); chargerConseils()">💡 Conseils</button>
+      <button class="tab-btn" [class.active]="onglet() === 'parametrage'"
+              (click)="onglet.set('parametrage')">⚙️ Profil et paramètres</button>
     </div>
 
     <!-- ════════════ OBLIGATIONS ÉTABLISSEMENT ════════════ -->
+    @if (onglet() === 'parametrage') {
+      <app-profil-fiscal />
+    }
     @if (onglet() === 'obligations') {
       @if (obligationsData(); as od) {
         @if (!od.identification?.complet) {
@@ -82,6 +88,10 @@ import { TranslateModule } from '@ngx-translate/core';
                 <div>
                   <div class="ob-titre">{{ o.libelle }}</div>
                   <div class="ob-desc">{{ o.description }}</div>
+                  @if (o.reference || o.a_verifier) {
+                    <div class="ob-desc" style="font-size:11px">{{ o.reference }}
+                      @if (o.a_verifier) { <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px">valeur à vérifier</span> }</div>
+                  }
                 </div>
                 <p-tag [value]="statutObligation(o.statut)"
                        [severity]="o.statut === 'EXONERE' || o.statut === 'BULLETINS' || o.statut === 'GERE_PAR_RH' ? 'success' :
@@ -434,7 +444,7 @@ export class FiscalComponent implements OnInit {
   loading      = signal(true);
   saving       = signal(false);
 
-  onglet          = signal<'declarations' | 'obligations' | 'conseils'>('declarations');
+  onglet          = signal<'declarations' | 'obligations' | 'conseils' | 'parametrage'>('declarations');
   obligationsData = signal<any | null>(null);
   conseils        = signal<any[] | null>(null);
 
@@ -520,8 +530,9 @@ export class FiscalComponent implements OnInit {
   }
 
   statutObligation(s: string) {
-    return { ESTIMATION: 'Estimation', EXONERE: 'Exonéré', A_SAISIR: 'À saisir',
-             BULLETINS: 'Données réelles', GERE_PAR_RH: 'Géré par le module RH' }[s] || s;
+    return ({ ESTIMATION: 'Estimation', EXONERE: 'Exonéré', A_SAISIR: 'À saisir',
+             BULLETINS: 'Données réelles', GERE_PAR_RH: 'Géré par le module RH',
+             NON_APPLICABLE: 'Non applicable', INFO: 'Information' } as Record<string, string>)[s] || s;
   }
 
   categorieLabel(c: string) {

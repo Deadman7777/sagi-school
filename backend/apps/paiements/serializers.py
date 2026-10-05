@@ -13,7 +13,34 @@ class ExerciceSerializer(TenantModelSerializer):
         fields = '__all__'
         extra_kwargs = {
             'tenant': {'required': False, 'read_only': True},
+            'an_source': {'read_only': True},
+            'an_genere_le': {'read_only': True},
         }
+
+    def validate(self, attrs):
+        """Plusieurs exercices, oui ; qui se chevauchent, non.
+
+        Une école peut créer un exercice ANTÉRIEUR à l'exercice courant (année
+        non régularisée à son arrivée) : il suffit qu'il ne recouvre aucun
+        autre, sinon une écriture datée appartiendrait à deux exercices.
+        """
+        debut = attrs.get('date_debut', getattr(self.instance, 'date_debut', None))
+        fin = attrs.get('date_fin', getattr(self.instance, 'date_fin', None))
+        if debut and fin:
+            if fin <= debut:
+                raise serializers.ValidationError({'date_fin': 'La fin doit suivre le début.'})
+            request = self.context.get('request')
+            from core.tenant import get_tenant
+            tenant = get_tenant(request) if request else getattr(self.instance, 'tenant', None)
+            if tenant is not None:
+                autres = Exercice.objects.filter(tenant=tenant, date_debut__lte=fin, date_fin__gte=debut)
+                if self.instance is not None:
+                    autres = autres.exclude(id=self.instance.id)
+                if (conflit := autres.first()) is not None:
+                    raise serializers.ValidationError({'date_debut': (
+                        f"Cet exercice chevauche l'exercice {conflit.annee_scolaire} "
+                        f"({conflit.date_debut:%d/%m/%Y} – {conflit.date_fin:%d/%m/%Y}).")})
+        return attrs
 
 
 class PaiementSerializer(TenantModelSerializer):

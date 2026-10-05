@@ -756,13 +756,21 @@ class CloturerExerciceView(APIView):
     def get_tenant(self):
         return get_tenant(self.request)
 
+    def _exercice(self, tenant):
+        """L'exercice à clôturer : celui désigné (`exercice_id`, exercice
+        antérieur régularisé), sinon l'exercice courant, comme avant."""
+        ex_id = (self.request.data.get('exercice_id') if self.request.method == 'POST' else None) \
+            or self.request.query_params.get('exercice')
+        qs = Exercice.objects.filter(tenant=tenant, cloture=False)
+        if ex_id:
+            return qs.filter(id=ex_id).first()
+        return qs.order_by('-date_debut').first()
+
     def get(self, request):
         """Vérifie si l'exercice peut être clôturé."""
         from .cloturer import verifier_avant_cloture
         tenant   = self.get_tenant()
-        exercice = Exercice.objects.filter(
-            tenant=tenant, cloture=False
-        ).order_by('-date_debut').first()
+        exercice = self._exercice(tenant)
 
         if not exercice:
             return Response({'error': 'Aucun exercice actif'}, status=404)
@@ -782,9 +790,7 @@ class CloturerExerciceView(APIView):
         from core.permissions import IsAdminEcole
 
         tenant   = self.get_tenant()
-        exercice = Exercice.objects.filter(
-            tenant=tenant, cloture=False
-        ).order_by('-date_debut').first()
+        exercice = self._exercice(tenant)
 
         if not exercice:
             return Response({'error': 'Aucun exercice actif'}, status=404)
@@ -806,7 +812,8 @@ class CloturerExerciceView(APIView):
 
         creer_suivant = request.data.get('creer_suivant', True)
         reporter      = request.data.get('reporter_impayes', True)
-        result        = cloturer_exercice(exercice, creer_suivant, reporter)
+        a_nouveaux    = bool(request.data.get('a_nouveaux', False))
+        result        = cloturer_exercice(exercice, creer_suivant, reporter, a_nouveaux)
 
         return Response({
             'success': True,

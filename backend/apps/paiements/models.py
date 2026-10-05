@@ -14,6 +14,11 @@ class Exercice(TenantModel):
     devise                 = models.CharField(max_length=10, default='FCFA')
     cloture                = models.BooleanField(default=False)
     date_cloture           = models.DateTimeField(null=True, blank=True)
+    # Continuité comptable : de quel exercice viennent les à-nouveaux de
+    # celui-ci, et quand ils ont été (re)générés (apps/comptabilite/exercices.py).
+    an_source              = models.ForeignKey('self', null=True, blank=True,
+                                               on_delete=models.SET_NULL, related_name='+')
+    an_genere_le           = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'exercices'

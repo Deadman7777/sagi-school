@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% load logo_ecole %}
+{% comment %}
+Un document du dossier ETAFI (voir apps/comptabilite/etafi.py). Gabarit unique,
+piloté par les données : page de garde, fiche, tableaux, contrôles. Sobre :
+couleurs sur les cellules (xhtml2pdf ignore celles des lignes), pas de police
+à chasse fixe, montants en FCFA sans décimale.
+{% endcomment %}
+<style>
+  @page { size: {% if paysage %}A4 landscape{% else %}A4{% endif %}; margin: 18pt 24pt 28pt;
+          @frame pied { -pdf-frame-content: pied; left: 24pt; right: 24pt; bottom: 10pt; height: 16pt; } }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #111; }
+  .entete { width: 100%; border-bottom: 1.5pt solid #1a3c5e; margin-bottom: 8pt; }
+  .entete td { vertical-align: top; padding-bottom: 4pt; }
+  .ecole { font-size: 11pt; font-weight: bold; color: #1a3c5e; }
+  .meta { font-size: 8pt; color: #374151; }
+  .titre { font-size: 13pt; font-weight: bold; text-align: right; color: #111; }
+  .provisoire { font-size: 8pt; font-weight: bold; color: #b45309; text-align: right; }
+  .definitif { font-size: 8pt; font-weight: bold; color: #047857; text-align: right; }
+  h3 { font-size: 10pt; color: #1a3c5e; margin: 10pt 0 3pt; }
+  table.t { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
+  table.t th { background-color: #1a3c5e; color: #fff; font-size: 8pt; padding: 3pt 4pt; text-align: left; }
+  table.t th.n { text-align: right; }
+  table.t td { border-bottom: 0.5pt solid #d1d5db; padding: 1.6pt 4pt 1pt; font-size: 8pt; }
+  table.t td.n { text-align: right; }
+  table.t td.tot { background-color: #e8eef5; font-weight: bold; }
+  .para { font-size: 8pt; color: #374151; margin-top: 6pt; }
+  .garde-titre { font-size: 22pt; font-weight: bold; color: #1a3c5e; text-align: center; margin-top: 70pt; }
+  .garde-sous { font-size: 12pt; text-align: center; margin-top: 8pt; }
+  .garde-ecole { font-size: 16pt; font-weight: bold; text-align: center; margin-top: 40pt; }
+  table.fiche { width: 100%; border-collapse: collapse; }
+  table.fiche td { border: 0.5pt solid #d1d5db; padding: 5pt 6pt; font-size: 9.5pt; }
+  table.fiche td.lib { background-color: #f3f6fa; width: 38%; color: #374151; }
+  td.ok { color: #047857; font-weight: bold; }
+  td.ko { color: #b91c1c; font-weight: bold; }
+  td.na { color: #b45309; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="pied" class="meta">{{ tenant.nom }} — ETAFI {{ exercice.annee_scolaire }} — {{ titre }} — édité le {{ date_edition|date:"d/m/Y" }} — page <pdf:pagenumber></div>
+
+{% if gabarit == 'garde' %}
+  {% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 160 60 %}</div>{% endif %}
+  <div class="garde-ecole">{{ tenant.nom|upper }}</div>
+  <div class="garde-sous">{{ tenant.adresse }} {{ tenant.ville }}</div>
+  <div class="garde-sous">{% if tenant.ninea %}NINEA {{ tenant.ninea }}{% endif %}{% if tenant.rccm %} · RCCM {{ tenant.rccm }}{% endif %}</div>
+  <div class="garde-titre">ÉTATS FINANCIERS DE SYNTHÈSE</div>
+  <div class="garde-sous">SYSCOHADA Révisé — {% if systeme == 'SN' %}Système normal{% else %}Système minimal de trésorerie{% endif %}</div>
+  <div class="garde-sous">Exercice {{ exercice.annee_scolaire }} — du {{ exercice.date_debut|date:"d/m/Y" }} au {{ exercice.date_fin|date:"d/m/Y" }}</div>
+  <div class="garde-sous" style="color:{% if statut == 'DEFINITIF' %}#047857{% else %}#b45309{% endif %}; font-weight:bold">{% if statut == 'DEFINITIF' %}Exercice clôturé{% else %}Version provisoire — exercice non clôturé{% endif %}</div>
+  <h3 style="margin-top:40pt">Contenu du dossier</h3>
+  <table class="t">
+    {% for d in documents %}<tr><td>{{ forloop.counter }}. {{ d }}</td></tr>{% endfor %}
+  </table>
+{% else %}
+  <table class="entete">
+    <tr>
+      <td width="55%">
+        <div class="ecole">{{ tenant.nom }}</div>
+        <div class="meta">{% if tenant.ninea %}NINEA {{ tenant.ninea }} · {% endif %}Exercice {{ exercice.annee_scolaire }} ({{ exercice.date_debut|date:"d/m/Y" }} – {{ exercice.date_fin|date:"d/m/Y" }})</div>
+        <div class="meta">Montants en FCFA{% if precedent %} · N-1 : {{ precedent }}{% endif %}</div>
+      </td>
+      <td width="45%">
+        <div class="titre">{{ titre }}</div>
+        <div class="{% if statut == 'DEFINITIF' %}definitif{% else %}provisoire{% endif %}">{% if statut == 'DEFINITIF' %}DÉFINITIF{% else %}PROVISOIRE{% endif %}</div>
+      </td>
+    </tr>
+  </table>
+
+  {% if gabarit == 'fiche' %}
+    <table class="fiche">
+      {% for lib, val in champs %}<tr><td class="lib">{{ lib }}</td><td>{{ val }}</td></tr>{% endfor %}
+    </table>
+  {% elif gabarit == 'controles' %}
+    <table class="t">
+      <tr><th width="58%">Contrôle</th><th width="14%">Résultat</th><th width="28%">Détail</th></tr>
+      {% for c in controles %}
+      <tr><td>{{ c.libelle }}</td>
+          <td class="{% if c.ok %}ok{% elif c.ok is None %}na{% else %}ko{% endif %}">{% if c.ok %}Conforme{% elif c.ok is None %}À noter{% else %}ÉCART{% endif %}</td>
+          <td>{{ c.detail }}</td></tr>
+      {% endfor %}
+    </table>
+    <div class="para">Ces contrôles sont recalculés à chaque génération. Un écart doit être corrigé (écritures diverses, régularisation de l'exercice) avant le dépôt du dossier.</div>
+  {% endif %}
+
+  {% for t in tables %}
+    {% if t.titre %}<h3>{{ t.titre }}</h3>{% endif %}
+    <table class="t" repeat="1">
+      <tr>{% for c, w in t.entetes %}<th width="{{ w }}%"{% if forloop.counter > 2 %} class="n"{% endif %}>{% if c %}{{ c }}{% else %}&nbsp;{% endif %}</th>{% endfor %}</tr>
+      {% for l in t.lignes %}
+      <tr>{% for c in l.cellules %}<td class="{% if c.n %}n{% endif %}{% if l.total %} tot{% endif %}">{{ c.v }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </table>
+  {% endfor %}
+  {% for p in paragraphes %}<div class="para">{{ p }}</div>{% endfor %}
+{% endif %}
+</body>
+</html>

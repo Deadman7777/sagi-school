@@ -100,9 +100,18 @@ def annee_suivante(annee_scolaire):
     return f"Exercice {timezone.now().year + 1}"
 
 
-def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
+def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True, a_nouveaux=False):
     """
     Clôture l'exercice et optionnellement crée le suivant.
+
+    Si l'exercice suivant existe déjà (clôture d'un exercice ANTÉRIEUR
+    régularisé après coup, alors que l'année courante tourne), il est repris
+    tel quel : on n'en crée pas un second.
+
+    `a_nouveaux` : reporte tout le bilan de clôture sur l'exercice suivant
+    (apps/comptabilite/exercices.py) — trésorerie, créances, dettes,
+    immobilisations, capitaux. Sans lui, seule la trésorerie (à la création)
+    et les impayés sont reconduits, comme avant.
 
     `reporter_impayes` reconduit les restes dus sur le nouvel exercice
     (réinscription des élèves concernés + à-nouveaux 411/890). Sans effet si
@@ -118,8 +127,12 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
     exercice.save()
 
     nouvel_exercice = None
+    from apps.comptabilite.exercices import exercice_suivant
+    existant = exercice_suivant(exercice)
+    if existant is not None:
+        nouvel_exercice = existant
 
-    if creer_suivant:
+    if creer_suivant and nouvel_exercice is None:
         nouvelle_annee = annee_suivante(exercice.annee_scolaire)
 
         # Trésorerie reportée sur le nouvel exercice : le solde RÉEL de chaque
@@ -151,9 +164,17 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True):
         from .report_reliquats import reporter_reliquats
         report = reporter_reliquats(exercice, nouvel_exercice)
 
+    # Après le report des impayés : les à-nouveaux en tiennent compte (pas de
+    # créance reportée deux fois).
+    an = None
+    if nouvel_exercice and (a_nouveaux or nouvel_exercice.an_genere_le):
+        from apps.comptabilite.exercices import generer_a_nouveaux
+        an = generer_a_nouveaux(exercice, nouvel_exercice)
+
     return {
         'exercice_cloture': exercice.annee_scolaire,
         'nouvel_exercice':  nouvel_exercice.annee_scolaire if nouvel_exercice else None,
         'date_cloture':     str(exercice.date_cloture),
         'report_reliquats': report,
+        'a_nouveaux':       an,
     }

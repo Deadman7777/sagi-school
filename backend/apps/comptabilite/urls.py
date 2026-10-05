@@ -9,6 +9,8 @@ from .views import (SuggestionCompteView, JournalView, GrandLivreView, BalanceVi
                     CaisseEncaissementViewSet)
 from .pdf_views import ExportPDFView
 from .views_activites import ActiviteViewSet, FactureActiviteViewSet, ResultatsActivitesView
+from .views_exercices import (ANouveauxView, EcrituresDiversesView, EtafiArchiveView, EtafiArchiverView,
+                              EtafiDocumentView, EtafiView, ImportBalanceView, SituationExercicesView)
 
 router = DefaultRouter()
 router.register('caisses', CaisseEncaissementViewSet, basename='caisse')
@@ -18,6 +20,15 @@ router.register('factures-activite', FactureActiviteViewSet, basename='facture-a
 urlpatterns = [
     path('', include(router.urls)),
     path('activites-resultats/', ResultatsActivitesView.as_view()),
+    path('exercices-situation/', SituationExercicesView.as_view()),
+    path('a-nouveaux/',          ANouveauxView.as_view()),
+    path('ecritures-diverses/',  EcrituresDiversesView.as_view()),
+    path('ecritures-diverses/<str:no_piece>/extourner/', EcrituresDiversesView.as_view()),
+    path('import-balance/',      ImportBalanceView.as_view()),
+    path('etafi/',               EtafiView.as_view()),
+    path('etafi/document/<str:code>/', EtafiDocumentView.as_view()),
+    path('etafi/archiver/',      EtafiArchiverView.as_view()),
+    path('etafi/archives/<str:pk>/', EtafiArchiveView.as_view()),
     path('journal/',            JournalView.as_view()),
     path('grand-livre/',        GrandLivreView.as_view()),
     path('balance/',            BalanceView.as_view()),

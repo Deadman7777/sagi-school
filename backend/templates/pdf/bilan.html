@@ -180,9 +180,21 @@
     <!-- F — Capitaux Propres -->
     <tr><td colspan="2" class="bil-cat-p">F — Capitaux Propres</td></tr>
     <tr style="background:#f9f9f9">
-      <td class="bil-sub">Capital — trésorerie initiale</td>
+      <td class="bil-sub">Capitaux d'ouverture (trésorerie initiale et à-nouveaux)</td>
       <td class="tr mn" style="color:#6b21a8">{{ passif.capitaux_propres.capital|floatformat:0 }}</td>
     </tr>
+    {% for a in passif.capitaux_propres.autres %}
+    <tr>
+      <td class="bil-sub">{{ a.compte }} — {{ a.libelle }}</td>
+      <td class="tr mn">{{ a.montant|floatformat:0 }}</td>
+    </tr>
+    {% endfor %}
+    {% if passif.capitaux_propres.provisions_reglementees %}
+    <tr>
+      <td class="bil-sub">Provisions réglementées (15x)</td>
+      <td class="tr mn">{{ passif.capitaux_propres.provisions_reglementees|floatformat:0 }}</td>
+    </tr>
+    {% endif %}
     <tr>
       <td class="bil-sub">Résultat net {% if passif.capitaux_propres.resultat_net >= 0 %}(bénéfice){% else %}(perte){% endif %}</td>
       <td class="tr mn" style="{% if passif.capitaux_propres.resultat_net >= 0 %}color:#047857{% else %}color:#b91c1c{% endif %}">

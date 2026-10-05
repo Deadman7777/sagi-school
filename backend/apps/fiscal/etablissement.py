@@ -18,11 +18,8 @@ from rest_framework.permissions import IsAuthenticated
 
 from core.tenant import get_tenant
 
-# ── Paramètres fiscaux Sénégal (CGI) — niveau établissement ──────────────────
-TAUX_IS  = 0.30       # Impôt sur les sociétés — art. 36 CGI
-TAUX_IMF = 0.005      # Impôt minimum forfaitaire : 0,5 % des produits
-IMF_MIN  = 500_000    # plancher IMF (FCFA)
-IMF_MAX  = 5_000_000  # plafond IMF (FCFA)
+# Les taux, seuils et obligations ne sont plus écrits ici : ils sont datés et
+# paramétrables (apps/fiscal/models.py, referentiel.py, moteur.py).
 
 DISCLAIMER = ("Montants estimés automatiquement depuis les données du système "
               "(CGI du Sénégal). À confirmer avec votre expert-comptable ou la "
@@ -35,17 +32,11 @@ MOIS_FR = {
 
 # Comptes SYSCOHADA de comptabilisation par obligation :
 # constatation = débit compte de charge (ou 891) / crédit compte État (44x)
-COMPTES_OBLIGATIONS = {
-    'IS':   {'debit': '891',  'credit': '441',  'libelle': 'Impôt sur les bénéfices'},
-    'IMF':  {'debit': '891',  'credit': '441',  'libelle': 'Impôt minimum forfaitaire'},
-    'CFCE': {'debit': '6413', 'credit': '4421', 'libelle': 'CFCE'},
-    'CEL':  {'debit': '6414', 'credit': '442',  'libelle': 'Contribution Économique Locale (ex-patente)'},
-}
-
-
-def _exercice_courant(tenant):
-    from apps.paiements.models import Exercice
-    return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+def _exercice_courant(tenant, request=None):
+    """L'exercice consulté : `?exercice=` (un exercice antérieur à régulariser,
+    ou clôturé en lecture), sinon l'exercice courant."""
+    from apps.comptabilite.views import get_exercice
+    return get_exercice(tenant, request)
 
 
 def _bulletins_exercice(tenant, exercice):
@@ -73,9 +64,10 @@ def donnees_financieres(tenant, exercice):
         cfce  = float(sum(b.cfce for b in buls))
         source_paie = 'BULLETINS'
     else:
+        from .parametres import valeur_parametre
         masse = float(j.filter(no_compte='661', source='PAIE')
                        .aggregate(t=Sum('debit'))['t'] or 0)
-        cfce  = round(masse * 0.03, 2)
+        cfce  = round(masse * float(valeur_parametre('CFCE_TAUX', tenant, exercice.date_fin, 3)) / 100, 2)
         source_paie = 'ESTIMATION'
 
     treso_mvt = j.filter(no_compte__in=('571', '5521', '5522', '5523', '521')) \
@@ -110,98 +102,12 @@ def _deja_comptabilise(tenant, exercice, code):
 
 
 def calculer_obligations(tenant, exercice):
-    """Liste des obligations fiscales de l'établissement, montants estimés."""
+    """Liste des obligations fiscales de l'établissement, montants estimés —
+    selon son profil fiscal et les paramètres en vigueur (moteur.py)."""
+    from .moteur import calculer
     d = donnees_financieres(tenant, exercice)
-    produits, resultat = d['produits'], d['resultat']
-
-    is_calc = round(max(0.0, resultat) * TAUX_IS, 0)
-    imf     = round(min(max(produits * TAUX_IMF, IMF_MIN), IMF_MAX), 0) if produits > 0 else IMF_MIN
-    # L'IS dû ne peut être inférieur à l'IMF (art. 38 CGI)
-    is_du   = max(is_calc, imf)
-
-    obligations = [
-        {
-            'code': 'IS',
-            'libelle': 'Impôt sur les sociétés (IS) / IMF',
-            'description': (f"IS 30 % du résultat estimé ({resultat:,.0f} FCFA) = {is_calc:,.0f} FCFA ; "
-                            f"minimum forfaitaire (0,5 % des produits, plancher 500 000, plafond 5 000 000) "
-                            f"= {imf:,.0f} FCFA. Le montant dû est le plus élevé des deux."),
-            'base': resultat if is_calc >= imf else produits,
-            'taux': '30 % (ou IMF 0,5 %)',
-            'montant': is_du,
-            'periodicite': 'Annuelle',
-            'echeance': 'Acomptes 15 février et 30 avril · solde avec la déclaration (30 avril N+1)',
-            'statut': 'ESTIMATION',
-            'comptabilisable': True,
-            'deja_comptabilise': _deja_comptabilise(tenant, exercice, 'IS'),
-            'comptes': COMPTES_OBLIGATIONS['IS'],
-        },
-        {
-            'code': 'CFCE',
-            'libelle': "CFCE — Contribution forfaitaire à la charge de l'employeur",
-            'description': ("3 % de la masse salariale brute (art. 188 CGI). "
-                            + ("Comptabilisée automatiquement à la validation des bulletins (module RH)."
-                               if d['source_paie'] == 'BULLETINS'
-                               else "Estimation depuis le journal — validez les bulletins de paie (module RH) pour des montants réels.")),
-            'base': d['masse_salariale'],
-            'taux': '3 %',
-            'montant': d['cfce'],
-            'periodicite': 'Mensuelle (avec la BRS)',
-            'echeance': 'Le 15 du mois suivant, avec la BRS',
-            'statut': 'BULLETINS' if d['source_paie'] == 'BULLETINS' else 'ESTIMATION',
-            'comptabilisable': d['source_paie'] != 'BULLETINS',
-            'deja_comptabilise': _deja_comptabilise(tenant, exercice, 'CFCE'),
-            'comptes': COMPTES_OBLIGATIONS['CFCE'],
-        },
-        {
-            'code': 'TVA',
-            'libelle': 'TVA',
-            'description': ("Les prestations d'enseignement scolaire et universitaire sont EXONÉRÉES de TVA "
-                            "(annexe du CGI). Ne facturez pas de TVA sur les frais de scolarité. "
-                            "Les activités annexes (cantine, transport…) peuvent être taxables : vérifiez avec votre conseil."),
-            'base': None,
-            'taux': 'Exonéré (18 % sur activités taxables)',
-            'montant': 0,
-            'periodicite': '—',
-            'echeance': '—',
-            'statut': 'EXONERE',
-            'comptabilisable': False,
-            'deja_comptabilise': 0,
-            'comptes': None,
-        },
-        {
-            'code': 'CEL',
-            'libelle': 'CEL — Contribution Économique Locale (ex-patente)',
-            'description': ("Due à la collectivité locale : CEL-VL assise sur la valeur locative des locaux "
-                            "et CEL-VA sur la valeur ajoutée. Les bases ne sont pas gérées par le système : "
-                            "saisissez le montant de votre avis d'imposition pour le comptabiliser."),
-            'base': None,
-            'taux': 'Selon avis d’imposition',
-            'montant': None,
-            'periodicite': 'Annuelle',
-            'echeance': 'Selon avis de la collectivité (généralement avant le 30 avril)',
-            'statut': 'A_SAISIR',
-            'comptabilisable': True,
-            'deja_comptabilise': _deja_comptabilise(tenant, exercice, 'CEL'),
-            'comptes': COMPTES_OBLIGATIONS['CEL'],
-        },
-        {
-            'code': 'RETENUES',
-            'libelle': 'Retenues sur salaires (IR, TRIMF) et cotisations (IPRES, CSS)',
-            'description': ("Calculées et comptabilisées automatiquement par le module RH à la validation "
-                            "des bulletins ; à reverser chaque mois avec la BRS (voir l'onglet Déclarations)."),
-            'base': d['masse_salariale'],
-            'taux': 'Barème IR / taux IPRES-CSS',
-            'montant': None,
-            'periodicite': 'Mensuelle',
-            'echeance': 'Le 15 du mois suivant (BRS)',
-            'statut': 'GERE_PAR_RH',
-            'comptabilisable': False,
-            'deja_comptabilise': 0,
-            'comptes': None,
-        },
-    ]
-    return obligations, d
+    return calculer(tenant, exercice, d,
+                    lambda code: _deja_comptabilise(tenant, exercice, code)), d
 
 
 class ObligationsEtablissementView(APIView):
@@ -210,7 +116,7 @@ class ObligationsEtablissementView(APIView):
 
     def get(self, request):
         tenant = get_tenant(request)
-        exercice = _exercice_courant(tenant) if tenant else None
+        exercice = _exercice_courant(tenant, request) if tenant else None
         identification = {
             'rccm':  getattr(tenant, 'rccm', '') or '',
             'ninea': getattr(tenant, 'ninea', '') or '',
@@ -228,9 +134,17 @@ class ObligationsEtablissementView(APIView):
                                          "automatique des obligations fiscales.")})
 
         obligations, donnees = calculer_obligations(tenant, exercice)
+        from .moteur import profil_de
+        profil = profil_de(tenant)
         return Response({
             'identification': identification,
             'exercice':       exercice.annee_scolaire,
+            'exercice_id':    str(exercice.id),
+            'profil': {'forme_juridique': profil.get_forme_juridique_display(),
+                       'statut': profil.get_statut_display(),
+                       'regime': profil.get_regime_display(),
+                       'but_lucratif': profil.but_lucratif,
+                       'assujetti_tva': profil.assujetti_tva},
             'obligations':    obligations,
             'donnees':        donnees,
             'disclaimer':     DISCLAIMER,
@@ -249,13 +163,19 @@ class ComptabiliserObligationView(APIView):
     def post(self, request):
         from apps.comptabilite.models import JournalEntry
 
+        from apps.comptabilite.views import get_exercice_ecriture
+        from .moteur import comptes_obligation
         tenant   = get_tenant(request)
-        exercice = _exercice_courant(tenant) if tenant else None
+        try:
+            # Exercice courant, ou exercice antérieur encore ouvert (exercice_id).
+            exercice = get_exercice_ecriture(tenant, request) if tenant else None
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         if not exercice:
             return Response({'error': 'Aucun exercice actif.'}, status=400)
 
         code    = str(request.data.get('code', '')).upper()
-        comptes = COMPTES_OBLIGATIONS.get(code)
+        comptes = comptes_obligation(code)
         if not comptes:
             return Response({'error': f"Obligation inconnue ou non comptabilisable : {code}"}, status=400)
 
@@ -310,7 +230,7 @@ class ConseilsView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = _exercice_courant(tenant) if tenant else None
+        exercice = _exercice_courant(tenant, request) if tenant else None
         if not exercice:
             return Response({'conseils': [], 'disclaimer': DISCLAIMER})
 
@@ -336,9 +256,13 @@ class ConseilsView(APIView):
                 f"Déposez la BRS du mois de {MOIS_FR[today.month]} avant le "
                 f"15 {MOIS_FR[prochain.month]} (retenues IR + IPRES/CSS + CFCE) pour éviter pénalités et intérêts de retard.")
 
+        is_ligne = None
         if d['resultat'] > 0 and rccm and ninea:
-            is_estime = round(max(d['resultat'] * TAUX_IS,
-                                  min(max(d['produits'] * TAUX_IMF, IMF_MIN), IMF_MAX)), 0)
+            from .moteur import calculer
+            is_ligne = next((o for o in calculer(tenant, exercice, d, lambda c: 0)
+                             if o['code'] == 'IS' and o['statut'] == 'ESTIMATION'), None)
+        if is_ligne:
+            is_estime = is_ligne['montant']
             deja = _deja_comptabilise(tenant, exercice, 'IS')
             if deja < is_estime:
                 add('FISCAL', 'ATTENTION', 'Provision IS recommandée',
@@ -346,9 +270,21 @@ class ConseilsView(APIView):
                     f"~{is_estime:,.0f} FCFA d'impôt sur les sociétés (acomptes 15 février et 30 avril). "
                     f"Déjà comptabilisé : {deja:,.0f} FCFA.")
 
-        add('FISCAL', 'INFO', 'TVA : enseignement exonéré',
-            "Ne facturez pas de TVA sur les frais de scolarité (exonération CGI). Les activités "
-            "annexes (cantine, transport) peuvent être taxables : vérifiez avec votre conseil.")
+        from .moteur import profil_de
+        if not profil_de(tenant).assujetti_tva:
+            from apps.comptabilite.models import Activite
+            taxables = list(Activite.objects.filter(tenant=tenant, actif=True, regime_tva='TAXABLE')
+                            .values_list('libelle', flat=True))
+            if taxables:
+                add('FISCAL', 'ATTENTION', 'Activité taxable, établissement non assujetti',
+                    f"L'activité « {', '.join(taxables)} » est paramétrée soumise à TVA alors que le "
+                    "profil fiscal déclare l'établissement non assujetti : mettez le profil à jour "
+                    "(Fiscal → Profil) ou corrigez le régime de l'activité.")
+            else:
+                add('FISCAL', 'INFO', 'TVA : enseignement exonéré',
+                    "Ne facturez pas de TVA sur les frais de scolarité (exonération CGI). Les activités "
+                    "annexes (transport de tiers, location…) peuvent être taxables : paramétrez-les "
+                    "dans Comptabilité → Activités.")
 
         if d['source_paie'] == 'ESTIMATION' and d['masse_salariale'] > 0:
             add('FISCAL', 'INFO', 'Fiabilisez vos déclarations sociales',

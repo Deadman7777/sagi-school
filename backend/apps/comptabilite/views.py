@@ -19,6 +19,10 @@ PLAN_COMPTABLE = {
     # ── Classe 1 — Ressources durables ──
     '10':    'Capitaux propres',
     '101':   'Capital personnel',
+    '121':   'Report à nouveau (créditeur)',
+    '129':   'Report à nouveau (débiteur)',
+    '4111':  'Clients — activités et prestations externes',
+    '4432':  'TVA facturée sur prestations de services',
     '111':   'Réserve légale',
     '118':   'Autres réserves',
     '12':    'Report à nouveau',
@@ -826,254 +830,33 @@ def _sum_sf_side(sfs, side, prefixes, plan):
 
 # ── Bilan SYSCOHADA Révisé (Articles 7-11 et 23 AUDCIF) ─────────────────────
 class BilanView(APIView):
+    """Bilan de l'exercice — calcul unique dans apps/comptabilite/etats.py,
+    partagé avec l'export PDF et la liasse ETAFI."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from .etats import donnees_bilan
         tenant    = get_tenant(request)
         exercice  = get_exercice(tenant, request)
         if not exercice:
             return Response({})
-
-        plan      = get_plan_dict(tenant)
-        entries   = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
-        paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
-        caht      = _sum_paiements(paiements)
-        systeme   = _detecter_systeme(caht)
-
-        sfs = _compute_account_sfs(entries, exercice, tenant)
-
-        # ── A — Actif Immobilisé ─────────────────────────────────────────
-        incorporel_t, incorporel_d = _sum_sf_side(sfs, 'sf_d', ['20', '21'], plan)
-        corporel_t,   corporel_d   = _sum_sf_side(sfs, 'sf_d', ['22', '23', '24', '25'], plan)
-        financier_t,  financier_d  = _sum_sf_side(sfs, 'sf_d', ['26', '27'], plan)
-        amort_t, _                 = _sum_sf_side(sfs, 'sf_c', ['28'], plan)
-        total_corporel_net = round(max(corporel_t - amort_t, 0), 2)
-        total_immobilise   = round(incorporel_t + total_corporel_net + financier_t, 2)
-
-        # ── B — Actif Circulant AO (stocks + créances tiers 40-47 SF_D) ─
-        stocks_t,   stocks_d   = _sum_sf_side(sfs, 'sf_d', ['31','32','33','34','35','36','37','38'], plan)
-        creances_t, creances_d = _sum_sf_side(sfs, 'sf_d', ['40','41','42','43','44','45','46','47'], plan)
-        prov_b_t,   _          = _sum_sf_side(sfs, 'sf_c', ['49'], plan)
-        total_circulant_ao = round(stocks_t + creances_t - prov_b_t, 2)
-
-        # ── C — Actif Circulant HAO (48x SF_D) ───────────────────────────
-        hao_actif_t, hao_actif_d = _sum_sf_side(sfs, 'sf_d', ['48'], plan)
-
-        # ── D — Trésorerie-Actif ─────────────────────────────────────────
-        treso_actif_t, treso_actif_d = _sum_sf_side(sfs, 'sf_d', ['51','52','53','54','55','57','58'], plan)
-
-        total_actif = round(total_immobilise + total_circulant_ao + hao_actif_t + treso_actif_t, 2)
-
-        # ── F — Capitaux Propres ─────────────────────────────────────────
-        capital = float(exercice.solde_initial_banque + exercice.solde_initial_caisse +
-                        exercice.solde_initial_mobile)
-        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
-        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
-        # HAO (classe 8) : produits (crédit) − charges (débit). Nécessaire pour que
-        # les provisions réglementées (dotation 85x / reprise 86x) impactent le
-        # résultat et laissent le bilan équilibré face à la provision 15x.
-        _8agg = entries.filter(no_compte__startswith='8').aggregate(d=Sum('debit'), c=Sum('credit'))
-        resultat_net = round(
-            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) -
-            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)) +
-            (float(_8agg['c'] or 0) - float(_8agg['d'] or 0)), 2)
-        # Provisions réglementées (15x SF_C) — ressources durables / capitaux propres.
-        prov_regl_t, prov_regl_d = _sum_sf_side(sfs, 'sf_c', ['15'], plan)
-        # Autres capitaux propres portés par le journal : capital appelé (10x),
-        # réserves (11x), report à nouveau (12x) et SUBVENTIONS
-        # D'INVESTISSEMENT (14x). Ils n'étaient ramassés nulle part : une école
-        # ayant reçu une subvention d'investissement voyait son bilan
-        # « déséquilibré » du montant exact de cette subvention, alors que le
-        # grand livre, lui, était juste au franc près.
-        # Le 13x est volontairement exclu : le résultat est déjà calculé
-        # ci-dessus à partir des classes 6, 7 et 8 — l'ajouter le compterait
-        # deux fois.
-        autres_cp_t, autres_cp_d = _sum_sf_side(sfs, 'sf_c', ['10', '11', '12', '14'], plan)
-        total_capitaux = round(capital + resultat_net + prov_regl_t + autres_cp_t, 2)
-
-        # ── G — Dettes Financières (16x-19x SF_C) ───────────────────────
-        dettes_fin_t, dettes_fin_d = _sum_sf_side(sfs, 'sf_c', ['16', '17', '18', '19'], plan)
-
-        # ── H — Passif Circulant AO (40x-47x SF_C) ──────────────────────
-        dettes_ao_t, dettes_ao_d = _sum_sf_side(sfs, 'sf_c', ['40','41','42','43','44','45','46','47'], plan)
-
-        # ── I — Passif Circulant HAO (48x SF_C) ─────────────────────────
-        hao_passif_t, hao_passif_d = _sum_sf_side(sfs, 'sf_c', ['48'], plan)
-
-        # ── J — Trésorerie-Passif (découverts 5x SF_C) ──────────────────
-        treso_passif_t, treso_passif_d = _sum_sf_side(sfs, 'sf_c', ['51','52','53','54','55','57','58'], plan)
-
-        total_passif = round(total_capitaux + dettes_fin_t + dettes_ao_t + hao_passif_t + treso_passif_t, 2)
-
-        def _sub(detail, prefixes):
-            return round(sum(x['montant'] for x in detail if any(x['compte'].startswith(p) for p in prefixes)), 2)
-
-        return Response({
-            'exercice':   exercice.annee_scolaire,
-            'date_bilan': str(exercice.date_fin),
-            'systeme':    systeme,
-            'caht':       round(caht, 2),
-            'seuil_smt':  SEUIL_SMT_SERVICES,
-            'actif': {
-                'immobilise': {
-                    'incorporel': incorporel_d,
-                    'corporel':   corporel_d,
-                    'financier':  financier_d,
-                    'amort':      round(amort_t, 2),
-                    'total':      total_immobilise,
-                },
-                'circulant_ao': {
-                    'stocks':   stocks_d,
-                    'creances': creances_d,
-                    'total':    total_circulant_ao,
-                },
-                'circulant_hao': {
-                    'detail': hao_actif_d,
-                    'total':  hao_actif_t,
-                },
-                'tresorerie_actif': {
-                    'detail': treso_actif_d,
-                    'total':  treso_actif_t,
-                },
-                'total_actif': total_actif,
-            },
-            'passif': {
-                'capitaux_propres': {
-                    'capital':      round(capital, 2),
-                    'resultat_net': resultat_net,
-                    'subventions_investissement': _sub(autres_cp_d, ['14']),
-                    'autres':       autres_cp_d,
-                    'provisions_reglementees': prov_regl_t,
-                    'total':        total_capitaux,
-                },
-                'dettes_financieres': {
-                    'detail': dettes_fin_d,
-                    'total':  dettes_fin_t,
-                },
-                'passif_circulant_ao': {
-                    'detail':           dettes_ao_d,
-                    'fournisseurs':     _sub(dettes_ao_d, ['40', '401', '404']),
-                    'dettes_fiscales':  _sub(dettes_ao_d, ['44']),
-                    'dettes_personnel': _sub(dettes_ao_d, ['42']),
-                    'dettes_sociales':  _sub(dettes_ao_d, ['43']),
-                    'total':            dettes_ao_t,
-                },
-                'passif_circulant_hao': {
-                    'detail': hao_passif_d,
-                    'total':  hao_passif_t,
-                },
-                'tresorerie_passif': {
-                    'detail': treso_passif_d,
-                    'total':  treso_passif_t,
-                },
-                'total_passif': total_passif,
-            },
-            'equilibre': abs(total_actif - total_passif) < 1,
-        })
+        return Response(donnees_bilan(tenant, exercice))
 
 
 # ── Tableau des Flux de Trésorerie — Méthode Indirecte (AUDCIF Art. 32) ──────
 class TableauFluxView(APIView):
+    """Tableau des flux de trésorerie (méthode indirecte) — calcul unique dans
+    apps/comptabilite/etats.py : la variation de trésorerie y est exacte, ou
+    l'écart est montré."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from django.db.models import Count
-
+        from .etats import donnees_tft
         tenant   = get_tenant(request)
         exercice = get_exercice(tenant, request)
         if not exercice:
             return Response({})
-
-        paiements = Paiement.objects.filter(tenant=tenant, exercice=exercice)
-        entries   = JournalEntry.objects.filter(tenant=tenant, exercice=exercice)
-        plan      = get_plan_dict(tenant)
-        systeme   = _detecter_systeme(_sum_paiements(paiements))
-
-        sfs = _compute_account_sfs(entries, exercice, tenant)
-
-        # ── A — Flux opérationnels (méthode indirecte) ───────────────────
-        _7agg = entries.filter(no_compte__startswith='7').aggregate(d=Sum('debit'), c=Sum('credit'))
-        _6agg = entries.filter(no_compte__startswith='6').aggregate(d=Sum('debit'), c=Sum('credit'))
-        resultat_net = round(
-            float(_7agg['c'] or 0) - float(_7agg['d'] or 0) -
-            (float(_6agg['d'] or 0) - float(_6agg['c'] or 0)), 2)
-
-        amort = round(float(entries.filter(
-            Q(no_compte__startswith='681') | Q(no_compte__startswith='691')
-        ).aggregate(t=Sum('debit'))['t'] or 0), 2)
-
-        actif_b_t, _ = _sum_sf_side(sfs, 'sf_d',
-            ['31','32','33','34','35','36','37','38','40','41','42','43','44','45','46','47'], plan)
-        passif_h_t, _ = _sum_sf_side(sfs, 'sf_c',
-            ['40','41','42','43','44','45','46','47'], plan)
-        var_actif_b  = round(-actif_b_t, 2)
-        var_passif_h = round(passif_h_t, 2)
-        flux_a = round(resultat_net + amort + var_actif_b + var_passif_h, 2)
-
-        # ── B — Flux d'investissement ────────────────────────────────────
-        TRESO_COMPTES = list(MOBILE_ACCOUNTS) + ['521', '522', '571']
-        agg_inv_out = entries.filter(
-            source='INVEST', no_compte__in=TRESO_COMPTES, credit__gt=0,
-        ).aggregate(t=Sum('credit'))
-        acquisitions = round(float(agg_inv_out['t'] or 0), 2)
-
-        agg_inv_in = entries.filter(
-            source__in=('INVEST', 'CESSION'), no_compte__in=TRESO_COMPTES, debit__gt=0,
-        ).aggregate(t=Sum('debit'))
-        cessions = round(float(agg_inv_in['t'] or 0), 2)
-
-        flux_b = round(cessions - acquisitions, 2)
-
-        # ── C — Flux de financement ──────────────────────────────────────
-        agg_empr = entries.filter(
-            Q(no_compte__startswith='16') | Q(no_compte__startswith='17') |
-            Q(no_compte__startswith='18') | Q(no_compte__startswith='19')
-        ).aggregate(d=Sum('debit'), c=Sum('credit'))
-        nouveaux_emprunts = round(float(agg_empr['c'] or 0), 2)
-        remboursements    = round(float(agg_empr['d'] or 0), 2)
-        flux_c = round(nouveaux_emprunts - remboursements, 2)
-
-        # ── TRÉSORERIE ────────────────────────────────────────────────────
-        treso_actif_t,  _ = _sum_sf_side(sfs, 'sf_d', ['51','52','53','54','55','57','58'], plan)
-        treso_passif_t, _ = _sum_sf_side(sfs, 'sf_c', ['51','52','53','54','55','57','58'], plan)
-        tn_fin   = round(treso_actif_t - treso_passif_t, 2)
-        tn_debut = round(float(exercice.solde_initial_banque + exercice.solde_initial_caisse +
-                               exercice.solde_initial_mobile), 2)
-        variation = round(flux_a + flux_b + flux_c, 2)
-
-        # Ventilé sur les modes réels (un règlement multi-mode se répartit).
-        from .tresorerie import liste_par_mode
-        # Encaissements réels : ni annulés, ni reprises de migration (890).
-        par_mode = liste_par_mode(paiements.filter(statut='ACTIF').exclude(mode_paiement='REPRISE'))
-
-        return Response({
-            'exercice': exercice.annee_scolaire,
-            'methode':  'Indirecte',
-            'systeme':  systeme,
-            'flux_a': {
-                'resultat_net':  resultat_net,
-                'amort':         amort,
-                'var_actif_b':   var_actif_b,
-                'var_passif_h':  var_passif_h,
-                'flux_net':      flux_a,
-            },
-            'flux_b': {
-                'acquisitions': acquisitions,
-                'cessions':     cessions,
-                'flux_net':     flux_b,
-            },
-            'flux_c': {
-                'emprunts':       nouveaux_emprunts,
-                'remboursements': remboursements,
-                'flux_net':       flux_c,
-            },
-            'tresorerie': {
-                'tn_debut':  tn_debut,
-                'variation': variation,
-                'tn_fin':    tn_fin,
-            },
-            'par_mode': par_mode,
-        })
+        return Response(donnees_tft(tenant, exercice))
 
 
 # ── Notes Annexes ──────────────────────────────────────────────────────────────

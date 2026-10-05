@@ -15,11 +15,13 @@ import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ActivitesComponent } from './activites.component';
+import { ExercicesComponent } from './exercices.component';
+import { EtafiDossierComponent } from './etafi-dossier.component';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent, ActivitesComponent],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent, ActivitesComponent, ExercicesComponent, EtafiDossierComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -88,10 +90,24 @@ import { ActivitesComponent } from './activites.component';
               (click)="onglet.set('activites')">
         🏷️ Activités
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'exercices'"
+              (click)="onglet.set('exercices')">
+        📅 Exercices
+      </button>
+      <button class="tab-btn" [class.active]="onglet() === 'dossier-etafi'"
+              (click)="onglet.set('dossier-etafi')">
+        🗂️ Dossier ETAFI
+      </button>
     </div>
 
     @if (onglet() === 'activites') {
       <app-activites [exercice]="exerciceSel()" [lectureSeule]="estLectureSeule()" />
+    }
+    @if (onglet() === 'exercices') {
+      <app-exercices />
+    }
+    @if (onglet() === 'dossier-etafi') {
+      <app-etafi-dossier [exercice]="exerciceSel()" />
     }
 
     <!-- Sous-onglets ETAFI (États Financiers de Synthèse) -->

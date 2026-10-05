@@ -439,3 +439,34 @@ class ReglementFacture(TenantModel):
     class Meta:
         db_table = 'reglements_facture'
         ordering = ['date_reglement']
+
+
+class EtafiArchive(TenantModel):
+    """Un dossier ETAFI généré pour un exercice, archivé en base.
+
+    Le ZIP complet (PDF par état + liasse en un seul PDF + balance) est gardé
+    tel qu'il a été remis : un dossier déposé ne doit pas changer parce que
+    l'exercice a été régularisé depuis. Une sauvegarde pg_dump suffit à tout
+    conserver (rien sur le disque). L'empreinte SHA-256 permet de prouver qu'un
+    dossier est bien celui qui a été généré.
+    """
+    STATUT_CHOICES = [('PROVISOIRE', 'Provisoire'), ('DEFINITIF', 'Définitif')]
+    exercice      = models.ForeignKey('paiements.Exercice', on_delete=models.CASCADE,
+                                      related_name='etafi_archives')
+    version       = models.PositiveIntegerField(default=1)
+    statut        = models.CharField(max_length=10, choices=STATUT_CHOICES, default='PROVISOIRE')
+    systeme       = models.CharField(max_length=20, blank=True, default='')
+    genere_par    = models.ForeignKey('users.User', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='+')
+    contenu_zip   = models.BinaryField()
+    taille        = models.IntegerField(default=0)
+    empreinte     = models.CharField(max_length=64, blank=True, default='')
+    # Grandeurs clés au moment de la génération (contrôle de cohérence).
+    resume        = models.JSONField(default=dict, blank=True)
+    observations  = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'etafi_archives'
+        ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['tenant', 'exercice', 'version'],
+                                               name='uniq_etafi_version_exercice')]
