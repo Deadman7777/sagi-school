@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from core.serializers import TenantModelSerializer
 from django.utils import timezone
@@ -415,9 +417,12 @@ class EleveSerializer(TenantModelSerializer):
         À la création d'un abonnement, `premiere_adhesion` vaut vrai sauf si une
         fiche d'une année précédente du même enfant suivait déjà ce service.
         `premieres_adhesions` ({service_id: bool}) permet à l'école de corriger.
+        `tarifs_services` ({service_id: montant | null}) : tarif propre à
+        l'élève pour ce service (null ou vide : le tarif du service).
         """
         ids = self.initial_data.get('abonnements', None)
         corrections = self.initial_data.get('premieres_adhesions') or {}
+        tarifs = self.initial_data.get('tarifs_services') or {}
         existing = {str(ab.service_id): ab for ab in eleve.abonnements.all()}
         if ids is not None:
             wanted = {str(i) for i in ids}
@@ -438,6 +443,16 @@ class EleveSerializer(TenantModelSerializer):
             if ab is not None and ab.premiere_adhesion != bool(valeur):
                 ab.premiere_adhesion = bool(valeur)
                 ab.save(update_fields=['premiere_adhesion', 'updated_at'])
+        for sid, valeur in tarifs.items():
+            ab = existing.get(str(sid))
+            if ab is None:
+                continue
+            montant = None if valeur in (None, '') else Decimal(str(valeur))
+            if montant is not None and montant < 0:
+                raise serializers.ValidationError({'tarifs_services': 'Un tarif ne peut pas être négatif.'})
+            if ab.montant != montant:
+                ab.montant = montant
+                ab.save(update_fields=['montant', 'updated_at'])
 
     def _sync_formule(self, eleve, section_changee):
         """Formule choisie sur la fiche (`formule` : id).
@@ -490,6 +505,11 @@ class EleveSerializer(TenantModelSerializer):
     def get_abonnements_detail(self, obj):
         return [{'service': str(ab.service_id), 'nom': ab.service.nom,
                  'premiere_adhesion': ab.premiere_adhesion,
+                 # Tarif particulier (null : tarif du service) et montant retenu.
+                 'montant': float(ab.montant) if ab.montant is not None else None,
+                 'tarif_service': float(ab.service.montant or 0),
+                 'prix': ab.prix,
+                 'periodicite': ab.service.periodicite,
                  'a_des_frais_premiere_fois': any(el.get('premiere_fois')
                                                   for el in ab.service.composition_adhesion or [])}
                 for ab in obj.abonnements.all()]

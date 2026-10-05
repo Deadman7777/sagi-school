@@ -574,7 +574,7 @@ class Eleve(TenantModel):
         total = 0.0
         for ab in self.abonnements.all():
             s = ab.service
-            total += float(s.montant) * (nb_mois if s.periodicite == 'MENSUEL' else 1)
+            total += ab.prix * (nb_mois if s.periodicite == 'MENSUEL' else 1)
         total += sum(a['montant'] for a in self.adhesions_services())
         return round(total, 2)
 
@@ -637,13 +637,13 @@ class Eleve(TenantModel):
         renouvellement pour un ancien quand l'école en pratique un."""
         adhesions = sum(a['montant'] for a in self.adhesions_services())
         if not self.section:
-            return round(sum(float(ab.service.montant or 0)
+            return round(sum(ab.prix
                              for ab in self.abonnements.all()
                              if ab.service.periodicite != 'MENSUEL') + adhesions, 2)
         total = max(self.frais_entree - self.montant_pec_inscription, 0.0)
         total += float(self.section.frais_uniforme)
         total += float(self.section.frais_fournitures)
-        total += sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+        total += sum(ab.prix for ab in self.abonnements.all()
                      if ab.service.periodicite != 'MENSUEL')
         total += adhesions
         return round(total, 2)
@@ -651,7 +651,7 @@ class Eleve(TenantModel):
     @property
     def du_mensuel_standard(self):
         """Ce que coûte un mois ordinaire : mensualité nette + services mensuels."""
-        mensuel = sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+        mensuel = sum(ab.prix for ab in self.abonnements.all()
                       if ab.service.periodicite == 'MENSUEL')
         return round(self.frais_mensualite_effectif + mensuel, 2)
 
@@ -679,7 +679,7 @@ class Eleve(TenantModel):
         if self.a_la_journee:
             return self.du_mensuel_standard
         if self._formules_datees():
-            mensuel = sum(float(ab.service.montant or 0) for ab in self.abonnements.all()
+            mensuel = sum(ab.prix for ab in self.abonnements.all()
                           if ab.service.periodicite == 'MENSUEL')
             net = max(self.mensualite_brute_du_mois(mois) - self.pec_du_mois(mois), 0.0)
             return round(net + mensuel, 2)
@@ -1053,6 +1053,11 @@ class EleveService(TenantModel):
     # ses fiches des années précédentes, corrigeable par l'école. Figé, pour
     # qu'une fiche ancienne supprimée ne fasse pas réapparaître un kimono dû.
     premiere_adhesion = models.BooleanField(default=True)
+    # Tarif propre à CET élève (transport : même zone, prix différents selon
+    # la distance, l'accord avec la famille…). Vide : le tarif du service.
+    # Remplace le tarif, ce n'est pas une remise : il est dû tel quel, mois
+    # par mois pour un service mensuel. Lu partout via `prix`.
+    montant = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         db_table = 'eleve_services'
@@ -1060,6 +1065,13 @@ class EleveService(TenantModel):
 
     def __str__(self):
         return f"{self.eleve} → {self.service}"
+
+    @property
+    def prix(self):
+        """Ce que l'élève paie pour ce service (par mois s'il est mensuel) :
+        son tarif particulier s'il en a un, sinon le tarif du service. Toute
+        lecture du montant d'un abonnement passe par ici."""
+        return float(self.montant if self.montant is not None else (self.service.montant or 0))
 
 
 class RappelEnvoye(TenantModel):

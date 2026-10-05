@@ -95,8 +95,11 @@ export interface Eleve {
   /** Réponses aux champs que l'école a ajoutés : {champ_id: valeur}. */
   champs_perso?: Record<string, any>;
   abonnements: string[];
+  /** Tarif propre à l'élève par service (null : tarif du service). En écriture. */
+  tarifs_services?: Record<string, number | null>;
   /** Pour chaque service : première adhésion (équipement dû) ou non. */
-  abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean }[];
+  abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean;
+                         montant?: number | null; tarif_service?: number; prix?: number; periodicite?: string }[];
   /** Formule en vigueur ce mois-ci (crèche), et ses changements datés. */
   formule?: string | null;
   formules_historique?: { formule: string; nom: string; mois_debut: number; mois_libelle: string; mensualite: number }[];

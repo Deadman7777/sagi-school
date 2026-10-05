@@ -1588,6 +1588,21 @@ import { EtatImpayesComponent } from './etat-impayes.component';
           <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="nouvelEleve.abonnements"
                          optionLabel="nom" optionValue="id" display="chip"
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
+          @for (sid of nouvelEleve.abonnements || []; track sid) {
+            @if (serviceDe(sid); as svc) {
+              <label class="tarif-eleve">
+                <span>{{ svc.nom }}</span>
+                <input type="number" min="0" step="500" [(ngModel)]="nouvelEleve.tarifs_services![sid]"
+                       [placeholder]="'Tarif du service : ' + (+svc.montant | number:'1.0-0')"
+                       [attr.aria-label]="'Tarif de ' + svc.nom + ' pour cet élève'" />
+                <small>{{ svc.periodicite === 'MENSUEL' ? 'FCFA / mois' : 'FCFA, une fois' }}</small>
+              </label>
+            }
+          }
+          @if ((nouvelEleve.abonnements || []).length) {
+            <small class="fc-hint">Laissez vide pour appliquer le tarif du service. Un montant saisi
+              remplace ce tarif pour cet élève seulement (ex. transport selon la distance).</small>
+          }
         </div>
         <!-- Ardoise des années d'avant : montant global, sans justification par
              poste — c'est ce que les écoles savent donner à la migration. -->
@@ -1746,6 +1761,21 @@ import { EtatImpayesComponent } from './etat-impayes.component';
           <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="formServices" display="chip"
                          optionLabel="nom" optionValue="id"
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
+          @for (sid of formServices; track sid) {
+            @if (serviceDe(sid); as svc) {
+              <label class="tarif-eleve">
+                <span>{{ svc.nom }}</span>
+                <input type="number" min="0" step="500" [(ngModel)]="tarifsServices[sid]"
+                       [placeholder]="'Tarif du service : ' + (+svc.montant | number:'1.0-0')"
+                       [attr.aria-label]="'Tarif de ' + svc.nom + ' pour cet élève'" />
+                <small>{{ svc.periodicite === 'MENSUEL' ? 'FCFA / mois' : 'FCFA, une fois' }}</small>
+              </label>
+            }
+          }
+          @if ((formServices).length) {
+            <small class="fc-hint">Laissez vide pour appliquer le tarif du service. Un montant saisi
+              remplace ce tarif pour cet élève seulement (ex. transport selon la distance).</small>
+          }
         </div>
         <ng-template #aucunService>
           <div style="color:var(--text-3);font-size:13px">{{ 'eleves.services_aucun' | translate }}</div>
@@ -1898,6 +1928,11 @@ import { EtatImpayesComponent } from './etat-impayes.component';
     .photo-mini { width:48px; height:60px; object-fit:cover; border-radius:4px; border:1px solid var(--border); }
     .lien-retirer { background:none; border:none; color:#ef4444; cursor:pointer; font-size:12px; padding:0; }
     .stat-aide { display:block; font-size:10.5px; color:var(--text-3); line-height:1.35; margin:2px 0 4px; }
+    .tarif-eleve { display:grid; grid-template-columns:1.2fr 1fr auto; align-items:center; gap:8px;
+                   font-size:13px; color:var(--text-2); margin-top:8px; }
+    .tarif-eleve input { padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+                         background:var(--surface); color:var(--text); min-width:0; }
+    .tarif-eleve small { color:var(--text-3); }
     .case-adhesion { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2); margin-top:10px; }
     .histo-formule { font-size:13px; color:var(--text-2); padding:2px 0; }
     .aide-formule { font-size:11px; color:var(--text-3); }
@@ -2545,10 +2580,22 @@ export class ElevesListeComponent implements OnInit {
     this.formServices = [...(eleve.abonnements || [])];
     this.premieresAdhesions = Object.fromEntries(
       (eleve.abonnements_detail || []).map(ab => [ab.service, ab.premiere_adhesion]));
+    this.tarifsServices = this.tarifsDe(eleve);
     this.dialogServicesVisible = true;
   }
 
   premieresAdhesions: Record<string, boolean> = {};
+  /** Tarif propre à l'élève par service (vide : tarif du service). */
+  tarifsServices: Record<string, number | null> = {};
+
+  serviceDe(id: string) {
+    return this.services().find(s => s.id === id);
+  }
+
+  private tarifsDe(eleve: Eleve): Record<string, number | null> {
+    return Object.fromEntries((eleve.abonnements_detail || [])
+      .map(ab => [ab.service, ab.montant ?? null]));
+  }
 
   /** Abonnements existants dont un élément n'est dû qu'à la première adhésion. */
   adhesionsCorrigeables() {
@@ -2562,7 +2609,8 @@ export class ElevesListeComponent implements OnInit {
     if (!e) return;
     this.saving.set(true);
     this.elevesService.updateEleve(e.id, { abonnements: this.formServices,
-                                          premieres_adhesions: this.premieresAdhesions } as any).subscribe({
+                                          premieres_adhesions: this.premieresAdhesions,
+                                          tarifs_services: this.tarifsServices } as any).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: e.nom_complet });
         this.dialogServicesVisible = false;
@@ -3556,7 +3604,7 @@ export class ElevesListeComponent implements OnInit {
     this.moisInscription = '';
     this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE',
                          etat_sante: 'SAIN', date_inscription_jour_estime: false,
-                         reliquat_anterieur: 0, reliquat_note: '' };
+                         reliquat_anterieur: 0, reliquat_note: '', tarifs_services: {} };
     this.champsSaisis = {};
     this.chargerFamillesChoix();
     this.dialogVisible = true;
@@ -3657,6 +3705,7 @@ export class ElevesListeComponent implements OnInit {
       etat_sante:       eleve.etat_sante || 'SAIN',
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
+      tarifs_services:  this.tarifsDe(eleve),
       formule:          eleve.formule ?? null,
       profession_pere:  eleve['profession_pere'],
       residence_pere:   eleve['residence_pere'],

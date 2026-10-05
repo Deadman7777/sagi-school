@@ -182,8 +182,8 @@ def _lignes_entree(eleve, du_hors):
                 lignes.append(_ligne(nom, getattr(section, champ), nature='ENTREE'))
     for ab in eleve.abonnements.all():
         s = ab.service
-        if s.periodicite != 'MENSUEL' and float(s.montant or 0) > 0:
-            lignes.append(_ligne(s.nom, s.montant, detail='Paiement unique', nature='SERVICE'))
+        if s.periodicite != 'MENSUEL' and ab.prix > 0:
+            lignes.append(_ligne(s.nom, ab.prix, detail='Paiement unique', nature='SERVICE'))
     for a in eleve.adhesions_services():
         lignes.append(_ligne(f"{a['service']} — {a['libelle'] or 'adhésion'}", a['montant'],
                              detail="Frais d'adhésion au service", nature='SERVICE'))
@@ -195,7 +195,7 @@ def _lignes_entree(eleve, du_hors):
 def _lignes_mois(eleve, retenus):
     """Les mois retenus, décomposés en mensualité, réduction, services et
     suppléments. La somme vaut exactement la somme des dus de l'échéancier."""
-    services = [(ab.service.nom, float(ab.service.montant or 0))
+    services = [(ab.service.nom, ab.prix)
                 for ab in eleve.abonnements.all() if ab.service.periodicite == 'MENSUEL']
     total_services = sum(m for _, m in services)
     par_mois = []

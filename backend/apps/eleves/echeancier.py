@@ -171,10 +171,10 @@ def composition_du_mois(eleve, mois):
     du = float(eleve.du_du_mois(mois))
     services = []
     if eleve._mois_du_calendrier(mois):
-        services = [{'nom': ab.service.nom, 'montant': float(ab.service.montant or 0),
+        services = [{'nom': ab.service.nom, 'montant': ab.prix,
                      'premier_mois_a_inscription': bool(ab.service.premier_mois_a_inscription)}
                     for ab in eleve.abonnements.all()
-                    if ab.service.periodicite == 'MENSUEL' and float(ab.service.montant or 0) > 0]
+                    if ab.service.periodicite == 'MENSUEL' and ab.prix > 0]
     supplements = float(du_garde_soir_du_mois(eleve, mois))
     if eleve.a_la_journee:
         from .garderie import du_presences_du_mois
@@ -306,9 +306,9 @@ def _services(eleve):
     for ab in eleve.abonnements.all():
         s = ab.service
         if s.periodicite == 'MENSUEL':
-            mensuel += float(s.montant or 0)
+            mensuel += ab.prix
         else:
-            uniques.append((s.mois_unique, float(s.montant or 0)))
+            uniques.append((s.mois_unique, ab.prix))
     return mensuel, uniques
 
 

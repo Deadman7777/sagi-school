@@ -1671,7 +1671,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             {
                 'id':          str(ab.service_id),
                 'nom':         ab.service.nom,
-                'montant':     float(ab.service.montant),
+                # Tarif particulier de l'élève s'il en a un.
+                'montant':     ab.prix,
+                'tarif_service': float(ab.service.montant),
                 'periodicite': ab.service.periodicite,
                 # UNIQUE : None = dû à l'inscription, 1..12 = mois calendaire
                 'mois_unique': ab.service.mois_unique,

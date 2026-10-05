@@ -88,7 +88,7 @@ def _postes_hors_mensualite(eleve, hors, regle):
     for ab in eleve.abonnements.all():
         s = ab.service
         if s.periodicite != 'MENSUEL':
-            ajouter(f'UNIQUE:{s.id}', s.nom, 'service', float(s.montant or 0),
+            ajouter(f'UNIQUE:{s.id}', s.nom, 'service', ab.prix,
                     regle[f'unique:{s.nom}'], service={'nom': s.nom, 'nature': 'UNIQUE'})
     for a in eleve.adhesions_services():
         nom = f"{a['service']} — {a['libelle']}" if a['libelle'] else a['service']
