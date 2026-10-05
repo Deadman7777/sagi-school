@@ -43,7 +43,7 @@
        Largeurs : MATIÈRE + COEF 6 + évaluations + MOY 11 + PTS 7 + RG 5 + APPRÉC = 100.
        MATIÈRE, évaluations et APPRÉC. sont calculées par la vue (largeurs) :
        moins il y a d'évaluations, plus le nom de la matière a de place. -->
-  <table class="tbl-notes mb">
+  <table class="tbl-notes mb" repeat="1">
     <thead>
       <tr>
         <td class="left" width="{{ largeurs.matiere|default:24 }}%">MATIÈRE</td>
@@ -51,19 +51,32 @@
         {% if eval_columns %}{% for col in eval_columns %}<td width="{{ col.largeur|default:col.width }}%">{{ col.label }}</td>{% endfor %}{% else %}<td width="{{ largeurs.notes|default:28 }}%">NOTES</td>{% endif %}
         <td width="11%">MOY.</td>
         <td width="7%">PTS</td>
-        <td width="5%">RG</td>
+        {% if classer %}<td width="5%">RG</td>{% endif %}
         <td class="left" width="{{ largeurs.apprec|default:19 }}%">APPRÉC.</td>
       </tr>
     </thead>
     <tbody>
-      {% for m in matieres %}
-      <tr{% if forloop.counter|divisibleby:2 %} class="pair"{% endif %}>
-        <td class="left{% if m.arabe %} ar{% endif %}">{{ m.nom }}</td>
+      {% for m in lignes_tableau %}
+      {% if m.type == 'domaine' %}
+      <tr class="dom"><td class="left" colspan="{{ nb_colonnes }}">{{ m.nom|upper }}</td></tr>
+      {% elif m.type == 'sous_total' %}
+      <tr class="sous-total">
+        <td class="left">Moyenne du domaine</td>
+        <td>{{ m.coef }}</td>
+        {% if eval_columns %}{% for col in eval_columns %}<td>&nbsp;</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
+        <td class="moy-val">{{ m.moyenne }}/{{ note_max }}</td>
+        <td>{{ m.points }}</td>
+        {% if classer %}<td>&nbsp;</td>{% endif %}
+        <td>&nbsp;</td>
+      </tr>
+      {% else %}
+      <tr{% if m.pair %} class="pair"{% endif %}>
+        <td class="left{% if m.arabe %} ar{% endif %}">{{ m.nom }}{% if m.hors_moyenne %} *{% endif %}</td>
         <td>{{ m.coefficient }}</td>
-        {% if eval_columns %}{% for cell in m.notes_cells %}<td>{{ cell }}</td>{% endfor %}{% else %}<td></td>{% endif %}
+        {% if eval_columns %}{% for cell in m.notes_cells %}<td>{{ cell }}</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
         <td class="moy-val">{{ m.moyenne }}/{{ m.note_max }}</td>
         <td>{{ m.points }}</td>
-        <td class="rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>
+        {% if classer %}<td class="rang-txt">{% if m.rang %}{{ m.rang }}e{% else %}—{% endif %}</td>{% endif %}
         <td class="left col-app
           {% if m.appreciation == 'Excellent' %}ap-ex
           {% elif m.appreciation == 'Très Bien' %}ap-tb
@@ -71,8 +84,9 @@
           {% elif m.appreciation == 'Assez Bien' %}ap-ab
           {% elif m.appreciation == 'Passable' %}ap-pa
           {% elif m.appreciation %}ap-in
-          {% endif %}">{{ m.appreciation|default:"—" }}</td>
+          {% endif %}"{% if m.couleur %} style="color:{{ m.couleur }}"{% endif %}>{{ m.appreciation|default:"—" }}</td>
       </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
     <tfoot>
@@ -82,7 +96,7 @@
         {% if eval_columns %}{% for col in eval_columns %}<td>&nbsp;</td>{% endfor %}{% else %}<td>&nbsp;</td>{% endif %}
         <td class="moy-val">{{ stats.moy_generale }}/{{ note_max }}</td>
         <td>{{ total_points }}{% if total_bareme %} / {{ total_bareme }}{% endif %}</td>
-        <td>&nbsp;</td>
+        {% if classer %}<td>&nbsp;</td>{% endif %}
         <td class="left col-app
           {% if appreciation_generale == 'Excellent' %}ap-ex
           {% elif appreciation_generale == 'Très Bien' %}ap-tb
@@ -90,10 +104,11 @@
           {% elif appreciation_generale == 'Assez Bien' %}ap-ab
           {% elif appreciation_generale == 'Passable' %}ap-pa
           {% elif appreciation_generale %}ap-in
-          {% endif %}">{{ appreciation_generale }}</td>
+          {% endif %}"{% if mention.couleur %} style="color:{{ mention.couleur }}"{% endif %}>{{ appreciation_generale }}</td>
       </tr>
     </tfoot>
   </table>
+  {% if hors_moyenne_present %}<div class="note-bas">* Matière notée, hors moyenne générale.</div>{% endif %}
 
   <!-- ── RÉSULTATS + MENTION / DÉCISION, sur une seule ligne ──
        La page est en paysage : côte à côte, ils laissent la hauteur au
@@ -101,7 +116,9 @@
   <table class="tbl-stats mb">
     <tr>
       <td width="13%"><div class="stat-val">{{ stats.moy_generale }}</div><div class="stat-lbl">MOY. GÉN.</div></td>
-      <td width="10%"><div class="stat-val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div><div class="stat-lbl">RANG</div></td>
+      {% if classer %}<td width="10%"><div class="stat-val rang-txt">{{ eleve.rang }}e / {{ stats.nb_eleves }}</div><div class="stat-lbl">RANG</div></td>
+      {% elif mode_classement == 'MENTIONS' %}<td width="10%"><div class="stat-val"{% if mention.couleur %} style="color:{{ mention.couleur }}"{% endif %}>{% if mention.badge %}{{ mention.badge }}{% else %}{{ mention.libelle }}{% endif %}</div><div class="stat-lbl">{% if mention.badge %}{{ mention.libelle|upper }}{% else %}MENTION{% endif %}</div></td>
+      {% else %}<td width="10%"><div class="stat-val">{{ stats.nb_eleves }}</div><div class="stat-lbl">ÉLÈVES NOTÉS</div></td>{% endif %}
       <td width="13%"><div class="stat-val">{{ stats.moy_classe }}</div><div class="stat-lbl">MOY. CLASSE</div></td>
       <td width="12%"><div class="stat-val" style="color:#2e7d32">{{ stats.moy_max }}</div><div class="stat-lbl">PLUS HAUTE</div></td>
       <td width="12%"><div class="stat-val" style="color:#c62828">{{ stats.moy_min }}</div><div class="stat-lbl">PLUS BASSE</div></td>

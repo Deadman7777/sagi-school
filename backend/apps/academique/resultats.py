@@ -33,6 +33,7 @@ Deux façons de faire la moyenne générale, au choix de l'école
              formule de la moyenne générale, quel que soit le mode.
 """
 from collections import defaultdict
+from types import SimpleNamespace
 
 from .models import BulletinCache
 
@@ -55,7 +56,61 @@ def lignes_cache(tenant, annee, programme=None, **filtres):
     qs = BulletinCache.objects.filter(tenant=tenant, annee_scolaire=annee, **filtres)
     if programme:
         qs = qs.filter(matiere__programme=programme)
-    return qs.select_related('matiere')
+    return qs.select_related('matiere', 'matiere__domaine')
+
+
+# ── Classement et paliers d'appréciation ────────────────────────────────────
+# L'échelle historique, écrite en dur jusqu'en octobre 2026 à trois endroits
+# (moteur, bulletin, analyse). Elle reste la règle d'une école qui n'a saisi
+# aucun palier. Seuils sur 20, inclus.
+PALIERS_DEFAUT = (
+    {'libelle': 'Excellent',        'seuil': 18, 'couleur': '#1b5e20', 'badge': '', 'distinction': True},
+    {'libelle': 'Très Bien',        'seuil': 16, 'couleur': '#2e7d32', 'badge': '', 'distinction': True},
+    {'libelle': 'Bien',             'seuil': 14, 'couleur': '#1565c0', 'badge': '', 'distinction': False},
+    {'libelle': 'Assez Bien',       'seuil': 12, 'couleur': '#00838f', 'badge': '', 'distinction': False},
+    {'libelle': 'Passable',         'seuil': 10, 'couleur': '#ef6c00', 'badge': '', 'distinction': False},
+    {'libelle': 'Insuffisant',      'seuil': 8,  'couleur': '#c62828', 'badge': '', 'distinction': False},
+    {'libelle': 'Très Insuffisant', 'seuil': 0,  'couleur': '#b71c1c', 'badge': '', 'distinction': False},
+)
+
+
+def paliers_ecole(tenant):
+    """Les paliers de l'école, du plus haut au plus bas ; l'échelle historique
+    si elle n'en a saisi aucun. Une requête : à appeler une fois par écran ou
+    par bulletin, puis passer la liste à `apprecier`."""
+    from .models import PalierMention
+    paliers = [{'libelle': p.libelle, 'seuil': float(p.seuil), 'couleur': p.couleur,
+                'badge': p.badge, 'distinction': p.distinction}
+               for p in PalierMention.objects.filter(tenant=tenant).order_by('-seuil')]
+    return paliers or [dict(p) for p in PALIERS_DEFAUT]
+
+
+def apprecier(moyenne, note_max, paliers):
+    """Le palier atteint par une moyenne (dict libellé/couleur/badge/…), ou
+    None sans moyenne. La moyenne est d'abord ramenée sur 20 : 8/10 = 16/20.
+    Sous le plus bas des seuils, le plus bas des paliers."""
+    if moyenne is None or not paliers:
+        return None
+    sur20 = ramener(moyenne, note_max or 20, 20)
+    for p in paliers:
+        if sur20 + 1e-9 >= float(p['seuil']):
+            return p
+    return paliers[-1]
+
+
+def libelle_appreciation(moyenne, note_max, paliers):
+    p = apprecier(moyenne, note_max, paliers)
+    return p['libelle'] if p else ''
+
+
+def mode_classement(tenant):
+    return getattr(tenant, 'mode_classement', 'CLASSIQUE') or 'CLASSIQUE'
+
+
+def avec_rangs(tenant):
+    """Les rangs (général et par matière) ne sortent que si l'école classe.
+    Ils restent calculés : changer de mode ne demande aucun recalcul."""
+    return mode_classement(tenant) == 'CLASSIQUE'
 
 
 def ramener(valeur, depuis, vers):
@@ -163,6 +218,36 @@ def poids_ligne(ligne):
     return float(ligne.matiere.coefficient)
 
 
+def compte(ligne):
+    """La ligne entre-t-elle dans la moyenne générale ? Une matière marquée
+    « hors moyenne » s'imprime avec sa note, mais ne pèse pas."""
+    return getattr(ligne.matiere, 'compte_dans_moyenne', True) is not False
+
+
+def lignes_comptees(lignes):
+    return [l for l in lignes if compte(l)]
+
+
+def ligne_calcul(points, poids, matiere):
+    """Une ligne au format de BulletinCache, pour le moteur de calcul qui
+    n'a pas encore écrit ses lignes en base : la moyenne générale passe par la
+    MÊME fonction, qu'elle vienne du moteur ou du cache."""
+    return SimpleNamespace(points=points, poids=poids, matiere=matiere)
+
+
+def moyennes_domaines(lignes):
+    """[(domaine ou None, Σ points, Σ poids)] des lignes comptées, dans l'ordre
+    des domaines. Une matière sans domaine forme son propre groupe."""
+    groupes = {}
+    for l in lignes_comptees(lignes):
+        dom = getattr(l.matiere, 'domaine', None) if getattr(l.matiere, 'domaine_id', None) else None
+        cle = ('D', dom.id) if dom is not None else ('M', l.matiere.id)
+        g = groupes.setdefault(cle, [dom, 0.0, 0.0])
+        g[1] += float(l.points or 0)
+        g[2] += poids_ligne(l)
+    return list(groupes.values())
+
+
 def oublier_moyennes(tenant):
     """Efface les moyennes calculées de l'année en cours ; rend leur nombre.
 
@@ -210,17 +295,39 @@ def note_max_reference(classe, matieres):
     return baremes.pop() if len(baremes) == 1 else 20.0
 
 
-def moyenne_generale(lignes, arrondi='ARRONDI'):
+def moyenne_generale(lignes, arrondi='ARRONDI', domaines=False):
     """Σ points / Σ poids ; None si aucune matière notée.
 
     Les points sont déjà au barème du niveau (voir `resultat_matiere`), donc
     cette moyenne l'est aussi : c'est elle qu'on imprime « /20 ». Le poids est
     le coefficient, ou le barème de la matière en calcul « total des points ».
+
+    Les matières « hors moyenne » ne pèsent pas. `domaines=True` (réglage
+    `Tenant.agregation_domaines`) : moyenne des domaines pondérée par leur
+    coefficient ; un domaine sans coefficient pèse la somme de ceux de ses
+    matières — auquel cas le résultat est identique au calcul simple.
     """
+    lignes = lignes_comptees(lignes)
+    if domaines:
+        num = den = 0.0
+        for dom, pts, poids in moyennes_domaines(lignes):
+            if poids <= 0:
+                continue
+            coef_dom = (float(dom.coefficient) if dom is not None and dom.coefficient is not None
+                        else poids)
+            num += pts / poids * coef_dom
+            den += coef_dom
+        return arrondir(num / den, arrondi) if den > 0 else None
     coef = sum(poids_ligne(l) for l in lignes)
     if coef <= 0:
         return None
     return arrondir(sum(float(l.points or 0) for l in lignes) / coef, arrondi)
+
+
+def moyenne_eleve(lignes, tenant):
+    """La moyenne générale selon les réglages de l'école — à utiliser partout."""
+    return moyenne_generale(lignes, mode_arrondi(tenant),
+                            bool(getattr(tenant, 'agregation_domaines', False)))
 
 
 def rang(moyenne, moyennes):
@@ -245,7 +352,7 @@ def resultats_classe(tenant, classe, periode, annee, programme=None):
         par_eleve[str(l.eleve_id)].append(l)
     resultats = {}
     for eleve_id, lignes in par_eleve.items():
-        moy = moyenne_generale(lignes, mode_arrondi(tenant))
+        moy = moyenne_eleve(lignes, tenant)
         if moy is not None:
             resultats[eleve_id] = moy
     return resultats
@@ -257,19 +364,23 @@ def situation_periode(tenant, eleve, periode, annee, programme=None):
     None si l'élève n'a aucune note calculée pour cette période (et ce programme).
     """
     lignes = list(lignes_cache(tenant, annee, programme, eleve=eleve, trimestre=periode)
-                  .select_related('matiere__classe__niveau').order_by('matiere__ordre', 'matiere__nom'))
+                  .select_related('matiere__classe__niveau')
+                  .order_by('matiere__domaine__ordre', 'matiere__domaine__nom',
+                            'matiere__ordre', 'matiere__nom'))
     if not lignes:
         return None
-    moy = moyenne_generale(lignes, mode_arrondi(tenant)) or 0
+    moy = moyenne_eleve(lignes, tenant) or 0
     classe = lignes[0].matiere.classe
     moyennes = list(resultats_classe(tenant, classe, periode, annee, programme).values())
+    comptees = lignes_comptees(lignes)
     return {
         'lignes':       lignes,
         'classe':       classe,
         'moy_generale': moy,
-        'total_points': round(sum(float(l.points or 0) for l in lignes), 2),
-        'total_coef':   round(sum(poids_ligne(l) for l in lignes), 2),
-        'rang':         rang(moy, moyennes),
+        'total_points': round(sum(float(l.points or 0) for l in comptees), 2),
+        'total_coef':   round(sum(poids_ligne(l) for l in comptees), 2),
+        # Calculé toujours, montré seulement si l'école classe (avec_rangs).
+        'rang':         rang(moy, moyennes) if avec_rangs(tenant) else None,
         'moy_classe':   arrondir(sum(moyennes) / len(moyennes), mode_arrondi(tenant)) if moyennes else 0,
         'moy_max':      max(moyennes) if moyennes else 0,
         'moy_min':      min(moyennes) if moyennes else 0,

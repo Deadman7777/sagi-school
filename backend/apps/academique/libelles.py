@@ -128,7 +128,13 @@ def contexte_bulletin_ar(context, tenant, lignes):
         **context,
         't':                t,
         'periode_ar':       shape_ar(libelle_periode(tenant, context['trimestre'], 'ar')),
-        'rang_ar':          shape_ar(f"{context['eleve']['rang']} من {stats['nb_eleves']}"),
+        # Sans classement : la mention de l'école (mode MENTIONS) ou rien.
+        'rang_ar':          (shape_ar(f"{context['eleve']['rang']} من {stats['nb_eleves']}")
+                             if context.get('classer', True) and context['eleve']['rang']
+                             else (shape_ar(APPRECIATIONS_AR.get(
+                                       (context.get('mention') or {}).get('libelle', '—'),
+                                       (context.get('mention') or {}).get('libelle', '—')))
+                                   if context.get('mode_classement') == 'MENTIONS' else '—')),
         'eval_columns_rtl': list(reversed(colonnes)),
         'matieres':         matieres,
         'appreciation_generale': shape_ar(APPRECIATIONS_AR.get(context['appreciation_generale'],
@@ -221,7 +227,8 @@ def contexte_fiche(fiche, tenant, eleve, classe_nom, langue):
     periodes = [{
         'libelle':    f(libelle_periode(tenant, p['code'], langue)),
         'moyenne':    fmt(p['moyenne']),
-        'rang':       (f(f"{p['rang']} من {p['effectif']}") if ar
+        'rang':       ('—' if not p['rang'] else
+                       f(f"{p['rang']} من {p['effectif']}") if ar
                        else f"{p['rang']}{'er' if p['rang'] == 1 else 'e'} / {p['effectif']}"),
         'moy_classe': fmt(p['moy_classe']),
     } for p in fiche['periodes']]

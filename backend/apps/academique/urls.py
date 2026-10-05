@@ -3,7 +3,8 @@ from django.urls import path
 from .views import (BulletinPDFView, BulletinsClassePDFView, NiveauScolaireViewSet, ClasseViewSet, TypeEvaluationViewSet,
                     MatiereViewSet, EvaluationViewSet, NoteViewSet,
                     MoteurCalculView, BulletinView, AnalysePerformanceView,
-                    BulletinsHistoriqueView, FichePedagogiqueView)
+                    BulletinsHistoriqueView, FichePedagogiqueView,
+                    DomaineMatiereViewSet, PalierMentionViewSet)
 
 router = DefaultRouter()
 router.register('niveaux',     NiveauScolaireViewSet, basename='niveau')
@@ -12,6 +13,8 @@ router.register('types-eval',  TypeEvaluationViewSet, basename='type-eval')
 router.register('matieres',    MatiereViewSet,        basename='matiere')
 router.register('evaluations', EvaluationViewSet,     basename='evaluation')
 router.register('notes',       NoteViewSet,           basename='note')
+router.register('domaines',    DomaineMatiereViewSet, basename='domaine')
+router.register('paliers',     PalierMentionViewSet,  basename='palier')
 
 urlpatterns = router.urls + [
     path('calculer/',                        MoteurCalculView.as_view()),

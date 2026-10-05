@@ -1,13 +1,16 @@
+from collections import defaultdict
 from rest_framework import viewsets, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from django.db.models import Avg, Max, Min, Count, Q
-from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache
+from .models import (NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache,
+                     DomaineMatiere, PalierMention)
 from .serializers import (NiveauScolaireSerializer, ClasseSerializer,
                            TypeEvaluationSerializer, MatiereSerializer,
-                           EvaluationSerializer, NoteSerializer, erreur_bareme)
+                           EvaluationSerializer, NoteSerializer, erreur_bareme,
+                           DomaineMatiereSerializer, PalierMentionSerializer)
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from apps.eleves.models import Eleve
@@ -17,7 +20,9 @@ from .libelles import libelle_periode
 from .resultats import (fiche_pedagogique, lignes_cache, moyenne_generale, numero_periode,
                         note_max_reference, points_matiere, poids_ligne, programme_valide, ramener,
                         resultat_matiere, arrondir, mode_arrondi,
-                        situation_periode)
+                        situation_periode, paliers_ecole, apprecier, libelle_appreciation,
+                        avec_rangs, mode_classement, moyenne_eleve, ligne_calcul,
+                        lignes_comptees, moyennes_domaines)
 
 
 def _est_periode_finale(tenant, periode):
@@ -125,14 +130,18 @@ class ClasseViewSet(viewsets.ModelViewSet):
                             deja = existantes[cle]
                             deja.coefficient, deja.note_max = m.coefficient, m.note_max
                             deja.ordre, deja.est_active = m.ordre, True
+                            deja.domaine_id = m.domaine_id
+                            deja.compte_dans_moyenne = m.compte_dans_moyenne
                             deja.save(update_fields=['coefficient', 'note_max',
-                                                     'ordre', 'est_active'])
+                                                     'ordre', 'est_active', 'domaine',
+                                                     'compte_dans_moyenne'])
                             alignees += 1
                         continue
                     Matiere.objects.create(
                         tenant=tenant, classe=cible, nom=m.nom, code=m.code,
                         programme=m.programme, coefficient=m.coefficient, note_max=m.note_max,
-                        ordre=m.ordre, est_active=True)
+                        ordre=m.ordre, est_active=True, domaine_id=m.domaine_id,
+                        compte_dans_moyenne=m.compte_dans_moyenne)
                     creees += 1
                 rapport.append({'classe': cible.nom, 'creees': creees,
                                 'alignees': alignees,
@@ -186,6 +195,116 @@ class ClasseViewSet(viewsets.ModelViewSet):
         } for e in qs])
 
 
+# Modèle indicatif tiré de l'organisation du Curriculum de l'Éducation de Base
+# (CEB) du Sénégal pour l'élémentaire : quatre domaines, leurs activités. Les
+# intitulés, l'ordre et les coefficients varient d'une école et d'une étape à
+# l'autre — l'école l'applique puis l'adapte ; rien n'est imposé.
+MODELE_CEB = (
+    ('LC', 'Langue et communication', (
+        'Communication orale', 'Lecture', "Production d'écrits", 'Grammaire',
+        'Conjugaison', 'Orthographe', 'Vocabulaire', 'Récitation', 'Écriture')),
+    ('MATHS', 'Mathématiques', (
+        'Activités numériques', 'Activités géométriques', 'Activités de mesure',
+        'Résolution de problèmes')),
+    ('ESVS', 'Éducation à la science et à la vie sociale', (
+        'Histoire', 'Géographie', 'Initiation scientifique et technologique',
+        'Vivre ensemble (éducation civique)')),
+    ('EPSA', 'Éducation physique, sportive et artistique', (
+        'Éducation physique et sportive', 'Arts plastiques', 'Éducation musicale',
+        'Arts scéniques')),
+)
+
+
+class DomaineMatiereViewSet(viewsets.ModelViewSet):
+    """Domaines (blocs) de matières du bulletin.
+
+    POST domaines/modele-ceb/ {"classes": [ids], "programme": "FR"} crée les
+    quatre domaines du CEB (s'ils manquent, reconnus à leur code) et, pour
+    chaque classe donnée, leurs matières absentes — reconnues à leur nom,
+    jamais dupliquées. Relancer l'opération ne change rien de plus.
+    """
+    serializer_class   = DomaineMatiereSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = DomaineMatiere.objects.filter(tenant=get_tenant(self.request))
+        if programme := self.request.query_params.get('programme'):
+            qs = qs.filter(programme=programme)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    @action(detail=False, methods=['post'], url_path='modele-ceb')
+    def modele_ceb(self, request):
+        from django.db import transaction
+        tenant = get_tenant(request)
+        programme = programme_valide(request.data.get('programme')) or 'FR'
+        classes = list(Classe.objects.filter(tenant=tenant, id__in=request.data.get('classes') or []))
+        domaines_crees = matieres_creees = 0
+        with transaction.atomic():
+            for ordre_d, (code, nom, matieres) in enumerate(MODELE_CEB):
+                dom, cree = DomaineMatiere.objects.get_or_create(
+                    tenant=tenant, code=code, programme=programme,
+                    defaults={'nom': nom, 'ordre': ordre_d})
+                domaines_crees += cree
+                for classe in classes:
+                    existantes = {m.nom.strip().lower(): m for m in
+                                  Matiere.objects.filter(tenant=tenant, classe=classe,
+                                                         programme=programme)}
+                    for ordre_m, nom_m in enumerate(matieres):
+                        deja = existantes.get(nom_m.lower())
+                        if deja is not None:
+                            if deja.domaine_id is None:
+                                deja.domaine = dom
+                                deja.save(update_fields=['domaine'])
+                            continue
+                        Matiere.objects.create(tenant=tenant, classe=classe, nom=nom_m,
+                                               programme=programme, domaine=dom,
+                                               coefficient=1, note_max=classe.niveau.note_max
+                                               if classe.niveau_id else 20,
+                                               ordre=ordre_d * 100 + ordre_m)
+                        matieres_creees += 1
+        return Response({'domaines_crees': domaines_crees, 'matieres_creees': matieres_creees,
+                         'classes': [c.nom for c in classes]})
+
+
+class PalierMentionViewSet(viewsets.ModelViewSet):
+    """Paliers d'appréciation et de mention de l'école.
+
+    Liste vide : l'échelle historique s'applique. POST paliers/initialiser/
+    l'enregistre pour que l'école la modifie (sans effet si elle a déjà des
+    paliers).
+    """
+    serializer_class   = PalierMentionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return PalierMention.objects.filter(tenant=get_tenant(self.request))
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def list(self, request, *args, **kwargs):
+        reponse = super().list(request, *args, **kwargs)
+        tenant = get_tenant(request)
+        donnees = reponse.data.get('results', reponse.data) if isinstance(reponse.data, dict) else reponse.data
+        return Response({'paliers': donnees,
+                         'par_defaut': not donnees,
+                         'effectifs': paliers_ecole(tenant),
+                         'mode_classement': mode_classement(tenant)})
+
+    @action(detail=False, methods=['post'])
+    def initialiser(self, request):
+        from .resultats import PALIERS_DEFAUT
+        tenant = get_tenant(request)
+        if PalierMention.objects.filter(tenant=tenant).exists():
+            return Response({'error': "L'école a déjà ses paliers."}, status=409)
+        for i, p in enumerate(PALIERS_DEFAUT):
+            PalierMention.objects.create(tenant=tenant, ordre=i, **p)
+        return Response({'crees': len(PALIERS_DEFAUT)}, status=201)
+
+
 class TypeEvaluationViewSet(viewsets.ModelViewSet):
     serializer_class   = TypeEvaluationSerializer
     permission_classes = [IsAuthenticated]
@@ -204,7 +323,7 @@ class MatiereViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Matiere.objects.filter(
             tenant=get_tenant(self.request), est_active=True
-        ).select_related('classe')
+        ).select_related('classe', 'domaine')
         if classe := self.request.query_params.get('classe'):
             qs = qs.filter(classe_id=classe)
         if programme := self.request.query_params.get('programme'):
@@ -388,15 +507,15 @@ class MoteurCalculView(APIView):
     """Moteur de calcul des moyennes et rangs."""
     permission_classes = [IsAuthenticated]
 
+    paliers = None
+
     def get_appreciation(self, moyenne, note_max):
-        ratio = float(moyenne) / float(note_max) * 20
-        if ratio >= 18:   return 'Excellent'
-        if ratio >= 16:   return 'Très Bien'
-        if ratio >= 14:   return 'Bien'
-        if ratio >= 12:   return 'Assez Bien'
-        if ratio >= 10:   return 'Passable'
-        if ratio >= 8:    return 'Insuffisant'
-        return 'Très Insuffisant'
+        # Les paliers de l'école (ou l'échelle historique) : une seule échelle
+        # pour la matière, la moyenne générale et le bulletin.
+        if self.paliers is None:
+            from .resultats import PALIERS_DEFAUT
+            self.paliers = [dict(p) for p in PALIERS_DEFAUT]
+        return libelle_appreciation(moyenne, note_max, self.paliers)
 
     def get_appreciation_intelligente(self, moyenne, note_max, absences=0, progression=0):
         base = self.get_appreciation(moyenne, note_max)
@@ -487,6 +606,8 @@ class MoteurCalculView(APIView):
         note_max_niveau = note_max_reference(classe, matieres)
         arrondi         = mode_arrondi(tenant)
         seuil_reussite  = note_max_niveau / 2
+        self.paliers    = paliers_ecole(tenant)
+        classer         = avec_rangs(tenant)
 
         resultats = []
         matieres_classement: dict = {str(m.id): [] for m in matieres}
@@ -496,6 +617,7 @@ class MoteurCalculView(APIView):
             total_points = 0
             total_coef   = 0
             detail_matieres = []
+            lignes_eleve = []     # pour la moyenne générale : le calcul unique
 
             for matiere in matieres:
                 evaluations = [ev for ev in evals_by_matiere.get(str(matiere.id), [])
@@ -532,8 +654,12 @@ class MoteurCalculView(APIView):
                 # les points sont ramenés à celui du niveau (addition).
                 moyenne, points, poids = resultat
                 poids_effectif = poids if poids is not None else float(matiere.coefficient)
-                total_points += points
-                total_coef   += poids_effectif
+                lignes_eleve.append(ligne_calcul(round(points, 2),
+                                                 None if poids is None else round(poids, 3),
+                                                 matiere))
+                if matiere.compte_dans_moyenne:
+                    total_points += points
+                    total_coef   += poids_effectif
                 appreciation  = self.get_appreciation(moyenne, matiere.note_max)
 
                 cache_to_upsert.append((eleve, matiere, arrondir(moyenne, arrondi), round(points, 2),
@@ -551,11 +677,15 @@ class MoteurCalculView(APIView):
                     'moyenne':      arrondir(moyenne, arrondi),
                     'points':       round(points, 2),
                     'appreciation': appreciation,
+                    'compte_dans_moyenne': matiere.compte_dans_moyenne,
                     'rang_matiere': None,  # rempli après
                 })
 
-            moy_generale  = total_points / total_coef if total_coef > 0 else 0
+            # Même fonction que le bulletin (resultats.moyenne_generale) :
+            # matières hors moyenne et agrégation par domaines comprises.
+            moy_generale  = moyenne_eleve(lignes_eleve, tenant) or 0
             appr_generale = self.get_appreciation(moy_generale, note_max_niveau)
+            palier        = apprecier(moy_generale, note_max_niveau, self.paliers) if lignes_eleve else None
 
             resultats.append({
                 'eleve_id':              str(eleve.id),
@@ -565,6 +695,7 @@ class MoteurCalculView(APIView):
                 'total_coef':            total_coef,
                 'moy_generale':          arrondir(moy_generale, arrondi),
                 'appreciation_generale': appr_generale,
+                'mention':               palier,
                 'rang':                  0,  # calculé après
             })
 
@@ -624,6 +755,17 @@ class MoteurCalculView(APIView):
                 if mat_id:
                     dm['rang_matiere'] = rang_par_matiere.get(mat_id, {}).get(r['eleve_id'])
 
+        # École sans classement : les rangs restent en base (changer d'avis ne
+        # demande aucun recalcul) mais ne sortent pas, et la liste se lit par
+        # ordre alphabétique — triée par moyenne, elle redirait le classement.
+        if not classer:
+            from apps.eleves.tri import cle_nom
+            for r in resultats:
+                r['rang'] = None
+                for dm in r['matieres']:
+                    dm['rang_matiere'] = None
+            resultats.sort(key=lambda r: cle_nom(r['eleve_nom']))
+
         # Statistiques classe
         moyennes = [r['moy_generale'] for r in resultats if r['moy_generale'] > 0]
         stats = {
@@ -632,11 +774,20 @@ class MoteurCalculView(APIView):
             'moy_min':      min(moyennes) if moyennes else 0,
             'nb_eleves':    len(resultats),
             'taux_reussite': round(len([m for m in moyennes if m >= seuil_reussite])/len(moyennes)*100, 1) if moyennes else 0,
+            # Valorisation sans rang : combien d'élèves par palier, et combien
+            # de « distingués » (tableau d'honneur, félicitations…).
+            'repartition_paliers': [
+                {'libelle': p['libelle'], 'couleur': p['couleur'], 'badge': p['badge'],
+                 'nb': sum(1 for r in resultats if r['mention'] and r['mention']['libelle'] == p['libelle'])}
+                for p in self.paliers],
+            'nb_distingues': sum(1 for r in resultats if r['mention'] and r['mention']['distinction']),
         }
 
         return Response({
             'classe':    classe.nom,
             'trimestre': trimestre,
+            'mode_classement': mode_classement(tenant),
+            'paliers':   self.paliers,
             'annee_scolaire': annee,
             'programme': programme,
             'resultats': resultats,
@@ -696,13 +847,16 @@ class BulletinView(APIView):
             'trimestre': trimestre,
             'annee':     annee,
             'programme': programme,
+            'mode_classement': mode_classement(tenant),
             'matieres': [{
                 'nom':         b.matiere.nom,
+                'domaine':     b.matiere.domaine.nom if b.matiere.domaine_id else None,
                 'coefficient': float(b.matiere.coefficient),
                 'note_max':    float(b.matiere.note_max),
+                'compte_dans_moyenne': b.matiere.compte_dans_moyenne,
                 'moyenne':     float(b.moyenne) if b.moyenne is not None else None,
                 'points':      float(b.points) if b.points is not None else None,
-                'rang':        b.rang_matiere,
+                'rang':        b.rang_matiere if avec_rangs(tenant) else None,
                 'appreciation':b.appreciation,
             } for b in situation['lignes']],
             'stats': {
@@ -713,20 +867,18 @@ class BulletinView(APIView):
                 'moy_classe':   situation['moy_classe'],
                 'rang':         situation['rang'],
                 'effectif':     situation['effectif'],
+                'mention':      apprecier(situation['moy_generale'],
+                                          note_max_reference(situation['classe'],
+                                                             [b.matiere for b in situation['lignes']]),
+                                          paliers_ecole(tenant)),
             }
         }
         return Response(data)
 
 
-def _appreciation(moy, note_max):
-    ratio = float(moy) / float(note_max) * 20
-    if ratio >= 18: return 'Excellent'
-    if ratio >= 16: return 'Très Bien'
-    if ratio >= 14: return 'Bien'
-    if ratio >= 12: return 'Assez Bien'
-    if ratio >= 10: return 'Passable'
-    if ratio >= 8:  return 'Insuffisant'
-    return 'Très Insuffisant'
+def _appreciation(moy, note_max, paliers=None):
+    from .resultats import PALIERS_DEFAUT
+    return libelle_appreciation(moy, note_max, paliers or [dict(p) for p in PALIERS_DEFAUT])
 
 
 def _decision(moy, note_max, trimestre='T1', est_finale=None):
@@ -866,8 +1018,12 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             return '—'
         return f"{float(val):g}".replace('.', ',')
 
+    paliers = paliers_ecole(tenant)
+    classer = avec_rangs(tenant)
+
     matieres_ctx = []
     for b in bulletins_list:
+        ap = apprecier(b.moyenne, b.matiere.note_max, paliers) if b.moyenne is not None else None
         matieres_ctx.append({
             # Une matière saisie en arabe (« القرآن الكريم ») s'imprimait en
             # carrés : le gabarit français est en Arial, sans caractères
@@ -883,10 +1039,45 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             'note_max':     int(b.matiere.note_max) if float(b.matiere.note_max) == int(b.matiere.note_max) else float(b.matiere.note_max),
             'moyenne':      _fmt(b.moyenne),
             'points':       _fmt(b.points),
-            'rang':         b.rang_matiere,
+            'rang':         b.rang_matiere if classer else None,
             'appreciation': b.appreciation,
+            # Couleur du palier de l'école (vide : la couleur historique du
+            # libellé, voir le gabarit).
+            'couleur':      (ap or {}).get('couleur', ''),
+            'hors_moyenne': not b.matiere.compte_dans_moyenne,
             'notes_cells':  build_notes_cells(b.matiere_id, b.matiere.note_max),
+            '_domaine':     b.matiere.domaine if b.matiere.domaine_id else None,
         })
+
+    # ── Regroupement par domaines ─────────────────────────────────────
+    # Les lignes arrivent déjà triées par domaine (situation_periode). Chaque
+    # domaine ouvre par son titre et ferme par sa moyenne ; une école sans
+    # domaine garde son tableau d'avant, ligne pour ligne.
+    sous_totaux = {}
+    for dom, pts, poids in moyennes_domaines(bulletins_list):
+        if dom is not None and poids > 0:
+            sous_totaux[dom.id] = {'moyenne': _fmt(round(pts / poids, 2)),
+                                   'points': _fmt(round(pts, 2)), 'coef': _fmt(round(poids, 2))}
+    lignes_tableau = []
+    dom_courant = None
+    for i, m in enumerate(matieres_ctx):
+        dom = m.pop('_domaine')
+        dom_id = dom.id if dom is not None else None
+        if dom_id != dom_courant:
+            if dom_courant is not None and dom_courant in sous_totaux:
+                lignes_tableau.append({'type': 'sous_total', **sous_totaux[dom_courant]})
+            if dom is not None:
+                lignes_tableau.append({'type': 'domaine', 'nom': dom.nom})
+            dom_courant = dom_id
+        lignes_tableau.append({'type': 'matiere', 'pair': i % 2 == 1, **m})
+    if dom_courant is not None and dom_courant in sous_totaux:
+        lignes_tableau.append({'type': 'sous_total', **sous_totaux[dom_courant]})
+    avec_domaines = bool(sous_totaux)
+
+    # Sans rang, la colonne RG disparaît et sa place va au nom de la matière.
+    if not classer:
+        largeurs['matiere'] = largeurs['matiere'] + 5
+    nb_colonnes = 5 + max(1, len(eval_columns)) + (1 if classer else 0)
     # ─────────────────────────────────────────────────────────────────
 
     context = {
@@ -907,6 +1098,13 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
             'rang':           situation['rang'],
         },
         'matieres':            matieres_ctx,
+        'lignes_tableau':      lignes_tableau,
+        'hors_moyenne_present': any(m['hors_moyenne'] for m in matieres_ctx),
+        'avec_domaines':       avec_domaines,
+        'nb_colonnes':         nb_colonnes,
+        'classer':             classer,
+        'mode_classement':     mode_classement(tenant),
+        'mention':             apprecier(moy_generale, note_max, paliers),
         'total_coef':          round(total_coef, 1),
         'total_points':        round(total_points, 2),
         # Calcul « total des points » : le total se lit « 125 / 150 », comme la
@@ -925,7 +1123,7 @@ def contexte_bulletin(tenant, eleve, trimestre, annee, programme):
         # classe, comme sur les bulletins papier des écoles.
         'effectif_classe':     _effectif_classe(tenant, eleve),
         'periode_libelle':     libelle_periode(tenant, trimestre),
-        'appreciation_generale': _appreciation(moy_generale, note_max),
+        'appreciation_generale': libelle_appreciation(moy_generale, note_max, paliers),
         'decision':              _decision(moy_generale, note_max, trimestre, est_finale=_est_periode_finale(tenant, trimestre)),
         'is_final':              _est_periode_finale(tenant, trimestre),
         'decision_positive':     moy_generale >= (note_max * 10 / 20),
@@ -946,14 +1144,7 @@ class BulletinPDFView(APIView):
         return _get_annee_scolaire(get_tenant(request))
 
     def get_appreciation(self, moy, note_max):
-        ratio = float(moy) / float(note_max) * 20
-        if ratio >= 18: return 'Excellent'
-        if ratio >= 16: return 'Très Bien'
-        if ratio >= 14: return 'Bien'
-        if ratio >= 12: return 'Assez Bien'
-        if ratio >= 10: return 'Passable'
-        if ratio >= 8:  return 'Insuffisant'
-        return 'Très Insuffisant'
+        return _appreciation(moy, note_max)
 
     def get_decision(self, moy, note_max, trimestre='T1', est_finale=None):
         ratio = float(moy) / float(note_max) * 20
@@ -1059,26 +1250,30 @@ class AnalysePerformanceView(APIView):
             classe = classes_tenant.get(classe_id)
             return note_max_reference(classe, matieres_par_classe.get(classe_id, []))
 
-        # BulletinCache est PAR MATIÈRE → la moyenne générale d'un élève = Σpoints / Σcoef.
+        # BulletinCache est PAR MATIÈRE → la moyenne générale d'un élève passe
+        # par resultats.moyenne_eleve, comme le bulletin (matières hors
+        # moyenne et domaines compris). Un Σpoints / Σcoef en SQL ici aurait
+        # divergé du bulletin dès la première matière hors moyenne.
         def moyennes_par_eleve(periode):
             """Retourne [{eleve_id, nom, classe, moyenne}] pour une période donnée."""
-            rows = bulletins.filter(trimestre=periode).values(
-                'eleve_id', 'eleve__nom_complet', 'eleve__classe_id',
-                'eleve__classe__nom', 'eleve__section__nom',
-            ).annotate(pts=Sum('points'),
-                       # Même poids que resultats.poids_ligne, en SQL.
-                       coef=Sum(Coalesce('poids', 'matiere__coefficient')))
+            par_eleve = defaultdict(list)
+            for l in (bulletins.filter(trimestre=periode)
+                      .select_related('matiere', 'matiere__domaine',
+                                      'eleve__classe', 'eleve__section')):
+                par_eleve[l.eleve_id].append(l)
             res = []
-            for r in rows:
-                c = float(r['coef'] or 0)
-                if c <= 0:
+            for eleve_id, lignes in par_eleve.items():
+                moy = moyenne_eleve(lignes, tenant)
+                if moy is None:
                     continue
+                e = lignes[0].eleve
                 res.append({
-                    'eleve_id': r['eleve_id'],
-                    'nom':      r['eleve__nom_complet'] or '—',
-                    'classe':   r['eleve__classe__nom'] or r['eleve__section__nom'] or '—',
-                    'moyenne':  arrondir(float(r['pts'] or 0) / c, arrondi),
-                    'bareme':   bareme_de(r['eleve__classe_id']),
+                    'eleve_id': eleve_id,
+                    'nom':      e.nom_complet or '—',
+                    'classe':   (e.classe.nom if e.classe_id else
+                                 (e.section.nom if e.section_id else '—')),
+                    'moyenne':  moy,
+                    'bareme':   bareme_de(e.classe_id),
                 })
             return res
 
@@ -1104,8 +1299,10 @@ class AnalysePerformanceView(APIView):
         ref_avgs = moyennes_par_eleve(tri_ref) if tri_ref else []
 
         # ── Top 10 élèves ─────────────────────────────────────────────────
+        classer = avec_rangs(tenant)
+        paliers = paliers_ecole(tenant)
         top_eleves = [{
-            'rang':      i + 1,
+            'rang':      i + 1 if classer else None,
             'nom':       a['nom'],
             'classe':    a['classe'],
             'moyenne':   a['moyenne'],
@@ -1139,8 +1336,33 @@ class AnalysePerformanceView(APIView):
             elif note_20 >= 10: distribution['passable']     += 1
             else:               distribution['insuffisant'] += 1
 
+        # Répartition selon les paliers de l'école, et élèves distingués : la
+        # valorisation des performances sans rang (mode MENTIONS).
+        repartition = []
+        distingues = []
+        for p in paliers:
+            repartition.append({'libelle': p['libelle'], 'couleur': p['couleur'],
+                                'badge': p['badge'], 'distinction': p['distinction'], 'nb': 0})
+        for a in ref_avgs:
+            pal = apprecier(a['moyenne'], a['bareme'], paliers)
+            for r in repartition:
+                if pal and r['libelle'] == pal['libelle']:
+                    r['nb'] += 1
+            if pal and pal['distinction']:
+                distingues.append({'nom': a['nom'], 'classe': a['classe'], 'moyenne': a['moyenne'],
+                                   'bareme': a['bareme'], 'mention': pal['libelle'],
+                                   'couleur': pal['couleur'], 'badge': pal['badge']})
+        from apps.eleves.tri import cle_nom
+        distingues.sort(key=lambda d: (d['classe'], cle_nom(d['nom'])))
+        if not classer:
+            # Sans classement, pas de palmarès : la liste se lit par nom.
+            top_eleves.sort(key=lambda t: cle_nom(t['nom']))
+
         bareme_ref = _bareme_commun(ref_avgs)
         return Response({
+            'mode_classement': mode_classement(tenant),
+            'repartition_paliers': repartition,
+            'distingues':     distingues,
             'annee_scolaire': annee,
             'trimestre_ref':  tri_ref,
             'evolution':      evolution,
@@ -1196,43 +1418,26 @@ class BulletinsHistoriqueView(APIView):
         if programme := programme_valide(request.query_params.get('programme')):
             qs = qs.filter(matiere__programme=programme)
 
-        zero = Value(Decimal('0'), output_field=DecimalField())
-        # Un bulletin par programme : un élève d'établissement hybride en a deux
-        groupes = list(
-            qs.values('eleve_id', 'trimestre', 'annee_scolaire', 'matiere__programme')
-            .annotate(
-                nb_matieres=Count('id'),
-                total_points=Coalesce(Sum('points'), zero),
-                # Même poids que resultats.poids_ligne, en SQL.
-                total_coef=Coalesce(Sum(Coalesce('poids', 'matiere__coefficient')), zero),
-            )
-            .order_by('-annee_scolaire', 'trimestre')
-        )
-
-        eleve_ids = list({str(g['eleve_id']) for g in groupes})
-        eleves_map = {
-            str(e.id): e
-            for e in Eleve.objects.filter(id__in=eleve_ids).select_related('section')
-        }
+        # Un bulletin par programme : un élève d'établissement hybride en a
+        # deux. La moyenne passe par resultats.moyenne_eleve, comme le
+        # bulletin imprimé.
+        groupes = defaultdict(list)
+        for l in qs.select_related('matiere', 'matiere__domaine', 'eleve__classe', 'eleve__section'):
+            groupes[(str(l.eleve_id), l.trimestre, l.annee_scolaire, l.matiere.programme)].append(l)
 
         result = []
-        for g in groupes:
-            e = eleves_map.get(str(g['eleve_id']))
-            if not e:
-                continue
-            coef = float(g['total_coef'] or 0)
-            pts  = float(g['total_points'] or 0)
-            moy  = arrondir(pts / coef, arrondi) if coef > 0 else 0
+        for (eleve_id, trimestre_g, annee_g, programme_g), lignes in groupes.items():
+            e = lignes[0].eleve
             result.append({
-                'eleve_id':      str(g['eleve_id']),
+                'eleve_id':      eleve_id,
                 'eleve_nom':     e.nom_complet,
                 'classe':        (e.classe.nom if e.classe_id
                                   else (e.section.nom if e.section else '—')),
-                'trimestre':     g['trimestre'],
-                'annee_scolaire':g['annee_scolaire'],
-                'programme':     g['matiere__programme'],
-                'moy_generale':  moy,
-                'nb_matieres':   g['nb_matieres'],
+                'trimestre':     trimestre_g,
+                'annee_scolaire':annee_g,
+                'programme':     programme_g,
+                'moy_generale':  moyenne_eleve(lignes, tenant) or 0,
+                'nb_matieres':   len(lignes),
             })
 
         result.sort(key=lambda x: (
@@ -1302,21 +1507,53 @@ class FichePedagogiqueView(APIView):
 # Hauteurs de page essayées pour un bulletin, en mm (chaînes : voir le
 # gabarit). 210 = une demi-A4 debout (148,5 x 210) : la taille visée, sans
 # réduction. Au-delà, le bulletin sera réduit à l'échelle pour tenir dans
-# sa moitié — le cas d'une classe à vingt-cinq matières et plus.
+# sa moitié.
 # De 5 en 5 mm : la réduction suit la longueur réelle du bulletin. Par pas
 # de 25 mm, un bulletin qui dépassait de 2 mm était réduit comme s'il en
 # dépassait 25, et le bas de sa demi-feuille restait blanc (24/09/2026,
 # bulletins de Shoumoul imprimés à 72 % au lieu de ~90 %).
-HAUTEURS_BULLETIN = tuple(str(h) for h in range(210, 300, 5)) + ('330', '380')
+#
+# Plafond 295 mm, soit une réduction à 71 % : au-delà le texte devient
+# illisible (jusqu'en octobre 2026, on descendait à 55 % pour 380 mm). Un
+# bulletin plus long — un programme à trente matières — passe en A4 debout,
+# sur autant de pages qu'il faut, l'en-tête du tableau répété.
+HAUTEURS_BULLETIN = tuple(str(h) for h in range(210, 300, 5))
+A4_DEBOUT = ('210', '297')
+# En A4 debout, même logique, en plus doux : jusqu'à 350 mm de haut (réduit à
+# 85 %) le bulletin tient sur une page ; au-delà, il est paginé. Sans ce
+# palier, un bulletin dépassant de trois lignes envoyait les signatures
+# seules sur une seconde page.
+HAUTEURS_A4 = tuple(str(h) for h in range(297, 355, 8))
+
+
+def _rendre_bulletin(corps, tenant, largeur, hauteur):
+    from io import BytesIO
+
+    from xhtml2pdf import pisa
+
+    from core.arabe import font_link_callback
+
+    html_str = render_to_string('pdf/bulletins_classe.html', {
+        'bulletins': [corps], 'tenant': tenant, 'font_ar': POLICE_ARABE,
+        'largeur_page': largeur, 'hauteur_page': hauteur})
+    buffer = BytesIO()
+    if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
+                      link_callback=font_link_callback).err:
+        return None
+    return buffer.getvalue()
 
 
 def _bulletin_sur_une_page(corps, tenant, depart=0):
-    """(PDF d'une seule page, index de la hauteur retenue) pour un bulletin.
+    """(PDF, index de la hauteur retenue) pour un bulletin.
 
-    Le bulletin est rendu sur une demi-A4 debout ; s'il déborde, sur une
-    page un peu plus haute, jusqu'à tenir sur UNE page. L'imposition le
-    ramène ensuite à la taille de sa demi-feuille. Jamais un bulletin sur
-    deux morceaux, coupé entre deux matières.
+    Format « deux par feuille » (défaut) : le bulletin est rendu sur une
+    demi-A4 debout ; s'il déborde, sur une page un peu plus haute, jusqu'à
+    tenir sur UNE page. L'imposition le ramène ensuite à la taille de sa
+    demi-feuille. Jamais un bulletin sur deux morceaux, coupé entre deux
+    matières. Trop long même pour la plus haute (réduction sous 71 %), il est
+    rendu en A4 debout paginée — l'imposition le reconnaît à sa largeur.
+
+    Format « A4 » (`Tenant.format_bulletin`) : directement en A4 debout.
 
     `depart` : les élèves d'une classe ont les mêmes matières, la hauteur qui
     a suffi au précédent est le bon point de départ pour le suivant.
@@ -1324,24 +1561,25 @@ def _bulletin_sur_une_page(corps, tenant, depart=0):
     from io import BytesIO
 
     from pypdf import PdfReader
-    from xhtml2pdf import pisa
 
-    from core.arabe import font_link_callback
+    def en_a4():
+        for hauteur in HAUTEURS_A4:
+            donnees = _rendre_bulletin(corps, tenant, A4_DEBOUT[0], hauteur)
+            if donnees is None or len(PdfReader(BytesIO(donnees)).pages) == 1:
+                return donnees
+        return _rendre_bulletin(corps, tenant, *A4_DEBOUT)
 
-    donnees = None
+    if getattr(tenant, 'format_bulletin', 'DEMI_A4') == 'A4':
+        return en_a4(), depart
+
     for i in range(depart, len(HAUTEURS_BULLETIN)):
-        html_str = render_to_string('pdf/bulletins_classe.html', {
-            'bulletins': [corps], 'tenant': tenant, 'font_ar': POLICE_ARABE,
-            'hauteur_page': HAUTEURS_BULLETIN[i]})
-        buffer = BytesIO()
-        if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8',
-                          link_callback=font_link_callback).err:
+        donnees = _rendre_bulletin(corps, tenant, '148.5', HAUTEURS_BULLETIN[i])
+        if donnees is None:
             return None, depart
-        donnees = buffer.getvalue()
         if len(PdfReader(BytesIO(donnees)).pages) == 1:
             return donnees, i
-    # Même la page la plus haute ne suffit pas : le bulletin garde ses pages.
-    return donnees, len(HAUTEURS_BULLETIN) - 1
+    # Même la page la plus haute ne suffit pas : A4 debout.
+    return en_a4(), len(HAUTEURS_BULLETIN) - 1
 
 
 def _imposer_deux_par_feuille(pdfs_bulletins):
@@ -1367,6 +1605,7 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     from pypdf import PageObject, PdfReader, PdfWriter, Transformation
 
     A4_L, A4_H = 841.89, 595.276          # points PDF, feuille couchée
+    A4_L_DEBOUT, A4_H_DEBOUT = A4_H, A4_L
     demi = A4_L / 2
 
     # Composition des feuilles : (demi-pages, trait de découpe ou non).
@@ -1374,6 +1613,15 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     en_attente = None                      # demi-page de gauche, sans voisin encore
     for donnees in pdfs_bulletins:
         pages = PdfReader(BytesIO(donnees)).pages
+        # Bulletin en A4 debout (format A4, ou trop long pour sa demi-feuille) :
+        # ses pages passent telles quelles, une par feuille, sans réduction.
+        if float(pages[0].mediabox.width) > demi + 1:
+            if en_attente is not None:
+                feuilles.append(([en_attente], False))
+                en_attente = None
+            for page in pages:
+                feuilles.append(([page], None))
+            continue
         if len(pages) == 1:
             if en_attente is None:
                 en_attente = pages[0]
@@ -1392,6 +1640,16 @@ def _imposer_deux_par_feuille(pdfs_bulletins):
     ecrivain = PdfWriter()
     repere = _repere_decoupe(A4_L, A4_H)
     for demi_pages, trait in feuilles:
+        if trait is None:                  # page A4 debout
+            page = demi_pages[0]
+            if float(page.mediabox.height) <= A4_H_DEBOUT + 1:
+                ecrivain.add_page(page)
+            else:                          # un peu plus haute : ramenée à l'A4
+                feuille = PageObject.create_blank_page(width=A4_L_DEBOUT, height=A4_H_DEBOUT)
+                feuille.merge_transformed_page(
+                    page, _dans_la_moitie(page, A4_L_DEBOUT, A4_H_DEBOUT, 0))
+                ecrivain.add_page(feuille)
+            continue
         feuille = PageObject.create_blank_page(width=A4_L, height=A4_H)
         feuille.merge_transformed_page(demi_pages[0], _dans_la_moitie(demi_pages[0], demi, A4_H, 0))
         if len(demi_pages) > 1:

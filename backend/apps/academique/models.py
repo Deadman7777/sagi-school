@@ -87,6 +87,67 @@ class TypeEvaluation(TenantModel):
         return f"{self.nom} (poids {self.poids})"
 
 
+class DomaineMatiere(TenantModel):
+    """Un bloc de matières sur le bulletin : « Langue et communication »,
+    « Mathématiques », « ESVS », « EPSA » au Curriculum de l'Éducation de Base
+    du Sénégal ; « Sciences », « Lettres »… ailleurs.
+
+    Un programme à vingt-cinq ou trente matières ne se lit qu'ainsi : le
+    parent voit chaque domaine, sa moyenne, puis la moyenne générale.
+
+    `coefficient` vide : le domaine pèse la somme des coefficients de ses
+    matières, et la moyenne générale reste exactement celle d'avant (Σ points
+    / Σ coefficients). Renseigné, et seulement si l'école a choisi l'agrégation
+    par domaines (`Tenant.agregation_domaines`), la moyenne générale devient
+    la moyenne des domaines pondérée par ces coefficients. Voir
+    `resultats.moyenne_generale`, seul calcul.
+    """
+    nom          = models.CharField(max_length=100)
+    code         = models.CharField(max_length=20, blank=True)
+    programme    = models.CharField(max_length=2, choices=[('FR', 'Programme français'),
+                                                           ('AR', 'Programme arabe')],
+                                    default='FR')
+    coefficient  = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    ordre        = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'domaines_matieres'
+        ordering = ['ordre', 'nom']
+
+    def __str__(self):
+        return self.nom
+
+
+class PalierMention(TenantModel):
+    """Un palier d'appréciation : « Excellent » à partir de 18/20, en vert, avec
+    un badge « ★★★ ».
+
+    Une seule échelle pour toute l'école : l'appréciation de chaque matière,
+    l'appréciation générale du bulletin et, en mode de classement
+    « mentions », la distinction qui remplace le rang. Les seuils sont sur 20
+    et s'appliquent à la PART de la moyenne (8/10 vaut 16/20).
+
+    Sans palier enregistré, l'échelle historique s'applique (voir
+    `resultats.PALIERS_DEFAUT`) : aucune école ne voit ses bulletins changer
+    sans l'avoir demandé.
+    """
+    libelle      = models.CharField(max_length=60)
+    seuil        = models.DecimalField(max_digits=5, decimal_places=2)   # sur 20, inclus
+    couleur      = models.CharField(max_length=9, blank=True, default='')  # #2e7d32
+    badge        = models.CharField(max_length=20, blank=True, default='')  # ★★★, OR, TH…
+    # Élève « performant » : tableau d'honneur, félicitations… Compté à part
+    # dans l'analyse et signalé sur le bulletin.
+    distinction  = models.BooleanField(default=False)
+    ordre        = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'paliers_mention'
+        ordering = ['-seuil']
+
+    def __str__(self):
+        return f"{self.libelle} (≥ {self.seuil}/20)"
+
+
 class Matiere(TenantModel):
     # Établissement hybride : une même classe suit le programme français ET le
     # programme arabe. Chaque matière appartient à l'un des deux ; chacun a son
@@ -101,6 +162,11 @@ class Matiere(TenantModel):
     note_max     = models.DecimalField(max_digits=4, decimal_places=1, default=20)
     ordre        = models.IntegerField(default=0)
     est_active   = models.BooleanField(default=True)
+    domaine      = models.ForeignKey(DomaineMatiere, on_delete=models.SET_NULL,
+                                     null=True, blank=True, related_name='matieres')
+    # Matière notée et imprimée, mais hors de la moyenne générale (EPS
+    # facultative, conduite, activité d'éveil…).
+    compte_dans_moyenne = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'matieres'

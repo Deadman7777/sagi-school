@@ -110,7 +110,109 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
         </span>
       </div>
 
+      <!-- Bulletin : classement, mise en page, agrégation par domaines -->
+      <div class="periode-bar">
+        <label class="periode-label" for="mode-classement">🏅 Classement</label>
+        <select id="mode-classement" class="reglage-select" [ngModel]="modeClassement()"
+                (ngModelChange)="modeClassement.set($event); sauvegarderReglagesBulletin()">
+          <option value="CLASSIQUE">Classement classique (1er, 2e…)</option>
+          <option value="AUCUN">Aucun classement</option>
+          <option value="MENTIONS">Mentions et distinctions (paliers)</option>
+        </select>
+        <label class="periode-hint" for="format-bulletin">Bulletin</label>
+        <select id="format-bulletin" class="reglage-select" [ngModel]="formatBulletin()"
+                (ngModelChange)="formatBulletin.set($event); sauvegarderReglagesBulletin()">
+          <option value="DEMI_A4">deux par feuille (A4 couchée)</option>
+          <option value="A4">une A4 par élève, paginée</option>
+        </select>
+        <label class="hybride-toggle">
+          <input type="checkbox" [ngModel]="agregationDomaines()"
+                 (ngModelChange)="agregationDomaines.set($event); sauvegarderReglagesBulletin()" />
+          Moyenne générale par domaines
+        </label>
+        <span class="periode-hint">
+          @switch (modeClassement()) {
+            @case ('AUCUN') { Ni rang ni classement : moyennes et appréciations seules. }
+            @case ('MENTIONS') { Pas de rang : chaque élève reçoit le palier atteint (libellé, couleur, badge). }
+            @default { Rang général et rang par matière sur le bulletin. }
+          }
+          Un bulletin trop long pour sa demi-feuille passe tout seul en A4 paginée.
+        </span>
+      </div>
+
       <div class="param-grid">
+
+        <!-- Domaines de matières -->
+        <div class="param-card">
+          <div class="pc-header">
+            <span>🧩 Domaines de matières</span>
+            <span>
+              <p-button icon="pi pi-book" [rounded]="true" [text]="true" severity="secondary"
+                        (onClick)="appliquerModeleCEB()"
+                        pTooltip="Appliquer le modèle CEB (élémentaire) : 4 domaines et leurs activités, à la classe filtrée"
+                        tooltipPosition="top" />
+              <p-button icon="pi pi-plus" [rounded]="true" [text]="true"
+                        severity="success" (onClick)="ouvrirDialogDomaine()" />
+            </span>
+          </div>
+          <div class="pc-body">
+            @for (d of domaines(); track d.id) {
+              <div class="pc-item">
+                <span>{{ d.nom }}</span>
+                <span class="pc-right">
+                  @if (hybride) { <span class="badge" [class.badge-ar]="d.programme === 'AR'">{{ d.programme }}</span> }
+                  <span class="badge">{{ d.nb_matieres }} mat.</span>
+                  @if (d.coefficient) { <span class="badge">coef {{ +d.coefficient }}</span> }
+                  <span class="pc-actions">
+                    <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                              severity="secondary" (onClick)="ouvrirDialogDomaine(d)" />
+                    <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                              severity="danger" (onClick)="supprimerDomaine(d)" />
+                  </span>
+                </span>
+              </div>
+            } @empty {
+              <div class="empty-msg">Aucun domaine : les matières s'impriment en liste simple.</div>
+            }
+          </div>
+        </div>
+
+        <!-- Paliers d'appréciation / mentions -->
+        <div class="param-card">
+          <div class="pc-header">
+            <span>🎖️ Paliers et mentions</span>
+            <p-button icon="pi pi-plus" [rounded]="true" [text]="true" severity="success"
+                      [disabled]="paliersParDefaut()" (onClick)="ouvrirDialogPalier()" />
+          </div>
+          <div class="pc-body">
+            @if (paliersParDefaut()) {
+              <div class="empty-msg">
+                Échelle historique (Excellent ≥ 18 … Très insuffisant).
+                <p-button label="Personnaliser" size="small" [text]="true" (onClick)="initialiserPaliers()" />
+              </div>
+            }
+            @for (p of paliersAffiches(); track p.libelle) {
+              <div class="pc-item">
+                <span>
+                  <span class="pastille" [style.background]="p.couleur || '#90a4ae'"></span>
+                  {{ p.libelle }} @if (p.badge) { <b>{{ p.badge }}</b> }
+                </span>
+                <span class="pc-right">
+                  <span class="badge">≥ {{ +p.seuil }}/20</span>
+                  @if (p.distinction) { <span class="badge">distinction</span> }
+                  @if (p.id) {
+                    <span class="pc-actions">
+                      <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
+                                severity="secondary" (onClick)="ouvrirDialogPalier(p)" />
+                      <p-button icon="pi pi-trash" [rounded]="true" [text]="true" size="small"
+                                severity="danger" (onClick)="supprimerPalier(p)" />
+                    </span>
+                  }
+                </span>
+              </div>
+            }
+          </div>
+        </div>
 
         <!-- Classes -->
         <div class="param-card">
@@ -163,6 +265,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <span>{{ m.nom }}</span>
               <span class="pc-right">
                 <span class="badge" *ngIf="hybride" [class.badge-ar]="m.programme === 'AR'">{{ m.programme }}</span>
+                <span class="badge" *ngIf="m.domaine_nom">{{ m.domaine_nom }}</span>
+                <span class="badge" *ngIf="m.compte_dans_moyenne === false">hors moyenne</span>
                 <span class="badge">{{ 'academique.coef' | translate }} {{ m.coefficient }}</span>
                 <span class="pc-actions">
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" size="small"
@@ -361,13 +465,16 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           <div class="sc-item"><span>{{ 'academique.plus_haute'    | translate }}</span><strong style="color:#10b981">{{ statsClasse().moy_max }}</strong></div>
           <div class="sc-item"><span>{{ 'academique.plus_basse'    | translate }}</span><strong style="color:#ef4444">{{ statsClasse().moy_min }}</strong></div>
           <div class="sc-item"><span>{{ 'academique.taux_reussite' | translate }}</span><strong style="color:#0099ff">{{ statsClasse().taux_reussite }}%</strong></div>
+          @if (modeClassement() === 'MENTIONS') {
+            <div class="sc-item"><span>Distingués</span><strong style="color:#1b5e20">{{ statsClasse().nb_distingues }}</strong></div>
+          }
         </div>
 
         <p-table [value]="resultats()" styleClass="p-datatable-sm"
                  [paginator]="true" [rows]="20">
           <ng-template pTemplate="header">
             <tr>
-              <th>{{ 'academique.rang'        | translate }}</th>
+              @if (modeClassement() === 'CLASSIQUE') { <th>{{ 'academique.rang' | translate }}</th> }
               <th>{{ 'academique.eleve_col'   | translate }}</th>
               <th *ngFor="let m of colonnesMatieres()">{{ m }}</th>
               <th>{{ 'academique.moy_generale'| translate }}</th>
@@ -377,14 +484,16 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
           </ng-template>
           <ng-template pTemplate="body" let-r>
             <tr>
-              <td class="mono bold" style="color:#f59e0b">{{ r.rang }}e</td>
+              @if (modeClassement() === 'CLASSIQUE') { <td class="mono bold" style="color:#f59e0b">{{ r.rang }}e</td> }
               <td class="bold">{{ r.eleve_nom }}</td>
               <td class="mono" *ngFor="let m of r.matieres" style="text-align:center">
                 <div>{{ m.moyenne !== null ? m.moyenne : '—' }}</div>
                 <div *ngIf="m.rang_matiere" style="font-size:10px;color:var(--text-3)">{{ m.rang_matiere }}e</div>
               </td>
               <td class="mono bold" style="color:#00d4aa">{{ r.moy_generale }}</td>
-              <td>{{ r.appreciation_generale }}</td>
+              <td [style.color]="r.mention?.couleur || null" [style.fontWeight]="r.mention?.distinction ? 700 : null">
+                {{ r.appreciation_generale }} @if (modeClassement() === 'MENTIONS' && r.mention?.badge) { <b>{{ r.mention.badge }}</b> }
+              </td>
               <td>
                 <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                           severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
@@ -410,29 +519,33 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       @if (loadingAnalyse()) {
         <div class="empty-msg" style="padding:40px; text-align:center; color:var(--text-3)">Chargement...</div>
       } @else if (analyse()) {
-        <!-- KPI distribution -->
-        <div class="analyse-grid" style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px">
-          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #f59e0b">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Excellent ≥ {{ analyse()!.seuils?.excellent ?? 16 }}</div>
-            <div style="font-size:22px; font-weight:700; color:#f59e0b">{{ analyse()!.distribution.excellent }}</div>
-          </div>
-          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #10b981">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Bien ≥ {{ analyse()!.seuils?.bien ?? 14 }}</div>
-            <div style="font-size:22px; font-weight:700; color:#10b981">{{ analyse()!.distribution.bien }}</div>
-          </div>
-          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #0099ff">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Assez bien ≥ {{ analyse()!.seuils?.assez_bien ?? 12 }}</div>
-            <div style="font-size:22px; font-weight:700; color:#0099ff">{{ analyse()!.distribution.assez_bien }}</div>
-          </div>
-          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #a855f7">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Passable ≥ {{ analyse()!.seuils?.passable ?? 10 }}</div>
-            <div style="font-size:22px; font-weight:700; color:#a855f7">{{ analyse()!.distribution.passable }}</div>
-          </div>
-          <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center; border-top:3px solid #ef4444">
-            <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">Insuffisant &lt; {{ analyse()!.seuils?.passable ?? 10 }}</div>
-            <div style="font-size:22px; font-weight:700; color:#ef4444">{{ analyse()!.distribution.insuffisant }}</div>
-          </div>
+        <!-- Répartition selon les paliers de l'école -->
+        <div class="analyse-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:20px">
+          @for (p of analyse()!.repartition_paliers; track p.libelle) {
+            <div class="kpi-card" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center"
+                 [style.borderTop]="'3px solid ' + (p.couleur || '#90a4ae')">
+              <div style="font-size:11px; color:var(--text-3); margin-bottom:4px">{{ p.libelle }} @if (p.badge) { {{ p.badge }} }</div>
+              <div style="font-size:22px; font-weight:700" [style.color]="p.couleur || 'var(--text)'">{{ p.nb }}</div>
+            </div>
+          }
         </div>
+        @if (analyse()!.distingues?.length) {
+          <div class="table-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px">
+            <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">🎖️ Élèves distingués — {{ analyse()!.trimestre_ref }}</div>
+            <table style="width:100%; border-collapse:collapse">
+              <tbody>
+                @for (d of analyse()!.distingues; track d.nom + d.classe) {
+                  <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
+                    <td style="padding:8px 12px; font-weight:600; color:var(--text)">{{ d.nom }}</td>
+                    <td style="padding:8px 12px; color:var(--text-3)">{{ d.classe }}</td>
+                    <td style="padding:8px 12px; font-weight:700" [style.color]="d.couleur">{{ d.mention }} {{ d.badge }}</td>
+                    <td style="padding:8px 12px; text-align:right; font-family:monospace">{{ d.moyenne }}/{{ d.bareme }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
 
         <!-- Évolution par trimestre -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
@@ -483,7 +596,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
         <!-- Top élèves -->
         <div class="table-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-top:16px">
-          <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">🏆 Top 10 Élèves — {{ analyse()!.trimestre_ref }}</div>
+          <div style="padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; color:var(--text)">🏆 {{ analyse()!.mode_classement === 'CLASSIQUE' ? 'Top 10 Élèves' : 'Meilleures moyennes' }} — {{ analyse()!.trimestre_ref }}</div>
           <table style="width:100%; border-collapse:collapse">
             <thead><tr>
               <th style="padding:8px 12px; text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Rang</th>
@@ -492,9 +605,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
               <th style="padding:8px 12px; text-align:right; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border)">Moyenne</th>
             </tr></thead>
             <tbody>
-              @for (e of analyse()!.top_eleves; track e.rang) {
+              @for (e of analyse()!.top_eleves; track e.nom + e.classe) {
                 <tr style="border-bottom:1px solid rgba(42,63,95,0.3)">
-                  <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : 'var(--text-3)' }}">{{ e.rang }}</td>
+                  <td style="padding:8px 12px; font-weight:700; color:{{ e.rang === 1 ? '#f59e0b' : e.rang <= 3 ? '#0099ff' : 'var(--text-3)' }}">{{ e.rang ?? '—' }}</td>
                   <td style="padding:8px 12px; font-weight:600; color:var(--text)">{{ e.nom }}</td>
                   <td style="padding:8px 12px; color:var(--text-3)">{{ e.classe }}</td>
                   <td style="padding:8px 12px; text-align:right; font-family:monospace; color:#00d4aa; font-weight:700">{{ e.moyenne }}/{{ e.bareme ?? analyse()!.bareme ?? 20 }}</td>
@@ -637,8 +750,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                  [attr.dir]="formMatiere.programme === 'AR' ? 'auto' : null" />
         </div>
         <div class="form-group">
+          <label>Domaine</label>
+          <p-select appendTo="body" [overlayOptions]="overlayNoHideOnScroll" [options]="domainesDuProgramme(formMatiere.programme)"
+                    [(ngModel)]="formMatiere.domaine" optionLabel="nom" optionValue="id"
+                    [showClear]="true" placeholder="Sans domaine" styleClass="w-full" />
+        </div>
+        <div class="form-group">
           <label>{{ 'academique.coefficient' | translate }}</label>
           <p-inputNumber [(ngModel)]="formMatiere.coefficient" [min]="0.5" [max]="10" mode="decimal" styleClass="w-full" />
+          <label class="copie-ecraser" style="margin-top:6px">
+            <input type="checkbox" [(ngModel)]="formMatiere.compte_dans_moyenne" />
+            <span>Compte dans la moyenne générale</span>
+          </label>
         </div>
         <div class="form-group">
           <label>{{ 'academique.note_max' | translate }}</label>
@@ -658,6 +781,70 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogMatiereVisible=false" />
         <p-button [label]="(formMatiere.id ? 'common.enregistrer' : 'common.creer') | translate" severity="success" (onClick)="creerMatiere()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog Domaine -->
+    <p-dialog [header]="formDomaine.id ? 'Modifier le domaine' : 'Nouveau domaine'" [(visible)]="dialogDomaineVisible"
+              [modal]="true" [style]="{width:'420px'}">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="form-group">
+          <label>Nom *</label>
+          <input pInputText [(ngModel)]="formDomaine.nom" class="w-full" placeholder="Ex. Langue et communication" />
+        </div>
+        @if (hybride) {
+          <div class="form-group">
+            <label>{{ 'academique.programme' | translate }}</label>
+            <p-select appendTo="body" [options]="programmesOptions()" [(ngModel)]="formDomaine.programme"
+                      optionLabel="label" optionValue="value" styleClass="w-full" />
+          </div>
+        }
+        <div class="form-group">
+          <label>Ordre sur le bulletin</label>
+          <p-inputNumber [(ngModel)]="formDomaine.ordre" [min]="0" [fluid]="true" />
+        </div>
+        <div class="form-group">
+          <label>Coefficient du domaine</label>
+          <p-inputNumber [(ngModel)]="formDomaine.coefficient" [min]="0.1" mode="decimal"
+                         [maxFractionDigits]="2" [fluid]="true" placeholder="Somme des coefficients de ses matières" />
+          <small class="fc-hint">Utilisé seulement avec « Moyenne générale par domaines ». Vide : le domaine pèse la somme des coefficients de ses matières.</small>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogDomaineVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success" (onClick)="enregistrerDomaine()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Dialog Palier -->
+    <p-dialog [header]="formPalier.id ? 'Modifier le palier' : 'Nouveau palier'" [(visible)]="dialogPalierVisible"
+              [modal]="true" [style]="{width:'420px'}">
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="form-group">
+          <label>Libellé *</label>
+          <input pInputText [(ngModel)]="formPalier.libelle" class="w-full" placeholder="Ex. Tableau d'honneur" />
+        </div>
+        <div class="form-group">
+          <label>À partir de (sur 20)</label>
+          <p-inputNumber [(ngModel)]="formPalier.seuil" [min]="0" [max]="20" mode="decimal"
+                         [maxFractionDigits]="2" [fluid]="true" />
+          <small class="fc-hint">Sur 20, appliqué à la part de la moyenne : 8/10 vaut 16/20.</small>
+        </div>
+        <div class="form-group">
+          <label>Couleur et badge</label>
+          <div style="display:flex; gap:8px; align-items:center">
+            <input type="color" [(ngModel)]="formPalier.couleur" />
+            <input pInputText [(ngModel)]="formPalier.badge" maxlength="20" placeholder="Ex. ★★★ ou TH" />
+          </div>
+        </div>
+        <label class="copie-ecraser">
+          <input type="checkbox" [(ngModel)]="formPalier.distinction" />
+          <span>Distinction (élève performant : tableau d'honneur, félicitations…)</span>
+        </label>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogPalierVisible=false" />
+        <p-button [label]="'common.enregistrer' | translate" severity="success" (onClick)="enregistrerPalier()" />
       </ng-template>
     </p-dialog>
 
@@ -843,6 +1030,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
     .bareme-rapide button.actif { background:var(--primary); border-color:var(--primary); color:#fff; }
     .fc-hint { display:block; margin-top:4px; font-size:12px; color:var(--text-muted); }
     .badge-ar { background:rgba(245,158,11,.15) !important; color:#b45309 !important; }
+    .pastille { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
     .sc-item { display:flex; flex-direction:column; gap:2px; font-size:12px; }
     .sc-item span { color:var(--text-3); }
     .sc-item strong { color:var(--text); font-family:monospace; }
@@ -901,6 +1089,19 @@ export class AcademiqueComponent implements OnInit {
   calculMoyenne: 'MATIERES' | 'POINTS' = 'MATIERES';
   baremeMoyenne: '' | '10' | '20' = '';
   arrondiMoyenne: 'ARRONDI' | 'TRONQUE' = 'ARRONDI';
+  // Classement, mise en page du bulletin, agrégation par domaines
+  modeClassement     = signal<'CLASSIQUE' | 'AUCUN' | 'MENTIONS'>('CLASSIQUE');
+  formatBulletin     = signal<'DEMI_A4' | 'A4'>('DEMI_A4');
+  agregationDomaines = signal(false);
+  domaines           = signal<any[]>([]);
+  paliers            = signal<any[]>([]);
+  paliersEffectifs   = signal<any[]>([]);
+  paliersParDefaut   = signal(true);
+  paliersAffiches    = computed(() => this.paliersParDefaut() ? this.paliersEffectifs() : this.paliers());
+  dialogDomaineVisible = false;
+  dialogPalierVisible  = false;
+  formDomaine: any = { id: null, nom: '', programme: 'FR', ordre: 0, coefficient: null };
+  formPalier:  any = { id: null, libelle: '', seuil: 10, couleur: '#1565c0', badge: '', distinction: false };
   programmeNotes = 'FR';
   programmeResultats = 'FR';
   programmeAnalyse = 'FR';
@@ -960,6 +1161,104 @@ export class AcademiqueComponent implements OnInit {
       },
       error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
     });
+  }
+
+  sauvegarderReglagesBulletin() {
+    this.api.patch<any>('/tenants/mon_ecole/', {
+      mode_classement: this.modeClassement(),
+      format_bulletin: this.formatBulletin(),
+      agregation_domaines: this.agregationDomaines(),
+    }).subscribe({
+      next: () => { this.analyse.set(null); this.resultats.set([]);
+                    this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }); },
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
+    });
+  }
+
+  // ── Domaines de matières ───────────────────────────────────────────────
+  chargerDomaines() {
+    this.api.get<any>('/academique/domaines/').subscribe({
+      next: r => this.domaines.set(r.results || r || []),
+    });
+  }
+  domainesDuProgramme(programme: string) {
+    return this.domaines().filter((d: any) => !this.hybride || (d.programme || 'FR') === (programme || 'FR'));
+  }
+  ouvrirDialogDomaine(d?: any) {
+    this.formDomaine = d
+      ? { id: d.id, nom: d.nom, programme: d.programme || 'FR', ordre: d.ordre,
+          coefficient: d.coefficient !== null ? +d.coefficient : null }
+      : { id: null, nom: '', programme: 'FR', ordre: this.domaines().length, coefficient: null };
+    this.dialogDomaineVisible = true;
+  }
+  enregistrerDomaine() {
+    if (!this.formDomaine.nom?.trim()) return;
+    const corps = { ...this.formDomaine, coefficient: this.formDomaine.coefficient || null };
+    const obs = this.formDomaine.id
+      ? this.api.patch<any>(`/academique/domaines/${this.formDomaine.id}/`, corps)
+      : this.api.post<any>('/academique/domaines/', corps);
+    obs.subscribe({
+      next: () => { this.dialogDomaineVisible = false; this.chargerDomaines();
+                    this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes') }); },
+      error: (e) => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                   detail: JSON.stringify(e?.error || '') }),
+    });
+  }
+  supprimerDomaine(d: any) {
+    if (!confirm(`Supprimer le domaine « ${d.nom} » ?
+Ses matières restent, sans domaine.`)) return;
+    this.api.delete<any>(`/academique/domaines/${d.id}/`).subscribe({
+      next: () => { this.chargerDomaines(); this.chargerMatieres(); },
+    });
+  }
+  appliquerModeleCEB() {
+    const classes = this.classeFiltre ? [this.classeFiltre] : [];
+    const quoi = this.classeFiltre
+      ? `les 4 domaines du CEB et leurs activités manquantes dans « ${this.nomClasseFiltre()} »`
+      : 'les 4 domaines du CEB (choisissez une classe dans « Matières » pour créer aussi ses activités)';
+    if (!confirm(`Créer ${quoi} ?
+Rien n'est dupliqué ; vos coefficients sont gardés.`)) return;
+    this.api.post<any>('/academique/domaines/modele-ceb/', { classes, programme: 'FR' }).subscribe({
+      next: r => {
+        this.chargerDomaines(); this.chargerMatieres();
+        this.msg.add({ severity: 'success', summary: 'Modèle CEB appliqué',
+                       detail: `${r.domaines_crees} domaine(s), ${r.matieres_creees} matière(s) créés.` });
+      },
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur') }),
+    });
+  }
+
+  // ── Paliers d'appréciation / mentions ──────────────────────────────────
+  chargerPaliers() {
+    this.api.get<any>('/academique/paliers/').subscribe({
+      next: r => { this.paliers.set(r.paliers || []); this.paliersEffectifs.set(r.effectifs || []);
+                   this.paliersParDefaut.set(!!r.par_defaut); },
+    });
+  }
+  initialiserPaliers() {
+    this.api.post<any>('/academique/paliers/initialiser/', {}).subscribe({ next: () => this.chargerPaliers() });
+  }
+  ouvrirDialogPalier(p?: any) {
+    this.formPalier = p
+      ? { id: p.id, libelle: p.libelle, seuil: +p.seuil, couleur: p.couleur || '#1565c0',
+          badge: p.badge || '', distinction: !!p.distinction }
+      : { id: null, libelle: '', seuil: 10, couleur: '#1565c0', badge: '', distinction: false };
+    this.dialogPalierVisible = true;
+  }
+  enregistrerPalier() {
+    if (!this.formPalier.libelle?.trim()) return;
+    const obs = this.formPalier.id
+      ? this.api.patch<any>(`/academique/paliers/${this.formPalier.id}/`, this.formPalier)
+      : this.api.post<any>('/academique/paliers/', this.formPalier);
+    obs.subscribe({
+      next: () => { this.dialogPalierVisible = false; this.chargerPaliers(); },
+      error: (e) => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                   detail: JSON.stringify(e?.error || '') }),
+    });
+  }
+  supprimerPalier(p: any) {
+    if (!confirm(`Supprimer le palier « ${p.libelle} » ?`)) return;
+    this.api.delete<any>(`/academique/paliers/${p.id}/`).subscribe({ next: () => this.chargerPaliers() });
   }
 
   telechargerFiche(eleveId: string, nom: string) {
@@ -1067,6 +1366,9 @@ export class AcademiqueComponent implements OnInit {
         this.calculMoyenne = e?.calcul_moyenne === 'POINTS' ? 'POINTS' : 'MATIERES';
         this.baremeMoyenne = e?.bareme_moyenne ? (String(+e.bareme_moyenne) as '10' | '20') : '';
         this.arrondiMoyenne = e?.arrondi_moyenne === 'TRONQUE' ? 'TRONQUE' : 'ARRONDI';
+        this.modeClassement.set(e?.mode_classement || 'CLASSIQUE');
+        this.formatBulletin.set(e?.format_bulletin === 'A4' ? 'A4' : 'DEMI_A4');
+        this.agregationDomaines.set(!!e?.agregation_domaines);
         this.nbPeriodes = e?.nb_periodes || 3;
         this.construireTrimestres();
       },
@@ -1074,6 +1376,8 @@ export class AcademiqueComponent implements OnInit {
     this.acad.getNiveaux().subscribe({ next: r => this.niveaux.set(r.results || []) });
     this.acad.getClasses().subscribe({ next: r => this.classes.set(r.results || []) });
     this.acad.getTypesEval().subscribe({ next: r => this.typesEval.set(r.results || []) });
+    this.chargerDomaines();
+    this.chargerPaliers();
   }
 
   ouvrirCopieMatieres() {
@@ -1308,12 +1612,14 @@ export class AcademiqueComponent implements OnInit {
   }
   ouvrirDialogMatiere()  {
     // Pré-remplir avec la classe filtrée si active
-    this.formMatiere = { id:null, nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20, programme:'FR' };
+    this.formMatiere = { id:null, nom:'', classe: this.classeFiltre || '', coefficient:1, note_max:20, programme:'FR',
+                         domaine: null, compte_dans_moyenne: true };
     this.dialogMatiereVisible = true;
   }
   ouvrirEditionMatiere(m: any) {
     this.formMatiere = { id:m.id, nom:m.nom, classe:m.classe, coefficient:+m.coefficient, note_max:+m.note_max,
-                         programme: m.programme || 'FR' };
+                         programme: m.programme || 'FR', domaine: m.domaine || null,
+                         compte_dans_moyenne: m.compte_dans_moyenne !== false };
     this.dialogMatiereVisible = true;
   }
   ouvrirDialogTypeEval() { this.formTypeEval = { id:null, nom:'', nom_ar:'', poids:1 }; this.dialogTypeEvalVisible = true; }
@@ -1377,6 +1683,7 @@ export class AcademiqueComponent implements OnInit {
       next: () => {
         this.dialogMatiereVisible = false;
         this.chargerMatieres();
+        this.chargerDomaines();
         this.msg.add({ severity:'success', summary: this.translate.instant('academique.matiere_creee') });
       },
       error: (err) => this.msg.add({ severity:'error', summary:'Erreur',

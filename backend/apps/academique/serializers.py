@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from core.serializers import TenantModelSerializer
-from .models import NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache
+from .models import (NiveauScolaire, Classe, TypeEvaluation, Matiere, Evaluation, Note, BulletinCache,
+                     DomaineMatiere, PalierMention)
 
 
 class NiveauScolaireSerializer(TenantModelSerializer):
@@ -41,8 +42,44 @@ class TypeEvaluationSerializer(TenantModelSerializer):
         extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
 
 
+class DomaineMatiereSerializer(TenantModelSerializer):
+    nb_matieres = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DomaineMatiere
+        fields = '__all__'
+        extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def get_nb_matieres(self, obj):
+        return obj.matieres.filter(est_active=True).count()
+
+    def validate_coefficient(self, valeur):
+        if valeur is not None and valeur <= 0:
+            raise serializers.ValidationError("Le coefficient d'un domaine doit être positif (ou vide).")
+        return valeur
+
+
+class PalierMentionSerializer(TenantModelSerializer):
+    class Meta:
+        model = PalierMention
+        fields = '__all__'
+        extra_kwargs = {'tenant': {'required': False, 'read_only': True}}
+
+    def validate_seuil(self, valeur):
+        if valeur < 0 or valeur > 20:
+            raise serializers.ValidationError('Le seuil se donne sur 20 (entre 0 et 20).')
+        return valeur
+
+    def validate_couleur(self, valeur):
+        import re
+        if valeur and not re.fullmatch(r'#[0-9a-fA-F]{6}', valeur):
+            raise serializers.ValidationError('Couleur attendue au format #RRGGBB.')
+        return valeur
+
+
 class MatiereSerializer(TenantModelSerializer):
     classe_nom = serializers.CharField(source='classe.nom', read_only=True)
+    domaine_nom = serializers.CharField(source='domaine.nom', read_only=True, default='')
 
     class Meta:
         model = Matiere

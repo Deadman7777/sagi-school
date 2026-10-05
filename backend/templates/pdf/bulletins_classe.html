@@ -23,7 +23,10 @@
   @font-face { font-family: "arf"; src: url("{{ font_ar|default:'Amiri-Regular.ttf' }}"); }
   .ar { font-family: "arf"; font-size: 10pt; }
 
-  @page { size: 148.5mm {{ hauteur_page|default:"210" }}mm; margin: 6mm 6mm 4mm; }
+  /* A4 debout (format « une page par élève », ou bulletin trop long pour
+     rester lisible en demi-feuille) : la page garde sa hauteur et le
+     tableau des notes se poursuit sur la suivante, en-tête répété. */
+  @page { size: {{ largeur_page|default:"148.5" }}mm {{ hauteur_page|default:"210" }}mm; margin: 6mm 6mm 4mm; }
 
   /* Interligne fixé : celui de xhtml2pdf par défaut (1,5) faisait déborder
      les signatures sur une deuxième page dès treize matières. */
@@ -65,6 +68,13 @@
                         border: 0.5pt solid #b0c4de; border-top: 1.2pt solid #1a3c5e;
                         font-size: 10.5pt; text-align: center; }
   .tbl-notes tfoot td.left { text-align: left; padding-left: 3pt; }
+
+  /* ── DOMAINES : titre de bloc et moyenne du domaine ── */
+  .tbl-notes tbody tr.dom td { background-color: #cfd8e3; color: #1a3c5e; font-size: 8.5pt;
+                               padding: 2pt 3pt 1pt; text-align: left; }
+  .tbl-notes tbody tr.sous-total td { background-color: #f3f6fa; font-size: 9pt;
+                                      border-bottom: 1pt solid #1a3c5e; }
+  .note-bas { font-size: 7pt; font-weight: normal; color: #444; margin: -3pt 0 4pt; }
 
   .moy-val  { color: #1a3c5e; }
   .rang-txt { color: #7b3a00; }

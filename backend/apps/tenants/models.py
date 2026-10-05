@@ -97,6 +97,28 @@ class Tenant(TimeStampedModel):
                                ('TRONQUE', 'Tronqué (comme à la main)')]
     arrondi_moyenne = models.CharField(max_length=10, choices=ARRONDI_MOYENNE_CHOICES,
                                        default='ARRONDI')
+    # Classement des élèves sur les bulletins et à l'écran :
+    #   CLASSIQUE — rang général et rang par matière (1er, 2e…) ;
+    #   AUCUN     — ni rang ni classement : moyennes et appréciations seules ;
+    #   MENTIONS  — pas de rang ; la performance se lit par les paliers de
+    #               l'école (libellé, couleur, badge — academique.PalierMention).
+    # Défaut CLASSIQUE : le comportement d'avant ce réglage.
+    MODE_CLASSEMENT_CHOICES = [('CLASSIQUE', 'Classement classique (rangs)'),
+                               ('AUCUN', 'Aucun classement'),
+                               ('MENTIONS', 'Mentions et distinctions')]
+    mode_classement = models.CharField(max_length=10, choices=MODE_CLASSEMENT_CHOICES,
+                                       default='CLASSIQUE')
+    # Moyenne générale par domaines : moyenne des domaines pondérée par leur
+    # coefficient, au lieu de Σ points / Σ coefficients des matières.
+    agregation_domaines = models.BooleanField(default=False)
+    # Mise en page du bulletin français :
+    #   DEMI_A4 — deux bulletins par A4 couchée ; un bulletin trop long pour
+    #             rester lisible passe tout seul en A4 debout paginée ;
+    #   A4      — un bulletin par A4 debout, sur autant de pages qu'il faut.
+    FORMAT_BULLETIN_CHOICES = [('DEMI_A4', 'Deux par feuille (A4 couchée)'),
+                               ('A4', 'Une page A4 par élève (paginée)')]
+    format_bulletin = models.CharField(max_length=8, choices=FORMAT_BULLETIN_CHOICES,
+                                       default='DEMI_A4')
 
     # ── Quand une mensualité devient-elle exigible ? ──────────────────────
     # Les écoles ne collectent pas au même moment, et la réponse décide de tout
