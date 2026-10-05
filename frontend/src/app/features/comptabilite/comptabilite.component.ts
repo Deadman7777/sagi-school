@@ -14,11 +14,12 @@ import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
+import { ActivitesComponent } from './activites.component';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent],
+  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent, ActivitesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -83,7 +84,15 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               (click)="chargerImmobilisations(); onglet.set('investissement')">
         🏗️ Investissement
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'activites'"
+              (click)="onglet.set('activites')">
+        🏷️ Activités
+      </button>
     </div>
+
+    @if (onglet() === 'activites') {
+      <app-activites [exercice]="exerciceSel()" [lectureSeule]="estLectureSeule()" />
+    }
 
     <!-- Sous-onglets ETAFI (États Financiers de Synthèse) -->
     <div class="etafi-bar" *ngIf="isEtafiActif()">

@@ -325,6 +325,29 @@ def get_exercice(tenant, request=None):
     return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
 
 
+def get_exercice_ecriture(tenant, request=None):
+    """Exercice dans lequel une vue d'ÉCRITURE doit passer ses écritures.
+
+    Par défaut l'exercice courant (le plus récent non clôturé). Une école qui
+    arrive avec un exercice antérieur non régularisé peut le désigner
+    (`exercice_id` dans le corps, ou `?exercice=`) pour y passer charges,
+    écritures diverses ou factures — sans bloquer l'exercice courant. Un
+    exercice clôturé reste en lecture seule : ValueError.
+    """
+    ex_id = None
+    if request is not None:
+        ex_id = (request.data.get('exercice_id') if hasattr(request, 'data') else None) \
+            or request.query_params.get('exercice')
+    if ex_id:
+        ex = Exercice.objects.filter(tenant=tenant, id=ex_id).first()
+        if ex is None:
+            raise ValueError('Exercice introuvable.')
+        if ex.cloture:
+            raise ValueError(f"L'exercice {ex.annee_scolaire} est clôturé : lecture seule.")
+        return ex
+    return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+
+
 def resoudre_dimensions_depense(request, tenant, montant):
     """Résout les dimensions analytiques (projet, ressource) d'une dépense et
     contrôle le disponible de la ressource (Lot 2 gouvernance).
@@ -1238,7 +1261,7 @@ class ChargeView(APIView):
 
     def get(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        exercice = get_exercice(tenant, request)
         if not exercice:
             return Response([])
 
@@ -1251,7 +1274,7 @@ class ChargeView(APIView):
             source__in=('CHARGE', 'PAIE', 'BUDGET'),
             debit__gt=0,
             no_compte__startswith='6',
-        ).select_related('budget_ligne').order_by('-date_ecriture')
+        ).select_related('budget_ligne', 'activite').order_by('-date_ecriture')
 
         # Recherche : libellé, n° de pièce ou compte. Une école qui cherche une
         # dépense de l'an dernier ne va pas la trouver en faisant défiler des
@@ -1282,16 +1305,32 @@ class ChargeView(APIView):
             # Ligne de budget consommée, s'il y en a une — « hors budget » sinon.
             'budget_ligne_id':      str(c.budget_ligne_id) if c.budget_ligne_id else None,
             'budget_ligne_libelle': c.budget_ligne.libelle if c.budget_ligne else '',
+            'activite_id':      str(c.activite_id) if c.activite_id else None,
+            'activite_libelle': c.activite.libelle if c.activite_id else '',
         } for c in charges])
 
     def post(self, request):
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
+        try:
+            # Exercice courant, ou exercice antérieur encore ouvert désigné
+            # par `exercice_id` (régularisation).
+            exercice = get_exercice_ecriture(tenant, request)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         if not exercice:
             return Response({'error': 'Aucun exercice actif'}, status=400)
 
+        # Activité de l'établissement à laquelle la dépense appartient (vide :
+        # l'activité principale). Son compte de charge sert de défaut.
+        from .activites import resoudre_activite
+        try:
+            activite = resoudre_activite(tenant, request.data.get('activite_id'))
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+
         data      = request.data
-        no_compte = data.get('no_compte', '658')  # 658 Charges diverses — 606 n'existe pas en SYSCOHADA
+        no_compte = (data.get('no_compte') or (activite.compte_charge if activite else '')
+                     or '658')  # 658 Charges diverses — 606 n'existe pas en SYSCOHADA
         montant   = float(data.get('montant', 0))
         libelle   = data.get('libelle', '')
         date      = data.get('date', str(timezone.now().date()))
@@ -1362,7 +1401,7 @@ class ChargeView(APIView):
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece, date_ecriture=date,
                 source='CHARGE', source_id=None,
-                projet=projet, ressource=ressource,
+                projet=projet, ressource=ressource, activite=activite,
                 budget_ligne=budget_ligne if e['ordre'] == 1 else None, **e
             )
 
@@ -1374,13 +1413,21 @@ class ChargeView(APIView):
         import datetime
         import re as _re
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
-        if not exercice:
-            return Response({'error': 'Aucun exercice actif'}, status=400)
         try:
             entry = JournalEntry.objects.get(id=pk, tenant=tenant)
         except JournalEntry.DoesNotExist:
             return Response({'error': 'Écriture introuvable'}, status=404)
+        # La correction se passe dans l'exercice de la charge s'il est encore
+        # ouvert (régularisation d'un exercice antérieur), sinon dans le courant.
+        exercice = entry.exercice if not entry.exercice.cloture else get_exercice(tenant)
+        if not exercice:
+            return Response({'error': 'Aucun exercice actif'}, status=400)
+        from .activites import resoudre_activite
+        try:
+            activite_new = (resoudre_activite(tenant, request.data.get('activite_id'))
+                            if 'activite_id' in request.data else entry.activite)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
 
         # Fonctionne pour les charges directes (CHARGE) comme pour les
         # comptabilisations de budget (BUDGET) : la pièce garde sa source
@@ -1408,7 +1455,7 @@ class ChargeView(APIView):
                 libelle=f"MODIF — {e.libelle}", ordre=e.ordre,
                 # La contre-écriture porte la même dimension : la consommation
                 # nette (débit−crédit) de la ressource/projet se dénoue à zéro.
-                projet=e.projet, ressource=e.ressource,
+                projet=e.projet, ressource=e.ressource, activite=e.activite,
                 # Idem pour l'imputation budgétaire : sans elle, la contre-écriture
                 # ne déduirait pas la dépense du réalisé de sa ligne.
                 budget_ligne=e.budget_ligne,
@@ -1490,7 +1537,7 @@ class ChargeView(APIView):
                 tenant=tenant, exercice=exercice,
                 no_piece=no_piece_new, date_ecriture=date_new,
                 source=source_piece, source_id=None,
-                projet=projet_new, ressource=ressource_new,
+                projet=projet_new, ressource=ressource_new, activite=activite_new,
                 budget_ligne=budget_new if e['ordre'] == 1 else None, **e
             )
 
@@ -1509,13 +1556,13 @@ class ChargeView(APIView):
     def delete(self, request, pk):
         """Annulation par contre-écritures SYSCOHADA (pas de suppression physique)."""
         tenant   = get_tenant(request)
-        exercice = get_exercice(tenant)
         try:
             entry   = JournalEntry.objects.get(id=pk, tenant=tenant)
             source_piece = entry.source if entry.source in ('CHARGE', 'BUDGET') else 'CHARGE'
             entries = JournalEntry.objects.filter(tenant=tenant, source=source_piece, no_piece=entry.no_piece)
         except JournalEntry.DoesNotExist:
             return Response({'success': True})
+        exercice = entry.exercice if not entry.exercice.cloture else get_exercice(tenant)
 
         if not exercice:
             return Response({'error': 'Aucun exercice actif'}, status=400)
@@ -1539,7 +1586,7 @@ class ChargeView(APIView):
                 libelle=f"Annulation {e.no_piece} — {e.libelle}",
                 ordre=e.ordre,
                 # Même dimension : la consommation nette de la ressource se dénoue.
-                projet=e.projet, ressource=e.ressource,
+                projet=e.projet, ressource=e.ressource, activite=e.activite,
                 # Et la même imputation, sinon une charge annulée resterait
                 # consommée dans le réalisé de sa ligne de budget.
                 budget_ligne=e.budget_ligne,

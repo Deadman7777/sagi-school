@@ -47,6 +47,12 @@ class JournalEntry(TenantModel):
     # (sauf les encaissements, repris du saisi_par de leur reçu).
     saisi_par     = models.ForeignKey('users.User', null=True, blank=True,
                                       on_delete=models.SET_NULL, related_name='+')
+    # Dimension « activité » (enseignement, transport, restauration…) : à
+    # quelle activité de l'établissement la ligne appartient. Vide = l'activité
+    # principale — toutes les écritures d'avant octobre 2026 y restent, sans
+    # migration de données. Voir apps/comptabilite/activites.py.
+    activite      = models.ForeignKey('comptabilite.Activite', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='ecritures')
 
     objects = JournalEntryQuerySet.as_manager()
 
@@ -305,3 +311,131 @@ class Immobilisation(TenantModel):
 
     def __str__(self):
         return f"{self.no_bien} — {self.libelle}"
+
+
+class Activite(TenantModel):
+    """Une activité de l'établissement, suivie à part dans la comptabilité.
+
+    L'enseignement est l'activité principale ; à côté, un établissement peut
+    exploiter un transport (y compris pour des clients extérieurs, sans lien
+    avec le ramassage des élèves), une restauration, un internat, des
+    prestations externes (location de salles, formations…).
+
+    Chaque activité porte son paramétrage comptable : le compte de produit
+    crédité par ses factures, le compte de charge proposé pour ses dépenses,
+    le compte client de ses débiteurs extérieurs, et son régime de TVA. Les
+    écritures qu'elle génère sont marquées (`JournalEntry.activite`) : recettes,
+    dépenses et résultat se lisent activité par activité, tout en alimentant
+    la même comptabilité générale.
+    """
+    TYPE_CHOICES = [
+        ('ENSEIGNEMENT', 'Enseignement'),
+        ('TRANSPORT',    'Transport'),
+        ('RESTAURATION', 'Restauration'),
+        ('HEBERGEMENT',  'Hébergement / internat'),
+        ('PRESTATION',   'Prestations externes'),
+        ('FORMATION',    'Formation continue'),
+        ('LOCATION',     'Location de locaux / matériel'),
+        ('COMMERCE',     'Vente (librairie, uniformes…)'),
+        ('AUTRE',        'Autre activité'),
+    ]
+    TVA_CHOICES = [
+        ('EXONERE',  'Exonérée'),
+        ('TAXABLE',  'Soumise à TVA'),
+        ('HORS_CHAMP', 'Hors champ'),
+    ]
+    code            = models.CharField(max_length=20)
+    libelle         = models.CharField(max_length=150)
+    type_activite   = models.CharField(max_length=15, choices=TYPE_CHOICES, default='AUTRE')
+    description     = models.TextField(blank=True, default='')
+    est_principale  = models.BooleanField(default=False)
+    compte_produit  = models.CharField(max_length=10, default='706')
+    compte_charge   = models.CharField(max_length=10, blank=True, default='')
+    compte_client   = models.CharField(max_length=10, default='4111')
+    regime_tva      = models.CharField(max_length=10, choices=TVA_CHOICES, default='EXONERE')
+    # Vide : le taux normal en vigueur (paramètre fiscal TVA_TAUX_NORMAL).
+    taux_tva        = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    actif           = models.BooleanField(default=True)
+    ordre           = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = 'activites'
+        ordering = ['ordre', 'libelle']
+        constraints = [models.UniqueConstraint(fields=['tenant', 'code'],
+                                               name='uniq_activite_code_tenant')]
+
+    def __str__(self):
+        return self.libelle
+
+
+class FactureActivite(TenantModel):
+    """Facture émise par une activité à un client (souvent extérieur).
+
+    Brouillon modifiable ; validée, elle est numérotée et comptabilisée :
+    client (D, TTC) / produit de l'activité (C, HT) / TVA facturée (C).
+    Les règlements soldent la créance ; une facture validée ne se supprime
+    pas, elle s'annule par extourne (traçabilité SYSCOHADA).
+    """
+    STATUT_CHOICES = [
+        ('BROUILLON', 'Brouillon'),
+        ('VALIDEE',   'Validée'),
+        ('PARTIEL',   'Partiellement réglée'),
+        ('PAYEE',     'Réglée'),
+        ('ANNULEE',   'Annulée'),
+    ]
+    activite      = models.ForeignKey(Activite, on_delete=models.PROTECT, related_name='factures')
+    exercice      = models.ForeignKey('paiements.Exercice', on_delete=models.PROTECT,
+                                      related_name='factures_activite')
+    numero        = models.CharField(max_length=30, blank=True, default='')
+    date_facture  = models.DateField()
+    date_echeance = models.DateField(null=True, blank=True)
+    client_nom    = models.CharField(max_length=200)
+    client_contact = models.CharField(max_length=200, blank=True, default='')
+    client_ninea  = models.CharField(max_length=30, blank=True, default='')
+    # [{"libelle": "Location bus — sortie", "quantite": 2, "prix_unitaire": 75000}]
+    lignes        = models.JSONField(default=list, blank=True)
+    montant_ht    = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    taux_tva      = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    montant_tva   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    montant_ttc   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    montant_regle = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    statut        = models.CharField(max_length=10, choices=STATUT_CHOICES, default='BROUILLON')
+    observations  = models.TextField(blank=True, default='')
+    date_validation = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'factures_activite'
+        ordering = ['-date_facture', '-numero']
+        constraints = [models.UniqueConstraint(
+            fields=['tenant', 'numero'], condition=~models.Q(numero=''),
+            name='uniq_facture_activite_numero_tenant')]
+
+    def __str__(self):
+        return f"{self.numero or 'Brouillon'} — {self.client_nom}"
+
+    @property
+    def reste_a_regler(self):
+        return round(float(self.montant_ttc) - float(self.montant_regle), 2)
+
+
+class ReglementFacture(TenantModel):
+    """Encaissement (total ou partiel) d'une facture d'activité."""
+    MODE_CHOICES = [
+        ('ESPECE', 'Espèce'), ('WAVE', 'Wave'), ('ORANGE_MONEY', 'Orange Money'),
+        ('FREE_MONEY', 'Free Money'), ('VIREMENT', 'Virement'), ('CHEQUE', 'Chèque'),
+    ]
+    facture       = models.ForeignKey(FactureActivite, on_delete=models.CASCADE,
+                                      related_name='reglements')
+    exercice      = models.ForeignKey('paiements.Exercice', on_delete=models.PROTECT,
+                                      related_name='+')
+    date_reglement = models.DateField()
+    montant       = models.DecimalField(max_digits=15, decimal_places=2)
+    mode          = models.CharField(max_length=15, choices=MODE_CHOICES, default='ESPECE')
+    # N° de chèque, de bordereau de versement, référence de virement…
+    reference     = models.CharField(max_length=80, blank=True, default='')
+    no_piece      = models.CharField(max_length=30, blank=True, default='')
+    annule        = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'reglements_facture'
+        ordering = ['date_reglement']

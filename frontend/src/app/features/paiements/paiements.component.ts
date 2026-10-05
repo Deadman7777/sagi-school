@@ -1069,6 +1069,14 @@ import { ProformasComponent } from './proformas.component';
               <small style="color:var(--text-3);font-size:10px">Contrôle automatique du disponible sur l'enveloppe</small>
             </div>
           }
+          @if (activitesCompta().length > 1) {
+            <div class="form-group full">
+              <label>Activité (enseignement, transport…)</label>
+              <p-select appendTo="body" [options]="activitesCompta()" [(ngModel)]="nouvelleCharge.activite_id"
+                        optionLabel="libelle" optionValue="id" styleClass="w-full" [showClear]="true"
+                        placeholder="— Activité principale —" (onChange)="appliquerCompteActivite()" />
+            </div>
+          }
           @if (projetsGouv().length) {
             <div class="form-group full">
               <label>Projet (analytique)</label>
@@ -1326,6 +1334,8 @@ export class PaiementsComponent implements OnInit {
   // Dimensions analytiques gouvernance (facultatives) — proposées à la saisie d'une charge.
   ressourcesGouv = signal<any[]>([]);
   projetsGouv    = signal<any[]>([]);
+  /** Activités de l'établissement (comptabilité multi-activité). */
+  activitesCompta = signal<any[]>([]);
 
   // Comptes de charge chargés depuis le plan comptable (classe 6 uniquement, sans immobilisations)
   planChargesData = signal<any[]>([]);
@@ -2321,6 +2331,13 @@ export class PaiementsComponent implements OnInit {
     this.dialogPiecesVisible = true;
   }
 
+  /** Le compte de charge par défaut de l'activité choisie, si l'utilisateur
+   *  n'a pas déjà choisi le sien. */
+  appliquerCompteActivite() {
+    const a = this.activitesCompta().find(x => x.id === this.nouvelleCharge.activite_id);
+    if (a?.compte_charge && !this.compteChargeVerrouille) this.nouvelleCharge.no_compte = a.compte_charge;
+  }
+
   ouvrirDialogCharge() {
     // 658 « Charges diverses » tant que le libellé n'a rien dit : l'ancien
     // défaut (661 Salaires) transformait toute dépense non reconnue en
@@ -2329,7 +2346,7 @@ export class PaiementsComponent implements OnInit {
       no_compte: '658', libelle: '', montant: 0,
       date: new Date().toISOString().split('T')[0],
       compte_credit: '571', compte_fournisseur: '401',
-      ressource_id: null, projet_id: null,
+      ressource_id: null, projet_id: null, activite_id: null,
       // Poste de budget consommé. Vide = dépense hors budget — le cas normal,
       // et celui qu'on ne savait pas exprimer : toute charge sur un compte
       // budgété était comptée comme réalisée, prévue ou non.
@@ -2340,6 +2357,10 @@ export class PaiementsComponent implements OnInit {
     this.compteChargeVerrouille = false;
     this.dialogChargeVisible = true;
     this.chargerLignesBudget();
+    this.apiCaisses.get<any>('/comptabilite/activites/').subscribe({
+      next: r => this.activitesCompta.set((r.results || r || []).filter((a: any) => a.actif)),
+      error: () => this.activitesCompta.set([]),
+    });
     // Dimensions analytiques facultatives (gouvernance) — listes fraîches.
     this.gouv.getRessources().subscribe({
       next: d => this.ressourcesGouv.set((d || []).filter((r: any) => r.statut === 'ACTIVE')),

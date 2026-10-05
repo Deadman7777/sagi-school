@@ -84,6 +84,10 @@ export class PiecesJustificativesComponent {
     { label: 'Bon de commande', value: 'BON_COMMANDE' }, { label: 'Bon de livraison', value: 'BON_LIVRAISON' },
     { label: 'Contrat', value: 'CONTRAT' }, { label: 'Convention', value: 'CONVENTION' },
     { label: 'Reçu', value: 'RECU' }, { label: 'Relevé bancaire', value: 'RELEVE' },
+    { label: 'Chèque (copie)', value: 'CHEQUE' }, { label: 'Bordereau de versement', value: 'BORDEREAU' },
+    { label: "Avis d'imposition", value: 'AVIS_IMPOT' }, { label: 'Déclaration', value: 'DECLARATION' },
+    { label: 'Quittance', value: 'QUITTANCE' }, { label: 'États financiers', value: 'ETAT_FIN' },
+    { label: 'Procès-verbal', value: 'PV' },
     { label: 'Photo', value: 'PHOTO' }, { label: 'PDF', value: 'PDF' },
     { label: 'Word', value: 'WORD' }, { label: 'Autre', value: 'AUTRE' },
   ];

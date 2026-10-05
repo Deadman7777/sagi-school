@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% load logo_ecole humanize_fcfa %}
+{% comment %}
+Facture d'une activité de l'établissement (transport, prestations externes…),
+voir apps/comptabilite/activites.py. Document sobre : couleurs posées sur les
+cellules (xhtml2pdf ignore celles des lignes), pas de police à chasse fixe.
+{% endcomment %}
+<style>
+  * { margin:0; padding:0; }
+  body { font-family: Arial, sans-serif; font-size:11px; color:#111827; }
+  .header-table { width:100%; border-bottom:2px solid #1a3c5e; padding-bottom:6px; margin-bottom:12px; }
+  .header-table td { vertical-align:top; }
+  .emetteur { font-size:16px; font-weight:bold; color:#1a3c5e; }
+  .coord { font-size:9.5px; color:#374151; margin-top:3px; line-height:1.35; }
+  .doc-title { font-size:19px; font-weight:bold; text-align:right; }
+  .doc-numero { font-size:13px; font-weight:bold; color:#1a3c5e; text-align:right; margin-top:2px; }
+  .doc-meta { font-size:9.5px; color:#374151; text-align:right; margin-top:3px; }
+  .parties { width:100%; margin-bottom:12px; }
+  .parties td { padding:6px 9px; border:1px solid #d1d5db; font-size:10.5px; vertical-align:top; }
+  .label { font-size:9px; color:#374151; text-transform:uppercase; }
+  .nom { font-size:12.5px; font-weight:bold; margin-top:1px; }
+  table.lignes { width:100%; border-collapse:collapse; margin-bottom:8px; }
+  table.lignes th { background-color:#1a3c5e; color:#ffffff; padding:6px 8px; font-size:10.5px; text-align:left; }
+  table.lignes td { padding:5px 8px; border-bottom:1px solid #e5e7eb; font-size:11px; }
+  .num { text-align:right; }
+  table.totaux { width:100%; border-collapse:collapse; }
+  .tot-label { padding:4px 8px; text-align:right; }
+  .tot-val { padding:4px 8px; text-align:right; font-weight:bold; }
+  .net-label { padding:7px 8px; font-size:13px; font-weight:bold; background-color:#1a3c5e; color:#ffffff; text-align:right; }
+  .net-val { padding:7px 8px; font-size:14px; font-weight:bold; background-color:#1a3c5e; color:#ffffff; text-align:right; }
+  .mention { font-size:9.5px; color:#374151; margin-top:6px; }
+  .annulee { font-size:14px; font-weight:bold; color:#b91c1c; border:2px solid #b91c1c; padding:4px; text-align:center; margin-bottom:10px; }
+  table.regl { width:100%; border-collapse:collapse; margin-top:10px; }
+  table.regl td { padding:4px 8px; border:1px solid #e5e7eb; font-size:10px; }
+  .signature { width:100%; margin-top:18px; }
+  .signature td { padding:7px; border:1px solid #d1d5db; height:55px; vertical-align:top; font-size:9.6px; color:#374151; }
+  @page { size: A4; margin: 28pt; }
+</style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td width="58%">
+        {% if tenant.logo %}<div>{% logo_ecole tenant.logo 120 40 %}</div>{% endif %}
+        <div class="emetteur">{{ tenant.nom }}</div>
+        <div class="coord">
+          {% if tenant.adresse %}{{ tenant.adresse }}<br>{% endif %}
+          {% if tenant.ville %}{{ tenant.ville }} — Sénégal<br>{% endif %}
+          {% if tenant.telephone %}Tél. {{ tenant.telephone }}{% endif %}{% if tenant.email %} · {{ tenant.email }}{% endif %}<br>
+          {% if tenant.ninea %}NINEA {{ tenant.ninea }}{% endif %}{% if tenant.rccm %} · RCCM {{ tenant.rccm }}{% endif %}
+        </div>
+      </td>
+      <td width="42%">
+        <div class="doc-title">FACTURE</div>
+        <div class="doc-numero">{% if facture.numero %}N° {{ facture.numero }}{% else %}BROUILLON{% endif %}</div>
+        <div class="doc-meta">Date : {{ facture.date_facture|date:"d/m/Y" }}{% if facture.date_echeance %}<br>Échéance : {{ facture.date_echeance|date:"d/m/Y" }}{% endif %}</div>
+        <div class="doc-meta">Activité : {{ facture.activite.libelle }}</div>
+      </td>
+    </tr>
+  </table>
+
+  {% if facture.statut == 'ANNULEE' %}<div class="annulee">FACTURE ANNULÉE</div>{% endif %}
+
+  <table class="parties">
+    <tr>
+      <td width="100%">
+        <div class="label">Facturé à</div>
+        <div class="nom">{{ facture.client_nom }}</div>
+        {% if facture.client_contact %}<div>{{ facture.client_contact }}</div>{% endif %}
+        {% if facture.client_ninea %}<div>NINEA : {{ facture.client_ninea }}</div>{% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <table class="lignes">
+    <tr>
+      <th width="55%">Désignation</th>
+      <th width="12%" class="num">Quantité</th>
+      <th width="16%" class="num">Prix unitaire</th>
+      <th width="17%" class="num">Montant</th>
+    </tr>
+    {% for l in lignes %}
+    <tr>
+      <td>{{ l.libelle }}</td>
+      <td class="num">{{ l.quantite|floatformat:"-2" }}</td>
+      <td class="num">{{ l.prix_unitaire|fcfa }}</td>
+      <td class="num">{{ l.montant|fcfa }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <table class="totaux">
+    <tr><td width="65%"></td><td width="20%" class="tot-label">Total HT</td><td width="15%" class="tot-val">{{ facture.montant_ht|fcfa }}</td></tr>
+    {% if facture.montant_tva %}<tr><td></td><td class="tot-label">TVA {{ facture.taux_tva|floatformat:"-2" }} %</td><td class="tot-val">{{ facture.montant_tva|fcfa }}</td></tr>{% endif %}
+    <tr><td></td><td class="net-label">Net à payer (FCFA)</td><td class="net-val">{{ facture.montant_ttc|fcfa }}</td></tr>
+  </table>
+  {% if not facture.montant_tva %}<div class="mention">{% if facture.activite.regime_tva == 'EXONERE' %}Opération exonérée de TVA.{% else %}TVA non applicable.{% endif %}</div>{% endif %}
+
+  {% if facture.reglements.all %}
+  <table class="regl">
+    <tr><td colspan="4"><b>Règlements reçus</b></td></tr>
+    {% for r in facture.reglements.all %}{% if not r.annule %}
+    <tr><td width="20%">{{ r.date_reglement|date:"d/m/Y" }}</td><td width="25%">{{ r.get_mode_display }}</td><td width="35%">{{ r.reference|default:"—" }}</td><td width="20%" class="num">{{ r.montant|fcfa }}</td></tr>
+    {% endif %}{% endfor %}
+    <tr><td colspan="3" class="num"><b>Reste à régler</b></td><td class="num"><b>{{ facture.reste_a_regler|fcfa }}</b></td></tr>
+  </table>
+  {% endif %}
+
+  {% if facture.observations %}<div class="mention">{{ facture.observations|linebreaksbr }}</div>{% endif %}
+
+  <table class="signature">
+    <tr><td width="50%">Le client</td><td width="50%">Pour {{ tenant.nom }}</td></tr>
+  </table>
+</body>
+</html>

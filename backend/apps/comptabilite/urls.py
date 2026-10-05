@@ -8,12 +8,16 @@ from .views import (SuggestionCompteView, JournalView, GrandLivreView, BalanceVi
                     ReglerImmobilisationView, ImportChargesView,
                     CaisseEncaissementViewSet)
 from .pdf_views import ExportPDFView
+from .views_activites import ActiviteViewSet, FactureActiviteViewSet, ResultatsActivitesView
 
 router = DefaultRouter()
 router.register('caisses', CaisseEncaissementViewSet, basename='caisse')
+router.register('activites', ActiviteViewSet, basename='activite')
+router.register('factures-activite', FactureActiviteViewSet, basename='facture-activite')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('activites-resultats/', ResultatsActivitesView.as_view()),
     path('journal/',            JournalView.as_view()),
     path('grand-livre/',        GrandLivreView.as_view()),
     path('balance/',            BalanceView.as_view()),
