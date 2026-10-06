@@ -7,6 +7,7 @@ import { TagModule } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AcademiqueService } from '../../../core/services/academique.service';
+import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.component';
 
 /**
  * Suivi pédagogique d'un élève : évolution de sa moyenne, matière par matière,
@@ -19,7 +20,7 @@ import { AcademiqueService } from '../../../core/services/academique.service';
 @Component({
   selector: 'app-suivi-pedagogique',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, SelectModule, ButtonModule, TagModule, TranslateModule],
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, SelectModule, ButtonModule, TagModule, TranslateModule],
   template: `
     <div class="filters-bar">
       <p-select [options]="classes()" [(ngModel)]="classeId" optionLabel="nom" optionValue="id"
@@ -34,6 +35,7 @@ import { AcademiqueService } from '../../../core/services/academique.service';
       }
       <p-button icon="pi pi-file-pdf" severity="danger" [label]="'pedago.telecharger' | translate"
                 [disabled]="!fiche()" [loading]="telechargement()" (onClick)="telecharger()" />
+      <app-bouton-imprimer [pdf]="pdfFiche" [disabled]="!fiche()" [taille]="undefined" />
     </div>
 
     @if (!eleveId) {
@@ -209,6 +211,9 @@ export class SuiviPedagogiqueComponent {
       },
     });
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfFiche = () => this.acad.getFichePedagogiquePdf(this.eleveId, this.hybride() ? this.programme : null);
 
   telecharger() {
     const f = this.fiche();

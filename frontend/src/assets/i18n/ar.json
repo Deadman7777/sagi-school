@@ -814,7 +814,10 @@
     "erreur_chargement": "تعذّرت قراءة الإعداد: قد تكون هذه الشاشة ناقصة.",
     "chargement": "جارٍ التحميل…",
     "attention": "تنبيه",
-    "telephone": "الهاتف"
+    "telephone": "الهاتف",
+    "imprimer": "طباعة",
+    "impression_envoyee": "تم الإرسال إلى الطابعة",
+    "impression_impossible": "تعذرت الطباعة"
   },
   "auth": {
     "email": "البريد الإلكتروني",
@@ -1822,8 +1825,7 @@
     "format_recu": "صيغة الإيصال",
     "imprimer": "طباعة",
     "telecharger": "تحميل الإيصال",
-    "recu_envoye": "تم إرسال الإيصال إلى الطابعة",
-    "erreur_impression": "تعذرت الطباعة"
+    "recu_envoye": "تم إرسال الإيصال إلى الطابعة"
   },
   "encaissement": {
     "montant_verse": "المبلغ الذي دفعته الأسرة",

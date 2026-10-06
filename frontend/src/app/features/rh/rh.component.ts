@@ -21,6 +21,7 @@ import {
   Employe, BulletinPaie, AvanceSalaire, ParametresFiscaux,
   RhService
 } from '../../core/services/rh.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 const MOIS_OPTIONS = [
   { label: 'Janvier',   value: 1  }, { label: 'Février',   value: 2  },
@@ -35,7 +36,7 @@ const MOIS_OPTIONS = [
   selector: 'app-rh',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
+  imports: [BoutonImprimerComponent, 
     DecimalPipe, DatePipe,
     FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, SelectModule, TagModule, InputNumberModule,
@@ -306,6 +307,7 @@ const MOIS_OPTIONS = [
                 <p-button icon="pi pi-download" [rounded]="true" [text]="true" severity="secondary"
                           (onClick)="telechargerPdf(b)" pTooltip="Télécharger le PDF du bulletin"
                           tooltipPosition="top" [loading]="downloadingId() === b.id" />
+                <app-bouton-imprimer [pdf]="pdfBulletinPaie" [arg]="b" [avecLibelle]="false" [texte]="true" [contour]="false" />
               }
               @if (b.statut === 'VALIDE' || b.statut === 'PAYE') {
                 <p-button icon="pi pi-ban" [rounded]="true" [text]="true" severity="danger"
@@ -1038,6 +1040,7 @@ const MOIS_OPTIONS = [
       <p-button icon="pi pi-download" label="Télécharger PDF" severity="info"
                 [loading]="downloadingId() === bulletinDetail()?.id"
                 (onClick)="telechargerPdf(bulletinDetail()!)" />
+      <app-bouton-imprimer [pdf]="pdfBulletinPaie" [arg]="bulletinDetail()!" [taille]="undefined" />
     }
   </ng-template>
 </p-dialog>
@@ -1593,6 +1596,9 @@ export class RhComponent implements OnInit {
       error: (err) => this.erreurToast(err),
     });
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfBulletinPaie = (b: BulletinPaie) => this.rh.telechargerPdf(b.id);
 
   telechargerPdf(b: BulletinPaie) {
     this.downloadingId.set(b.id);

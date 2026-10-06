@@ -8,6 +8,7 @@ import { DialogModule } from 'primeng/dialog';
 import { MessageService } from 'primeng/api';
 import { ApiService } from '../../core/services/api.service';
 import { ElevesService } from '../../core/services/eleves.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 export interface LigneProforma {
   designation: string; detail: string; quantite: number;
@@ -54,7 +55,7 @@ type Mode = 'ELEVE' | 'NOUVEAU';
 @Component({
   selector: 'app-proformas',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule, DialogModule],
+  imports: [BoutonImprimerComponent, DecimalPipe, DatePipe, FormsModule, ButtonModule, DialogModule],
   template: `
 <div class="pf">
   <div class="pf-head">
@@ -103,6 +104,7 @@ type Mode = 'ELEVE' | 'NOUVEAU';
             <td class="actions">
               <p-button label="📄 PDF" [text]="true" size="small" [ariaLabel]="'Télécharger la proforma ' + p.numero"
                         [loading]="pdfEnCours() === p.id" (onClick)="telecharger(p)" />
+              <app-bouton-imprimer [pdf]="pdfProforma" [arg]="p" [avecLibelle]="false" [texte]="true" [contour]="false" />
               @if (p.statut === 'EMISE') {
                 <p-button label="Annuler" [text]="true" size="small" severity="secondary"
                           [ariaLabel]="'Annuler la proforma ' + p.numero" (onClick)="demanderAnnulation(p)" />
@@ -642,6 +644,9 @@ export class ProformasComponent implements OnInit {
   }
 
   // ── PDF et annulation ─────────────────────────────────────────────────
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfProforma = (p: any) => this.api.getBlob(`/paiements/proformas/${p.id}/pdf/`);
+
   telecharger(p: ResumeProforma) {
     this.pdfEnCours.set(p.id);
     this.api.getBlob(`/paiements/proformas/${p.id}/pdf/`).subscribe({

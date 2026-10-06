@@ -15,11 +15,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { DaaraService } from '../../../core/services/daara.service';
 import { ElevesService } from '../../../core/services/eleves.service';
+import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.component';
 
 @Component({
   selector: 'app-memorisation',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
             InputTextModule, InputNumberModule, SelectModule, CheckboxModule,
             TagModule, ToastModule, TranslateModule],
   providers: [MessageService],
@@ -273,6 +274,9 @@ import { ElevesService } from '../../../core/services/eleves.service';
           </div>
           <p-button [label]="'daara.export_parent' | translate" icon="pi pi-file-pdf"
                     severity="help" [loading]="exporting()" (onClick)="exporterPdf()" />
+          @if (parcoursActif(); as pa) {
+            <app-bouton-imprimer [pdf]="pdfRapport" [arg]="pa.id" [taille]="undefined" />
+          }
         </div>
 
         <h4>{{ 'daara.couverture_juz' | translate }}</h4>
@@ -629,6 +633,9 @@ export class MemorisationComponent implements OnInit {
     if (pct > 0)    return `rgba(0,212,170,${0.25 + 0.6 * pct / 100})`;
     return 'var(--surface)';
   }
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfRapport = (parcoursId: string) => this.daara.getRapportPdf(parcoursId);
+
   exporterPdf() {
     const p = this.parcoursActif();
     if (!p) return;

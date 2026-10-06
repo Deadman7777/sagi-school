@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { ApiService } from '../../core/services/api.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /** Une ligne élève du cahier : ce qu'il devait pour le mois, payé, reste. */
 export interface LigneEleveCahier {
@@ -53,7 +54,7 @@ const RAFRAICHISSEMENT_MS = 60_000;
 @Component({
   selector: 'app-cahier-mensuel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule, SelectModule],
+  imports: [BoutonImprimerComponent, DecimalPipe, DatePipe, FormsModule, ButtonModule, SelectModule],
   template: `
 <div class="cahier">
   <div class="cm-head">
@@ -73,6 +74,7 @@ const RAFRAICHISSEMENT_MS = 60_000;
                 [loading]="loading()" (onClick)="charger()" />
       <p-button label="Télécharger le PDF" icon="pi pi-file-pdf" severity="danger"
                 [loading]="pdfEnCours()" [disabled]="!cahier()" (onClick)="telechargerPdf()" />
+      <app-bouton-imprimer [pdf]="pdfCahier" [disabled]="!cahier()" [taille]="undefined" />
     </div>
   </div>
 
@@ -375,6 +377,12 @@ export class CahierMensuelComponent implements OnInit {
     this.selection.set({ annee, mois });
     this.charger();
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfCahier = () => {
+    const c = this.cahier();
+    return this.api.getBlob('/paiements/cahier-mensuel/pdf/', { annee: String(c?.annee), mois: String(c?.mois) });
+  };
 
   telechargerPdf() {
     const c = this.cahier();

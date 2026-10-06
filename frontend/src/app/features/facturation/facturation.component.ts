@@ -19,6 +19,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DocumentCommercial, EcoleCliente, FacturationService, Justificatif, LigneDocument, Recu,
          SyntheseFacturation, TypeDocument } from '../../core/services/facturation.service';
 import { Prospect, ProspectsService } from '../../core/services/prospects.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
 
@@ -32,7 +33,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
 @Component({
   selector: 'app-facturation',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule, DialogModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, TagModule, DialogModule,
             InputTextModule, TextareaModule, SelectModule, ToastModule, TooltipModule,
             ConfirmDialogModule, TranslateModule],
   providers: [MessageService, ConfirmationService],
@@ -91,6 +92,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
       <p-button icon="pi pi-refresh" [text]="true" (onClick)="charger()" />
       <p-button icon="pi pi-file-pdf" [outlined]="true" size="small" [label]="'facturation.etat_pdf' | translate"
                 [loading]="exportEtat()" (onClick)="telechargerEtat()" />
+      <app-bouton-imprimer [pdf]="pdfEtat" />
     </div>
 
     <div class="table-card">
@@ -136,6 +138,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
                         [pTooltip]="'facturation.ouvrir' | translate" />
               <p-button icon="pi pi-download" [text]="true" size="small" (onClick)="telecharger(d)"
                         [pTooltip]="'facturation.telecharger_pdf' | translate" />
+              <app-bouton-imprimer [pdf]="pdfDocument" [arg]="d" [avecLibelle]="false" [texte]="true" />
             </td>
           </tr>
         </ng-template>
@@ -209,6 +212,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
           <span class="espace"></span>
           <p-button icon="pi pi-eye" [text]="true" [label]="'facturation.apercu' | translate" (onClick)="voirPdf(d)" />
           <p-button icon="pi pi-download" [outlined]="true" [label]="'facturation.telecharger_pdf' | translate" (onClick)="telecharger(d)" />
+          <app-bouton-imprimer [pdf]="pdfDocument" [arg]="d" [taille]="undefined" severite="primary" />
           <p-button icon="pi pi-list" [outlined]="true" severity="secondary" [label]="'facturation.releve_pdf' | translate" (onClick)="telechargerReleve(d)" />
         </div>
 
@@ -374,6 +378,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
               @if (r.annule) { <p-tag severity="danger" [value]="'facturation.annule' | translate" [pTooltip]="r.annule_motif" /> }
               <b class="mono">{{ r.montant | number:'1.0-0' }}</b>
               <p-button icon="pi pi-download" [text]="true" size="small" (onClick)="telechargerRecu(r)" [pTooltip]="'facturation.recu_pdf' | translate" />
+              <app-bouton-imprimer [pdf]="pdfRecu" [arg]="r" [avecLibelle]="false" [texte]="true" />
               <p-button icon="pi pi-paperclip" [text]="true" size="small" (onClick)="choisirFichier({ encaissement: r.id })"
                         [pTooltip]="'facturation.joindre_preuve' | translate" />
               @if (!r.annule) {
@@ -1026,6 +1031,11 @@ export class FacturationComponent implements OnInit {
       error: err => this.erreur(err),
     });
   }
+
+  // Requêtes des PDF pour <app-bouton-imprimer> (rien ne part avant le clic).
+  readonly pdfDocument = (d: DocumentCommercial) => this.service.pdf(d.id);
+  readonly pdfRecu = (r: Recu) => this.service.pdfRecu(r.id);
+  readonly pdfEtat = () => this.service.etatPdf(this.filtresActifs());
 
   telecharger(d: DocumentCommercial) {
     this.service.pdf(d.id).subscribe({

@@ -18,12 +18,13 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { DatePickerModule }  from 'primeng/datepicker';
 import { TranslateModule }   from '@ngx-translate/core';
 import { GmrfService } from '../../core/services/gmrf.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 @Component({
   selector: 'app-gmrf',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
+  imports: [BoutonImprimerComponent, 
     DecimalPipe, DatePipe, FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, InputNumberModule, SelectModule, TagModule, ToastModule,
     TooltipModule, ProgressBarModule, DatePickerModule, Textarea, TranslateModule,
@@ -279,6 +280,7 @@ import { GmrfService } from '../../core/services/gmrf.service';
           </div>
           <div class="head-actions">
             <button class="btn ghost sm" (click)="telechargerPdfNatt(c)">📄 PDF</button>
+            <app-bouton-imprimer [pdf]="pdfNatt" [arg]="c" [avecLibelle]="false" [texte]="true" [contour]="false" />
             @if (!c.cagnotte_recue && c.statut === 'EN_COURS') {
               <button class="btn primary" (click)="ouvrirReception(c)">💰 Recevoir la cagnotte</button>
             }
@@ -379,6 +381,7 @@ import { GmrfService } from '../../core/services/gmrf.service';
           </div>
           <div class="head-actions">
             <button class="btn ghost sm" (click)="telechargerPdfPret(p)">📄 PDF</button>
+            <app-bouton-imprimer [pdf]="pdfPret" [arg]="p" [avecLibelle]="false" [texte]="true" [contour]="false" />
           </div>
         </div>
         <div class="suivi-grid">
@@ -977,6 +980,10 @@ export class GmrfComponent implements OnInit {
   }
 
   // ── PDF ──
+  /** Requêtes des PDF pour <app-bouton-imprimer>. */
+  readonly pdfNatt = (c: any) => this.gmrf.getNattPdf(c.id);
+  readonly pdfPret = (p: any) => this.gmrf.getPretPdf(p.id);
+
   telechargerPdfNatt(c: any) {
     this.gmrf.getNattPdf(c.id).subscribe({
       next: b => this.telechargerBlob(b, `natt_${c.reference}.pdf`),

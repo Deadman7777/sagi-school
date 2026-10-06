@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { MessageService } from 'primeng/api';
 import { ApiService } from '../../core/services/api.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /**
  * Dossier ETAFI d'un exercice (SYSCOHADA Révisé) : contrôles de cohérence,
@@ -12,7 +13,7 @@ import { ApiService } from '../../core/services/api.service';
  */
 @Component({
   selector: 'app-etafi-dossier',
-  imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule],
+  imports: [BoutonImprimerComponent, DecimalPipe, DatePipe, FormsModule, ButtonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (dossier(); as d) {
@@ -50,6 +51,7 @@ import { ApiService } from '../../core/services/api.service';
         <div class="docs">
           @for (doc of d.documents; track doc.code) {
             <button type="button" class="doc" (click)="telechargerDocument(doc)">📄 {{ doc.titre }}</button>
+            <app-bouton-imprimer [pdf]="pdfDocument" [arg]="doc" [avecLibelle]="false" [texte]="true" [contour]="false" />
           }
         </div>
       </div>
@@ -122,6 +124,9 @@ export class EtafiDossierComponent {
     a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfDocument = (doc: any) => this.api.getBlob(`/comptabilite/etafi/document/${doc.code}/`, this.params());
 
   telechargerDocument(doc: any) {
     this.api.getBlob(`/comptabilite/etafi/document/${doc.code}/`, this.params()).subscribe({

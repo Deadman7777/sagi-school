@@ -19,6 +19,7 @@ import { Catalogue, Devis, PieceProspect, Prospect, ProspectsService, StatsProsp
   from '../../core/services/prospects.service';
 import { FacturationService } from '../../core/services/facturation.service';
 import { Router } from '@angular/router';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /**
  * Le fichier prospects de HADY GESMAN.
@@ -30,7 +31,7 @@ import { Router } from '@angular/router';
  */
 @Component({
   selector: 'app-prospects',
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
             DatePickerModule, ToastModule, TooltipModule, ConfirmDialogModule,
             TranslateModule],
@@ -260,6 +261,7 @@ import { Router } from '@angular/router';
                       (onClick)="voirPdf(d)" [pTooltip]="'prospects.voir_pdf' | translate" />
             <p-button icon="pi pi-download" [text]="true" size="small"
                       (onClick)="telechargerDevis(d)" [pTooltip]="'prospects.telecharger_pdf' | translate" />
+            <app-bouton-imprimer [pdf]="pdfDevis" [arg]="d" [avecLibelle]="false" [texte]="true" [contour]="false" />
             @if (d.statut === 'BROUILLON') {
               <p-button [label]="'prospects.valider' | translate"
                         size="small" severity="success" (onClick)="validerDevis(d)" />
@@ -926,6 +928,9 @@ export class ProspectsComponent implements OnInit {
     if (x.etape === 'TERMINEE' || x.statut_paiement === 'PAYEE') return 'success';
     return 'info';
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfDevis = (d: Devis) => this.service.pdfDevis(d.id);
 
   telechargerDevis(d: Devis) {
     this.service.pdfDevis(d.id).subscribe({

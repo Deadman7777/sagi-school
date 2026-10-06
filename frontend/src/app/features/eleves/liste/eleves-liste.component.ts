@@ -65,11 +65,13 @@ const MOIS_ANNEE = [
 ];
 
 import { EtatImpayesComponent } from './etat-impayes.component';
+import { Observable } from 'rxjs';
+import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.component';
 
 @Component({
   selector: 'app-eleves-liste',
   changeDetection: ChangeDetectionStrategy.Default,
-  imports: [CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TranslateModule, TableModule, TagModule, ButtonModule,
             InputTextModule, DialogModule, SelectModule, ToastModule, ProgressBarModule, InputNumberModule,
             TooltipModule, MultiSelectModule, CheckboxModule, ImportElevesDialogComponent,
             FamillesComponent, EncaissementGroupeComponent, EtatImpayesComponent],
@@ -172,6 +174,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                       severity="secondary" size="small" [outlined]="true"
                       [pTooltip]="'eleves.export_nominatif_aide' | translate"
                       [loading]="exportant()" (onClick)="exporterListePDF(false)" />
+            <app-bouton-imprimer [pdf]="pdfListe" [arg]="true" />
           </div>
         }
       </div>
@@ -276,6 +279,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                       (click)="exporterListeClasse(c.classe_id, c.classe)">
                 <i class="pi pi-file-pdf"></i>
               </button>
+              <app-bouton-imprimer [pdf]="pdfListeClasse" [arg]="c.classe_id" [avecLibelle]="false" [texte]="true" [contour]="false" />
             </div>
           }
           <div class="classe-chip total">
@@ -469,6 +473,8 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                             [pTooltip]="'eleves.org_releve' | translate"
                             [disabled]="!o.nb_boursiers"
                             (onClick)="telechargerReleveOrganisme(o)" />
+                  <app-bouton-imprimer [pdf]="pdfReleveOrganisme" [arg]="o" [avecLibelle]="false" [texte]="true"
+                                       [contour]="false" [disabled]="!o.nb_boursiers" />
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="warn"
                             [pTooltip]="'common.modifier' | translate"
                             (onClick)="ouvrirOrganisme(o.organisme_id)" />
@@ -1035,6 +1041,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                     (onClick)="genererCertificat(eleveSelectionne())" />
           <p-button label="Situation financière" severity="success" icon="pi pi-wallet"
                     (onClick)="telechargerSituationPDF(eleveSelectionne()!)" />
+          <app-bouton-imprimer [choix]="choixImpressionFiche(eleveSelectionne()!)" [taille]="undefined" severite="primary" />
           <p-button label="Fermer" severity="secondary" (onClick)="dialogFicheVisible=false" />
         </div>
       </ng-template>
@@ -1706,6 +1713,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
           <p-button [label]="'eleves.parcours_pdf' | translate" icon="pi pi-file-pdf"
                     severity="danger" [loading]="exportantParcours()"
                     (onClick)="telechargerParcoursPDF(p.eleve_id)" />
+          <app-bouton-imprimer [pdf]="pdfParcours" [arg]="p.eleve_id" [taille]="undefined" />
         }
         <p-button [label]="'common.fermer' | translate" severity="secondary"
                   (onClick)="dialogParcoursVisible=false" />
@@ -3389,8 +3397,26 @@ export class ElevesListeComponent implements OnInit {
    * entre des mains d'enseignants et d'élèves. Les filtres d'alerte n'y ont
    * pas de sens et ne sont donc pas transmis.
    */
-  exporterListePDF(financier = true) {
-    this.exportant.set(true);
+  // ── Requêtes des PDF pour <app-bouton-imprimer> (rien ne part avant le clic) ──
+  /** Menu « Imprimer ▾ » de la fiche : recalculé seulement quand l'élève change. */
+  private _choixFiche: { id: string; choix: { libelle: string; pdf: Observable<Blob> }[] } | null = null;
+  choixImpressionFiche(eleve: Eleve) {
+    if (this._choixFiche?.id !== eleve.id) {
+      this._choixFiche = { id: eleve.id, choix: [
+        { libelle: 'Fiche élève', pdf: this.elevesService.fichePDF(eleve.id) },
+        // Toujours la version PDF : le modèle Word ne s'imprime pas d'ici.
+        { libelle: 'Certificat de scolarité', pdf: this.elevesService.telechargerCertificat(eleve.id) },
+        { libelle: 'Situation financière', pdf: this.elevesService.situationPDF(eleve.id) },
+      ] };
+    }
+    return this._choixFiche.choix;
+  }
+  readonly pdfParcours = (eleveId: string) => this.elevesService.parcoursPDF(eleveId);
+  readonly pdfListeClasse = (classeId: string | null) => this.elevesService.listeClassePDF(classeId ?? 'sans');
+  readonly pdfReleveOrganisme = (o: { organisme_id: string }) => this.elevesService.releveOrganismePdf(o.organisme_id);
+  readonly pdfListe = (financier: boolean) => this.elevesService.exporterListePDF(this.paramsExportListe(financier));
+
+  private paramsExportListe(financier: boolean): Record<string, string> {
     const [groupe, ordre] = this.triExport.split(':');
     const params: Record<string, string> = { tri: groupe, ordre: ordre || 'alpha' };
     if (this.filtreStatut) params['statut'] = this.filtreStatut;
@@ -3401,6 +3427,12 @@ export class ElevesListeComponent implements OnInit {
     } else {
       params['financier'] = '0';
     }
+    return params;
+  }
+
+  exporterListePDF(financier = true) {
+    this.exportant.set(true);
+    const params = this.paramsExportListe(financier);
     this.elevesService.exporterListePDF(params).subscribe({
       next: (blob: Blob) => {
         const url  = URL.createObjectURL(blob);

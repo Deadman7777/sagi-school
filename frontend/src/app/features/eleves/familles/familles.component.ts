@@ -23,6 +23,7 @@ import { ElevesService } from '../../../core/services/eleves.service';
 import { FORMATS_RECU, ImpressionService } from '../../../core/services/impression.service';
 import { EncaissementGroupeComponent, FinEncaissement }
   from '../encaissement-groupe/encaissement-groupe.component';
+import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.component';
 
 /**
  * Les familles (fratries) d'une école.
@@ -48,7 +49,7 @@ type LigneReduction = LigneReductionFratrie & {
 @Component({
   selector: 'app-familles',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
             MultiSelectModule, CheckboxModule, InputNumberModule, ToastModule, TooltipModule,
             ConfirmDialogModule, EncaissementGroupeComponent,
@@ -196,6 +197,7 @@ type LigneReduction = LigneReductionFratrie & {
                     size="small" severity="secondary" [outlined]="true"
                     [loading]="telechargementSituation()"
                     (onClick)="telechargerSituation()" />
+          <app-bouton-imprimer [pdf]="pdfSituationFamille" [arg]="s.famille_id" [avecLibelle]="false" />
           @if (dernierVersement()) {
             <span class="recu-groupe">
               <span class="meta">{{ 'familles.recu_groupe' | translate }}</span>
@@ -651,6 +653,9 @@ export class FamillesComponent implements OnInit {
     this.charger();
   }
 
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfSituationFamille = (familleId: string) => this.eleves.situationFamillePdf(familleId);
+
   telechargerSituation() {
     const s = this.situation();
     if (!s) return;
@@ -691,7 +696,7 @@ export class FamillesComponent implements OnInit {
                            detail: res.imprimante });
           }
         } catch (e: any) {
-          this.msg.add({ severity: 'error', summary: this.translate.instant('familles.erreur_impression'),
+          this.msg.add({ severity: 'error', summary: this.translate.instant('common.impression_impossible'),
                          detail: e?.message, life: 8000 });
         } finally {
           this.impressionRecu.set(false);

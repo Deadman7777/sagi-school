@@ -17,11 +17,13 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
 import { ActivitesComponent } from './activites.component';
 import { ExercicesComponent } from './exercices.component';
 import { EtafiDossierComponent } from './etafi-dossier.component';
+import { throwError } from 'rxjs';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 @Component({
   selector: 'app-comptabilite',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent, ActivitesComponent, ExercicesComponent, EtafiDossierComponent],
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, TagModule, ButtonModule, TranslateModule, InputNumberModule, DialogModule, SelectModule, ToastModule, TooltipModule, PiecesJustificativesComponent, ActivitesComponent, ExercicesComponent, EtafiDossierComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -43,6 +45,7 @@ import { EtafiDossierComponent } from './etafi-dossier.component';
         <button class="btn-export" (click)="exporter()" [title]="'Exporter ' + labelOngletCourant() + ' en PDF'">
           📤 Exporter PDF — {{ labelOngletCourant() }}
         </button>
+        <app-bouton-imprimer [pdf]="pdfOnglet" [taille]="undefined" />
       </div>
     </div>
 
@@ -2470,6 +2473,13 @@ comptesCredit = [
   labelOngletCourant(): string {
     return this.ONGLET_PDF[this.onglet()]?.label ?? 'Document';
   }
+
+  /** PDF de l'onglet courant pour <app-bouton-imprimer> (onglet sans export : avertit comme exporter()). */
+  readonly pdfOnglet = () => {
+    const entry = this.ONGLET_PDF[this.onglet()];
+    if (!entry) return throwError(() => new Error('Cet onglet ne dispose pas d\'export PDF.'));
+    return this.compta.exportPDF(entry.type, this.exId);
+  };
 
   exporter() {
     const entry = this.ONGLET_PDF[this.onglet()];

@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { ApiService } from '../../core/services/api.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 type CodeMode = 'ESPECE' | 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY' | 'BANQUE';
 
@@ -69,7 +70,7 @@ function finDuMois(annee: number, mois: number): string {
 @Component({
   selector: 'app-point-tresorerie',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule, SelectModule],
+  imports: [BoutonImprimerComponent, DecimalPipe, DatePipe, FormsModule, ButtonModule, SelectModule],
   template: `
 <div class="pt">
   <div class="pt-head">
@@ -101,6 +102,7 @@ function finDuMois(annee: number, mois: number): string {
                 [loading]="loading()" (onClick)="charger()" />
       <p-button label="PDF à signer" icon="pi pi-file-pdf" severity="danger"
                 [loading]="pdfEnCours()" [disabled]="!point()" (onClick)="telechargerPdf()" />
+      <app-bouton-imprimer [pdf]="pdfPoint" [disabled]="!point()" [taille]="undefined" />
     </div>
   </div>
 
@@ -525,6 +527,12 @@ export class PointTresorerieComponent implements OnInit {
     }
     this.charger();
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfPoint = () => {
+    const p = this.point();
+    return this.api.getBlob('/paiements/point-tresorerie/pdf/', { debut: p?.debut, fin: p?.fin });
+  };
 
   telechargerPdf() {
     const p = this.point();

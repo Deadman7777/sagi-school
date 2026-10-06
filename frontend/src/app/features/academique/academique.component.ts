@@ -19,11 +19,13 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { MessageService } from 'primeng/api';
 import { ToastModule } from 'primeng/toast';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { map } from 'rxjs';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 @Component({
   selector: 'app-academique',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
+  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, InputNumberModule, MultiSelectModule, ToastModule, TooltipModule, TranslateModule,
             MemorisationComponent, SuiviPedagogiqueComponent],
   providers: [MessageService],
@@ -455,6 +457,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   [outlined]="true" [loading]="editionClasse()" [disabled]="!classeResultats"
                   [pTooltip]="'academique.bulletins_classe_aide' | translate"
                   (onClick)="telechargerBulletinsClasse()" />
+        <app-bouton-imprimer [pdf]="pdfBulletinsClasse" [taille]="undefined"
+                             [disabled]="!classeResultats || !trimestreResultats" />
       </div>
 
       <!-- Résultats -->
@@ -498,6 +502,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                 <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true"
                           severity="danger" (onClick)="telechargerBulletin(r.eleve_id)"
                           [title]="'academique.telecharger_bulletin' | translate" />
+                <app-bouton-imprimer [pdf]="pdfBulletin" [arg]="r.eleve_id" [avecLibelle]="false" [texte]="true"
+                                     [contour]="false" [disabled]="!trimestreResultats" />
                 <p-button icon="pi pi-chart-line" [rounded]="true" [text]="true"
                           severity="info" (onClick)="telechargerFiche(r.eleve_id, r.eleve_nom)"
                           [title]="'pedago.telecharger' | translate" />
@@ -696,6 +702,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
                   <p-button icon="pi pi-file-pdf" [rounded]="true" [text]="true" severity="danger"
                             (onClick)="telechargerBulletinHistorique(b)"
                             title="Télécharger le bulletin PDF" />
+                  <app-bouton-imprimer [pdf]="pdfBulletinHistorique" [arg]="b" [avecLibelle]="false" [texte]="true"
+                                       [contour]="false" />
                 </td>
               </tr>
             </ng-template>
@@ -1836,6 +1844,20 @@ Rien n'est dupliqué ; vos coefficients sont gardés.`)) return;
                                    detail: 'Impossible de générer le bulletin. Calculez d\'abord les moyennes.' }),
     });
   }
+
+  // ── Requêtes des PDF pour <app-bouton-imprimer> (rien ne part avant le clic) ──
+  readonly pdfBulletinsClasse = () => {
+    return this.acad.getBulletinsClassePdf(this.classeResultats, this.trimestreResultats,
+                                           this.anneeResultats || null, this.prog(this.programmeResultats))
+      .pipe(map(reponse => reponse.body as Blob));
+  };
+  readonly pdfBulletin = (eleveId: string) => {
+    return this.acad.getBulletinPdf(eleveId, this.trimestreResultats, this.anneeResultats || null,
+                                    this.prog(this.programmeResultats));
+  };
+  readonly pdfBulletinHistorique = (b: any) => {
+    return this.acad.getBulletinPdf(b.eleve_id, b.trimestre, b.annee_scolaire, this.prog(b.programme));
+  };
 
   /** Édite en une fois les bulletins de la classe sélectionnée. */
   telechargerBulletinsClasse() {

@@ -7,6 +7,7 @@ import { SelectModule } from 'primeng/select';
 import { MessageService } from 'primeng/api';
 import { ApiService } from '../../core/services/api.service';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /**
  * Comptabilité multi-activité : activités de l'établissement (enseignement,
@@ -15,7 +16,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
  */
 @Component({
   selector: 'app-activites',
-  imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule, DialogModule, SelectModule,
+  imports: [BoutonImprimerComponent, DecimalPipe, DatePipe, FormsModule, ButtonModule, DialogModule, SelectModule,
             PiecesJustificativesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -112,6 +113,7 @@ import { PiecesJustificativesComponent } from '../../shared/pieces-justificative
               <p-button [label]="f.statut === 'BROUILLON' ? 'Supprimer' : 'Annuler'" size="small" severity="danger" [text]="true" (onClick)="annuler(f)" />
             }
             <p-button icon="pi pi-file-pdf" size="small" [text]="true" (onClick)="pdf(f)" />
+            <app-bouton-imprimer [pdf]="pdfFacture" [arg]="f" [avecLibelle]="false" [texte]="true" [contour]="false" />
           </span>
         </div>
         <table class="tab">
@@ -393,6 +395,9 @@ export class ActivitesComponent implements OnInit {
       next: f => { this.selection.set(f); this.toutRecharger(); }, error: e => this.erreur(e),
     });
   }
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfFacture = (f: any) => this.api.getBlob(`/comptabilite/factures-activite/${f.id}/pdf/`);
+
   pdf(f: any) {
     this.api.getBlob(`/comptabilite/factures-activite/${f.id}/pdf/`).subscribe(b => {
       window.open(URL.createObjectURL(b), '_blank');

@@ -814,7 +814,10 @@
     "erreur_chargement": "Réglage illisible : l'écran peut être incomplet.",
     "chargement": "Chargement…",
     "attention": "Attention",
-    "telephone": "Téléphone"
+    "telephone": "Téléphone",
+    "imprimer": "Imprimer",
+    "impression_envoyee": "Envoyé à l'imprimante",
+    "impression_impossible": "Impression impossible"
   },
   "auth": {
     "email": "Email",
@@ -1822,8 +1825,7 @@
     "format_recu": "Format du reçu",
     "imprimer": "Imprimer",
     "telecharger": "Télécharger le reçu",
-    "recu_envoye": "Reçu envoyé à l'imprimante",
-    "erreur_impression": "Impression impossible"
+    "recu_envoye": "Reçu envoyé à l'imprimante"
   },
   "encaissement": {
     "montant_verse": "Montant versé par la famille",

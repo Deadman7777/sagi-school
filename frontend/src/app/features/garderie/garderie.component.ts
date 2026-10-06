@@ -10,6 +10,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { ApiService } from '../../core/services/api.service';
 import { ElevesService } from '../../core/services/eleves.service';
+import { ImpressionService } from '../../core/services/impression.service';
 
 type Formule = 'DEMI_JOURNEE' | 'JOURNEE' | null;
 
@@ -415,6 +416,7 @@ export class GarderieComponent implements OnInit {
   private eleves = inject(ElevesService);
   private msg = inject(MessageService);
   private translate = inject(TranslateService);
+  private impression = inject(ImpressionService);
 
   readonly aujourdhui = this.isoLocal(new Date());
   readonly moisOptions = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -500,7 +502,7 @@ export class GarderieComponent implements OnInit {
         this.encaissementVisible = false;
         this.msg.add({ severity: 'success', summary: this.translate.instant('garderie.encaisse'),
                        detail: `${e.nom_complet} — ${this.translate.instant('garderie.recu')} ${r.no_piece}` });
-        this.telechargerRecu(r.id);
+        this.imprimerRecu(r.id);
         this.chargerSoir();
         if (this.onglet() === 'recap') this.chargerRecap();
       },
@@ -511,13 +513,16 @@ export class GarderieComponent implements OnInit {
     });
   }
 
-  /** Reçu du règlement, au format ticket 80 mm. */
-  private telechargerRecu(paiementId: string) {
+  /** Reçu du règlement, ticket 80 mm, imprimé aussitôt (imprimante à tickets du poste). */
+  private imprimerRecu(paiementId: string) {
     this.api.getBlob(`/paiements/paiements/${paiementId}/recu-pdf/?taille=80MM`).subscribe({
-      next: blob => {
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      next: async blob => {
+        try {
+          await this.impression.imprimer(blob, 'ticket');
+        } catch (e: any) {
+          this.msg.add({ severity: 'error', summary: this.translate.instant('common.impression_impossible'),
+                         detail: e?.message, life: 8000 });
+        }
       },
       error: () => {},
     });

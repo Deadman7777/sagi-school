@@ -814,7 +814,10 @@
     "erreur_chargement": "Setting could not be read: this screen may be incomplete.",
     "chargement": "Loading…",
     "attention": "Warning",
-    "telephone": "Phone"
+    "telephone": "Phone",
+    "imprimer": "Print",
+    "impression_envoyee": "Sent to printer",
+    "impression_impossible": "Printing failed"
   },
   "auth": {
     "email": "Email",
@@ -1822,8 +1825,7 @@
     "format_recu": "Receipt format",
     "imprimer": "Print",
     "telecharger": "Download receipt",
-    "recu_envoye": "Receipt sent to printer",
-    "erreur_impression": "Printing failed"
+    "recu_envoye": "Receipt sent to printer"
   },
   "encaissement": {
     "montant_verse": "Amount paid by the family",

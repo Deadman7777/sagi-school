@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, signal } fro
 import { DecimalPipe } from '@angular/common';
 import { ButtonModule } from 'primeng/button';
 import { ApiService } from '../../../core/services/api.service';
+import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.component';
 
 interface LigneEtat {
   type: 'groupe' | 'sous_total'; code: string; libelle: string;
@@ -24,7 +25,7 @@ interface EtatImpayes {
 @Component({
   selector: 'app-etat-impayes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DecimalPipe, ButtonModule],
+  imports: [BoutonImprimerComponent, DecimalPipe, ButtonModule],
   template: `
 <div class="ei">
   <button type="button" class="ei-toggle" [attr.aria-expanded]="ouvert()" (click)="basculer()">
@@ -40,6 +41,7 @@ interface EtatImpayes {
           <span class="ei-actions">
             <p-button label="PDF" icon="pi pi-file-pdf" size="small" severity="danger" [outlined]="true"
                       [loading]="telechargement() === 'pdf'" (onClick)="telecharger('pdf')" />
+            <app-bouton-imprimer [pdf]="pdfEtat" />
             <p-button label="Excel" icon="pi pi-file-excel" size="small" severity="success" [outlined]="true"
                       [loading]="telechargement() === 'xlsx'" (onClick)="telecharger('xlsx')" />
           </span>
@@ -149,6 +151,9 @@ export class EtatImpayesComponent {
       error: err => this.erreur.set(err?.error?.error || "Impossible de calculer l'état des impayés."),
     });
   }
+
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfEtat = () => this.api.getBlob('/eleves/etat-impayes/', this.params({ export: 'pdf' }));
 
   telecharger(format: 'pdf' | 'xlsx') {
     const e = this.etat();
