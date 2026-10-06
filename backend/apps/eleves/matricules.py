@@ -49,12 +49,23 @@ def annee_promo(exercice, date_entree=None):
     La bascule d'une promo à l'autre suit le mois de début de l'exercice : une
     école dont l'année court d'octobre à juin range une entrée de janvier 2022
     dans la promo 2021-2022.
+
+    Inscription faite pendant les vacances, APRÈS la dernière mensualité et
+    AVANT la rentrée (juillet à septembre pour une année d'octobre à juin) :
+    elle prépare la rentrée suivante, donc la promo qui commence. Sans ça, un
+    élève inscrit le 15/09/2026 pour la rentrée d'octobre 2026 recevait un
+    matricule 2025-… (constat dans une école cloud, octobre 2026). Une école
+    qui facture les 12 mois n'a pas de vacances : rien ne change pour elle.
     """
     if date_entree is None:
         return exercice.date_debut.year
     mois_bascule = exercice.date_debut.month
-    return (date_entree.year if date_entree.month >= mois_bascule
-            else date_entree.year - 1)
+    annee = (date_entree.year if date_entree.month >= mois_bascule
+             else date_entree.year - 1)
+    nb_mois = min(int(exercice.nb_mensualites or 12), 12)
+    if (date_entree.month - mois_bascule) % 12 >= nb_mois:
+        annee += 1
+    return annee
 
 
 def libelle_promo(exercice, date_entree=None):
