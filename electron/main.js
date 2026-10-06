@@ -4,6 +4,7 @@ const path      = require('path');
 const http      = require('http');
 const fs        = require('fs');
 const os        = require('os');
+const { installerImpression } = require('./impression');
 
 let mainWindow;
 let djangoProcess;              // processus unique (poste isolé) ou 1er du groupe
@@ -736,6 +737,7 @@ if (!gotTheLock) {
     }
 
     // ── 2. Ouvrir la fenêtre principale ──
+    installerImpression(() => mainWindow);
     createWindow();
 
     // Pas de contrôle de licence ici. Il est fait par le serveur, sur la

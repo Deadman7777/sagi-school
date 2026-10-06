@@ -15,7 +15,9 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
 {% endcomment %}
 <style>
   /* Une SEULE règle @page (une seconde est ignorée ou écrase la première). */
-  @page { size: {{ page_size|default:"80mm 1500mm" }}; margin: {% if ticket_etroit %}3mm{% else %}4mm{% endif %}; }
+  /* Page = zone imprimable (72 mm sur rouleau 80, 48 mm sur rouleau 58), avec
+     une marge de sécurité : un pilote un peu décalé ne coupe plus rien. */
+  @page { size: {{ page_size|default:"72mm 1500mm" }}; margin: 4mm {% if ticket_etroit %}2.5mm{% else %}3.5mm{% endif %}; }
   /* Tête thermique : noir ou rien. Aucun gris (il sort pâle, voire pas du
      tout), des traits épais, des corps assez grands pour rester lisibles. */
   body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5px; color: #000; }
@@ -39,7 +41,7 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
   td.reste-m { width: 38%; font-size: 11.5px; font-weight: bold; padding-top: 2px; text-align: right; }
   .pied { text-align: center; font-size: 9.5px; color: #000; line-height: 1.4; }
   {% if ticket_etroit %}
-  /* 58 mm : ~50 mm imprimables. Polices réduites et colonne des montants
+  /* 58 mm : 48 mm imprimables. Polices réduites et colonne des montants
      élargie, sinon « 1 250 000 F » passe à la ligne. */
   body { font-size: 8.5px; }
   .ecole { font-size: 11px; }
@@ -50,8 +52,8 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
   td.m { width: 48%; font-size: 8.5px; }
   td.info-l { width: 30%; font-size: 8px; }
   td.info-v { width: 70%; font-size: 8px; }
-  td.total-l { width: 40%; font-size: 10.5px; }
-  td.total-m { width: 60%; font-size: 10.5px; }
+  td.total-l { width: 47%; font-size: 10px; }
+  td.total-m { width: 53%; font-size: 10px; }
   td.reste-l, td.reste-m { font-size: 9.5px; }
   {% endif %}
 </style>

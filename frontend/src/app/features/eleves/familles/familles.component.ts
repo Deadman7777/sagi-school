@@ -20,6 +20,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Famille, FratrieProbable, LigneReductionFratrie,
          ResponsableFamille, SituationFamille } from '../../../core/models/eleve.model';
 import { ElevesService } from '../../../core/services/eleves.service';
+import { FORMATS_RECU, ImpressionService } from '../../../core/services/impression.service';
 import { EncaissementGroupeComponent, FinEncaissement }
   from '../encaissement-groupe/encaissement-groupe.component';
 
@@ -196,9 +197,19 @@ type LigneReduction = LigneReductionFratrie & {
                     [loading]="telechargementSituation()"
                     (onClick)="telechargerSituation()" />
           @if (dernierVersement()) {
-            <p-button icon="pi pi-print" [label]="'familles.recu_groupe' | translate"
-                      size="small" severity="secondary" [outlined]="true"
-                      (onClick)="imprimerRecu()" />
+            <span class="recu-groupe">
+              <span class="meta">{{ 'familles.recu_groupe' | translate }}</span>
+              <p-select [options]="formatsRecu" [(ngModel)]="formatRecu" optionLabel="label"
+                        optionValue="value" appendTo="body" size="small"
+                        [ariaLabel]="'familles.format_recu' | translate" />
+              <p-button icon="pi pi-print" [label]="'familles.imprimer' | translate"
+                        size="small" [loading]="impressionRecu()"
+                        (onClick)="imprimerRecu()" />
+              <p-button icon="pi pi-download" size="small" severity="secondary" [outlined]="true"
+                        [pTooltip]="'familles.telecharger' | translate"
+                        [ariaLabel]="'familles.telecharger' | translate"
+                        (onClick)="telechargerRecu()" />
+            </span>
           }
         </div>
 
@@ -400,6 +411,8 @@ type LigneReduction = LigneReductionFratrie & {
     .puce { background:var(--surface-100); border-radius:12px; padding:2px 10px; font-size:.82rem; }
     .puce .cl { color:var(--text-color-secondary); margin-left:6px; font-size:.74rem; }
     .ligne-encaisser { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    .recu-groupe { display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .recu-groupe .meta { font-size:12px; color:var(--text-3); }
     .ligne-versement { display:flex; gap:8px; align-items:center; margin-bottom:12px;
                        flex-wrap:wrap; }
     .ligne-versement .champ-montant { width:170px; position:relative; }
@@ -436,6 +449,10 @@ export class FamillesComponent implements OnInit {
 
   telechargementSituation = signal(false);
   dernierVersement  = signal<string | null>(null);
+  private impression = inject(ImpressionService);
+  readonly formatsRecu = FORMATS_RECU;
+  formatRecu = 'A5';
+  impressionRecu = signal(false);
   responsablesFamille = signal<ResponsableFamille[]>([]);
   encaissementVisible = false;
   /** Remise fratrie de chaque enfant, en cours de saisie. */
@@ -647,14 +664,40 @@ export class FamillesComponent implements OnInit {
     });
   }
 
-  imprimerRecu() {
+  telechargerRecu() {
     const s = this.situation();
     const reference = this.dernierVersement();
     if (!s || !reference) return;
-    this.eleves.recuGroupe(s.famille_id, reference).subscribe({
+    this.eleves.recuGroupe(s.famille_id, reference, this.formatRecu).subscribe({
       next: blob => this.telechargerPdf(blob,
-                                        `recu_${s.code}_${reference.slice(0, 8)}.pdf`),
+                                        `recu_${s.code}_${reference.slice(0, 8)}_${this.formatRecu}.pdf`),
       error: () => this.erreur('familles.erreur_recu'),
+    });
+  }
+
+  /** Imprime le reçu du versement : directement (app installée) ou fenêtre du navigateur. */
+  imprimerRecu() {
+    const s = this.situation();
+    const reference = this.dernierVersement();
+    if (!s || !reference || this.impressionRecu()) return;
+    this.impressionRecu.set(true);
+    this.eleves.recuGroupe(s.famille_id, reference, this.formatRecu).subscribe({
+      next: async blob => {
+        try {
+          const res = await this.impression.imprimer(blob, ImpressionService.typePourFormat(this.formatRecu));
+          if (res.direct) {
+            this.msg.add({ severity: 'success',
+                           summary: this.translate.instant('familles.recu_envoye'),
+                           detail: res.imprimante });
+          }
+        } catch (e: any) {
+          this.msg.add({ severity: 'error', summary: this.translate.instant('familles.erreur_impression'),
+                         detail: e?.message, life: 8000 });
+        } finally {
+          this.impressionRecu.set(false);
+        }
+      },
+      error: () => { this.impressionRecu.set(false); this.erreur('familles.erreur_recu'); },
     });
   }
 

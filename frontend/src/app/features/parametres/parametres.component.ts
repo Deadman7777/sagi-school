@@ -6,6 +6,7 @@ import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppModeService } from '../../core/services/app-mode.service';
 import { ThemeService } from '../../core/services/theme.service';
+import { ImpressionService, Imprimante, TypeImpression } from '../../core/services/impression.service';
 import { ElevesService } from '../../core/services/eleves.service';
 import { InputTextModule } from 'primeng/inputtext';
 import { ButtonModule } from 'primeng/button';
@@ -67,6 +68,8 @@ import { PassageAnneeComponent } from './passage-annee.component';
               (click)="onglet.set('users')">👥 {{ 'parametres.utilisateurs' | translate }}</button>
       <button class="tab-btn" *ngIf="estLocal" [class.active]="onglet() === 'sauvegarde'"
               (click)="onglet.set('sauvegarde'); chargerSauvegarde()">☁️ {{ 'parametres.sauvegarde' | translate }}</button>
+      <button class="tab-btn" [class.active]="onglet() === 'imprimantes'"
+              (click)="onglet.set('imprimantes'); chargerImprimantes()">🖨️ {{ 'parametres.imprimantes' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'migration'"
         (click)="onglet.set('migration'); chargerSanteMigration()">
         🩺 {{ 'sante.title' | translate }}
@@ -975,6 +978,43 @@ import { PassageAnneeComponent } from './passage-annee.component';
         </div>
       </div>
     </div>
+
+    <!-- ══ ONGLET IMPRIMANTES (propre au poste) ══ -->
+    @if (onglet() === 'imprimantes') {
+      <div class="form-card">
+        <div class="fc-title">🖨️ {{ 'imprimantes.titre' | translate }}</div>
+        @if (!impression.directPossible) {
+          <p style="font-size:13px;color:var(--text-2)">{{ 'imprimantes.cloud' | translate }}</p>
+        } @else {
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">{{ 'imprimantes.explication' | translate }}</p>
+          @if (imprimantesChargees() && !optionsImprimantes().length) {
+            <div class="alerte-orange">⚠️ {{ 'imprimantes.aucune' | translate }}</div>
+          }
+          @for (t of typesImpression; track t) {
+            <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+              <div style="flex:1;min-width:260px">
+                <label [for]="'imp-' + t" style="display:block;font-size:12px;color:var(--text-2);margin-bottom:4px">
+                  {{ 'imprimantes.' + t | translate }}
+                </label>
+                <p-select [inputId]="'imp-' + t" appendTo="body" [fluid]="true"
+                          [options]="optionsImprimantes()" optionLabel="label" optionValue="value"
+                          [placeholder]="'imprimantes.defaut_systeme' | translate"
+                          [ngModel]="reglagesImpression()[t]"
+                          (ngModelChange)="choisirImprimante(t, $event)" />
+              </div>
+              <p-button [label]="'imprimantes.test' | translate" severity="secondary" [outlined]="true"
+                        icon="pi pi-print" (onClick)="imprimerPageTest(t)" />
+            </div>
+          }
+          <div class="form-actions">
+            <p-button [label]="'imprimantes.rafraichir' | translate" severity="secondary" [text]="true"
+                      icon="pi pi-refresh" (onClick)="chargerImprimantes()" />
+            <p-button [label]="'imprimantes.enregistrer' | translate" icon="pi pi-check"
+                      (onClick)="enregistrerImprimantes()" />
+          </div>
+        }
+      </div>
+    }
 
     <!-- ══ ONGLET CLÔTURE ══ -->
 <div *ngIf="onglet() === 'cloture'">
@@ -1938,6 +1978,50 @@ export class ParametresComponent implements OnInit {
   estLocal = this.appMode.isLocal();
   sauvegarde        = signal<any>(null);
   sauvegardeEnCours = signal(false);
+
+  // ── Imprimantes du poste (Electron) ──
+  readonly impression = inject(ImpressionService);
+  readonly typesImpression: TypeImpression[] = ['document', 'ticket'];
+  optionsImprimantes   = signal<{ label: string; value: string }[]>([]);
+  reglagesImpression   = signal<Record<TypeImpression, string>>({ document: '', ticket: '' });
+  imprimantesChargees  = signal(false);
+
+  async chargerImprimantes() {
+    if (!this.impression.directPossible) return;
+    const [liste, reglages] = await Promise.all([this.impression.listerImprimantes(), this.impression.reglages()]);
+    const defaut = this.translate.instant('imprimantes.defaut_systeme');
+    this.optionsImprimantes.set([
+      { label: defaut, value: '' },
+      ...liste.map((i: Imprimante) => ({ label: i.libelle + (i.parDefaut ? ' ★' : ''), value: i.nom })),
+    ]);
+    this.reglagesImpression.set(reglages);
+    this.imprimantesChargees.set(true);
+  }
+
+  choisirImprimante(type: TypeImpression, nom: string) {
+    this.reglagesImpression.update(r => ({ ...r, [type]: nom || '' }));
+  }
+
+  async enregistrerImprimantes() {
+    try {
+      this.reglagesImpression.set(await this.impression.enregistrerReglages(this.reglagesImpression()));
+      this.msg.add({ severity: 'success', summary: this.translate.instant('imprimantes.enregistre') });
+    } catch (e: any) {
+      this.msg.add({ severity: 'error', summary: e?.message || 'Erreur' });
+    }
+  }
+
+  /** Imprime une page de test sur l'imprimante choisie (même non encore enregistrée). */
+  async imprimerPageTest(type: TypeImpression) {
+    const nom = this.reglagesImpression()[type];
+    const libelle = this.optionsImprimantes().find(o => o.value === nom)?.label || nom;
+    try {
+      const res = await this.impression.imprimer(ImpressionService.pageDeTest(type, libelle), type, nom || undefined);
+      this.msg.add({ severity: 'success', summary: '🖨️ ' + (res.imprimante || libelle) });
+    } catch (e: any) {
+      this.msg.add({ severity: 'error', summary: e?.message || 'Erreur', life: 8000 });
+    }
+  }
 
   constructor(
     private api: ApiService,

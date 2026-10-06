@@ -397,7 +397,7 @@ export class ElevesService {
 
   /** Le reçu unique d'un versement groupé, édité APRÈS les règlements : il
    *  ne promet que ce que la caisse a réellement reçu. */
-  recuGroupe(familleId: string, reference: string, taille: 'A5' | 'A4' = 'A5') {
+  recuGroupe(familleId: string, reference: string, taille = 'A5') {
     return this.api.getBlob(`/eleves/familles/${familleId}/recu-groupe/`,
                             { reference, taille });
   }

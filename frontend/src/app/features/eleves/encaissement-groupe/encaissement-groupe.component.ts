@@ -15,6 +15,7 @@ import { EcheancesEleve, PosteEcheance, ReglementPrepare } from '../../../core/m
 import { ApiService } from '../../../core/services/api.service';
 import { ElevesService, PreparationDemande } from '../../../core/services/eleves.service';
 import { PaiementsService } from '../../../core/services/paiements.service';
+import { LigneMode, ventilerSurReglements } from './ventilation-modes';
 
 export interface FinEncaissement {
   reference: string;
@@ -144,12 +145,44 @@ export interface FinEncaissement {
 
       <!-- Comment l'argent entre : mode, caisse, date, payeur. -->
       <div class="bloc-reglement">
-        <label class="champ">
-          <span>{{ 'encaissement.mode' | translate }}</span>
-          <p-select inputId="enc-mode" [options]="modes" [(ngModel)]="mode" optionLabel="label"
-                    optionValue="value" appendTo="body" />
+        @if (!multiMode()) {
+          <label class="champ">
+            <span>{{ 'encaissement.mode' | translate }}</span>
+            <p-select inputId="enc-mode" [options]="modes" [(ngModel)]="mode" optionLabel="label"
+                      optionValue="value" appendTo="body" />
+          </label>
+        }
+        <label class="case">
+          <p-checkbox inputId="enc-multi" [binary]="true" [ngModel]="multiMode()"
+                      (ngModelChange)="basculerMultiMode($event)" />
+          <span>{{ 'encaissement.multi_mode' | translate }}</span>
         </label>
-        @if (mode === 'ESPECE' && caisses().length) {
+        @if (multiMode()) {
+          <div class="modes-lignes">
+            @for (m of lignesModes(); track $index; let i = $index) {
+              <div class="mode-ligne">
+                <p-select [inputId]="'enc-mode-' + i" [options]="modes" [ngModel]="m.mode"
+                          (ngModelChange)="majLigneMode(i, { mode: $event })"
+                          optionLabel="label" optionValue="value" appendTo="body"
+                          [ariaLabel]="'encaissement.mode' | translate" />
+                <p-inputNumber [inputId]="'enc-montant-' + i" [ngModel]="m.montant"
+                               (ngModelChange)="majLigneMode(i, { montant: $event || 0 })"
+                               [min]="0" [ariaLabel]="'encaissement.mode' | translate" />
+                <p-button icon="pi pi-times" [text]="true" severity="secondary" size="small"
+                          [disabled]="lignesModes().length <= 1" (onClick)="retirerLigneMode(i)"
+                          ariaLabel="✕" />
+              </div>
+            }
+            <div class="mode-pied">
+              <p-button [label]="'encaissement.ajouter_mode' | translate" [text]="true" size="small"
+                        (onClick)="ajouterLigneMode()" />
+              <span class="mono" [class.rouge]="resteAVentiler() !== 0">
+                {{ 'encaissement.reste_ventiler' | translate: { montant: (resteAVentiler() | number:'1.0-0') } }}
+              </span>
+            </div>
+          </div>
+        }
+        @if (avecEspeces() && caisses().length) {
           <label class="champ">
             <span>{{ 'encaissement.caisse' | translate }}</span>
             <p-select inputId="enc-caisse" [options]="optionsCaisses()" [(ngModel)]="caisse"
@@ -180,9 +213,10 @@ export interface FinEncaissement {
           <span class="meta">· {{ 'encaissement.nb_eleves' | translate: { nb: nbEleves() } }}</span>
         </span>
         <span class="espace"></span>
+        @if (erreurVentilation()) { <span class="rouge" role="alert">{{ erreurVentilation() }}</span> }
         @if (progression()) { <span class="meta">{{ progression() }}</span> }
         <p-button icon="pi pi-check" [label]="'encaissement.encaisser' | translate"
-                  severity="success" [disabled]="total() <= 0 || enCours()"
+                  severity="success" [disabled]="total() <= 0 || enCours() || (multiMode() && resteAVentiler() !== 0)"
                   [loading]="enCours()" (onClick)="encaisser()" />
       </div>
     }
@@ -223,6 +257,10 @@ export interface FinEncaissement {
     .pied { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
       position: sticky; bottom: 0; padding: 10px 0 0; background: var(--surface-2); }
     .total { font-size: 14px; }
+    .modes-lignes { display: flex; flex-direction: column; gap: 6px; flex: 1 1 100%; }
+    .mode-ligne { display: flex; gap: 8px; align-items: center; }
+    .mode-ligne p-select { flex: 1; }
+    .mode-pied { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
   `],
 })
 export class EncaissementGroupeComponent {
@@ -254,6 +292,16 @@ export class EncaissementGroupeComponent {
   date = new Date().toISOString().slice(0, 10);
   payeur: string | null = null;
   observations = '';
+  /** Plusieurs moyens pour le même versement (espèces + Wave…). */
+  multiMode = signal(false);
+  erreurVentilation = signal('');
+  lignesModes = signal<LigneMode[]>([]);
+  resteAVentiler = computed(() => Math.round(
+    (this.total() - this.lignesModes().reduce((t, m) => t + (Number(m.montant) || 0), 0)) * 100) / 100);
+  /** La caisse ne se choisit que si des espèces entrent. */
+  avecEspeces(): boolean {
+    return this.multiMode() ? this.lignesModes().some(m => m.mode === 'ESPECE') : this.mode === 'ESPECE';
+  }
 
   modes = [
     { label: 'Espèces', value: 'ESPECE' },
@@ -355,6 +403,24 @@ export class EncaissementGroupeComponent {
     });
   }
 
+  // ── Multi-mode ──────────────────────────────────────────────────────
+  basculerMultiMode(actif: boolean) {
+    this.multiMode.set(actif);
+    // Amorce : le mode déjà choisi, pour le total coché.
+    if (actif && !this.lignesModes().length) {
+      this.lignesModes.set([{ mode: this.mode, montant: this.total() }]);
+    }
+  }
+  ajouterLigneMode() {
+    this.lignesModes.update(l => [...l, { mode: '', montant: Math.max(0, this.resteAVentiler()) }]);
+  }
+  retirerLigneMode(i: number) {
+    this.lignesModes.update(l => l.filter((_, j) => j !== i));
+  }
+  majLigneMode(i: number, champ: Partial<LigneMode>) {
+    this.lignesModes.update(l => l.map((m, j) => j === i ? { ...m, ...champ } : m));
+  }
+
   // ── Encaissement ────────────────────────────────────────────────────
   async encaisser() {
     const selection = Object.entries(this.choix())
@@ -364,6 +430,7 @@ export class EncaissementGroupeComponent {
         return { eleve_id, cle, montant: Number(montant) };
       });
     if (!selection.length) return;
+    this.erreurVentilation.set('');
     this.enCours.set(true);
     const reference = this.nouvelleReference();
     const echecs: string[] = [];
@@ -375,16 +442,31 @@ export class EncaissementGroupeComponent {
         : this.elevesApi.preparerFamille(this.cibleId(), corps));
       const reglements: (ReglementPrepare & { nom: string })[] = preparation.lignes.flatMap(
         l => l.reglements.map(r => ({ ...r, nom: l.nom_complet })));
+      // Multi-mode : chaque règlement reçoit sa part des moyens saisis. Rien
+      // n'est envoyé si la ventilation ne couvre pas exactement le versement.
+      let moyens;
+      try {
+        moyens = this.multiMode()
+          ? ventilerSurReglements(reglements.map(r => Number(r.total) || 0), this.lignesModes())
+          : reglements.map(() => ({ mode_paiement: this.mode, modes_reglement: [] as LigneMode[] }));
+      } catch {
+        this.erreurVentilation.set(this.translate.instant('encaissement.ventilation_incomplete',
+                                                          { reste: this.resteAVentiler() }));
+        return;   // rien n'a été encaissé
+      }
       // Un règlement après l'autre : le numéro de reçu est une séquence de
       // l'école, deux envois simultanés se la disputeraient.
       for (const [i, r] of reglements.entries()) {
         this.progression.set(`${i + 1} / ${reglements.length}`);
         const { detail, total, nom, ...champs } = r;
+        const { mode_paiement, modes_reglement } = moyens[i];
+        const especes = mode_paiement === 'ESPECE' || modes_reglement.some(m => m.mode === 'ESPECE');
         try {
           await firstValueFrom(this.paiements.creerPaiement({
             ...champs,
-            mode_paiement: this.mode,
-            caisse: this.mode === 'ESPECE' ? this.caisse : null,
+            mode_paiement,
+            modes_reglement,
+            caisse: especes ? this.caisse : null,
             date_paiement: this.date || undefined,
             payeur: this.type() === 'famille' ? this.payeur : null,
             reference_groupe: reference,

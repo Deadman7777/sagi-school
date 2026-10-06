@@ -21,6 +21,9 @@ import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../core/services/api.service';
+import { FORMATS_RECU, ImpressionService } from '../../core/services/impression.service';
+import { SplitButtonModule } from 'primeng/splitbutton';
+import { MenuItem } from 'primeng/api';
 import { PiecesJustificativesComponent } from '../../shared/pieces-justificatives.component';
 import { ImportChargesDialogComponent } from './import-charges-dialog.component';
 import { CahierMensuelComponent } from './cahier-mensuel.component';
@@ -32,7 +35,7 @@ import { ProformasComponent } from './proformas.component';
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
-            InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, PiecesJustificativesComponent,
+            InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, SplitButtonModule, PiecesJustificativesComponent,
             ImportChargesDialogComponent, CahierMensuelComponent, PointTresorerieComponent, ProformasComponent],
   providers: [MessageService],
   template: `
@@ -886,6 +889,12 @@ import { ProformasComponent } from './proformas.component';
           <span style="font-size:12px;color:var(--text-3)">Format :</span>
           <p-select appendTo="body" [options]="formatsRecu" [(ngModel)]="recuFormat"
                     optionLabel="label" optionValue="value" styleClass="w-40" />
+          @if (impression.directPossible) {
+            <p-splitButton label="🖨 Imprimer" [model]="menuImprimantes()" appendTo="body"
+                           [disabled]="impressionEnCours()" (onClick)="imprimerRecuPdf()" />
+          } @else {
+            <p-button label="🖨 Imprimer" [loading]="impressionEnCours()" (onClick)="imprimerRecuPdf()" />
+          }
           <p-button label="📄 Télécharger PDF" severity="success"
                     icon="pi pi-download" (onClick)="telechargerRecuPdf()" />
           <p-button label="Fermer" severity="secondary" (onClick)="recuVisible=false" />
@@ -1374,15 +1383,11 @@ export class PaiementsComponent implements OnInit {
   recuVisible       = false;
   recuData          = signal<any>(null);
   recuFormat        = 'A5';
-  formatsRecu = [
-    { label: 'A5 (demi-A4)',     value: 'A5' },
-    { label: 'A4 (page entière)', value: 'A4' },
-    { label: 'A6 (quart de A4)',  value: 'A6' },
-    { label: 'Letter (US)',       value: 'LETTER' },
-    { label: 'Legal (US)',        value: 'LEGAL' },
-    { label: '80 mm (thermique)', value: '80mm' },
-    { label: '58 mm (thermique)', value: '58mm' },
-  ];
+  readonly impression = inject(ImpressionService);
+  impressionEnCours = signal(false);
+  /** « Imprimer sur… » : les imprimantes du poste (app locale uniquement). */
+  menuImprimantes   = signal<MenuItem[]>([]);
+  formatsRecu = FORMATS_RECU;
   saisieDonnees     = signal<any | null>(null);
   eleveSelectionne: any = null;
   rechercheInput    = '';
@@ -2208,6 +2213,38 @@ export class PaiementsComponent implements OnInit {
     if (!paiement?.id) return;
     this.paiementsService.getRecu(paiement.id).subscribe({
       next: res => { this.recuData.set(res); this.recuVisible = true; }
+    });
+    if (this.impression.directPossible && !this.menuImprimantes().length) {
+      this.impression.listerImprimantes().then(liste => this.menuImprimantes.set(
+        liste.map(i => ({ label: i.libelle + (i.parDefaut ? ' (par défaut)' : ''),
+                          command: () => this.imprimerRecuPdf(i.nom) }))));
+    }
+  }
+
+  /** Envoie le reçu au format choisi à l'imprimante (tickets 58/80 mm → imprimante à tickets). */
+  imprimerRecuPdf(imprimante?: string) {
+    const d = this.recuData();
+    if (!d?.paiement_id || this.impressionEnCours()) return;
+    this.impressionEnCours.set(true);
+    this.paiementsService.telechargerRecuPdf(d.paiement_id, this.recuFormat).subscribe({
+      next: async (blob: Blob) => {
+        try {
+          const res = await this.impression.imprimer(blob, ImpressionService.typePourFormat(this.recuFormat), imprimante);
+          if (res.direct) {
+            this.msg.add({ severity: 'success', summary: 'Reçu envoyé',
+                           detail: `${d.no_piece} → ${res.imprimante}` });
+          }
+        } catch (e: any) {
+          this.msg.add({ severity: 'error', summary: 'Impression impossible',
+                         detail: e?.message || 'Vérifiez l\'imprimante (Paramètres › Imprimantes).', life: 8000 });
+        } finally {
+          this.impressionEnCours.set(false);
+        }
+      },
+      error: () => {
+        this.impressionEnCours.set(false);
+        this.msg.add({ severity: 'error', summary: 'Erreur PDF', detail: 'Impossible de générer le reçu.' });
+      },
     });
   }
 

@@ -1,0 +1,111 @@
+{% load logo_ecole %}{% load humanize_fcfa %}<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+{% comment %}
+Reçu d'un versement de famille, format ticket (58/80 mm) et A6.
+Mêmes règles que recu_ticket.html (pièges xhtml2pdf, tête thermique) :
+- noir pur, aucun gris ; des <hr> entre blocs, aucune bordure de ligne ;
+- largeurs de colonnes fixes, sans remplissage horizontal ;
+- une seule règle @page ; repère FIN-DU-RECU en dernier (rognage en hauteur).
+Un enfant = son nom et son montant, puis le détail en petit dessous : un
+tableau à quatre colonnes ne tient pas sur 72 mm.
+{% endcomment %}
+<style>
+  @page { size: {{ page_size|default:"72mm 1500mm" }}; margin: 4mm {% if ticket_etroit %}2.5mm{% else %}3.5mm{% endif %}; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5px; color: #000; }
+  .center { text-align: center; }
+  .ecole { font-size: 13.5px; font-weight: bold; text-transform: uppercase; line-height: 1.25; }
+  .coord { font-size: 9.5px; color: #000; line-height: 1.35; }
+  .titre { font-size: 12px; font-weight: bold; margin-top: 5px; letter-spacing: 0.5px; }
+  .numero { font-size: 10.5px; font-weight: bold; }
+  hr.sep { border: 0; border-top: 1.2px dashed #000; color: #000; height: 0; margin-top: 4px; margin-bottom: 4px; }
+  hr.sep-fort { border: 0; border-top: 2px solid #000; color: #000; height: 0; margin-top: 3px; margin-bottom: 3px; }
+
+  table.t { width: 100%; }
+  td.info-l { width: 34%; font-size: 10px; padding-top: 1px; padding-bottom: 1px; vertical-align: top; color: #000; }
+  td.info-v { width: 66%; font-size: 10px; font-weight: bold; padding-top: 1px; padding-bottom: 1px; vertical-align: top; text-align: right; color: #000; }
+  td.l { width: 60%; font-size: 10.5px; font-weight: bold; padding-top: 3px; vertical-align: top; color: #000; }
+  td.m { width: 40%; font-size: 10.5px; font-weight: bold; padding-top: 3px; vertical-align: top; text-align: right; color: #000; }
+  td.detail { font-size: 8.5px; color: #000; padding-bottom: 3px; line-height: 1.3; }
+  td.total-l { width: 45%; font-size: 13px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; }
+  td.total-m { width: 55%; font-size: 13px; font-weight: bold; padding-top: 2px; padding-bottom: 2px; text-align: right; }
+  .pied { text-align: center; font-size: 9.5px; color: #000; line-height: 1.4; }
+  {% if ticket_etroit %}
+  body { font-size: 8.5px; }
+  .ecole { font-size: 11px; }
+  .coord, .pied { font-size: 8px; }
+  .titre { font-size: 10px; }
+  .numero { font-size: 9px; }
+  td.info-l { width: 34%; font-size: 8px; }
+  td.info-v { width: 66%; font-size: 8px; }
+  td.l { width: 52%; font-size: 8.5px; }
+  td.m { width: 48%; font-size: 8.5px; }
+  td.detail { font-size: 7.5px; }
+  td.total-l { width: 47%; font-size: 10px; }
+  td.total-m { width: 53%; font-size: 10px; }
+  {% endif %}
+</style>
+</head>
+<body>
+
+  <div class="center">
+    {% if logo %}{% if ticket_etroit %}{% logo_ecole logo 110 36 %}{% else %}{% logo_ecole logo 150 48 %}{% endif %}<br>{% endif %}
+    <div class="ecole">{{ tenant.nom }}</div>
+    <div class="coord">
+      {% if tenant.ville %}{{ tenant.ville }}<br>{% endif %}
+      {% if tenant.telephone %}Tél : {{ tenant.telephone }}{% endif %}
+    </div>
+    <div class="titre">REÇU DE VERSEMENT — FAMILLE</div>
+    <div class="numero">{{ reference_courte }}</div>
+    <div class="coord">{{ date|date:"d/m/Y" }}</div>
+  </div>
+
+  <hr class="sep">
+
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="info-l">Famille</td><td class="info-v">{{ famille.nom }}</td></tr>
+    <tr><td class="info-l">Code</td><td class="info-v">{{ famille.code }}</td></tr>
+    {% if payeur %}<tr><td class="info-l">Versé par</td><td class="info-v">{{ payeur }}</td></tr>{% endif %}
+    <tr><td class="info-l">Enfants</td><td class="info-v">{{ nb_enfants }}</td></tr>
+  </table>
+
+  <hr class="sep">
+
+  <table class="t" cellpadding="0" cellspacing="0">
+    {% for l in lignes %}
+    <tr><td class="l">{{ l.nom_complet }}</td><td class="m">{{ l.montant|fcfa }}</td></tr>
+    <tr><td class="detail" colspan="2">{{ l.no_piece }}{% if l.classe %} · {{ l.classe }}{% endif %} — {{ l.detail }}<br>
+      Impayés antérieurs restants : {% if l.impaye_anterieur_restant %}{{ l.impaye_anterieur_restant|fcfa }} F{% else %}néant{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+
+  <hr class="sep-fort">
+  <table class="t" cellpadding="0" cellspacing="0">
+    <tr><td class="total-l">TOTAL REÇU</td><td class="total-m">{{ total|fcfa }} F</td></tr>
+  </table>
+  <hr class="sep-fort">
+
+  <table class="t" cellpadding="0" cellspacing="0">
+    {% if modes_detail %}
+    <tr><td class="info-l">Mode</td><td class="info-v">Multi-mode</td></tr>
+    {% for m in modes_detail %}
+    <tr><td class="info-l">&nbsp;&nbsp;{{ m.libelle }}</td><td class="info-v">{{ m.total|fcfa }} F</td></tr>
+    {% endfor %}
+    {% else %}
+    <tr><td class="info-l">Mode</td><td class="info-v">{{ modes|default:"—" }}</td></tr>
+    {% endif %}
+    {% if caissier %}<tr><td class="info-l">Caissier</td><td class="info-v">{{ caissier }}</td></tr>{% endif %}
+  </table>
+
+  <hr class="sep">
+  <div class="pied">
+    Ce reçu couvre {{ lignes|length }} règlement(s).<br>
+    Merci de conserver ce reçu.<br>
+    Édité le {{ aujourdhui|date:"d/m/Y" }}
+  </div>
+  {# Repère de coupe, invisible (formats_recu.REPERE_FIN) : toujours en dernier. #}
+  <div style="color:#ffffff; font-size:2px;">FIN-DU-RECU</div>
+
+</body>
+</html>

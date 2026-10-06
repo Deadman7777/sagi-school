@@ -766,7 +766,8 @@
     "caisses_vide": "Aucune caisse spécifique : tout entre dans la caisse principale.",
     "caisse_confirm_suppr": "Supprimer cette caisse ?",
     "rappels_messages": "Messages à envoyer (fratries regroupées)",
-    "sms_eleves_couverts": "Élèves couverts par ces messages"
+    "sms_eleves_couverts": "Élèves couverts par ces messages",
+    "imprimantes": "Imprimantes"
   },
   "cloture": {
     "title": "Clôture de l'Exercice",
@@ -1817,7 +1818,12 @@
     "reduction_protegee": "Prise en charge d'un autre motif : modifiable depuis la fiche de l'élève.",
     "tarif": "Tarif :",
     "enregistrer_reduction": "Enregistrer les réductions",
-    "reduction_enregistree": "{{nb}} fiche(s) mise(s) à jour."
+    "reduction_enregistree": "{{nb}} fiche(s) mise(s) à jour.",
+    "format_recu": "Format du reçu",
+    "imprimer": "Imprimer",
+    "telecharger": "Télécharger le reçu",
+    "recu_envoye": "Reçu envoyé à l'imprimante",
+    "erreur_impression": "Impression impossible"
   },
   "encaissement": {
     "montant_verse": "Montant versé par la famille",
@@ -1848,6 +1854,23 @@
     "reference_virement": "Référence du virement ou du chèque",
     "total": "Total à encaisser",
     "nb_eleves": "{{nb}} élève(s)",
-    "encaisser": "Encaisser"
+    "encaisser": "Encaisser",
+    "multi_mode": "Multi-mode (plusieurs moyens)",
+    "ajouter_mode": "+ Ajouter un mode",
+    "reste_ventiler": "Reste à ventiler : {{montant}} FCFA",
+    "ventilation_incomplete": "La ventilation des modes doit couvrir exactement le total ({{reste}} FCFA restant)."
+  },
+  "imprimantes": {
+    "titre": "Imprimantes de ce poste",
+    "explication": "Choisissez sur quelle imprimante partent les documents quand vous cliquez sur « Imprimer ». Le réglage est propre à cet ordinateur.",
+    "document": "Documents (A4, A5…)",
+    "ticket": "Tickets de caisse (58/80 mm)",
+    "defaut_systeme": "Imprimante par défaut de l'ordinateur",
+    "aucune": "Aucune imprimante détectée sur cet ordinateur.",
+    "enregistrer": "Enregistrer",
+    "rafraichir": "Actualiser la liste",
+    "test": "Page de test",
+    "enregistre": "Imprimantes enregistrées pour ce poste.",
+    "cloud": "Dans le navigateur, la fenêtre d'impression s'ouvre et vous choisissez l'imprimante à chaque fois. Le réglage d'imprimantes est disponible dans l'application installée."
   }
 }

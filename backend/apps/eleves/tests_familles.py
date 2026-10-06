@@ -868,6 +868,51 @@ class VersementGroupeTest(BaseFamille):
         self.assertIn('AWA NDIAYE', texte.upper())
         self.assertNotIn('MOUSSA NDIAYE', texte.upper())
 
+    def test_recu_famille_multi_mode_et_tous_les_formats(self):
+        """Versement de famille réglé en espèces ET par Wave : chaque mode
+        apparaît avec son montant, et le reçu sort dans tous les formats du
+        reçu élève (tickets à la largeur imprimable, rognés en hauteur)."""
+        import uuid
+
+        from pypdf import PdfReader
+
+        aine, cadet = self._enfant('Awa NDIAYE'), self._enfant('Moussa NDIAYE')
+        reference = str(uuid.uuid4())
+        payeur = str(self.famille.responsable_principal.id)
+        # Un règlement en espèces seules, un autre mixte (5 000 + 20 000 Wave).
+        for enfant, corps in ((aine, {'mode_paiement': 'ESPECE'}),
+                              (cadet, {'mode_paiement': 'MIXTE', 'modes_reglement': [
+                                  {'mode': 'ESPECE', 'montant': 5000},
+                                  {'mode': 'WAVE', 'montant': 20000}]})):
+            r = self.client.post('/api/paiements/paiements/', {
+                'eleve': str(enfant.id), 'montant_inscription': 25000,
+                'reference_groupe': reference, 'payeur': payeur, **corps}, format='json')
+            self.assertEqual(r.status_code, 201, r.content[:300])
+
+        url = f'/api/eleves/familles/{self.famille.id}/recu-groupe/'
+        largeurs = {'80MM': 72, '58MM': 48, 'A6': 105, 'A5': 148, 'A4': 210,
+                    'LETTER': 215.9, 'LEGAL': 215.9}
+        for taille, largeur_mm in largeurs.items():
+            r = self.client.get(url, {'reference': reference, 'taille': taille})
+            self.assertEqual(r.status_code, 200, taille)
+            pdf = PdfReader(BytesIO(r.content))
+            self.assertEqual(len(pdf.pages), 1, taille)
+            page = pdf.pages[0]
+            self.assertAlmostEqual(float(page.mediabox.width) * 25.4 / 72, largeur_mm,
+                                   delta=0.5, msg=taille)
+            texte = page.extract_text().replace('\xa0', ' ')
+            compact = texte.replace(' ', '')
+            for nom in ('AWA NDIAYE', 'MOUSSA NDIAYE'):
+                self.assertIn(nom, texte.upper(), taille)
+            self.assertIn('50000', compact, taille)            # total
+            self.assertIn('30000', compact, taille)            # espèces 25 000 + 5 000
+            self.assertIn('Wave', texte, taille)
+            self.assertIn('20000', compact, taille)
+            self.assertNotIn('Multi-mode (', texte, taille)
+            if taille in ('80MM', '58MM'):
+                hauteur_mm = float(page.mediabox.height) * 25.4 / 72
+                self.assertLess(hauteur_mm, 250, taille)       # rogné au contenu
+
     def test_une_reference_inconnue_ne_produit_pas_un_recu_vide(self):
         import uuid
 

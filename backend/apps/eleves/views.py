@@ -3388,7 +3388,7 @@ class FamilleViewSet(viewsets.ModelViewSet):
 
         paiements = list(Paiement.objects.filter(
             tenant=tenant, reference_groupe=reference, statut='ACTIF')
-            .select_related('eleve', 'eleve__classe', 'eleve__section', 'payeur')
+            .select_related('eleve', 'eleve__classe', 'eleve__section', 'payeur', 'saisi_par')
             .order_by('eleve__nom_complet'))
         if not paiements:
             return HttpResponse("Aucun règlement pour cette référence.", status=404)
@@ -3430,13 +3430,27 @@ class FamilleViewSet(viewsets.ModelViewSet):
                 'impaye_anterieur_restant': eleve.reliquat_restant,
             })
 
-        # Modes réels : un règlement multi-mode se lit « Espèce, Wave », pas
-        # « Multi-mode ».
-        from apps.comptabilite.tresorerie import LIBELLES_MODE
-        modes = sorted({LIBELLES_MODE.get(m.get('mode'), m.get('mode'))
-                        for p in paiements for m in (p.modes_reglement or [])}
-                       | {p.get_mode_paiement_display() for p in paiements
-                          if not p.modes_reglement})
+        # Modes réels, avec leur montant : un versement réglé en partie en
+        # espèces, en partie par Wave se lit « Espèce 100 000 · Wave 50 000 »,
+        # pas « Multi-mode ». Même ventilation que la trésorerie.
+        from apps.comptabilite.tresorerie import liste_par_mode
+        from apps.paiements.formats_recu import FORMATS_RECU, rogner_a_la_hauteur_du_contenu
+        modes_detail = liste_par_mode(
+            Paiement.objects.filter(id__in=[p.id for p in paiements]))
+        modes = [m['libelle'] for m in modes_detail]
+
+        # Mêmes formats que le reçu d'un élève. Ticket (58/80 mm) et A6 :
+        # gabarit étroit, sans tableau à quatre colonnes.
+        fmt = (request.query_params.get('taille') or 'A5').upper()
+        if fmt not in FORMATS_RECU:
+            fmt = 'A5'
+        _, page_size, largeur_ticket = FORMATS_RECU[fmt]
+        gabarit = ('pdf/recu_famille_ticket.html' if largeur_ticket or fmt == 'A6'
+                   else 'pdf/recu_famille.html')
+        logo = tenant.logo
+        if gabarit == 'pdf/recu_famille_ticket.html' and logo:
+            from apps.tenants.logo import logo_noir_et_blanc
+            logo = logo_noir_et_blanc(logo)
         contexte = {
             'tenant':  tenant,
             'famille': famille,
@@ -3446,20 +3460,26 @@ class FamilleViewSet(viewsets.ModelViewSet):
             'date':    paiements[0].date_paiement,
             'payeur':  paiements[0].payeur.nom if paiements[0].payeur_id else '',
             'modes':   ', '.join(modes),
+            'modes_detail': modes_detail if len(modes_detail) > 1 else [],
+            'logo':    logo,
+            'caissier': paiements[0].saisi_par.nom if paiements[0].saisi_par_id else '',
+            'ticket_etroit': largeur_ticket == 58,
             # Les huit premiers caractères suffisent à retrouver le versement
             # et tiennent sur une ligne de reçu.
             'reference_courte': f'VERSEMENT {str(reference)[:8].upper()}',
             'aujourdhui': timezone.localdate(),
-            'page_size': 'A4 portrait' if (
-                request.query_params.get('taille') or 'A5').upper() == 'A4' else 'A5 portrait',
+            'page_size': page_size,
         }
-        html_str = render_to_string('pdf/recu_famille.html', contexte)
+        html_str = render_to_string(gabarit, contexte)
         buffer = BytesIO()
         if pisa.CreatePDF(html_str, dest=buffer, encoding='utf-8').err:
             return HttpResponse('Erreur génération du reçu.', status=500)
-        reponse = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        contenu = buffer.getvalue()
+        if largeur_ticket:
+            contenu = rogner_a_la_hauteur_du_contenu(contenu)
+        reponse = HttpResponse(contenu, content_type='application/pdf')
         reponse['Content-Disposition'] = (
-            f'inline; filename="recu_{famille.code}_{str(reference)[:8]}.pdf"')
+            f'inline; filename="recu_{famille.code}_{str(reference)[:8]}_{fmt}.pdf"')
         return reponse
 
     # ── Encaissement de la famille, poste par poste ───────────────────────

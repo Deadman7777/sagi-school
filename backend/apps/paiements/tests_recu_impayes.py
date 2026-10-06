@@ -107,7 +107,10 @@ class RecuImpayesAnterieursTest(ReportReliquatsBase):
                             montant_reliquat=30000, mode_paiement='MIXTE',
                             modes_reglement=[{'mode': 'ESPECE', 'montant': 660000},
                                              {'mode': 'WAVE', 'montant': 670000}])
-        for taille, largeur_mm in (('80MM', 80), ('58MM', 58)):
+        # Largeur de page = largeur IMPRIMABLE de la tête (72 mm sur un rouleau
+        # de 80, 48 mm sur un rouleau de 58) : une page de 80 mm avait la droite
+        # du reçu coupée à l'impression (montants, nom de l'élève).
+        for taille, largeur_mm in (('80MM', 72), ('58MM', 48)):
             pdf = self._pdf(p, taille)
             self.assertEqual(len(pdf.pages), 1, taille)
             boite = pdf.pages[0].mediabox

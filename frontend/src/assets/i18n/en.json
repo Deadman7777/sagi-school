@@ -766,7 +766,8 @@
     "caisses_vide": "No specific cash box: everything goes to the main one.",
     "caisse_confirm_suppr": "Delete this cash box?",
     "rappels_messages": "Messages to send (siblings grouped)",
-    "sms_eleves_couverts": "Students covered by those messages"
+    "sms_eleves_couverts": "Students covered by those messages",
+    "imprimantes": "Printers"
   },
   "cloture": {
     "title": "Year Closing",
@@ -1817,7 +1818,12 @@
     "reduction_protegee": "Covered under another reason: edit it from the student's record.",
     "tarif": "Fee:",
     "enregistrer_reduction": "Save discounts",
-    "reduction_enregistree": "{{nb}} record(s) updated."
+    "reduction_enregistree": "{{nb}} record(s) updated.",
+    "format_recu": "Receipt format",
+    "imprimer": "Print",
+    "telecharger": "Download receipt",
+    "recu_envoye": "Receipt sent to printer",
+    "erreur_impression": "Printing failed"
   },
   "encaissement": {
     "montant_verse": "Amount paid by the family",
@@ -1848,6 +1854,23 @@
     "reference_virement": "Transfer or cheque reference",
     "total": "Total to collect",
     "nb_eleves": "{{nb}} student(s)",
-    "encaisser": "Collect"
+    "encaisser": "Collect",
+    "multi_mode": "Multiple methods",
+    "ajouter_mode": "+ Add a method",
+    "reste_ventiler": "Left to allocate: {{montant}} FCFA",
+    "ventilation_incomplete": "The payment methods must cover exactly the total ({{reste}} FCFA left)."
+  },
+  "imprimantes": {
+    "titre": "Printers on this computer",
+    "explication": "Choose which printer documents are sent to when you click “Print”. This setting is specific to this computer.",
+    "document": "Documents (A4, A5…)",
+    "ticket": "Receipt tickets (58/80 mm)",
+    "defaut_systeme": "Computer's default printer",
+    "aucune": "No printer detected on this computer.",
+    "enregistrer": "Save",
+    "rafraichir": "Refresh list",
+    "test": "Test page",
+    "enregistre": "Printers saved for this computer.",
+    "cloud": "In the browser, the print window opens and you choose the printer each time. Printer settings are available in the installed application."
   }
 }

@@ -55,7 +55,7 @@ cellules, et les totaux ressortaient illisibles.
 <body>
 
 <div class="rep">RÉPUBLIQUE DU SÉNÉGAL &nbsp;|&nbsp; Un Peuple — Un But — Une Foi</div>
-{% if tenant.logo %}<div style="text-align:center">{% logo_ecole tenant.logo 120 42 %}</div>{% endif %}
+{% if logo %}<div style="text-align:center">{% logo_ecole logo 120 42 %}</div>{% endif %}
 <div class="ecole">{{ tenant.nom|upper }}</div>
 <div class="sous">{{ tenant.ville|default:"Sénégal" }}{% if tenant.telephone %} &nbsp;|&nbsp; {{ tenant.telephone }}{% endif %}</div>
 <div class="barre"></div>
@@ -108,6 +108,15 @@ cellules, et les totaux ressortaient illisibles.
     <td class="droite">{{ total|floatformat:0 }} FCFA</td>
   </tr>
 </table>
+
+{% if modes_detail %}
+<table class="tbl-infos" style="margin-top:4pt">
+  <colgroup><col style="width:60%"><col style="width:40%"></colgroup>
+  {% for m in modes_detail %}
+  <tr><td>{{ m.libelle }}</td><td class="droite val">{{ m.total|floatformat:0 }} FCFA</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
 
 <div class="mention">
   Ce reçu couvre {{ lignes|length }} règlement(s). Chacun figure au nom de

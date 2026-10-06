@@ -28,10 +28,12 @@
       "main.js",
       "preload.js",
       "lan-proxy.js",
+      "impression.js",
       "splash.html",
       "setup.html",
       "setup-preload.js",
-      "assets/**"
+      "assets/**",
+      "!node_modules/pdf-to-printer/dist/*.exe"
     ],
     "extraResources": [
       {
@@ -77,7 +79,13 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "node_modules/pdf-to-printer/dist/SumatraPDF-3.4.6-32.exe",
+          "to": "impression/SumatraPDF.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -95,5 +103,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Deadman7777/sagi-school.git"
+  },
+  "dependencies": {
+    "pdf-to-printer": "^5.8.1"
   }
 }
