@@ -279,6 +279,7 @@ const RAFRAICHISSEMENT_MS = 60_000;
     .table-wrap { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; }
     .tbl { width:100%; border-collapse:collapse; font-size:13px; }
     .tbl th { background:var(--surface-2); color:var(--text-3); font-size:11px; text-transform:uppercase; text-align:left; padding:8px 10px; white-space:nowrap; }
+    .tbl th.tr { text-align:right; }
     .tbl td { padding:7px 10px; border-top:1px solid var(--border); color:var(--text-2); font-variant-numeric:tabular-nums; }
     .tbl tfoot td { font-weight:700; color:var(--text); background:var(--surface-2); }
     .tbl a { color:#0099ff; text-decoration:none; }

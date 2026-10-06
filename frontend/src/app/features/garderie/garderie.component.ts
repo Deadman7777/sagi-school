@@ -392,6 +392,7 @@ interface LigneRecap {
     .table-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow-x:auto; }
     .recap { width:100%; border-collapse:collapse; }
     .recap th { text-align:left; font-size:11px; color:var(--text-3); padding:10px; border-bottom:1px solid var(--border); }
+    .recap th.ta-r { text-align:right; }
     .recap td { padding:8px 10px; border-bottom:1px solid var(--surface-2); font-size:13px; color:var(--text-2); }
     .recap tfoot td { border-top:1px solid var(--border); }
     .ta-r { text-align:right; }

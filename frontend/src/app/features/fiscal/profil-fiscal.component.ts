@@ -108,6 +108,7 @@ import { ApiService } from '../../core/services/api.service';
     .aide { font-size:12px; color:var(--text-3); margin:8px 0 0; }
     .tab { width:100%; border-collapse:collapse; font-size:12.5px; }
     .tab th { text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border); padding:6px; }
+    .tab th.num { text-align:right; }
     .tab td { padding:6px; border-bottom:1px solid var(--border); color:var(--text); }
     .num { text-align:right; } .ref { font-size:11px; color:var(--text-3); }
     tr.inactif td { opacity:.45; }

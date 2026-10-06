@@ -360,6 +360,7 @@ type Mode = 'ELEVE' | 'NOUVEAU';
     .table-wrap { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; }
     .tbl { width:100%; border-collapse:collapse; font-size:13px; }
     .tbl th { background:var(--surface-2); color:var(--text-3); font-size:11px; text-transform:uppercase; text-align:left; padding:8px 10px; white-space:nowrap; }
+    .tbl th.tr { text-align:right; }
     .tbl td { padding:7px 10px; border-top:1px solid var(--border); color:var(--text-2); font-variant-numeric:tabular-nums; vertical-align:top; }
     .tbl.mini { font-size:12px; }
     .tbl.mini td, .tbl.mini th { padding:5px 8px; }

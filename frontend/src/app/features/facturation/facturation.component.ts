@@ -563,6 +563,7 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
     .table-scroll { overflow-x:auto; }
     .lignes-edit { width:100%; border-collapse:collapse; }
     .lignes-edit th { text-align:left; font-size:11px; color:var(--text-3); padding:4px; }
+    .lignes-edit th.ta-r { text-align:right; }
     .lignes-edit td { padding:4px; vertical-align:top; }
     .lignes-edit .detail { margin-top:4px; font-size:12px; }
     .ligne-actions { display:flex; align-items:center; gap:12px; margin-top:6px; flex-wrap:wrap; }

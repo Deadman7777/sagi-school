@@ -209,6 +209,7 @@ export interface FinEncaissement {
     .postes { width: 100%; border-collapse: collapse; font-size: 13px; }
     .postes th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-3);
       padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .postes th.droite { text-align: right; }
     .postes td { padding: 5px 10px; border-bottom: 1px solid var(--border); }
     .postes tr.coche td { background: rgba(0,212,170,.07); }
     .droite { text-align: right; }

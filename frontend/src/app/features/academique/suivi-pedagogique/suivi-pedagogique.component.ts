@@ -68,11 +68,11 @@ import { AcademiqueService } from '../../../core/services/academique.service';
             <thead>
               <tr>
                 <th>{{ 'pedago.matiere' | translate }}</th>
-                <th>{{ 'pedago.coef' | translate }}</th>
-                @for (p of f.periodes; track p.code) { <th>{{ libellePeriode(p.code) }}</th> }
-                <th>{{ 'pedago.derniere' | translate }} /{{ fiche()?.bareme ?? 20 }}</th>
-                <th>{{ 'pedago.moy_classe' | translate }}</th>
-                <th>{{ 'pedago.evolution' | translate }}</th>
+                <th class="centre">{{ 'pedago.coef' | translate }}</th>
+                @for (p of f.periodes; track p.code) { <th class="centre">{{ libellePeriode(p.code) }}</th> }
+                <th class="centre">{{ 'pedago.derniere' | translate }} /{{ fiche()?.bareme ?? 20 }}</th>
+                <th class="centre">{{ 'pedago.moy_classe' | translate }}</th>
+                <th class="centre">{{ 'pedago.evolution' | translate }}</th>
                 <th>{{ 'pedago.lecture' | translate }}</th>
               </tr>
             </thead>
@@ -142,6 +142,7 @@ import { AcademiqueService } from '../../../core/services/academique.service';
     .table-scroll { overflow-x:auto; }
     .suivi-table { width:100%; border-collapse:collapse; font-size:12px; }
     .suivi-table th { text-align:left; padding:8px; color:var(--text-3); font-size:11px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    .suivi-table th.centre { text-align:center; }
     .suivi-table td { padding:7px 8px; border-bottom:1px solid var(--border); color:var(--text); }
     .centre { text-align:center; }
     .mono { font-family:monospace; }

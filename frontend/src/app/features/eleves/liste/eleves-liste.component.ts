@@ -2098,6 +2098,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
     .org-boursiers .aucun { color:var(--text-3); }
     .ech-table th { text-align:left; color:var(--text-3); font-weight:600;
                     padding:3px 4px; border-bottom:1px solid var(--border); }
+    .ech-table th.text-right { text-align:right; }
     .ech-table td { padding:3px 4px; border-bottom:1px solid rgba(42,63,95,0.3);
                     color:var(--text-2); }
     .ech-table .num { text-align:right; }

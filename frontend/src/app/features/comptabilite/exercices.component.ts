@@ -149,6 +149,7 @@ import { ApiService } from '../../core/services/api.service';
     @media (max-width: 900px) { .grille { grid-template-columns:1fr; } }
     .tab { width:100%; border-collapse:collapse; font-size:12.5px; }
     .tab th { text-align:left; font-size:11px; color:var(--text-3); border-bottom:1px solid var(--border); padding:6px; }
+    .tab th.num { text-align:right; }
     .tab td { padding:6px; border-bottom:1px solid var(--border); color:var(--text); }
     .num { text-align:right; font-variant-numeric:tabular-nums; }
     .actions { white-space:nowrap; }

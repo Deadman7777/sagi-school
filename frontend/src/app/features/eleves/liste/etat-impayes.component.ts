@@ -101,6 +101,7 @@ interface EtatImpayes {
     .table-wrap { overflow-x:auto; }
     .tbl { width:100%; border-collapse:collapse; font-size:13px; }
     .tbl th { background:var(--surface-2); color:var(--text-3); font-size:11px; text-transform:uppercase; text-align:left; padding:7px 10px; white-space:nowrap; }
+    .tbl th.tr { text-align:right; }
     .tbl td { padding:6px 10px; border-top:1px solid var(--border); color:var(--text-2); font-variant-numeric:tabular-nums; }
     .tbl tr.sous-total td { font-weight:700; color:var(--text); background:var(--surface-2); }
     .tbl tfoot td { font-weight:700; color:var(--text); background:rgba(0,212,170,.12); }

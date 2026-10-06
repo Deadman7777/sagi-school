@@ -1693,6 +1693,8 @@ import { EtafiDossierComponent } from './etafi-dossier.component';
     .budget-table-wrap { overflow-x:auto; margin-top:14px; }
     .budget-tbl    { width:100%; border-collapse:collapse; font-size:11px; }
     .budget-tbl th { background:var(--surface-2); color:var(--text-3); font-size:10px; text-transform:uppercase; padding:6px 8px; text-align:left; white-space:nowrap; border-bottom:2px solid var(--border); }
+    .budget-tbl th.mois-col, .budget-tbl th.total-col { text-align:right; }
+    .budget-tbl th.pct-col { text-align:center; }
     .budget-tbl td { padding:5px 8px; border-bottom:1px solid rgba(42,63,95,0.3); color:var(--text-2); vertical-align:middle; }
     .mois-col      { width:70px; text-align:right; }
     .total-col     { width:90px; text-align:right; font-weight:700; }
