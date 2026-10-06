@@ -85,6 +85,13 @@ class TenantViewSet(viewsets.ModelViewSet):
             t_ser.save()
 
             if exercice and exercice_data:
+                from apps.paiements.serializers import erreur_libelle_exercice
+                erreur = erreur_libelle_exercice(
+                    exercice_data.get('annee_scolaire', exercice.annee_scolaire),
+                    exercice_data.get('date_debut', exercice.date_debut))
+                if erreur:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({'annee_scolaire': erreur})
                 for field in ('annee_scolaire', 'date_debut', 'date_fin',
                               'solde_initial_caisse', 'solde_initial_banque',
                               'solde_initial_mobile'):

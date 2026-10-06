@@ -565,16 +565,31 @@ class Eleve(TenantModel):
             return 0.0
         return round(max(self.mensualite_brute_du_mois(None) - self.pec_du_mois(None), 0.0), 2)
 
+    def abonnements_mensuels_du_mois(self, mois):
+        """Abonnements MENSUELS dus le mois `mois` (mois où l'enfant utilise
+        le service). Seule source du dû mensuel des services : total annuel,
+        échéancier, guichet et proformas la lisent toutes."""
+        return [ab for ab in self.abonnements.all()
+                if ab.service.periodicite == 'MENSUEL' and ab.suivi_le_mois(mois)]
+
+    def services_mensuels_du_mois(self, mois):
+        """Montant des services mensuels dus le mois `mois`."""
+        return round(sum(ab.prix for ab in self.abonnements_mensuels_du_mois(mois)), 2)
+
     @property
     def montant_services_annuel(self):
         """Total annuel des services optionnels auxquels l'élève est abonné.
-        Mensuel → montant × mensualités dues (prorata entrée) ; Unique → montant une fois.
-        Les services ne sont PAS soumis à la prise en charge."""
-        nb_mois = self.nb_mensualites_dues
+        Mensuel → montant pour chaque mois facturé où l'enfant suit le service ;
+        Unique → montant une fois. Les services ne sont PAS soumis à la prise
+        en charge."""
+        from .echeancier import mois_de_base
+        mois = mois_de_base(self)
         total = 0.0
         for ab in self.abonnements.all():
-            s = ab.service
-            total += ab.prix * (nb_mois if s.periodicite == 'MENSUEL' else 1)
+            if ab.service.periodicite == 'MENSUEL':
+                total += ab.prix * sum(1 for m in mois if ab.suivi_le_mois(m))
+            else:
+                total += ab.prix
         total += sum(a['montant'] for a in self.adhesions_services())
         return round(total, 2)
 
@@ -676,14 +691,11 @@ class Eleve(TenantModel):
             # seuls les suppléments du mois sont dus. Y compter la scolarité
             # facturerait un mois entier pour un soir de garde ou un jour gardé.
             return 0.0
-        if self.a_la_journee:
-            return self.du_mensuel_standard
-        if self._formules_datees():
-            mensuel = sum(ab.prix for ab in self.abonnements.all()
-                          if ab.service.periodicite == 'MENSUEL')
+        mensuel = self.services_mensuels_du_mois(mois)
+        if self._formules_datees() and not self.a_la_journee:
             net = max(self.mensualite_brute_du_mois(mois) - self.pec_du_mois(mois), 0.0)
             return round(net + mensuel, 2)
-        return self.du_mensuel_standard
+        return round(self.frais_mensualite_effectif + mensuel, 2)
 
     def _mois_du_calendrier(self, mois):
         """Le mois fait-il partie des mensualités facturées (hors suppléments) ?"""
@@ -1058,6 +1070,12 @@ class EleveService(TenantModel):
     # Remplace le tarif, ce n'est pas une remise : il est dû tel quel, mois
     # par mois pour un service mensuel. Lu partout via `prix`.
     montant = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # Mois où l'enfant utilise le service (numéros 1-12) — service MENSUEL
+    # seulement. Vide : tous les mois facturés à l'élève, comme avant. Le
+    # transport se prend en cours d'année, s'arrête, reprend : seuls les mois
+    # cochés sont dus. Les mois passés restent dans la liste quand on arrête,
+    # sinon ce qui a été dû (et payé) disparaîtrait de la fiche.
+    mois = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'eleve_services'
@@ -1072,6 +1090,11 @@ class EleveService(TenantModel):
         son tarif particulier s'il en a un, sinon le tarif du service. Toute
         lecture du montant d'un abonnement passe par ici."""
         return float(self.montant if self.montant is not None else (self.service.montant or 0))
+
+    def suivi_le_mois(self, mois):
+        """L'enfant utilise-t-il ce service le mois `mois` ? Toute question
+        « ce service est-il dû ce mois-ci » passe par ici."""
+        return not self.mois or int(mois) in {int(m) for m in self.mois}
 
 
 class RappelEnvoye(TenantModel):

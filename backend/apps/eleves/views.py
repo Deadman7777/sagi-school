@@ -1678,6 +1678,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                 # UNIQUE : None = dû à l'inscription, 1..12 = mois calendaire
                 'mois_unique': ab.service.mois_unique,
                 'premier_mois_a_inscription': ab.service.premier_mois_a_inscription,
+                # Mois où l'enfant utilise le service (vide : toute l'année).
+                'mois':        [int(m) for m in ab.mois or []],
             }
             for ab in eleve.abonnements.all() if ab.service.actif
         ]
@@ -1747,6 +1749,13 @@ class EleveViewSet(viewsets.ModelViewSet):
                         # premier/dernier mois de l'école, case « 1er mois » d'un
                         # service) — le guichet d'inscription ne réclame que ça.
                         'entree': _part_entree_guichet(eleve, mo, ligne),
+                        # Services mensuels dus CE mois ({service: montant}) :
+                        # le transport peut ne courir qu'une partie de l'année.
+                        # Le guichet ne multiplie plus un tarif par le nombre
+                        # de mois cochés.
+                        'services': ({str(ab.service_id): ab.prix
+                                      for ab in eleve.abonnements_mensuels_du_mois(mo)}
+                                     if ligne and eleve._mois_du_calendrier(mo) else {}),
                     })
                 mo += 1
                 if mo > 12:

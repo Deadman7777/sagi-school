@@ -177,6 +177,9 @@ class EleveSerializer(TenantModelSerializer):
     abonnements                  = serializers.SerializerMethodField()
     # Pour chaque service : première adhésion ou non (kimono dû ou pas).
     abonnements_detail           = serializers.SerializerMethodField()
+    # Mois facturés de l'année (calendrier complet) : ceux qu'on peut cocher
+    # pour un service pris une partie de l'année seulement.
+    mois_calendrier              = serializers.SerializerMethodField()
     # Formule en vigueur ce mois-ci, et l'historique des changements datés.
     formule                      = serializers.SerializerMethodField()
     formules_historique          = serializers.SerializerMethodField()
@@ -419,6 +422,8 @@ class EleveSerializer(TenantModelSerializer):
         `premieres_adhesions` ({service_id: bool}) permet à l'école de corriger.
         `tarifs_services` ({service_id: montant | null}) : tarif propre à
         l'élève pour ce service (null ou vide : le tarif du service).
+        `mois_services` ({service_id: [mois] | null}) : mois où l'enfant
+        utilise un service mensuel. null, vide ou toute l'année : tous les mois.
         """
         ids = self.initial_data.get('abonnements', None)
         corrections = self.initial_data.get('premieres_adhesions') or {}
@@ -453,6 +458,31 @@ class EleveSerializer(TenantModelSerializer):
             if ab.montant != montant:
                 ab.montant = montant
                 ab.save(update_fields=['montant', 'updated_at'])
+        mois_services = self.initial_data.get('mois_services') or {}
+        if mois_services:
+            from .echeancier import mois_de_base
+            annee = set(mois_de_base(eleve))
+            for sid, valeur in mois_services.items():
+                ab = existing.get(str(sid))
+                if ab is None or ab.service.periodicite != 'MENSUEL':
+                    continue
+                try:
+                    mois = sorted({int(m) for m in (valeur or [])})
+                except (TypeError, ValueError):
+                    raise serializers.ValidationError({'mois_services': 'Mois invalide.'})
+                if any(m < 1 or m > 12 for m in mois):
+                    raise serializers.ValidationError({'mois_services': 'Mois invalide.'})
+                if valeur is not None and not mois:
+                    raise serializers.ValidationError({'mois_services': (
+                        f"Aucun mois coché pour {ab.service.nom} : retirez plutôt "
+                        "le service, ou cochez au moins un mois.")})
+                # Toute l'année cochée : on revient à « tous les mois », qui
+                # suit l'élève si son calendrier change (date d'entrée…).
+                if annee and annee <= set(mois):
+                    mois = []
+                if [int(m) for m in ab.mois or []] != mois:
+                    ab.mois = mois
+                    ab.save(update_fields=['mois', 'updated_at'])
 
     def _sync_formule(self, eleve, section_changee):
         """Formule choisie sur la fiche (`formule` : id).
@@ -510,9 +540,16 @@ class EleveSerializer(TenantModelSerializer):
                  'tarif_service': float(ab.service.montant or 0),
                  'prix': ab.prix,
                  'periodicite': ab.service.periodicite,
+                 # Mois où l'enfant utilise le service (vide : toute l'année).
+                 'mois': [int(m) for m in ab.mois or []],
                  'a_des_frais_premiere_fois': any(el.get('premiere_fois')
                                                   for el in ab.service.composition_adhesion or [])}
                 for ab in obj.abonnements.all()]
+
+    def get_mois_calendrier(self, obj):
+        """[{num, label}] des mois facturés de l'année, dans l'ordre scolaire."""
+        from .echeancier import NOMS_MOIS, mois_de_base
+        return [{'num': m, 'label': NOMS_MOIS[m]} for m in mois_de_base(obj)]
 
     def get_nom_tri(self, obj):
         from .tri import libelle_tri

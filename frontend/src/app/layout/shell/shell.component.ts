@@ -2,6 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
+import { ApiService } from '../../core/services/api.service';
 import { LicenceCompteurService } from '../../core/services/licence-compteur.service';
 import { LangueService } from '../../core/services/langue.service';
 import { InstallationAppService } from '../../core/services/installation-app.service';
@@ -114,7 +115,7 @@ interface NavItem {
               </a>
             }
             <span class="badge-gold" *ngIf="isSuperAdmin()">👑 Super Admin</span>
-            <span class="badge-blue" *ngIf="!isSuperAdmin()">📅 2025-2026</span>
+            <span class="badge-blue" *ngIf="!isSuperAdmin() && anneeCourante()">📅 {{ anneeCourante() }}</span>
           </div>
         </header>
 
@@ -236,8 +237,29 @@ export class ShellComponent {
   installation = inject(InstallationAppService);
   private messages = inject(MessageService);
 
+  private api = inject(ApiService);
+
+  /** Année de l'exercice courant, lue en base (elle était écrite en dur). */
+  anneeCourante = signal('');
+
   constructor(public auth: AuthService, public langue: LangueService) {
     if (this.afficherCompteurLicence()) this.compteur.demarrer();
+    if (!this.isSuperAdmin()) {
+      this.chargerAnnee();
+      window.addEventListener('sagi:exercice-modifie', () => this.chargerAnnee());
+    }
+  }
+
+  private chargerAnnee() {
+    // Triés exercices ouverts d'abord, du plus récent au plus ancien : le
+    // premier est l'exercice courant.
+    this.api.get<any>('/paiements/exercices/').subscribe({
+      next: res => {
+        const liste = Array.isArray(res) ? res : (res?.results ?? []);
+        this.anneeCourante.set(liste[0]?.annee_scolaire ?? '');
+      },
+      error: () => this.anneeCourante.set(''),
+    });
   }
 
   /** Les écoles (et HADY GESMAN quand il gère une école) voient leur échéance. */

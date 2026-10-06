@@ -170,16 +170,17 @@
       <div class="section-title">📅 Exercice scolaire</div>
       <div>
         <label>Année scolaire</label>
-        <input id="ex-annee" type="text" value="2025-2026" placeholder="2025-2026">
+        <input id="ex-annee" type="text" placeholder="2026-2027">
+        <div class="hint">Déduite des dates : c'est la date de début qui fixe l'année des matricules.</div>
       </div>
       <div class="row">
         <div>
           <label>Date début</label>
-          <input id="ex-debut" type="date" value="2025-10-01">
+          <input id="ex-debut" type="date">
         </div>
         <div>
           <label>Date fin</label>
-          <input id="ex-fin" type="date" value="2026-09-30">
+          <input id="ex-fin" type="date">
         </div>
       </div>
 
@@ -197,6 +198,40 @@
 
   <script>
     const $ = id => document.getElementById(id);
+
+    // Exercice proposé : l'année scolaire en cours ou à venir (octobre à
+    // septembre), jamais une année écrite en dur. Le libellé suit les dates :
+    // un libellé « 2026-2027 » sur un exercice qui commence en 2025 donnait
+    // des matricules 2025-… (l'année des matricules se lit sur la date de début).
+    function finExercice(debut) {
+      const [a, m, j] = String(debut || '').split('-').map(Number);
+      if (!a || !m || !j) return '';
+      return new Date(Date.UTC(a + 1, m - 1, j - 1)).toISOString().slice(0, 10);
+    }
+    function libelleExercice(debut, fin) {
+      const [a, b] = [String(debut).slice(0, 4), String(fin).slice(0, 4)];
+      return a === b ? a : `${a}-${b}`;
+    }
+    function initExercice() {
+      const now = new Date();
+      const a = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+      $('ex-debut').value = `${a}-10-01`;
+      $('ex-fin').value   = finExercice($('ex-debut').value);
+      $('ex-annee').value = libelleExercice($('ex-debut').value, $('ex-fin').value);
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      initExercice();
+      $('ex-debut').addEventListener('change', () => {
+        const fin = finExercice($('ex-debut').value);
+        if (!fin) return;
+        $('ex-fin').value   = fin;
+        $('ex-annee').value = libelleExercice($('ex-debut').value, fin);
+      });
+      $('ex-fin').addEventListener('change', () => {
+        if ($('ex-debut').value && $('ex-fin').value)
+          $('ex-annee').value = libelleExercice($('ex-debut').value, $('ex-fin').value);
+      });
+    });
 
     function markError(el) {
       el.classList.add('error');
@@ -239,6 +274,8 @@
         ['admin-nom',   'Nom admin'],
         ['admin-email', 'Email'],
         ['admin-pass',  'Mot de passe'],
+        ['ex-debut',    'Date début'],
+        ['ex-fin',      'Date fin'],
       ];
       for (const [id] of required) {
         if (!$(id).value.trim()) { markError($(id)); return; }
@@ -261,9 +298,9 @@
           admin_password:  $('admin-pass').value,
           admin_nom:       $('admin-nom').value.trim(),
           admin_prenom:    $('admin-prenom').value.trim(),
-          annee_scolaire:  $('ex-annee').value.trim() || '2025-2026',
-          date_debut:      $('ex-debut').value || '2025-10-01',
-          date_fin:        $('ex-fin').value || '2026-09-30',
+          annee_scolaire:  $('ex-annee').value.trim() || libelleExercice($('ex-debut').value, $('ex-fin').value),
+          date_debut:      $('ex-debut').value,
+          date_fin:        $('ex-fin').value,
         },
       };
 

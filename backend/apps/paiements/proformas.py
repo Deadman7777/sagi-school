@@ -195,12 +195,13 @@ def _lignes_entree(eleve, du_hors):
 def _lignes_mois(eleve, retenus):
     """Les mois retenus, décomposés en mensualité, réduction, services et
     suppléments. La somme vaut exactement la somme des dus de l'échéancier."""
-    services = [(ab.service.nom, ab.prix)
-                for ab in eleve.abonnements.all() if ab.service.periodicite == 'MENSUEL']
-    total_services = sum(m for _, m in services)
     par_mois = []
     for l in retenus:
         m, annee, du = l['mois'], l['annee'], l['du']
+        # Services du mois : l'enfant peut ne prendre le transport qu'une
+        # partie de l'année (`EleveService.mois`).
+        services = [(ab.service.nom, ab.prix) for ab in eleve.abonnements_mensuels_du_mois(m)]
+        total_services = sum(x for _, x in services)
         if l.get('montant_saisi') or eleve.a_la_journee:
             libelle = 'Garderie (jours de présence)' if eleve.a_la_journee else 'Mensualité scolaire'
             par_mois.append((libelle, m, annee, du))

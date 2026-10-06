@@ -2374,8 +2374,16 @@ chargerExercice() {
         this.exercice.set(res);
         this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: this.translate.instant('parametres.exercice') });
         this.saving.set(false);
+        // La barre du haut affiche l'année de l'exercice : la prévenir.
+        window.dispatchEvent(new Event('sagi:exercice-modifie'));
       },
-      error: () => { this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail: this.translate.instant('parametres.sauvegarde_echouee') }); this.saving.set(false); }
+      error: err => {
+        const e = err?.error || {};
+        const detail = [e.annee_scolaire, e.date_debut, e.date_fin].flat().filter(Boolean)[0]
+          || this.translate.instant('parametres.sauvegarde_echouee');
+        this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail, life: 8000 });
+        this.saving.set(false);
+      }
     });
   }
 

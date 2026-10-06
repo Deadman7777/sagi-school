@@ -3,6 +3,31 @@ from core.serializers import TenantModelSerializer
 from .models import Paiement, Exercice
 
 
+def erreur_libelle_exercice(libelle, debut):
+    """Message si l'année scolaire saisie contredit la date de début, sinon None.
+
+    Le libellé est une saisie libre, mais tout ce qui compte (matricules, promo,
+    année des bulletins) se lit sur `date_debut`. Un exercice « 2026-2027 » qui
+    commence le 01/10/2025 donnait des matricules 2025-… : l'école croyait avoir
+    réglé l'année et le système en voyait une autre. Le libellé doit donc
+    commencer par l'année de début (« 2026-2027 » ou « 2026 »).
+    """
+    import datetime
+    libelle = (libelle or '').strip()
+    if not libelle or not debut:
+        return None
+    if isinstance(debut, str):
+        try:
+            debut = datetime.date.fromisoformat(debut)
+        except ValueError:
+            return None
+    if libelle.startswith(str(debut.year)):
+        return None
+    return (f"L'année scolaire « {libelle} » ne correspond pas à la date de début "
+            f"({debut:%d/%m/%Y}). Corrigez la date de début : c'est elle qui fixe "
+            f"l'année des matricules.")
+
+
 class ExerciceSerializer(TenantModelSerializer):
     solde_initial_caisse = serializers.FloatField()
     solde_initial_banque = serializers.FloatField()
@@ -40,6 +65,10 @@ class ExerciceSerializer(TenantModelSerializer):
                     raise serializers.ValidationError({'date_debut': (
                         f"Cet exercice chevauche l'exercice {conflit.annee_scolaire} "
                         f"({conflit.date_debut:%d/%m/%Y} – {conflit.date_fin:%d/%m/%Y}).")})
+        if 'annee_scolaire' in attrs or 'date_debut' in attrs:
+            libelle = attrs.get('annee_scolaire', getattr(self.instance, 'annee_scolaire', ''))
+            if (erreur := erreur_libelle_exercice(libelle, debut)):
+                raise serializers.ValidationError({'annee_scolaire': erreur})
         return attrs
 
 

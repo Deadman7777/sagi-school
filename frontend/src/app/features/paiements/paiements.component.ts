@@ -1672,17 +1672,22 @@ export class PaiementsComponent implements OnInit {
   // Services abonnés proposés selon le contexte du paiement :
   // - UNIQUE « à l'inscription » (mois_unique null) → uniquement en type INSCRIPTION
   // - UNIQUE « mois X » → uniquement si le mois X fait partie des mois réglés
-  // - MENSUEL → mensualités, montant = tarif × nb mois sélectionnés
+  // - MENSUEL → mensualités, montant = somme du service sur les mois cochés.
+  //   Le dû de chaque mois vient du serveur (`mois_ecole[].services`) : un
+  //   service pris une partie de l'année (transport) n'est dû que sur ses mois.
   private construireServices() {
     const data = this.saisieDonnees();
     if (!data) { this.form.services = []; return; }
     const inclusAvant = new Map((this.form.services || []).map(s => [s.id, s.inclus]));
     const tous = data.services || [];
     let retenus: any[];
-    const nb = this.form.mois_regles.length;
+    const choisis = this.moisChoisis();
     const mensuels = tous.filter((s: any) => s.periodicite === 'MENSUEL')
       .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'MENSUEL', nature: 'MENSUEL',
-                          tarif: s.montant || 0, du: Math.round((s.montant || 0) * nb) }));
+                          tarif: s.montant || 0,
+                          du: Math.round(choisis.reduce((a, m) => a + (Number(m.services?.[s.id]) || 0), 0)) }))
+      // Un service qui ne court sur aucun des mois cochés n'a rien à régler ici.
+      .filter((s: any) => !choisis.length || s.du > 0);
     if (this.typePaiement === 'INSCRIPTION') {
       retenus = [
         ...tous
@@ -1699,7 +1704,9 @@ export class PaiementsComponent implements OnInit {
         // mois payé à l'inscription »). Les autres se paient à leur échéance.
         ...(this.form.mois_regles.includes(data.premier_mois)
             ? mensuels.filter((m: any) => tous.find((s: any) => s.id === m.id)?.premier_mois_a_inscription)
-                      .map((m: any) => ({ ...m, du: Math.round(m.tarif) }))
+                      .map((m: any) => ({ ...m, du: Math.round(Number(this.moisChoisis()
+                        .find((x: any) => x.num === data.premier_mois)?.services?.[m.id]) || 0) }))
+                      .filter((m: any) => m.du > 0)
             : []),
       ];
     } else {
@@ -1762,13 +1769,11 @@ export class PaiementsComponent implements OnInit {
       .filter((m: any) => this.form.mois_regles.includes(m.num));
   }
 
-  /** Total mensuel des services de l'élève. Leur dû est déjà compris dans celui
-   *  du mois (`du_mensuel_standard`) : il faut donc le retrancher pour isoler la
-   *  part « mensualité », sans quoi la ligne serait comptée deux fois. */
-  private servicesMensuelsDus(): number {
-    return (this.saisieDonnees()?.services || [])
-      .filter((s: any) => s.periodicite === 'MENSUEL')
-      .reduce((a: number, s: any) => a + (Number(s.montant) || 0), 0);
+  /** Services mensuels dus un mois donné. Leur dû est déjà compris dans celui
+   *  du mois : il faut donc le retrancher pour isoler la part « mensualité »,
+   *  sans quoi la ligne serait comptée deux fois. */
+  private servicesDuMois(m: any): number {
+    return Object.values(m?.services || {}).reduce((a: number, v: any) => a + (Number(v) || 0), 0);
   }
 
   /** Dû de la seule ligne « Mensualité » pour les mois cochés. */
@@ -1778,9 +1783,8 @@ export class PaiementsComponent implements OnInit {
       // d'avance, rien de plus.
       return this.moisChoisis().reduce((a, m) => a + (Number(m.entree?.scolarite) || 0), 0);
     }
-    const svc = this.servicesMensuelsDus();
     return this.moisChoisis()
-      .reduce((a, m) => a + Math.max((Number(m.montant) || 0) - svc, 0), 0);
+      .reduce((a, m) => a + Math.max((Number(m.montant) || 0) - this.servicesDuMois(m), 0), 0);
   }
 
   /** Dû des services proposés dans ce contexte, hors mensuels : celui des

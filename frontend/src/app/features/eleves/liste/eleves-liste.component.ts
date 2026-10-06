@@ -1586,6 +1586,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
         <div class="form-group full" *ngIf="servicesActifs().length">
           <label>{{ 'eleves.services' | translate }}</label>
           <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="nouvelEleve.abonnements"
+                         (onChange)="initMoisServices(nouvelEleve.mois_services!, nouvelEleve.abonnements || [], calendrierEdition)"
                          optionLabel="nom" optionValue="id" display="chip"
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
           @for (sid of nouvelEleve.abonnements || []; track sid) {
@@ -1597,11 +1598,22 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                        [attr.aria-label]="'Tarif de ' + svc.nom + ' pour cet élève'" />
                 <small>{{ svc.periodicite === 'MENSUEL' ? 'FCFA / mois' : 'FCFA, une fois' }}</small>
               </label>
+              @if (svc.periodicite === 'MENSUEL' && calendrierEdition.length) {
+                <div class="mois-service" role="group" [attr.aria-label]="'Mois du service ' + svc.nom">
+                  @for (m of calendrierEdition; track m.num) {
+                    <button type="button" class="mois-chip" [class.on]="nouvelEleve.mois_services![sid]?.includes(m.num)"
+                            [attr.aria-pressed]="!!nouvelEleve.mois_services![sid]?.includes(m.num)"
+                            (click)="basculerMoisService(nouvelEleve.mois_services!, sid, m.num)">{{ abregerMois(m.label) }}</button>
+                  }
+                </div>
+              }
             }
           }
           @if ((nouvelEleve.abonnements || []).length) {
             <small class="fc-hint">Laissez vide pour appliquer le tarif du service. Un montant saisi
               remplace ce tarif pour cet élève seulement (ex. transport selon la distance).</small>
+            <small class="fc-hint">Mois cochés : ceux où l'enfant prend le service, seuls dus. Pour un arrêt,
+              décochez les mois à venir ; les mois passés restent dus.</small>
           }
         </div>
         <!-- Ardoise des années d'avant : montant global, sans justification par
@@ -1759,6 +1771,7 @@ import { EtatImpayesComponent } from './etat-impayes.component';
         <div class="form-group" *ngIf="servicesActifs().length; else aucunService">
           <label>{{ 'eleves.services_choix' | translate }}</label>
           <p-multiSelect appendTo="body" [options]="servicesActifs()" [(ngModel)]="formServices" display="chip"
+                         (onChange)="initMoisServices(moisServices, formServices, eleveSelectionne()?.mois_calendrier || [])"
                          optionLabel="nom" optionValue="id"
                          [placeholder]="'eleves.services_ph' | translate" styleClass="w-full" />
           @for (sid of formServices; track sid) {
@@ -1770,11 +1783,22 @@ import { EtatImpayesComponent } from './etat-impayes.component';
                        [attr.aria-label]="'Tarif de ' + svc.nom + ' pour cet élève'" />
                 <small>{{ svc.periodicite === 'MENSUEL' ? 'FCFA / mois' : 'FCFA, une fois' }}</small>
               </label>
+              @if (svc.periodicite === 'MENSUEL' && (eleveSelectionne()?.mois_calendrier || []).length) {
+                <div class="mois-service" role="group" [attr.aria-label]="'Mois du service ' + svc.nom">
+                  @for (m of (eleveSelectionne()?.mois_calendrier || []); track m.num) {
+                    <button type="button" class="mois-chip" [class.on]="moisServices[sid]?.includes(m.num)"
+                            [attr.aria-pressed]="!!moisServices[sid]?.includes(m.num)"
+                            (click)="basculerMoisService(moisServices, sid, m.num)">{{ abregerMois(m.label) }}</button>
+                  }
+                </div>
+              }
             }
           }
           @if ((formServices).length) {
             <small class="fc-hint">Laissez vide pour appliquer le tarif du service. Un montant saisi
               remplace ce tarif pour cet élève seulement (ex. transport selon la distance).</small>
+            <small class="fc-hint">Mois cochés : ceux où l'enfant prend le service, seuls dus. Pour un arrêt,
+              décochez les mois à venir ; les mois passés restent dus.</small>
           }
         </div>
         <ng-template #aucunService>
@@ -1933,6 +1957,10 @@ import { EtatImpayesComponent } from './etat-impayes.component';
     .tarif-eleve input { padding:6px 8px; border:1px solid var(--border); border-radius:6px;
                          background:var(--surface); color:var(--text); min-width:0; }
     .tarif-eleve small { color:var(--text-3); }
+    .mois-service { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px; }
+    .mois-chip { padding:3px 8px; font-size:11.5px; border:1px solid var(--border); border-radius:12px;
+                 background:var(--surface); color:var(--text-3); cursor:pointer; }
+    .mois-chip.on { background:#2563eb; border-color:#2563eb; color:#fff; }
     .case-adhesion { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-2); margin-top:10px; }
     .histo-formule { font-size:13px; color:var(--text-2); padding:2px 0; }
     .aide-formule { font-size:11px; color:var(--text-3); }
@@ -2582,6 +2610,7 @@ export class ElevesListeComponent implements OnInit {
     this.premieresAdhesions = Object.fromEntries(
       (eleve.abonnements_detail || []).map(ab => [ab.service, ab.premiere_adhesion]));
     this.tarifsServices = this.tarifsDe(eleve);
+    this.moisServices = this.moisDe(eleve);
     this.dialogServicesVisible = true;
   }
 
@@ -2591,6 +2620,49 @@ export class ElevesListeComponent implements OnInit {
 
   serviceDe(id: string) {
     return this.services().find(s => s.id === id);
+  }
+
+  /** Mois cochés par service mensuel. Une liste vide en base veut dire
+   *  « toute l'année » : on coche alors tous les mois du calendrier. */
+  moisServices: Record<string, number[]> = {};
+  /** Calendrier de l'élève en cours de modification (vide à la création :
+   *  un service choisi à l'inscription court depuis l'entrée). */
+  calendrierEdition: { num: number; label: string }[] = [];
+
+  private moisDe(eleve: Eleve): Record<string, number[]> {
+    const cal = (eleve.mois_calendrier || []).map(m => m.num);
+    return Object.fromEntries((eleve.abonnements_detail || [])
+      .filter(ab => ab.periodicite === 'MENSUEL')
+      .map(ab => [ab.service, ab.mois?.length ? [...ab.mois] : [...cal]]));
+  }
+
+  /** Service ajouté à un élève déjà inscrit : il court à partir du mois en
+   *  cours — c'est le cas du transport pris en cours d'année. Hors calendrier
+   *  (vacances), toute l'année. L'école ajuste ensuite les cases. */
+  initMoisServices(map: Record<string, number[]>, ids: string[], cal: { num: number }[]) {
+    if (!map || !cal.length) return;
+    const nums = cal.map(m => m.num);
+    const i = nums.indexOf(new Date().getMonth() + 1);
+    for (const sid of ids) {
+      if (map[sid] === undefined && this.serviceDe(sid)?.periodicite === 'MENSUEL') {
+        map[sid] = i >= 0 ? nums.slice(i) : [...nums];
+      }
+    }
+  }
+
+  /** « Juin » et « Juillet » ne se confondent pas : 4 lettres au besoin. */
+  abregerMois(label: string): string {
+    return label.length <= 4 ? label : label.startsWith('Juil') ? 'Juil' : label.slice(0, 3);
+  }
+
+  basculerMoisService(map: Record<string, number[]>, sid: string, mois: number) {
+    const actuels = map[sid] || [];
+    map[sid] = actuels.includes(mois) ? actuels.filter(m => m !== mois) : [...actuels, mois];
+  }
+
+  /** Mois à envoyer : seulement pour les services retenus. */
+  private moisAEnvoyer(map: Record<string, number[]>, ids: string[]): Record<string, number[]> {
+    return Object.fromEntries(Object.entries(map || {}).filter(([sid]) => ids.includes(sid)));
   }
 
   private tarifsDe(eleve: Eleve): Record<string, number | null> {
@@ -2611,7 +2683,8 @@ export class ElevesListeComponent implements OnInit {
     this.saving.set(true);
     this.elevesService.updateEleve(e.id, { abonnements: this.formServices,
                                           premieres_adhesions: this.premieresAdhesions,
-                                          tarifs_services: this.tarifsServices } as any).subscribe({
+                                          tarifs_services: this.tarifsServices,
+                                          mois_services: this.moisAEnvoyer(this.moisServices, this.formServices) } as any).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'), detail: e.nom_complet });
         this.dialogServicesVisible = false;
@@ -3605,7 +3678,9 @@ export class ElevesListeComponent implements OnInit {
     this.moisInscription = '';
     this.nouvelEleve = { date_inscription: new Date().toISOString().split('T')[0], regime: 'EXERCICE',
                          etat_sante: 'SAIN', date_inscription_jour_estime: false,
-                         reliquat_anterieur: 0, reliquat_note: '', tarifs_services: {} };
+                         reliquat_anterieur: 0, reliquat_note: '', tarifs_services: {},
+                         mois_services: {} };
+    this.calendrierEdition = [];
     this.champsSaisis = {};
     this.chargerFamillesChoix();
     this.dialogVisible = true;
@@ -3683,6 +3758,7 @@ export class ElevesListeComponent implements OnInit {
   ouvrirModifier(eleve: Eleve | null) {
     if (!eleve) return;
     this.editId = eleve.id;
+    this.calendrierEdition = eleve.mois_calendrier || [];
     // Réponses aux champs de l'école : copiées pour l'édition.
     this.champsSaisis = { ...((eleve as any).champs_perso || {}) };
     this.nouvelEleve = {
@@ -3707,6 +3783,7 @@ export class ElevesListeComponent implements OnInit {
       observations_sante: eleve.observations_sante,
       abonnements:      [...(eleve.abonnements || [])],
       tarifs_services:  this.tarifsDe(eleve),
+      mois_services:    this.moisDe(eleve),
       formule:          eleve.formule ?? null,
       profession_pere:  eleve['profession_pere'],
       residence_pere:   eleve['residence_pere'],
@@ -3791,6 +3868,8 @@ export class ElevesListeComponent implements OnInit {
     // Les champs de l'école partent avec la fiche : un champ vidé est retiré
     // côté serveur, les autres gardent leur réponse.
     const payload = { ...this.nouvelEleve, champs_perso: this.champsSaisis } as any;
+    payload.mois_services = this.moisAEnvoyer(this.nouvelEleve.mois_services || {},
+                                              this.nouvelEleve.abonnements || []);
     const obs = this.editId
       ? this.elevesService.updateEleve(this.editId, payload)
       : this.elevesService.createEleve(payload);
