@@ -42,21 +42,35 @@ class PromoDateEntreeTest(TestCase):
         self.assertEqual(annee_promo(ex, datetime.date(2021, 11, 5)), 2021)
         self.assertEqual(annee_promo(ex, datetime.date(2022, 10, 2)), 2022)
 
-    def test_inscription_des_vacances_va_a_la_rentree_qui_suit(self):
-        """Inscrit le 15/09/2026 pour la rentrée d'octobre 2026 : promo 2026,
-        pas 2025 (constat dans une école cloud, octobre 2026)."""
+    def test_la_promo_est_l_annee_scolaire_de_l_ecole(self):
+        """Cas de L'Éveil (octobre 2026) : année 2026-2027 réglée, inscriptions
+        anticipées dès juin 2026. Toute la promo porte 2026-…, y compris une
+        arrivée en janvier 2027 — pas 2025, pas 2027."""
+        eveil = Tenant.objects.create(nom="École L'Éveil", code_etablissement='ELE')
         ex = Exercice.objects.create(
-            tenant=self.tenant, annee_scolaire='2026-2027', nb_mensualites=9,
+            tenant=eveil, annee_scolaire='2026-2027', nb_mensualites=9,
             date_debut=datetime.date(2026, 10, 1), date_fin=datetime.date(2027, 9, 30))
-        self.assertEqual(annee_promo(ex, datetime.date(2026, 9, 15)), 2026)
-        self.assertEqual(annee_promo(ex, datetime.date(2026, 7, 1)), 2026)
-        # Pendant l'année (dernière mensualité en juin) : promo de l'année.
-        self.assertEqual(annee_promo(ex, datetime.date(2027, 6, 20)), 2026)
-        self.assertEqual(annee_promo(ex, datetime.date(2026, 6, 20)), 2025)
-        a = Attributeur(self.tenant, ex)
-        self.assertTrue(a.suivant(date_entree=datetime.date(2026, 9, 15))['matricule']
-                        .startswith('2026-'))
-        self.assertEqual(libelle_promo(ex, datetime.date(2026, 9, 15)), '2026-2027')
+        for jour in (datetime.date(2026, 6, 2), datetime.date(2026, 7, 29),
+                     datetime.date(2026, 9, 10), datetime.date(2026, 10, 6),
+                     datetime.date(2027, 1, 15)):
+            self.assertEqual(annee_promo(ex, jour), 2026, jour)
+            self.assertEqual(libelle_promo(ex, jour), '2026-2027', jour)
+        a = Attributeur(eveil, ex)
+        self.assertEqual(a.suivant(date_entree=datetime.date(2026, 6, 2))['matricule'], '2026-ELE-0001')
+        self.assertEqual(a.suivant(date_entree=datetime.date(2027, 1, 15))['matricule'], '2026-ELE-0002')
+
+    def test_un_exercice_anterieur_de_l_ecole_garde_sa_promo(self):
+        """École migrée qui a l'exercice précédent : un enfant entré en mars
+        2026 était dans 2025-2026, il ne bascule pas dans la promo suivante."""
+        ecole = Tenant.objects.create(nom='École migrée', code_etablissement='MIG')
+        Exercice.objects.create(
+            tenant=ecole, annee_scolaire='2025-2026', nb_mensualites=9,
+            date_debut=datetime.date(2025, 10, 1), date_fin=datetime.date(2026, 9, 30))
+        ex = Exercice.objects.create(
+            tenant=ecole, annee_scolaire='2026-2027', nb_mensualites=9,
+            date_debut=datetime.date(2026, 10, 1), date_fin=datetime.date(2027, 9, 30))
+        self.assertEqual(annee_promo(ex, datetime.date(2026, 3, 10)), 2025)
+        self.assertEqual(libelle_promo(ex, datetime.date(2026, 3, 10)), '2025-2026')
 
     def test_libelle_garde_le_format_de_l_ecole(self):
         # Année civile → « 2021 », pas « 2021-2022 » qui n'existe pas ici.

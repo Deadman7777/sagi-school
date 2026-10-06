@@ -28,7 +28,7 @@ ne touche plus rien.
 """
 from django.db import transaction
 
-from .matricules import annee_promo, code_etablissement, libelle_promo
+from .matricules import annee_promo, code_etablissement, exercices_de, libelle_promo
 from .models import Eleve
 # Le regroupement des fiches par enfant réel est partagé avec le parcours :
 # une seule définition de « c'est le même enfant » dans toute l'application.
@@ -55,6 +55,7 @@ def calculer_rebasage(tenant):
                                .select_related('exercice')
                                .order_by('created_at'))
     code = code_etablissement(tenant)
+    exercices = exercices_de(tenant.id)
 
     enfants = []
     for groupe in grouper_par_eleve(fiches):
@@ -71,20 +72,20 @@ def calculer_rebasage(tenant):
     # La promo se lit sur la DATE D'ENTRÉE réelle, pas sur l'exercice de la
     # fiche : une migration verse tous les élèves dans l'exercice courant, et
     # sans ça un enfant entré en 2021 serait rebasé en promo 2026.
-    enfants.sort(key=lambda e: (annee_promo(e['exercice'], e['date_entree']),
+    enfants.sort(key=lambda e: (annee_promo(e['exercice'], e['date_entree'], exercices),
                                 e['date_entree'],
                                 min(f.created_at for f in e['groupe'])))
 
     rangs = {}
     lignes = []
     for enfant in enfants:
-        annee = annee_promo(enfant['exercice'], enfant['date_entree'])
+        annee = annee_promo(enfant['exercice'], enfant['date_entree'], exercices)
         rangs[annee] = rangs.get(annee, 0) + 1
         nouveau = f"{annee}-{code}-{rangs[annee]:04d}"
         ancien = next((f.matricule for f in enfant['groupe'] if f.matricule), '')
         lignes.append({
             **enfant,
-            'promo':     libelle_promo(enfant['exercice'], enfant['date_entree']),
+            'promo':     libelle_promo(enfant['exercice'], enfant['date_entree'], exercices),
             'ancien':    ancien or '',
             'nouveau':   nouveau,
             'nb_fiches': len(enfant['groupe']),

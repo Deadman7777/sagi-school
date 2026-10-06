@@ -34,51 +34,70 @@ def code_etablissement(tenant):
     return re.sub(r'[^A-Z0-9]', '', code)[:LONGUEUR_CODE] or 'ETB'
 
 
-def annee_promo(exercice, date_entree=None):
-    """Année de début de la promo.
+def exercices_de(tenant_id):
+    """Les exercices d'une école, lus une fois pour toute une série d'élèves."""
+    from apps.paiements.models import Exercice
+    return list(Exercice.objects.filter(tenant_id=tenant_id).order_by('date_debut'))
 
-    Sans date d'entrée : l'année de début de l'exercice. Toujours lue sur
-    date_debut, jamais sur annee_scolaire qui est une saisie libre.
 
-    AVEC une date d'entrée réelle, c'est ELLE qui fait foi. Une migration verse
-    dans l'exercice courant des élèves entrés bien des années plus tôt : sans
-    ça, un enfant arrivé en 2021 sort avec un matricule 2026, et le numéro
-    annonce l'année où l'école a saisi la donnée au lieu de sa promo — soit
-    précisément ce que le format promo devait supprimer.
+def _promo(exercice, date_entree, exercices=None):
+    """(année de promo, exercice de cette promo ou None).
 
-    La bascule d'une promo à l'autre suit le mois de début de l'exercice : une
-    école dont l'année court d'octobre à juin range une entrée de janvier 2022
-    dans la promo 2021-2022.
+    Règle (décision de l'école L'Éveil, octobre 2026) : la promo est l'ANNÉE
+    SCOLAIRE de l'école, lue dans ses exercices — pas l'année civile de la
+    date d'inscription. Toute la promo 2026-2027 porte 2026-…, qu'on se soit
+    inscrit en juin 2026 (anticipé), en septembre ou en janvier 2027.
 
-    Inscription faite pendant les vacances, APRÈS la dernière mensualité et
-    AVANT la rentrée (juillet à septembre pour une année d'octobre à juin) :
-    elle prépare la rentrée suivante, donc la promo qui commence. Sans ça, un
-    élève inscrit le 15/09/2026 pour la rentrée d'octobre 2026 recevait un
-    matricule 2025-… (constat dans une école cloud, octobre 2026). Une école
-    qui facture les 12 mois n'a pas de vacances : rien ne change pour elle.
+      1. Pas de date : l'exercice de la fiche.
+      2. Date dans un exercice de l'école : cet exercice.
+      3. Date dans les 12 mois qui précèdent la rentrée, sans exercice qui la
+         couvre : inscription anticipée, l'exercice de la fiche.
+      4. Date plus ancienne (migration : enfant entré en 2021, versé dans
+         l'exercice courant) : l'année de sa vraie entrée, avec bascule au mois
+         de rentrée. Sans ça le numéro annoncerait l'année où l'école a saisi
+         la donnée au lieu de sa promo.
+
+    Toujours lue sur `date_debut`, jamais sur `annee_scolaire` (saisie libre).
     """
     if date_entree is None:
-        return exercice.date_debut.year
-    mois_bascule = exercice.date_debut.month
+        return exercice.date_debut.year, exercice
+    if exercice.date_debut <= date_entree <= exercice.date_fin:
+        return exercice.date_debut.year, exercice
+    if exercices is None:
+        exercices = exercices_de(exercice.tenant_id)
+    couvrant = [e for e in exercices if e.date_debut <= date_entree <= e.date_fin]
+    if couvrant:
+        e = max(couvrant, key=lambda x: x.date_debut)
+        return e.date_debut.year, e
+    debut = exercice.date_debut
+    un_an_avant = debut.replace(year=debut.year - 1) if not (debut.month == 2 and debut.day == 29) \
+        else debut.replace(year=debut.year - 1, day=28)
+    if un_an_avant <= date_entree < debut:
+        return debut.year, exercice
+    mois_bascule = debut.month
     annee = (date_entree.year if date_entree.month >= mois_bascule
              else date_entree.year - 1)
-    nb_mois = min(int(exercice.nb_mensualites or 12), 12)
-    if (date_entree.month - mois_bascule) % 12 >= nb_mois:
-        annee += 1
-    return annee
+    return annee, None
 
 
-def libelle_promo(exercice, date_entree=None):
-    """Libellé de la promo pour l'affichage (« 2025-2026 », ou « 2026 »)."""
-    annee = annee_promo(exercice, date_entree)
-    libelle = (exercice.annee_scolaire or '').strip()
+def annee_promo(exercice, date_entree=None, exercices=None):
+    """Année de début de la promo (voir `_promo`)."""
+    return _promo(exercice, date_entree, exercices)[0]
+
+
+def libelle_promo(exercice, date_entree=None, exercices=None):
+    """Libellé de la promo pour l'affichage : celui de l'exercice de la promo
+    quand l'école l'a dans ses exercices (« 2026-2027 »), sinon reconstruit."""
+    annee, ex_promo = _promo(exercice, date_entree, exercices)
+    ref = ex_promo or exercice
+    libelle = (ref.annee_scolaire or '').strip()
+    if ex_promo is not None and libelle.startswith(str(annee)):
+        return libelle
     # École qui compte en année civile (exercice « 2026 ») : garder ce format
     # pour les promos antérieures aussi, sinon on inventerait un « 2021-2022 »
     # qui ne correspond à aucun exercice de cette école.
-    if libelle == str(exercice.date_debut.year):
+    if libelle == str(ref.date_debut.year):
         return str(annee)
-    # On ne garde le libellé de l'école que s'il commence bien par l'année
-    # calculée, sinon il induirait en erreur à côté du matricule.
     if libelle.startswith(str(annee)):
         return libelle
     return f"{annee}-{annee + 1}"
@@ -117,6 +136,7 @@ class Attributeur:
         self.exercice = exercice
         self.annee    = annee_promo(exercice)
         self.promo    = libelle_promo(exercice)
+        self._exercices = exercices_de(tenant.id)
         self.code     = code_etablissement(tenant)
         self._numero  = (Eleve.objects.filter(tenant=tenant)
                                       .aggregate(m=Max('numero'))['m'] or 0)
@@ -148,7 +168,7 @@ class Attributeur:
         # La promo se lit sur la date d'entrée réelle quand on l'a : un élève
         # migré entré en 2021 appartient à la promo 2021, même si sa fiche est
         # créée dans l'exercice 2026.
-        annee = annee_promo(self.exercice, date_entree)
+        annee = annee_promo(self.exercice, date_entree, self._exercices)
         if matricule:
             self._pris.add(matricule)
         else:
@@ -157,7 +177,7 @@ class Attributeur:
         return {
             'numero':       self._numero,
             'matricule':    matricule,
-            'annee_entree': libelle_promo(self.exercice, date_entree),
+            'annee_entree': libelle_promo(self.exercice, date_entree, self._exercices),
             'date_entree':  date_entree or self.exercice.date_debut,
         }
 
