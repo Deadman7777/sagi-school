@@ -1320,6 +1320,11 @@ class Famille(TenantModel):
     # qui n'est celui d'aucun des deux parents.
     nom          = models.CharField(max_length=200)
     adresse      = models.TextField(blank=True)
+    # Saisi une fois pour la fratrie, recopié sur la fiche de chaque enfant
+    # (voir familles.coordonnees_nouvel_enfant) : c'est le même voisin ou la
+    # même tante qu'on appelle, quel que soit l'enfant.
+    contact_urgence_nom       = models.CharField(max_length=200, blank=True)
+    contact_urgence_telephone = models.CharField(max_length=20, blank=True)
     observations = models.TextField(blank=True)
     actif        = models.BooleanField(default=True)
 
@@ -1372,6 +1377,9 @@ class ResponsableFamille(TenantModel):
                                    related_name='responsables')
     nom        = models.CharField(max_length=200)
     lien       = models.CharField(max_length=10, choices=LIEN_CHOICES, default='PERE')
+    # Ce que « Tuteur » ou « Autre » recouvre : oncle, grand-mère, marabout…
+    # Recopié dans Eleve.lien_tuteur.
+    precision_lien = models.CharField(max_length=100, blank=True)
     telephone  = models.CharField(max_length=20, blank=True)
     telephone2 = models.CharField(max_length=20, blank=True)
     email      = models.EmailField(blank=True)

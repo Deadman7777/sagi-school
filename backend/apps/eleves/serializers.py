@@ -716,6 +716,8 @@ class FamilleSerializer(TenantModelSerializer):
     responsables = ResponsableFamilleSerializer(many=True, required=False)
     nb_enfants   = serializers.SerializerMethodField()
     contact      = serializers.SerializerMethodField()
+    # Nombre de fiches d'enfants complétées par cet enregistrement (écriture).
+    fiches_completees = serializers.IntegerField(read_only=True, required=False)
 
     class Meta:
         model  = Famille
@@ -744,6 +746,13 @@ class FamilleSerializer(TenantModelSerializer):
         responsables = validated_data.pop('responsables', [])
         famille = Famille.objects.create(**validated_data)
         self._enregistrer_responsables(famille, responsables)
+        return famille
+
+    def save(self, **kwargs):
+        # Les fiches des enfants déjà rattachés reçoivent ce qui leur manque.
+        from .familles import completer_fiches_enfants
+        famille = super().save(**kwargs)
+        famille.fiches_completees = completer_fiches_enfants(famille)
         return famille
 
     def update(self, instance, validated_data):

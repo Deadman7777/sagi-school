@@ -105,15 +105,42 @@ def coordonnees_nouvel_enfant(famille):
         elif not valeurs['nom_tuteur']:
             valeurs['nom_tuteur'] = r.nom or ''
             valeurs['telephone_tuteur'] = r.telephone or ''
-            valeurs['lien_tuteur'] = r.get_lien_display() if r.lien == 'TUTEUR' else ''
+            valeurs['lien_tuteur'] = (r.precision_lien
+                                      or (r.get_lien_display() if r.lien == 'TUTEUR' else ''))
     if famille.adresse:
         valeurs['adresse'] = famille.adresse[:255]
+    valeurs['contact_urgence_nom'] = famille.contact_urgence_nom or ''
+    valeurs['contact_urgence_telephone'] = famille.contact_urgence_telephone or ''
 
     aine = famille.eleves.order_by('-created_at').first()
     if aine is not None:
         for champ in CHAMPS_PARENTS:
             valeurs[champ] = valeurs[champ] or (getattr(aine, champ, '') or '')
     return valeurs
+
+
+def completer_fiches_enfants(famille, eleves=None):
+    """Recopie les coordonnées de la famille sur les fiches de ses enfants.
+
+    Ne remplit QUE les champs vides : un enfant confié à un oncle garde son
+    tuteur, et ce que l'école a tapé sur une fiche n'est jamais écrasé. Appelé
+    quand la famille est enregistrée et quand des élèves y sont rattachés —
+    l'école saisit le père une fois, pas une fois par enfant.
+
+    Renvoie le nombre de fiches modifiées.
+    """
+    valeurs = coordonnees_nouvel_enfant(famille)
+    nb = 0
+    for eleve in (eleves if eleves is not None else famille.eleves.all()):
+        modifies = [champ for champ, v in valeurs.items()
+                    if v and not (getattr(eleve, champ, '') or '')]
+        if not modifies:
+            continue
+        for champ in modifies:
+            setattr(eleve, champ, valeurs[champ])
+        eleve.save(update_fields=modifies)
+        nb += 1
+    return nb
 
 
 def situation_famille(famille, exercice):

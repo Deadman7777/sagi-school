@@ -119,8 +119,11 @@ class EncaissementFamilleTest(BaseFamille):
         enfant = self._enfant('Seul NDIAYE')
         r = self.client.get(f'/api/eleves/familles/{self.famille.id}/echeances/')
         self.assertEqual(r.status_code, 200, r.content[:300])
+        # Des postes à venir sont proposés — sauf si l'on exécute le test après
+        # la dernière mensualité (10 mois depuis janvier 2026 : octobre).
+        derniere_mensualite = datetime.date(2026, 10, 1)
         self.assertTrue(any(not p['echu'] for p in r.data['enfants'][0]['postes'])
-                        or datetime.date.today() > self.ex.date_fin)
+                        or datetime.date.today() >= derniere_mensualite)
         r = self.client.post(f'/api/eleves/familles/{self.famille.id}/preparer/',
                              {'selection': [{'eleve_id': str(enfant.id), 'cle': 'ENTREE',
                                              'montant': 25000}]}, format='json')

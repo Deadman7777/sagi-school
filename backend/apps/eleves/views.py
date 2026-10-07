@@ -3626,6 +3626,11 @@ class FamilleViewSet(viewsets.ModelViewSet):
 
         qs = Eleve.objects.filter(tenant=tenant, id__in=ids)
         nb = qs.update(famille=None if detacher else famille)
+        if not detacher:
+            # Le père, la mère, le contact d'urgence : saisis sur la famille,
+            # recopiés là où la fiche de l'enfant est vide.
+            from .familles import completer_fiches_enfants
+            completer_fiches_enfants(famille, qs)
         log_audit(request, 'MODIFICATION', 'Famille', famille.id,
                   f"{nb} élève(s) {'détaché(s) de' if detacher else 'rattaché(s) à'} "
                   f'{famille.nom}')

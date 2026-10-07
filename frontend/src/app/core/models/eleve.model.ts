@@ -349,6 +349,8 @@ export interface ResponsableFamille {
   nom: string;
   lien: 'PERE' | 'MERE' | 'TUTEUR' | 'AUTRE';
   lien_libelle?: string;
+  /** Ce que « Tuteur » ou « Autre » recouvre : oncle, grand-mère… */
+  precision_lien?: string;
   telephone: string;
   telephone2?: string;
   email?: string;
@@ -367,9 +369,13 @@ export interface Famille {
   code: string;
   nom: string;
   adresse: string;
+  contact_urgence_nom?: string;
+  contact_urgence_telephone?: string;
   observations: string;
   actif: boolean;
   responsables: ResponsableFamille[];
+  /** Fiches d'enfants complétées par l'enregistrement (réponse seulement). */
+  fiches_completees?: number;
   nb_enfants: number;
   contact: { nom: string; telephone: string; lien: string } | null;
 }

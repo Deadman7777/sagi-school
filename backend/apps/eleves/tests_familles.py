@@ -188,6 +188,75 @@ class FamilleTest(BaseFamille):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Eleve.objects.filter(famille=famille).count(), 3)
 
+    # ── Saisie complète de la famille, recopiée sur les fiches ───────────
+    def _creer_famille_complete(self):
+        return self.client.post('/api/eleves/familles/', {
+            'nom': 'Famille DIOP', 'adresse': 'Rufisque, Keury Kao',
+            'contact_urgence_nom': 'Awa SECK', 'contact_urgence_telephone': '781112233',
+            'responsables': [
+                {'nom': 'Modou DIOP', 'lien': 'PERE', 'telephone': '770000010',
+                 'telephone2': '760000010', 'email': 'modou@exemple.sn',
+                 'profession': 'Commerçant', 'residence': 'Dakar', 'principal': True},
+                {'nom': 'Fatou FALL', 'lien': 'MERE', 'telephone': '770000011',
+                 'profession': 'Enseignante', 'residence': 'Rufisque'},
+                {'nom': 'Ibrahima DIOP', 'lien': 'TUTEUR', 'precision_lien': 'Oncle',
+                 'telephone': '770000012'},
+            ],
+        }, format='json')
+
+    def test_la_famille_garde_tous_les_renseignements_des_parents(self):
+        r = self._creer_famille_complete()
+        self.assertEqual(r.status_code, 201, r.content[:400])
+        famille = Famille.objects.get(id=r.data['id'])
+        self.assertEqual(famille.contact_urgence_telephone, '781112233')
+        pere = famille.responsables.get(lien='PERE')
+        self.assertEqual((pere.telephone2, pere.email, pere.profession, pere.residence),
+                         ('760000010', 'modou@exemple.sn', 'Commerçant', 'Dakar'))
+        self.assertEqual(famille.responsables.get(lien='TUTEUR').precision_lien, 'Oncle')
+
+    def test_un_nouvel_enfant_recoit_les_parents_saisis_sur_la_famille(self):
+        famille_id = self._creer_famille_complete().data['id']
+        c = self.client.get(f'/api/eleves/familles/{famille_id}/coordonnees/').data
+        self.assertEqual(c['nom_pere'], 'Modou DIOP')
+        self.assertEqual(c['profession_mere'], 'Enseignante')
+        self.assertEqual(c['residence_mere'], 'Rufisque')
+        self.assertEqual((c['nom_tuteur'], c['lien_tuteur']), ('Ibrahima DIOP', 'Oncle'))
+        self.assertEqual(c['contact_urgence_nom'], 'Awa SECK')
+        self.assertEqual(c['adresse'], 'Rufisque, Keury Kao')
+
+    def test_rattacher_complete_les_fiches_sans_rien_ecraser(self):
+        famille_id = self._creer_famille_complete().data['id']
+        vide = self._eleve('Aïda DIOP')
+        confie = self._eleve('Moussa DIOP', nom_tuteur='Grand-mère NDOYE',
+                             telephone_tuteur='775555555', lien_tuteur='Grand-mère')
+        r = self.client.post(f'/api/eleves/familles/{famille_id}/rattacher/',
+                             {'eleve_ids': [str(vide.id), str(confie.id)]}, format='json')
+        self.assertEqual(r.status_code, 200)
+        vide.refresh_from_db(); confie.refresh_from_db()
+        self.assertEqual((vide.nom_pere, vide.telephone_pere, vide.profession_pere),
+                         ('Modou DIOP', '770000010', 'Commerçant'))
+        self.assertEqual(vide.nom_mere, 'Fatou FALL')
+        self.assertEqual(vide.contact_urgence_telephone, '781112233')
+        # Ce qui était déjà saisi sur la fiche reste tel quel.
+        self.assertEqual((confie.nom_tuteur, confie.telephone_tuteur, confie.lien_tuteur),
+                         ('Grand-mère NDOYE', '775555555', 'Grand-mère'))
+        self.assertEqual(confie.nom_pere, 'Modou DIOP')
+
+    def test_modifier_la_famille_complete_les_fiches_des_enfants(self):
+        famille = self._famille()
+        enfant = self._eleve('Awa NDIAYE', famille=famille)
+        r = self.client.patch(f'/api/eleves/familles/{famille.id}/', {
+            'responsables': [
+                {'nom': 'Ousmane NDIAYE', 'lien': 'PERE', 'telephone': '770000001',
+                 'profession': 'Pêcheur', 'principal': True},
+                {'nom': 'Khady SOW', 'lien': 'MERE', 'telephone': '770000002'},
+            ]}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['fiches_completees'], 1)
+        enfant.refresh_from_db()
+        self.assertEqual((enfant.profession_pere, enfant.nom_mere, enfant.telephone_mere),
+                         ('Pêcheur', 'Khady SOW', '770000002'))
+
     def test_supprimer_la_famille_ne_supprime_pas_les_eleves(self):
         famille = self._famille()
         self._eleve('Awa NDIAYE', famille=famille)

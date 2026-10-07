@@ -124,8 +124,12 @@ type LigneReduction = LigneReductionFratrie & {
     }
 
     <!-- ══ CRÉATION / MODIFICATION ══ -->
-    <p-dialog [(visible)]="dialogVisible" [modal]="true" [style]="{ width: '620px' }"
+    <p-dialog [(visible)]="dialogVisible" [modal]="true" [style]="{ width: '880px' }"
+              [breakpoints]="{ '960px': '96vw' }"
               [header]="(form.id ? 'familles.modifier' : 'familles.nouvelle') | translate">
+      <!-- Tout ce qu'on saisit ici est recopié sur la fiche de chaque enfant
+           (champs vides seulement) : le père se tape une fois par famille. -->
+      <p class="aide">{{ 'familles.saisie_aide' | translate }}</p>
       <div class="form-grid">
         <div class="champ">
           <label for="fam-nom">{{ 'familles.nom' | translate }} *</label>
@@ -136,34 +140,78 @@ type LigneReduction = LigneReductionFratrie & {
           <label for="fam-adresse">{{ 'familles.adresse' | translate }}</label>
           <input pInputText id="fam-adresse" [(ngModel)]="form.adresse" [fluid]="true" />
         </div>
+        <div class="champ">
+          <label for="fam-urg-nom">{{ 'familles.contact_urgence' | translate }}</label>
+          <input pInputText id="fam-urg-nom" [(ngModel)]="form.contact_urgence_nom" [fluid]="true"
+                 [placeholder]="'familles.contact_urgence_ph' | translate" />
+        </div>
+        <div class="champ">
+          <label for="fam-urg-tel">{{ 'familles.contact_urgence_tel' | translate }}</label>
+          <input pInputText id="fam-urg-tel" [(ngModel)]="form.contact_urgence_telephone" [fluid]="true" />
+        </div>
       </div>
 
       <h4 class="titre-section">{{ 'familles.responsables' | translate }}</h4>
       <p class="aide">{{ 'familles.responsables_aide' | translate }}</p>
 
       @for (r of responsables(); track $index) {
-        <div class="ligne-responsable">
-          <input pInputText [(ngModel)]="r.nom" [placeholder]="'familles.resp_nom' | translate" />
-          <p-select [(ngModel)]="r.lien" [options]="liens" optionLabel="label" optionValue="value"
-                    appendTo="body" />
-          <input pInputText [(ngModel)]="r.telephone"
-                 [placeholder]="'familles.resp_tel' | translate" />
-          <!-- Un seul principal : un bouton radio, pas une case à cocher. En
-               cocher deux rouvrirait la question « qui appeler ? » que ce
-               regroupement est censé fermer. -->
-          <label class="principal" [pTooltip]="'familles.principal_aide' | translate">
-            <input type="radio" name="principal" [checked]="r.principal"
-                   (change)="designerPrincipal($index)" />
-            {{ 'familles.principal' | translate }}
-          </label>
-          <p-button icon="pi pi-times" size="small" severity="danger" [text]="true"
-                    (onClick)="retirerResponsable($index)"
-                    [ariaLabel]="'common.supprimer' | translate" />
+        <div class="carte-responsable">
+          <div class="tete-responsable">
+            <p-select [(ngModel)]="r.lien" [options]="liens" optionLabel="label" optionValue="value"
+                      appendTo="body" [ariaLabel]="'familles.lien' | translate" />
+            @if (r.lien === 'TUTEUR' || r.lien === 'AUTRE') {
+              <input pInputText [(ngModel)]="r.precision_lien" class="precision"
+                     [placeholder]="'familles.precision_lien_ph' | translate" />
+            }
+            <span class="espace"></span>
+            <!-- Un seul principal : un bouton radio, pas une case à cocher. En
+                 cocher deux rouvrirait la question « qui appeler ? » que ce
+                 regroupement est censé fermer. -->
+            <label class="principal" [pTooltip]="'familles.principal_aide' | translate">
+              <input type="radio" name="principal" [checked]="r.principal"
+                     (change)="designerPrincipal($index)" />
+              {{ 'familles.principal' | translate }}
+            </label>
+            <p-button icon="pi pi-times" size="small" severity="danger" [text]="true"
+                      (onClick)="retirerResponsable($index)"
+                      [ariaLabel]="'common.supprimer' | translate" />
+          </div>
+          <div class="grille-responsable">
+            <div class="champ">
+              <label [for]="'resp-nom-' + $index">{{ 'familles.resp_nom' | translate }}</label>
+              <input pInputText [id]="'resp-nom-' + $index" [(ngModel)]="r.nom" [fluid]="true" />
+            </div>
+            <div class="champ">
+              <label [for]="'resp-tel-' + $index">{{ 'familles.resp_tel' | translate }}</label>
+              <input pInputText [id]="'resp-tel-' + $index" [(ngModel)]="r.telephone" [fluid]="true" />
+            </div>
+            <div class="champ">
+              <label [for]="'resp-tel2-' + $index">{{ 'familles.resp_tel2' | translate }}</label>
+              <input pInputText [id]="'resp-tel2-' + $index" [(ngModel)]="r.telephone2" [fluid]="true" />
+            </div>
+            <div class="champ">
+              <label [for]="'resp-prof-' + $index">{{ 'familles.resp_profession' | translate }}</label>
+              <input pInputText [id]="'resp-prof-' + $index" [(ngModel)]="r.profession" [fluid]="true" />
+            </div>
+            <div class="champ">
+              <label [for]="'resp-res-' + $index">{{ 'familles.resp_residence' | translate }}</label>
+              <input pInputText [id]="'resp-res-' + $index" [(ngModel)]="r.residence" [fluid]="true" />
+            </div>
+            <div class="champ">
+              <label [for]="'resp-mail-' + $index">{{ 'familles.resp_email' | translate }}</label>
+              <input pInputText type="email" [id]="'resp-mail-' + $index" [(ngModel)]="r.email" [fluid]="true" />
+            </div>
+          </div>
         </div>
       }
       <p-button icon="pi pi-plus" [label]="'familles.ajouter_responsable' | translate"
                 size="small" severity="secondary" [outlined]="true"
                 (onClick)="ajouterResponsable()" />
+
+      <div class="champ observations">
+        <label for="fam-obs">{{ 'familles.observations' | translate }}</label>
+        <textarea pTextarea id="fam-obs" [(ngModel)]="form.observations" rows="2" [fluid]="true"></textarea>
+      </div>
 
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" severity="secondary" [text]="true"
@@ -394,8 +442,16 @@ type LigneReduction = LigneReductionFratrie & {
     .champ label { font-size:.8rem; color:var(--text-color-secondary); }
     .titre-section { margin:16px 0 4px; font-size:.95rem; }
     .aide { font-size:.8rem; color:var(--text-color-secondary); margin:0 0 8px; }
-    .ligne-responsable { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
-    .ligne-responsable input[type=text], .ligne-responsable input:not([type]) { min-width:150px; }
+    .carte-responsable { border:1px solid var(--surface-300); border-radius:8px; padding:10px 12px;
+                         margin-bottom:10px; }
+    .tete-responsable { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+    .tete-responsable .precision { width:220px; }
+    .tete-responsable .espace { flex:1; }
+    .grille-responsable { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+    .observations { margin-top:14px; }
+    @media (max-width: 720px) {
+      .form-grid, .grille-responsable { grid-template-columns:1fr; }
+    }
     .principal { display:flex; align-items:center; gap:4px; font-size:.82rem; white-space:nowrap; }
     .kpi-famille { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
     .kpi { flex:1 1 130px; background:var(--surface-100); border-radius:8px; padding:10px 12px; }
@@ -502,19 +558,31 @@ export class FamillesComponent implements OnInit {
   ouvrirDialog(famille?: Famille) {
     this.form = famille
       ? { id: famille.id, nom: famille.nom, adresse: famille.adresse,
+          contact_urgence_nom: famille.contact_urgence_nom || '',
+          contact_urgence_telephone: famille.contact_urgence_telephone || '',
           observations: famille.observations }
-      : { nom: '', adresse: '' };
+      : { nom: '', adresse: '', contact_urgence_nom: '', contact_urgence_telephone: '',
+          observations: '' };
     // Copie : éditer les objets de la liste ferait bouger le tableau derrière
     // le dialog, y compris si l'école annule.
     this.responsables.set((famille?.responsables || []).map(r => ({ ...r })));
-    if (this.responsables().length === 0) this.ajouterResponsable();
+    // Nouvelle famille : le père et la mère d'emblée, comme sur la fiche
+    // élève. Une carte laissée sans nom n'est pas enregistrée.
+    if (this.responsables().length === 0) {
+      this.ajouterResponsable('PERE');
+      this.ajouterResponsable('MERE');
+    }
     this.dialogVisible = true;
   }
 
-  ajouterResponsable() {
+  /** Sans lien précisé : le père, puis la mère, puis un tuteur. */
+  ajouterResponsable(lien?: ResponsableFamille['lien']) {
+    const presents = new Set(this.responsables().map(r => r.lien));
+    lien ??= !presents.has('PERE') ? 'PERE' : !presents.has('MERE') ? 'MERE' : 'TUTEUR';
     const premier = this.responsables().length === 0;
     this.responsables.update(rs => [...rs, {
-      nom: '', lien: 'PERE', telephone: '', principal: premier }]);
+      nom: '', lien, precision_lien: '', telephone: '', telephone2: '', email: '',
+      profession: '', residence: '', principal: premier }]);
   }
 
   retirerResponsable(index: number) {
@@ -534,6 +602,8 @@ export class FamillesComponent implements OnInit {
     const nom = (this.form.nom || '').trim();
     if (!nom) { this.erreur('familles.nom_obligatoire'); return; }
     const responsables = this.responsables().filter(r => (r.nom || '').trim());
+    // Le principal était peut-être sur une carte laissée vide : le serveur
+    // désigne alors le premier responsable restant.
     const corps: Partial<Famille> = { ...this.form, nom, responsables };
 
     this.enregistrement.set(true);
@@ -541,12 +611,14 @@ export class FamillesComponent implements OnInit {
       ? this.eleves.majFamille(this.form.id, corps)
       : this.eleves.creerFamille(corps);
     appel.subscribe({
-      next: () => {
+      next: f => {
         this.enregistrement.set(false);
         this.dialogVisible = false;
         this.charger();
+        const nb = f?.fiches_completees || 0;
         this.msg.add({ severity: 'success',
-                       summary: this.translate.instant('familles.enregistree') });
+                       summary: this.translate.instant('familles.enregistree'),
+                       detail: nb ? this.translate.instant('familles.fiches_completees', { nb }) : undefined });
       },
       error: () => { this.enregistrement.set(false); this.erreur('familles.erreur_enregistrement'); },
     });
