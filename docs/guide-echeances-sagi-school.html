@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide des échéances — SAGI SCHOOL</title>
+<style>
+  :root {
+    --ink: #16202e; --muted: #56697d; --accent: #1565c0; --sky: #4fc3f7;
+    --tint: #eef5fc; --tint-2: #f6f9fc; --line: #d4dee8; --line-2: #e6edf4;
+    --ok: #2e7d4f; --warn-bg: #fff6e6; --warn-ln: #e0a94a; --warn-tx: #7a4d0c;
+    --sans: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  }
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  * { box-sizing: border-box; }
+  body { background: #fff; color: var(--ink); font-family: var(--sans); font-size: 10.5pt;
+         line-height: 1.45; margin: 0; }
+  .page { max-width: 820px; margin: 0 auto; padding: 0 16px; }
+  @media print { .page { padding: 0; max-width: none; } }
+
+  header { display: flex; align-items: center; gap: 14px; padding-bottom: 12px;
+           border-bottom: 2px solid var(--accent); margin-bottom: 14px; }
+  .logo { width: 42px; height: 42px; border-radius: 9px; flex: none;
+          background: linear-gradient(150deg, var(--accent), var(--sky));
+          color: #fff; font-size: 21px; font-weight: 700;
+          display: flex; align-items: center; justify-content: center; }
+  header h1 { font-size: 17pt; margin: 0; }
+  header .sous { color: var(--muted); font-size: 9.5pt; }
+
+  h2 { font-size: 13pt; color: var(--accent); margin: 20px 0 6px;
+       padding-bottom: 3px; border-bottom: 1px solid var(--line); break-after: avoid; }
+  h3 { font-size: 11pt; margin: 12px 0 4px; break-after: avoid; }
+  p { margin: 4px 0 8px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.5pt;
+          break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: var(--tint); font-weight: 600; }
+  td.n, th.n { text-align: right; white-space: nowrap; }
+  tr:nth-child(even) td { background: var(--tint-2); }
+
+  .encadre { background: var(--tint); border-left: 4px solid var(--accent); border-radius: 4px;
+             padding: 8px 12px; margin: 8px 0 10px; break-inside: avoid; }
+  .piege { background: var(--warn-bg); border-left: 4px solid var(--warn-ln); color: var(--warn-tx);
+           border-radius: 4px; padding: 8px 12px; margin: 8px 0 10px; break-inside: avoid; }
+  .piege strong { color: #5c3906; }
+  .cle { background: #e9f6ee; border-left: 4px solid var(--ok); border-radius: 4px;
+         padding: 8px 12px; margin: 8px 0 10px; break-inside: avoid; }
+  .tag { display: inline-block; font-size: 8.5pt; padding: 0 6px; border-radius: 9px;
+         background: var(--line-2); color: var(--muted); }
+  .crit { color: #b3261e; font-weight: 600; }
+  .urg  { color: #b35c00; font-weight: 600; }
+  .att  { color: #8a6d00; font-weight: 600; }
+  ol.check li { margin: 5px 0; }
+  .case { display: inline-block; width: 11px; height: 11px; border: 1.3px solid var(--ink);
+          border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  footer { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: 8.5pt; }
+  .saut { break-before: page; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="logo">S</div>
+  <div>
+    <h1>Les échéances dans SAGI SCHOOL</h1>
+    <div class="sous">Comment un mois devient « en retard » — guide de paramétrage pour l'installation chez un client · v1.61</div>
+  </div>
+</header>
+
+<div class="encadre">
+  Tous les écrans partent d'<strong>un seul calcul</strong> : fiche élève, alertes, tableau de bord,
+  rappels SMS, état des impayés, encaissement famille, reçus. Bien paramétré, tout est juste ;
+  mal paramétré, tout est faux <em>de la même façon</em>. Ce calcul répond à trois questions :
+  <ol>
+    <li><strong>Quels mois</strong> l'élève doit-il ? — le calendrier</li>
+    <li><strong>À partir de quand</strong> chaque mois est-il réclamable ? — l'exigibilité</li>
+    <li><strong>Combien</strong> est dû chaque mois, et qu'est-ce qui est déjà payé ?</li>
+  </ol>
+  Les exemples de ce guide ont été calculés avec le moteur réel de l'application.
+</div>
+
+<p><strong>École de référence pour tous les exemples :</strong> exercice du 1<sup>er</sup> octobre 2026
+au 30 septembre 2027, 9 mensualités de 15 000 F, inscription 25 000 F.</p>
+
+<h2>0. Les niveaux de paramétrage — qui l'emporte</h2>
+<table>
+  <tr><th>Niveau</th><th>Où le régler</th><th>Ce qu'il fixe</th></tr>
+  <tr><td><strong>École</strong></td><td>Paramètres › ⏰ Échéances</td><td>Mode et jour d'échéance, mois pris à l'inscription, renouvellement, rappels</td></tr>
+  <tr><td><strong>Exercice</strong></td><td>Exercice comptable</td><td>Date de début, nombre de mensualités</td></tr>
+  <tr><td><strong>Section</strong></td><td>Paramètres › Sections</td><td>Nombre de mensualités propre à un niveau (vide = celui de l'exercice)</td></tr>
+  <tr><td><strong>Service</strong></td><td>Paramètres › Services</td><td>Mensuel ou unique ; « 1<sup>er</sup> mois payé à l'inscription »</td></tr>
+  <tr><td><strong>Élève</strong></td><td>Fiche élève</td><td>Date d'entrée, mois facturés, montant d'un mois, régime passager, sortie</td></tr>
+</table>
+<div class="cle"><strong>Règle générale : le plus précis gagne.</strong> Ce qui est saisi sur la fiche élève l'emporte sur la section, qui l'emporte sur l'exercice.</div>
+
+<h2>1. Quels mois sont dus — le calendrier</h2>
+
+<h3>1.a Cas de base : l'exercice</h3>
+<p>Les mois se déroulent <strong>à partir du mois de début de l'exercice</strong>, sur le nombre de mensualités.
+Exercice d'octobre, 9 mensualités → octobre à juin.</p>
+<div class="piege"><strong>⚠ Piège n°1 à l'installation.</strong> Le premier mois facturé, c'est le mois de début de
+l'exercice. Une école qui ouvre l'exercice au 1<sup>er</sup> septembre alors que les cours commencent en octobre,
+avec 9 mensualités, sera facturée de <strong>septembre à mai</strong>, pas d'octobre à juin. Faire coïncider le
+début d'exercice avec le premier mois facturé, ou saisir les mois sur les fiches (1.d).</div>
+
+<h3>1.b La section : un nombre de mensualités différent</h3>
+<p>Exemple : la 3<sup>e</sup> paie aussi juillet → mettre <strong>10</strong> dans « Mensualités (si différent de l'école) »
+sur la section 3<sup>e</sup>. Ses élèves doivent octobre à juillet ; les autres classes restent octobre à juin.</p>
+
+<h3>1.c Prorata sur la date d'entrée (automatique)</h3>
+<p>Un élève arrivé en cours d'année ne doit que les mois restants, <strong>comptés depuis la fin</strong>.</p>
+<table>
+  <tr><th>Date d'entrée</th><th>Mois dus</th></tr>
+  <tr><td>1<sup>er</sup> octobre</td><td>octobre → juin (9)</td></tr>
+  <tr><td>15 janvier</td><td>janvier → juin (6)</td></tr>
+  <tr><td>28 janvier</td><td>janvier → juin (6) — <strong>seul le mois compte, pas le jour</strong></td></tr>
+  <tr><td>2 juin</td><td>juin (1)</td></tr>
+</table>
+<div class="piege"><strong>⚠</strong> Entré le 28, l'élève doit <strong>le mois entier</strong>. Pour réduire ce mois-là, saisir le montant du mois sur sa fiche (3).</div>
+
+<h3>1.d Mois facturés saisis sur la fiche</h3>
+<p>Quand l'école coche les mois sur la fiche, <strong>ils priment sur tout</strong> (prorata, section).
+Exemples : absence médicale de décembre à février → tout cocher sauf ces mois ; élève entré le 28 octobre
+que l'école fait commencer en novembre.</p>
+
+<h3>1.e Ndongo passager <span class="tag">licence Taxawu Daara</span></h3>
+<p>Il doit <strong>N mois depuis son entrée</strong>, même au-delà de la fin d'exercice. Arrivé en juillet pour 3 mois :
+juillet, août, septembre.</p>
+
+<h3>1.f Sortie de l'élève</h3>
+<p>Un élève sorti (abandon, transfert) ne doit que les <strong>mois déjà exigibles le jour de son départ</strong>.
+Parti le 10 mars en « début du mois » : il doit jusqu'à mars inclus, rien à partir d'avril, et ses retards
+cessent de grossir à cette date.</p>
+
+<h2>2. À partir de quand un mois est réclamable — le réglage clé</h2>
+<p>Deux réglages au niveau de l'école : <strong>le mode</strong> et <strong>le jour d'échéance</strong> (1 à 28).</p>
+<table>
+  <tr><th>Mode</th><th>Échéance du mois M</th><th>Pour quelle école</th></tr>
+  <tr><td><strong>Avant le mois</strong></td><td>le jour J du mois <strong>précédent</strong></td><td>On paie d'avance : juillet se règle en juin (Shoumoul)</td></tr>
+  <tr><td><strong>Dès le début du mois</strong> <span class="tag">défaut</span></td><td>le jour J du <strong>mois même</strong></td><td>On paie pendant le mois</td></tr>
+  <tr><td><strong>À la fin du mois</strong></td><td>le jour J du mois <strong>suivant</strong></td><td>À terme échu : on paie le mois écoulé</td></tr>
+</table>
+
+<h3>Date d'échéance de quelques mois selon le réglage</h3>
+<table>
+  <tr><th>Réglage</th><th>Octobre</th><th>Décembre</th><th>Janvier</th><th>Février</th></tr>
+  <tr><td>Avant le mois, jour 1</td><td>1<sup>er</sup> sept.</td><td>1<sup>er</sup> nov.</td><td>1<sup>er</sup> déc.</td><td>1<sup>er</sup> janv.</td></tr>
+  <tr><td>Avant le mois, jour 25</td><td>25 sept.</td><td>25 nov.</td><td>25 déc.</td><td>25 janv.</td></tr>
+  <tr><td>Début du mois, jour 1</td><td>1<sup>er</sup> oct.</td><td>1<sup>er</sup> déc.</td><td>1<sup>er</sup> janv.</td><td>1<sup>er</sup> févr.</td></tr>
+  <tr><td>Début du mois, jour 5</td><td>5 oct.</td><td>5 déc.</td><td>5 janv.</td><td>5 févr.</td></tr>
+  <tr><td>Fin du mois, jour 1</td><td>1<sup>er</sup> nov.</td><td>1<sup>er</sup> janv.</td><td>1<sup>er</sup> févr.</td><td>1<sup>er</sup> mars</td></tr>
+  <tr><td>Fin du mois, jour 10</td><td>10 nov.</td><td>10 janv.</td><td>10 févr.</td><td>10 mars</td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted)">Le jour est plafonné à 28 : février ne pose jamais de problème.</p>
+
+<h3>Le même élève le 3 janvier 2027, selon le réglage</h3>
+<p>Entré le 1<sup>er</sup> octobre, <strong>rien payé</strong>. « En retard » comprend l'inscription (25 000).</p>
+<table>
+  <tr><th>Réglage</th><th>Mois en retard</th><th class="n">En retard</th><th class="n">À venir</th><th>Alerte</th></tr>
+  <tr><td>Avant le mois, jour 1</td><td>oct., nov., déc., janv., <strong>févr.</strong></td><td class="n">100 000</td><td class="n">60 000</td><td class="crit">CRITIQUE (5)</td></tr>
+  <tr><td>Avant le mois, jour 25</td><td>oct. → janv.</td><td class="n">85 000</td><td class="n">75 000</td><td class="crit">CRITIQUE (4)</td></tr>
+  <tr><td>Début du mois, jour 1</td><td>oct. → janv.</td><td class="n">85 000</td><td class="n">75 000</td><td class="crit">CRITIQUE (4)</td></tr>
+  <tr><td>Début du mois, jour 5</td><td>oct. → déc. <em>(janvier dû le 5)</em></td><td class="n">70 000</td><td class="n">90 000</td><td class="crit">CRITIQUE (3)</td></tr>
+  <tr><td>Fin du mois, jour 1</td><td>oct. → déc.</td><td class="n">70 000</td><td class="n">90 000</td><td class="crit">CRITIQUE (3)</td></tr>
+  <tr><td>Fin du mois, jour 10</td><td>oct., nov. <em>(décembre dû le 10/01)</em></td><td class="n">55 000</td><td class="n">105 000</td><td class="urg">URGENT (2)</td></tr>
+</table>
+<div class="cle"><strong>Le même élève, à la même date, a de 2 à 5 mois de retard selon le réglage.</strong>
+À l'installation, poser la question au directeur : <em>« Pour le mois de novembre, à partir de quand un parent est-il en retard ? »</em>
+<ul>
+  <li>« S'il n'a pas payé avant le 1<sup>er</sup> novembre » → <strong>Avant le mois</strong></li>
+  <li>« Dans les 5 premiers jours de novembre » → <strong>Début du mois, jour 5</strong></li>
+  <li>« Après la fin de novembre » → <strong>Fin du mois</strong></li>
+</ul></div>
+
+<h2>3. Mois encaissés dès l'inscription</h2>
+<p>Deux cases au niveau école : <strong>« 1<sup>re</sup> mensualité »</strong> et <strong>« dernière mensualité encaissée dès l'inscription »</strong>.
+Ces mois deviennent exigibles <strong>à la date d'entrée de l'élève</strong>, plus à leur tour dans le calendrier.
+Seule la <em>scolarité</em> est concernée.</p>
+<table>
+  <tr><th>Réglage (élève entré le 1<sup>er</sup> oct., vu le 2 oct.)</th><th>Exigible dès l'entrée</th><th class="n">En retard le 2/10</th></tr>
+  <tr><td>Début du mois, aucune case</td><td>octobre (le 1/10)</td><td class="n">40 000</td></tr>
+  <tr><td>Début du mois, 1<sup>re</sup> <strong>et</strong> dernière cochées</td><td>octobre <strong>et juin</strong></td><td class="n">55 000</td></tr>
+  <tr><td>Fin du mois, dernière cochée</td><td><strong>juin</strong> seulement (octobre attend le 1/11)</td><td class="n">40 000</td></tr>
+</table>
+<p><strong>Élève entré le 15 janvier</strong>, « Fin du mois » + 1<sup>re</sup> cochée : janvier exigible le 15/01 (à l'entrée)
+au lieu du 1/02 ; février reste dû le 1/03. Le « 1<sup>er</sup> mois », c'est <strong>son</strong> premier mois.</p>
+<p><strong>Services</strong> : la case « 1<sup>er</sup> mois payé à l'inscription » se règle sur chaque service (cantine, transport…) et ne
+vise que <em>ce</em> service, au premier mois. Le reste du mois garde son échéance. Exemple : scolarité de juin prise à
+l'inscription, cantine de juin à terme échu → la cantine n'apparaît pas en retard à l'inscription.</p>
+
+<h2>4. Inscription ou renouvellement</h2>
+<ul>
+  <li><strong>Inscription</strong> (défaut) : exigible <strong>dès l'entrée</strong>, donc en retard dès le lendemain si impayée.</li>
+  <li><strong>Renouvellement</strong> (à activer, surtout pour les daaras) : un <strong>ancien</strong> paie le montant de renouvellement de sa section au lieu de l'inscription.
+    <ul>
+      <li>Ancien = <strong>au moins X mois de présence</strong> au 1<sup>er</sup> jour de l'exercice (X réglable : 12 par défaut, 9 chez Shoumoul).
+          Avec X = 12, un élève entré le 20/10/2025 n'est pas ancien au 1/10/2026 (11 mois) → il paie l'inscription.</li>
+      <li><strong>Mois du renouvellement</strong> : vide = exigible dès la rentrée ; « janvier » = pas réclamé avant le 1<sup>er</sup> janvier.
+          Sans ce réglage, tous les anciens sont en retard le jour de la rentrée.</li>
+    </ul>
+  </li>
+</ul>
+<div class="piege"><strong>⚠</strong> Pour un renouvelant, ce report s'applique à toute la ligne « hors mensualité » : uniforme et fournitures compris.</div>
+
+<h2>5. Les services</h2>
+<table>
+  <tr><th>Type</th><th>Comment il est dû</th></tr>
+  <tr><td><strong>Mensuel</strong> (cantine, transport)</td><td>Ajouté au dû de chaque mois, <strong>même échéance</strong> que la scolarité</td></tr>
+  <tr><td><strong>Mensuel sur une partie de l'année</strong></td><td>Seulement les mois cochés pour l'élève (transport pris en cours d'année)</td></tr>
+  <tr><td><strong>Unique</strong> (tenue, kimono, adhésion)</td><td>Dans la ligne « hors mensualité », exigible comme l'inscription</td></tr>
+  <tr><td><strong>Garderie à la journée / soirs de garde</strong></td><td>Dus le mois de la présence, même hors calendrier (un soir en août est dû)</td></tr>
+</table>
+
+<h2>6. Combien par mois, et comment les paiements s'imputent</h2>
+<ul>
+  <li><strong>Montant d'un mois</strong> (fiche) : réduit un mois précis. Entré le 16 juillet → juillet à 7 500 au lieu de 15 000.
+      0 est permis : « ce mois vaut 0 » ≠ « tarif normal ».</li>
+  <li><strong>Prise en charge</strong> : réduction mensuelle, plafonnée au tarif du mois.</li>
+  <li><strong>Imputation</strong> : un paiement qui désigne ses mois les solde ; sinon il solde <strong>les mois les plus anciens</strong> ;
+      ce qui dépasse le dû de l'année est une avance, posée sur le dernier mois.</li>
+  <li><strong>Répartition du payé corrigée à la main</strong> : réservée aux données migrées ; elle déplace l'argent entre les mois, n'en crée pas.</li>
+</ul>
+
+<h2>7. Ce que tout cela produit</h2>
+<h3>Niveau d'alerte — nombre de mois échus non soldés</h3>
+<table>
+  <tr><th>Niveau</th><th>Situation</th></tr>
+  <tr><td>À jour</td><td>Rien de dû, ni maintenant ni plus tard</td></tr>
+  <tr><td>OK</td><td>Rien d'exigible aujourd'hui, mais des mois à venir</td></tr>
+  <tr><td class="att">ATTENTION</td><td>1 mois — ou seulement l'inscription / un impayé antérieur</td></tr>
+  <tr><td class="urg">URGENT</td><td>2 mois</td></tr>
+  <tr><td class="crit">CRITIQUE</td><td>3 mois ou plus</td></tr>
+</table>
+<p>Les impayés des années antérieures entrent dans le montant réclamé, mais ne fixent pas le niveau.</p>
+
+<h3>Rappels SMS — fenêtre de rappel</h3>
+<p>Jour de début et jour limite (défaut : du 1 au 10). Ils ne changent <strong>pas</strong> ce qui est en retard :
+ils fixent seulement <em>quand</em> les SMS partent.</p>
+<ul>
+  <li>Seul ce qui est <strong>déjà exigible</strong> est rappelé ; un seul rappel par élève et par mois.</li>
+  <li>Les élèves sortis ne sont pas rappelés ; la part d'un organisme boursier n'est pas réclamée à la famille.</li>
+</ul>
+<div class="cle">Régler la fenêtre <strong>après</strong> l'échéance : « Début du mois, jour 5 » → rappels du 6 au 15 ;
+« Avant le mois, jour 25 » → du 26 au 28.</div>
+
+<h2>8. Checklist d'installation chez un client</h2>
+<ol class="check">
+  <li><span class="case"></span><strong>Exercice</strong> : date de début = <strong>premier mois facturé</strong> ; bon nombre de mensualités.</li>
+  <li><span class="case"></span><strong>Sections</strong> : niveaux qui ont un nombre de mensualités différent (classes d'examen).</li>
+  <li><span class="case"></span><strong>Question au directeur</strong> sur le retard → mode et jour d'échéance (§2).</li>
+  <li><span class="case"></span><strong>1<sup>er</sup> / dernier mois pris à l'inscription ?</strong> → cocher selon la pratique (§3).</li>
+  <li><span class="case"></span><strong>Services</strong> : mensuels ou uniques ; lesquels se paient au 1<sup>er</sup> mois à l'inscription.</li>
+  <li><span class="case"></span><strong>Daara</strong> : activer le renouvellement, ancienneté en mois, mois de campagne, montant par section.</li>
+  <li><span class="case"></span><strong>Rappels</strong> : fenêtre après le jour d'échéance ; SMS en simulation tant qu'il n'est pas testé sur un numéro de test.</li>
+  <li><span class="case"></span><strong>Contrôle final</strong> : ouvrir 3 fiches — un élève de la rentrée, un entré en cours d'année, un ancien —
+      et vérifier que les mois en retard sont ceux que le directeur attend.</li>
+</ol>
+
+<footer>SAGI SCHOOL — HADY GESMAN · Guide des échéances · octobre 2026 · Support : +221 70 328 61 51 / +221 78 429 78 30</footer>
+</div>
+</body>
+</html>
