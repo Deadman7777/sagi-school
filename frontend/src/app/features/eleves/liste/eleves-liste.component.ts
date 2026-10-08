@@ -273,6 +273,9 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
             <div class="classe-chip">
               <span class="cc-nom">{{ c.classe }}</span>
               <span class="cc-nb">{{ c.nb }}</span>
+              <span class="cc-genre" [attr.aria-label]="c.nb_garcons + ' garçons, ' + c.nb_filles + ' filles'">
+                <span class="g">{{ c.nb_garcons }} G</span> · <span class="f">{{ c.nb_filles }} F</span>
+              </span>
               <button type="button" class="cc-pdf"
                       [attr.aria-label]="('eleves.liste_classe_export' | translate) + ' ' + c.classe"
                       [disabled]="exportClasse() === c.classe_id"
@@ -285,6 +288,9 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
           <div class="classe-chip total">
             <span class="cc-nom">{{ 'eleves.effectif_total' | translate }}</span>
             <span class="cc-nb">{{ eff.total }}</span>
+            <span class="cc-genre" [attr.aria-label]="eff.nb_garcons + ' garçons, ' + eff.nb_filles + ' filles'">
+              <span class="g">{{ eff.nb_garcons }} G</span> · <span class="f">{{ eff.nb_filles }} F</span>
+            </span>
           </div>
         </div>
       }
@@ -2143,6 +2149,8 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
     .classe-chip.total { border-color:#00d4aa; }
     .cc-nom { color:var(--text-2); }
     .cc-nb  { font-weight:700; color:var(--text); }
+    .cc-genre { font-size:11px; color:var(--text-3); white-space:nowrap; }
+    .cc-genre .g { color:#7c3aed; } .cc-genre .f { color:#db2777; }
     .cc-pdf { background:none; border:none; cursor:pointer; color:var(--text-3);
               padding:2px 4px; font-size:12px; }
     .cc-pdf:hover:not(:disabled) { color:#ef4444; }
@@ -3280,9 +3288,9 @@ export class ElevesListeComponent implements OnInit {
   }
 
   // ── Effectifs par classe ───────────────────────────────────────────────
-  effectifs = signal<{ exercice: string; total: number;
-                       classes: { classe_id: string | null; classe: string;
-                                  section: string; nb: number }[] } | null>(null);
+  effectifs = signal<{ exercice: string; total: number; nb_garcons: number; nb_filles: number;
+                       classes: { classe_id: string | null; classe: string; section: string;
+                                  nb: number; nb_garcons: number; nb_filles: number }[] } | null>(null);
   exportClasse = signal<string | null>(null);
 
   onTriChange() {

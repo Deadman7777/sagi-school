@@ -192,6 +192,7 @@ def contexte_liste_nominative(tenant, exercice, classe_id=None, section=None,
 
     return {'tenant': tenant, 'exercice': exercice, 'classe': titre,
             'eleves': eleves, 'nb': len(eleves), 'date_edition': timezone.now(),
+            **repartition_genre(eleves),
             'montrer_classe':  montrer_classe,
             'montrer_section': montrer_section,
             # Largeur calculée ici : un gabarit Django ne sait pas compter, et
@@ -1004,17 +1005,24 @@ class EleveViewSet(viewsets.ModelViewSet):
         qs = (Eleve.objects.filter(tenant=tenant, exercice=exercice,
                                    fiche_creance=False)
               .exclude(statut__in=STATUTS_SORTIE))
+        from django.db.models import Q as _Q
         lignes = list(qs.values('classe_id', 'classe__nom', 'section__nom')
-                        .annotate(nb=Count('id'))
+                        .annotate(nb=Count('id'),
+                                  nb_garcons=Count('id', filter=_Q(genre='G')),
+                                  nb_filles=Count('id', filter=_Q(genre='F')))
                         .order_by('section__nom', 'classe__nom'))
         return Response({
             'exercice': exercice.annee_scolaire,
             'total':    qs.count(),
+            'nb_garcons': qs.filter(genre='G').count(),
+            'nb_filles':  qs.filter(genre='F').count(),
             'classes': [{
                 'classe_id': str(l['classe_id']) if l['classe_id'] else None,
                 'classe':    l['classe__nom'] or 'Sans classe',
                 'section':   l['section__nom'] or '—',
                 'nb':        l['nb'],
+                'nb_garcons': l['nb_garcons'],
+                'nb_filles':  l['nb_filles'],
             } for l in lignes],
         })
 
@@ -1951,6 +1959,14 @@ class EleveViewSet(viewsets.ModelViewSet):
         })
 
 
+def repartition_genre(eleves):
+    """{'nb_garcons', 'nb_filles', 'nb_genre_inconnu'} d'une liste de dicts
+    portant 'genre' (G/F) — affichés à côté du total sur les listes."""
+    g = sum(1 for e in eleves if e.get('genre') == 'G')
+    f = sum(1 for e in eleves if e.get('genre') == 'F')
+    return {'nb_garcons': g, 'nb_filles': f, 'nb_genre_inconnu': len(eleves) - g - f}
+
+
 def _vrai(valeur):
     return valeur is True or str(valeur).lower() in ('1', 'true', 'oui')
 
@@ -2586,6 +2602,7 @@ class ElevesListePDFView(APIView):
             'date_edition':      timezone.now(),
             'eleves':            eleves_data,
             'nb_eleves':         len(eleves_data),
+            **repartition_genre(eleves_data),
             'total_attendu':     round(total_attendu_global, 0),
             'total_paye':        round(total_paye_global, 0),
             'total_reste':       total_reste_global,
@@ -3727,6 +3744,122 @@ class BaremeFratrieViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=get_tenant(self.request))
+
+
+class EtatServicesView(APIView):
+    """État des services optionnels (etat_services.py) : abonnés par service,
+    leur classe, dû, payé, reste, et les encaissements par mode et receveur.
+
+    GET /api/eleves/etat-services/[?service=&section=&classe=&du=&au=]
+        [&export=pdf|xlsx][&exercice=<id>]
+    """
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        from apps.comptabilite.views import get_exercice
+        from django.utils.dateparse import parse_date
+        from .etat_services import etat_services
+
+        tenant = get_tenant(request)
+        exercice = get_exercice(tenant, request)
+        if not exercice:
+            return Response({'error': 'Aucun exercice.'}, status=404)
+        q = request.query_params
+        etat = etat_services(tenant, exercice,
+                             service_id=q.get('service') or None,
+                             section_id=q.get('section') or None,
+                             classe_id=q.get('classe') or None,
+                             du=parse_date(q.get('du') or '') if q.get('du') else None,
+                             au=parse_date(q.get('au') or '') if q.get('au') else None)
+        nom = f"etat_services_{exercice.annee_scolaire}_{etat['date']}"
+        fmt = q.get('export')
+        if fmt == 'pdf':
+            return self._pdf(tenant, exercice, etat, nom)
+        if fmt == 'xlsx':
+            return self._xlsx(tenant, etat, nom)
+        return Response(etat)
+
+    def _pdf(self, tenant, exercice, etat, nom):
+        from io import BytesIO
+        import datetime
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from xhtml2pdf import pisa
+        html = render_to_string('pdf/etat_services.html', {
+            'tenant': tenant, 'exercice': exercice, 'etat': etat,
+            'date_arret': datetime.date.fromisoformat(etat['date']),
+            'periode_du': datetime.date.fromisoformat(etat['du']) if etat['du'] else None,
+            'periode_au': datetime.date.fromisoformat(etat['au']) if etat['au'] else None,
+            'date_edition': timezone.localtime(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        resp['Content-Disposition'] = f'attachment; filename="{nom}.pdf"'
+        return resp
+
+    def _xlsx(self, tenant, etat, nom):
+        from io import BytesIO
+        from django.http import HttpResponse
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+
+        gras = Font(bold=True)
+        fond = PatternFill('solid', fgColor='DCE6F1')
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Récapitulatif'
+        ws.append([f"{tenant.nom} — Services optionnels — exercice {etat['exercice']} — au {etat['date']}"])
+        ws['A1'].font = Font(bold=True, size=13)
+        ws.append([])
+        ws.append(['Service', 'Abonnés', 'À jour', 'En retard', 'Dû sur l\'année', 'Dû à ce jour',
+                   'Payé', 'Reste à ce jour', 'Encaissé (période)'])
+        for c in ws[ws.max_row]:
+            c.font, c.fill = gras, fond
+        for s in etat['services']:
+            ws.append([s['nom'], s['nb_abonnes'], s['nb_a_jour'], s['nb_en_retard'], s['du_annee'],
+                       s['du_echu'], s['paye'], s['reste_echu'], s['encaisse']])
+        t = etat['total']
+        ws.append(['TOTAL', t['nb_abonnes'], t['nb_a_jour'], t['nb_en_retard'], t['du_annee'],
+                   t['du_echu'], t['paye'], t['reste_echu'], t['encaisse']])
+        for c in ws[ws.max_row]:
+            c.font = gras
+
+        for s in etat['services']:
+            titre = ''.join(ch for ch in s['nom'] if ch not in '[]:*?/\\')[:28] or 'Service'
+            w = wb.create_sheet(titre)
+            w.append([f"{s['nom']} — {s['nb_abonnes']} abonné(s)"])
+            w['A1'].font = Font(bold=True, size=12)
+            w.append(['N°', 'Matricule', 'Élève', 'Section', 'Classe', 'Contact', 'Téléphone', 'Tarif',
+                      'Mois', 'Dû sur l\'année', 'Dû à ce jour', 'Payé', 'Reste', 'Dernier règlement'])
+            for c in w[w.max_row]:
+                c.font, c.fill = gras, fond
+            for i, a in enumerate(s['abonnes'], 1):
+                d = a['dernier']
+                w.append([i, a['matricule'], a['nom_complet'], a['section'], a['classe'], a['contact'],
+                          a['telephone'], a['tarif'], a['mois'], a['du_annee'], a['du_echu'], a['paye'],
+                          a['reste_echu'],
+                          f"{d['date_texte']} {d['no_piece']} ({d['montant']:,.0f})" if d else ''])
+            w.append([])
+            w.append(['Encaissements'])
+            w[w.max_row][0].font = gras
+            w.append(['Date', 'Reçu', 'Élève', 'Classe', 'Mois', 'Montant', 'Mode', 'Reçu par'])
+            for c in w[w.max_row]:
+                c.font, c.fill = gras, fond
+            for l in s['encaissements']:
+                w.append([l['date_texte'], l['no_piece'], l['eleve'], l['classe'], l['mois'], l['montant'],
+                          l['mode'], l['receveur']])
+            for col, larg in zip('ABCDEFGHIJKLMN', (5, 14, 28, 14, 14, 22, 14, 10, 22, 13, 13, 11, 11, 30)):
+                w.column_dimensions[col].width = larg
+        ws.column_dimensions['A'].width = 28
+
+        buf = BytesIO()
+        wb.save(buf)
+        resp = HttpResponse(buf.getvalue(),
+                            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f'attachment; filename="{nom}.xlsx"'
+        return resp
 
 
 class EtatImpayesView(APIView):

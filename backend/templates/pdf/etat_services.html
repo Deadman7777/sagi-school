@@ -1,0 +1,152 @@
+{% extends "pdf/base.html" %}
+{% block page_style %}
+@page {
+  size: A4 landscape;
+  @frame contenu { left: 28pt; top: 28pt; width: 786pt; height: 523pt; }
+  @frame pied {
+    -pdf-frame-content: pied-de-page;
+    left: 28pt; top: 555pt; width: 786pt; height: 28pt;
+  }
+}
+{% endblock %}
+{% block doc_title %}Services optionnels — au {{ date_arret|date:"d/m/Y" }}{% endblock %}
+{% block content %}
+
+<div style="font-size:10px;color:#374151;margin-bottom:8px">
+  Exercice {{ etat.exercice }}. Dû et payé de chaque abonné : année en cours, arrêtés au {{ date_arret|date:"d/m/Y" }}.
+  Encaissements{% if periode_du or periode_au %} du {{ periode_du|date:"d/m/Y"|default:"début" }} au {{ periode_au|date:"d/m/Y"|default:"ce jour" }}{% else %} de l'exercice{% endif %}.
+  Montants en FCFA.
+</div>
+
+<div class="section-title">Récapitulatif par service</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th>Service</th>
+      <th class="text-right" style="width:55px">Abonnés</th>
+      <th class="text-right" style="width:50px">À jour</th>
+      <th class="text-right" style="width:60px">En retard</th>
+      <th class="text-right" style="width:85px">Dû sur l'année</th>
+      <th class="text-right" style="width:85px">Dû à ce jour</th>
+      <th class="text-right" style="width:80px">Payé</th>
+      <th class="text-right" style="width:85px">Reste à ce jour</th>
+      <th class="text-right" style="width:90px">Encaissé (période)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in etat.services %}
+    <tr>
+      <td>{{ s.nom }}</td>
+      <td class="text-right">{{ s.nb_abonnes }}</td>
+      <td class="text-right">{{ s.nb_a_jour }}</td>
+      <td class="text-right">{{ s.nb_en_retard }}</td>
+      <td class="text-right">{{ s.du_annee|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.du_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.paye|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ s.reste_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.encaisse|floatformat:"0g" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>TOTAL</td>
+      <td class="text-right">{{ etat.total.nb_abonnes }}</td>
+      <td class="text-right">{{ etat.total.nb_a_jour }}</td>
+      <td class="text-right">{{ etat.total.nb_en_retard }}</td>
+      <td class="text-right">{{ etat.total.du_annee|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.du_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.paye|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.reste_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ etat.total.encaisse|floatformat:"0g" }}</td>
+    </tr>
+  </tfoot>
+</table>
+
+{% for s in etat.services %}
+<div class="section-title">{{ s.nom }} — {{ s.nb_abonnes }} abonné(s) — tarif {{ s.tarif|floatformat:"0g" }}{% if s.periodicite == 'MENSUEL' %} / mois{% endif %}</div>
+{% if s.abonnes %}
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th style="width:22px">N°</th>
+      <th>Élève</th>
+      <th style="width:85px">Classe</th>
+      <th style="width:75px">Téléphone</th>
+      <th style="width:120px">Mois</th>
+      <th class="text-right" style="width:65px">Dû année</th>
+      <th class="text-right" style="width:65px">Dû à ce jour</th>
+      <th class="text-right" style="width:60px">Payé</th>
+      <th class="text-right" style="width:60px">Reste</th>
+      <th style="width:110px">Dernier règlement</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in s.abonnes %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ a.nom_complet }}</td>
+      <td>{{ a.classe|default:a.section|default:"—" }}</td>
+      <td>{{ a.telephone|default:"—" }}</td>
+      <td>{{ a.mois|default:"—" }}{% if a.nb_mois %} ({{ a.nb_mois }} mois){% endif %}</td>
+      <td class="text-right">{{ a.du_annee|floatformat:"0g" }}</td>
+      <td class="text-right">{{ a.du_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ a.paye|floatformat:"0g" }}</td>
+      <td class="text-right bold">{{ a.reste_echu|floatformat:"0g" }}</td>
+      <td>{% if a.dernier %}{{ a.dernier.no_piece }} du {{ a.dernier.date_texte }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="5">Sous-total {{ s.nom }}</td>
+      <td class="text-right">{{ s.du_annee|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.du_echu|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.paye|floatformat:"0g" }}</td>
+      <td class="text-right">{{ s.reste_echu|floatformat:"0g" }}</td>
+      <td>&nbsp;</td>
+    </tr>
+  </tfoot>
+</table>
+{% endif %}
+
+{% if s.encaissements %}
+<div style="font-size:10.5px;font-weight:bold;margin:8px 0 4px">
+  Encaissements : {{ s.encaisse|floatformat:"0g" }} FCFA
+  {% for m in s.par_mode %} · {{ m.mode }} {{ m.montant|floatformat:"0g" }}{% endfor %}
+</div>
+<div style="font-size:10px;margin-bottom:4px">
+  Par receveur :{% for r in s.par_receveur %} {{ r.nom }} {{ r.montant|floatformat:"0g" }}{% if not forloop.last %} ·{% endif %}{% endfor %}
+</div>
+<table cellspacing="0" cellpadding="4" class="dense" repeat="1">
+  <thead>
+    <tr>
+      <th style="width:65px">Date</th>
+      <th style="width:65px">Reçu</th>
+      <th>Élève</th>
+      <th style="width:85px">Classe</th>
+      <th style="width:110px">Mois</th>
+      <th class="text-right" style="width:65px">Montant</th>
+      <th style="width:80px">Mode</th>
+      <th style="width:100px">Reçu par</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in s.encaissements %}
+    <tr>
+      <td>{{ l.date_texte }}</td>
+      <td>{{ l.no_piece }}</td>
+      <td>{{ l.eleve }}</td>
+      <td>{{ l.classe|default:"—" }}</td>
+      <td>{{ l.mois|default:"—" }}</td>
+      <td class="text-right">{{ l.montant|floatformat:"0g" }}</td>
+      <td>{{ l.mode }}</td>
+      <td>{{ l.receveur }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+
+{% endblock %}

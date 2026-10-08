@@ -207,8 +207,9 @@ export class ElevesService {
   /** Effectif par classe, sur le périmètre des élèves ACTIFS uniquement. */
   getEffectifsClasses() {
     return this.api.get<{
-      exercice: string; total: number;
-      classes: { classe_id: string | null; classe: string; section: string; nb: number }[];
+      exercice: string; total: number; nb_garcons: number; nb_filles: number;
+      classes: { classe_id: string | null; classe: string; section: string;
+                 nb: number; nb_garcons: number; nb_filles: number }[];
     }>('/eleves/effectifs-classes/');
   }
 

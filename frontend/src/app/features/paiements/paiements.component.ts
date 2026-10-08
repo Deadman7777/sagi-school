@@ -29,6 +29,7 @@ import { ImportChargesDialogComponent } from './import-charges-dialog.component'
 import { CahierMensuelComponent } from './cahier-mensuel.component';
 import { PointTresorerieComponent } from './point-tresorerie.component';
 import { ProformasComponent } from './proformas.component';
+import { ServicesAbonnesComponent } from './services-abonnes.component';
 
 @Component({
   selector: 'app-paiements',
@@ -36,7 +37,8 @@ import { ProformasComponent } from './proformas.component';
   imports: [CommonModule, FormsModule, TableModule, TranslateModule, ButtonModule, DialogModule,
             InputTextModule, SelectModule, TagModule, ToastModule,
             InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, SplitButtonModule, PiecesJustificativesComponent,
-            ImportChargesDialogComponent, CahierMensuelComponent, PointTresorerieComponent, ProformasComponent],
+            ImportChargesDialogComponent, CahierMensuelComponent, PointTresorerieComponent, ProformasComponent,
+            ServicesAbonnesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -75,6 +77,10 @@ import { ProformasComponent } from './proformas.component';
               (click)="onglet.set('proformas')">
         📄 Proformas
       </button>
+      <button class="tab-btn" [class.active]="onglet() === 'services'"
+              (click)="onglet.set('services')">
+        🚌 Services optionnels
+      </button>
     </div>
 
     <!-- Rappel visuel permanent : le reste à faire du mois, visible depuis
@@ -106,6 +112,10 @@ import { ProformasComponent } from './proformas.component';
 
     @if (onglet() === 'proformas') {
       <app-proformas />
+    }
+
+    @if (onglet() === 'services') {
+      <app-services-abonnes />
     }
 
     <!-- === ONGLET PAIEMENTS === -->
