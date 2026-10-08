@@ -89,3 +89,59 @@ class ModifierPaiementTest(APITestCase):
         self.assertIn('plusieurs modes', r.data['error'])
         p.refresh_from_db()
         self.assertEqual(p.statut, 'ACTIF')
+
+
+class ModifierVentilationTest(ModifierPaiementTest):
+    """08/10/2026 : 26 000 saisis en espèces, la famille avait remis 24 000 en
+    espèces et 2 000 par Wave."""
+
+    def _tresorerie(self, p):
+        """Débits de trésorerie par compte : 57x espèces, 552x mobile money."""
+        ecr = JournalEntry.objects.filter(tenant=self.tenant, source='PAIEMENT', source_id=p.id)
+        par = {}
+        for e in ecr:
+            if e.no_compte[:2] in ('57', '55') and float(e.debit):
+                par[e.no_compte] = par.get(e.no_compte, 0) + float(e.debit)
+        return par
+
+    def test_mode_unique_reventile_en_deux_modes(self):
+        p = self._encaisser(montant_inscription=12000, montant_mensualite=12000, montant_divers=2000)
+        r = self._modifier(p, montant_inscription=12000, montant_mensualite=12000, montant_divers=2000,
+                           mode_paiement='MIXTE',
+                           modes_reglement=[{'mode': 'ESPECE', 'montant': 24000},
+                                            {'mode': 'WAVE', 'montant': 2000}])
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        nouveau = Paiement.objects.get(no_piece=r.data['nouveau_no_piece'])
+        self.assertEqual(nouveau.mode_paiement, 'MIXTE')
+        self.assertEqual(nouveau.modes_reglement, [{'mode': 'ESPECE', 'montant': 24000.0},
+                                                   {'mode': 'WAVE', 'montant': 2000.0}])
+        tres = self._tresorerie(nouveau)
+        self.assertEqual(tres.get('5521'), 2000.0)
+        self.assertEqual(sum(tres.values()), 26000.0)
+
+    def test_ventilation_fausse_refusee(self):
+        p = self._encaisser(montant_mensualite=12000)
+        r = self._modifier(p, montant_mensualite=12000, mode_paiement='MIXTE',
+                           modes_reglement=[{'mode': 'ESPECE', 'montant': 10000},
+                                            {'mode': 'WAVE', 'montant': 1000}])
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Paiement.objects.get(id=p.id).statut, 'ACTIF')
+
+    def test_changer_de_mode_a_montant_egal(self):
+        """L'ancienne ventilation (espèces) couvrait le total : elle était
+        reprise et le changement de mode ignoré."""
+        p = self._encaisser(montant_mensualite=12000)
+        r = self._modifier(p, montant_mensualite=12000, mode_paiement='WAVE')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        nouveau = Paiement.objects.get(no_piece=r.data['nouveau_no_piece'])
+        self.assertEqual(nouveau.modes_reglement, [{'mode': 'WAVE', 'montant': 12000.0}])
+
+    def test_repasser_un_multi_mode_en_mode_unique(self):
+        p = self._encaisser(montant_mensualite=12000,
+                            modes_reglement=[{'mode': 'ESPECE', 'montant': 10000},
+                                             {'mode': 'WAVE', 'montant': 2000}])
+        r = self._modifier(p, montant_mensualite=12000, mode_paiement='ESPECE',
+                           modes_reglement=[{'mode': 'ESPECE', 'montant': 12000}])
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        nouveau = Paiement.objects.get(no_piece=r.data['nouveau_no_piece'])
+        self.assertEqual(nouveau.mode_paiement, 'ESPECE')

@@ -325,10 +325,39 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
         </div>
 
         <div class="form-group" style="margin-bottom:10px">
-          <label>Mode de paiement</label>
-          <p-select [options]="modesPaiement" [(ngModel)]="modifForm.mode_paiement"
-                    optionLabel="label" optionValue="value"
-                    placeholder="Choisir le mode..." styleClass="w-full" />
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <label style="margin:0">Mode de paiement</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer">
+              <input type="checkbox" [(ngModel)]="modifForm.multi_mode" (change)="onToggleMultiModeModif()" />
+              Multi-mode (plusieurs moyens)
+            </label>
+          </div>
+          @if (!modifForm.multi_mode) {
+            <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="modifForm.mode_paiement"
+                      optionLabel="label" optionValue="value"
+                      placeholder="Choisir le mode..." styleClass="w-full" />
+          } @else {
+            <div style="margin-top:6px">
+              @for (m of modifForm.modes_reglement; track $index; let i = $index) {
+                <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+                  <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="m.mode"
+                            optionLabel="label" optionValue="value" placeholder="Mode..."
+                            styleClass="w-full" [style]="{flex:'1'}" />
+                  <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
+                         style="width:130px;text-align:right" />
+                  <button type="button" class="mode-x" (click)="modifForm.modes_reglement.splice(i, 1)"
+                          [disabled]="modifForm.modes_reglement.length <= 1" title="Retirer">✕</button>
+                </div>
+              }
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <button type="button" class="mode-add" (click)="ajouterModeModif()">+ Ajouter un mode</button>
+                <span style="font-size:12px;font-family:monospace"
+                      [style.color]="resteAVentilerModif() === 0 ? '#00d4aa' : '#f59e0b'">
+                  Reste à ventiler : {{ resteAVentilerModif() | number:'1.0-0' }} FCFA
+                </span>
+              </div>
+            </div>
+          }
         </div>
 
         @if (receveurs().length) {
@@ -348,7 +377,8 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
       <ng-template pTemplate="footer">
         <p-button label="Annuler" severity="secondary" (onClick)="modifVisible=false" />
         <p-button label="✏️ Enregistrer la modification" severity="warn"
-                  [loading]="savingModif()" [disabled]="totalModifForm() <= 0"
+                  [loading]="savingModif()"
+                  [disabled]="totalModifForm() <= 0 || (modifForm.multi_mode && resteAVentilerModif() !== 0)"
                   (onClick)="confirmerModificationPaiement()" />
       </ng-template>
     </p-dialog>
@@ -1456,6 +1486,8 @@ export class PaiementsComponent implements OnInit {
     montant_reliquat: 0,
     mode_paiement: '', observations: '',
     receveur: null as string | null,
+    multi_mode: false,
+    modes_reglement: [] as { mode: string; montant: number }[],
   };
   dialogVisible     = false;
   recuVisible       = false;
@@ -2238,6 +2270,23 @@ export class PaiementsComponent implements OnInit {
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
   }
 
+  /** Multi-mode dans la modification d'un reçu : même saisie qu'au guichet. */
+  onToggleMultiModeModif() {
+    if (this.modifForm.multi_mode && this.modifForm.modes_reglement.length === 0) {
+      this.modifForm.modes_reglement = [{
+        mode: this.modifForm.mode_paiement || 'ESPECE', montant: this.totalModifForm() }];
+    }
+  }
+
+  ajouterModeModif() {
+    this.modifForm.modes_reglement.push({ mode: '', montant: Math.max(0, this.resteAVentilerModif()) });
+  }
+
+  resteAVentilerModif(): number {
+    const somme = this.modifForm.modes_reglement.reduce((s, m) => s + (Number(m.montant) || 0), 0);
+    return Math.round((this.totalModifForm() - somme) * 100) / 100;
+  }
+
   // ── Receveurs : qui a l'argent en main (transport…) ──────────────────
   receveurs = signal<{ id: string; nom: string }[]>([]);
   filtreReceveur: string | null = null;
@@ -2388,14 +2437,31 @@ export class PaiementsComponent implements OnInit {
       mode_paiement:       p.mode_paiement       || '',
       observations:        p.observations        || '',
       receveur:            p.receveur            || null,
+      // Un reçu déjà ventilé se rouvre ventilé, ligne par ligne.
+      multi_mode:          (p.modes_reglement || []).length > 1,
+      modes_reglement:     (p.modes_reglement || []).length > 1
+        ? p.modes_reglement.map((m: any) => ({ mode: m.mode, montant: Number(m.montant) || 0 }))
+        : [],
     };
+    if (this.modifForm.mode_paiement === 'MIXTE') this.modifForm.mode_paiement = '';
     this.modifVisible = true;
   }
 
   confirmerModificationPaiement() {
     if (!this.paiementModifier?.id) return;
     this.savingModif.set(true);
-    this.paiementsService.modifierPaiement(this.paiementModifier.id, this.modifForm).subscribe({
+    // La ventilation est TOUJOURS envoyée : sans elle, le serveur reprenait
+    // celle du reçu d'origine (26 000 espèces) au lieu de la correction.
+    const { multi_mode, ...corps } = this.modifForm;
+    const modes = multi_mode
+      ? this.modifForm.modes_reglement.filter(m => m.mode && Number(m.montant) > 0)
+      : (this.modifForm.mode_paiement
+          ? [{ mode: this.modifForm.mode_paiement, montant: this.totalModifForm() }] : undefined);
+    this.paiementsService.modifierPaiement(this.paiementModifier.id, {
+      ...corps,
+      mode_paiement: multi_mode ? 'MIXTE' : this.modifForm.mode_paiement,
+      ...(modes ? { modes_reglement: modes } : { modes_reglement: undefined }),
+    }).subscribe({
       next: (res: any) => {
         this.msg.add({
           severity: 'success',

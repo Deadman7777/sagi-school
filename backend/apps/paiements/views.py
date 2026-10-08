@@ -643,7 +643,12 @@ class PaiementViewSet(viewsets.ModelViewSet):
             ancienne = paiement.modes_reglement or []
             somme_anc = sum(float((l or {}).get('montant') or 0) for l in ancienne)
             modes = {(l or {}).get('mode') for l in ancienne}
-            if ancienne and abs(somme_anc - nouveau_total) < 0.01:
+            # Reprise de l'ancienne ventilation seulement si elle couvre le
+            # total ET que l'utilisateur n'a pas choisi un autre mode : passer
+            # un reçu de 26 000 espèces en Wave gardait sinon les espèces.
+            autre_mode = (len(modes) == 1 and mode_paiement not in (None, '', 'MIXTE')
+                          and mode_paiement not in modes)
+            if ancienne and abs(somme_anc - nouveau_total) < 0.01 and not autre_mode:
                 modes_reglement_in = ancienne
             elif len(modes) > 1:
                 return Response({'error': (
