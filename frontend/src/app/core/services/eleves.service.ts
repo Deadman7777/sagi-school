@@ -80,6 +80,11 @@ export class ElevesService {
     return this.api.delete(`/eleves/${id}/`);
   }
 
+  /** Élève saisi par erreur ; `parcours` = toutes ses fiches annuelles (anciens). */
+  supprimerEleve(id: string, parcours = false) {
+    return this.api.delete<any>(`/eleves/${id}/${parcours ? '?parcours=1' : ''}`);
+  }
+
   /** Champs ajoutés par l'école à la fiche élève. */
   champsFiche()                      { return this.api.get<any>('/eleves/champs/', { actifs: 1 }); }
   champsFicheTous()                  { return this.api.get<any>('/eleves/champs/'); }

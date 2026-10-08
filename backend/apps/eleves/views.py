@@ -631,6 +631,34 @@ class EleveViewSet(viewsets.ModelViewSet):
                           motif=(self.request.data.get('motif_sortie') or '').strip(),
                           utilisateur=getattr(self.request.user, 'email', ''))
 
+    ROLES_SUPPRESSION = ('SUPER_ADMIN', 'ADMIN_ECOLE', 'ADMIN_SCOLARITE')
+
+    def destroy(self, request, *args, **kwargs):
+        """DELETE /api/eleves/<id>/[?parcours=1] — élève saisi par erreur.
+
+        Refusé (409, motifs) tant que la fiche porte de l'argent ou une
+        créance : voir suppression.py. `parcours=1` (base des anciens)
+        supprime toutes les fiches de l'enfant."""
+        from core.models import log_audit
+        from .suppression import SuppressionRefusee, supprimer
+        if getattr(request.user, 'role', '') not in self.ROLES_SUPPRESSION:
+            return Response({'error': "Seuls la direction et le responsable de la scolarité "
+                                      "peuvent supprimer un élève."}, status=403)
+        fiche = self._fiche_du_tenant(kwargs.get('pk'))
+        fiche_id = str(fiche.id)  # delete() remet l'id à None
+        try:
+            resume = supprimer(fiche, tout_le_parcours=request.query_params.get('parcours') in ('1', 'true'))
+        except SuppressionRefusee as exc:
+            return Response({'code': 'SUPPRESSION_REFUSEE', 'motifs': exc.motifs,
+                             'error': "Suppression impossible : " + ' '.join(exc.motifs)}, status=409)
+        annules = resume['recus_annules']
+        log_audit(request, 'DELETE', 'Eleve', fiche_id,
+                  f"Élève supprimé (saisi par erreur) : {resume['nom_complet']}"
+                  f"{' — ' + resume['matricule'] if resume['matricule'] else ''}"
+                  f" — {', '.join(resume['annees'])}"
+                  f"{' — reçus annulés effacés : ' + ', '.join(annules) if annules else ''}")
+        return Response(resume, status=200)
+
     def _fiche_du_tenant(self, pk):
         """Fiche brute, fiches de créance et sortants compris (hors queryset liste)."""
         from django.shortcuts import get_object_or_404

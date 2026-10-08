@@ -376,6 +376,11 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                   <p-button icon="pi pi-pencil" [rounded]="true" [text]="true"
                             severity="contrast" pTooltip="Corriger le déjà payé (reprise)"
                             (onClick)="ouvrirReprise(eleve)" />
+                  @if (peutSupprimer()) {
+                    <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                              pTooltip="Supprimer (saisi par erreur)"
+                              (onClick)="ouvrirSuppression(eleve.id, eleve.nom_complet, 1, false)" />
+                  }
                 </div>
               </td>
             </tr>
@@ -627,6 +632,11 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                     <p-button icon="pi pi-replay" [rounded]="true" [text]="true" severity="success"
                               [pTooltip]="a.statut === 'DIPLOME' ? 'Annuler la sortie (erreur)' : 'Réintégrer / annuler la sortie'"
                               (onClick)="ouvrirReintegration(a.eleve_id, a.nom_complet, a.statut === 'DIPLOME')" />
+                  }
+                  @if (peutSupprimer()) {
+                    <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger"
+                              pTooltip="Supprimer (saisi par erreur)"
+                              (onClick)="ouvrirSuppression(a.eleve_id, a.nom_complet, a.nb_annees, true)" />
                   }
                 </div>
               </td>
@@ -1925,6 +1935,35 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
          Règles appliquées par le serveur (apps/eleves/reintegration.py) :
          date et motif obligatoires, dette du départ reconnue, mois d'absence
          non facturés, retour sur un nouvel exercice avec la dette en reliquat. -->
+    <p-dialog header="🗑 Supprimer un élève" [(visible)]="dialogSuppressionVisible" [modal]="true"
+              [style]="{ width: '480px', maxWidth: '95vw' }">
+      <div class="suppr-corps">
+        <p>Supprimer <strong>{{ suppression.nom }}</strong>@if (suppression.parcours && suppression.nbAnnees > 1) {
+          et ses <strong>{{ suppression.nbAnnees }} fiches annuelles</strong>} ?</p>
+        <p class="suppr-aide">Réservé à un élève <strong>saisi par erreur</strong> (doublon, mauvaise saisie).
+          Un enfant qui a fréquenté l'école ne se supprime pas : utilisez « Changer statut » (sortie),
+          il restera dans la base des anciens.</p>
+        <p class="suppr-aide">Sont effacés : la fiche, ses services, ses notes et ses reçus déjà annulés.
+          La suppression est refusée si l'élève a un reçu actif, une bourse ou un reste des années antérieures.
+          Elle est inscrite au journal d'audit.</p>
+        @if (suppression.motifs.length) {
+          <div class="suppr-refus">
+            <strong>Suppression impossible :</strong>
+            <ul>@for (m of suppression.motifs; track m) { <li>{{ m }}</li> }</ul>
+          </div>
+        }
+        <label class="reint-check">
+          <p-checkbox [(ngModel)]="suppression.confirme" [binary]="true" inputId="suppr-ok" />
+          <span>Je confirme que cet élève a été saisi par erreur</span>
+        </label>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button [label]="'common.annuler' | translate" severity="secondary" (onClick)="dialogSuppressionVisible=false" />
+        <p-button label="Supprimer définitivement" icon="pi pi-trash" severity="danger" [loading]="saving()"
+                  [disabled]="!suppression.confirme" (onClick)="confirmerSuppression()" />
+      </ng-template>
+    </p-dialog>
+
     <p-dialog header="↩ Réintégrer un élève" [(visible)]="dialogReintegrationVisible" [modal]="true"
               [style]="{ width: '560px', maxWidth: '95vw' }" [draggable]="false">
       <div class="reint">
@@ -2302,6 +2341,11 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
     .reint-refus { background:rgba(220,38,38,.1); border:1px solid #dc2626; color:#dc2626; border-radius:8px; padding:10px 12px; font-size:13px; }
     .reint-dette { background:rgba(234,179,8,.12); border:1px solid #ca8a04; border-radius:8px; padding:10px 12px; font-size:13px; color:var(--text); }
     .reint-check { display:flex; align-items:center; gap:8px; margin-top:8px; cursor:pointer; }
+    .suppr-corps p { margin:0 0 10px; }
+    .suppr-aide { font-size:12.5px; color:var(--text-2); }
+    .suppr-refus { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.4); color:var(--text-1);
+                   border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:13px; }
+    .suppr-refus ul { margin:6px 0 0; padding-left:18px; }
     @media (max-width: 520px) { .reint-grid { grid-template-columns:1fr; } }
   `]
 })
@@ -2802,6 +2846,42 @@ export class ElevesListeComponent implements OnInit {
                         erreur_saisie: false };
   apercuReintegration     = signal<any | null>(null);
   chargementReintegration = signal(false);
+
+  // ── Suppression d'un élève saisi par erreur ─────────────────────────
+  // Le serveur refuse (409) dès que la fiche porte de l'argent ou une créance
+  // et dit pourquoi : voir apps/eleves/suppression.py.
+  dialogSuppressionVisible = false;
+  suppression = { id: '', nom: '', nbAnnees: 1, parcours: false, confirme: false, motifs: [] as string[] };
+
+  peutSupprimer(): boolean {
+    return ['SUPER_ADMIN', 'ADMIN_ECOLE', 'ADMIN_SCOLARITE'].includes(this.auth.currentUser()?.role ?? '');
+  }
+
+  ouvrirSuppression(id: string, nom: string, nbAnnees: number, parcours: boolean) {
+    this.suppression = { id, nom, nbAnnees: nbAnnees || 1, parcours, confirme: false, motifs: [] };
+    this.dialogSuppressionVisible = true;
+  }
+
+  confirmerSuppression() {
+    this.saving.set(true);
+    this.elevesService.supprimerEleve(this.suppression.id, this.suppression.parcours).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.dialogSuppressionVisible = false;
+        this.msg.add({ severity: 'success', summary: 'Élève supprimé',
+                       detail: `${this.suppression.nom} a été supprimé.`, life: 5000 });
+        this.chargerEleves();
+        if (this.onglet() === 'anciens') this.chargerAnciens();
+        this.cdr.markForCheck();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.suppression.motifs = err?.error?.motifs
+          || [err?.error?.error || 'Erreur lors de la suppression.'];
+        this.cdr.markForCheck();
+      },
+    });
+  }
 
   ouvrirReintegration(eleveId: string, nom: string, erreurSaisie = false) {
     this.reintegrationId = eleveId;
