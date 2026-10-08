@@ -2506,7 +2506,7 @@ export class PaiementsComponent implements OnInit {
   }
 
   chargerRappelMois() {
-    this.paiementsService.getCahierMensuel().subscribe({
+    this.paiementsService.getResumeCahierMensuel().subscribe({
       next: (c: any) => this.rappelMois.set({
         libelle_mois: c.libelle_mois, periode: c.periode, jours_restants: c.jours_restants,
         nb_impayes: c.scolarite.totaux.nb_impayes, nb_partiels: c.scolarite.totaux.nb_partiels,

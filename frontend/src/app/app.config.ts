@@ -1,5 +1,5 @@
 import { ApplicationConfig, inject, provideAppInitializer } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { PreloadAllModules, provideRouter, withPreloading } from '@angular/router';
 import { provideHttpClient, withInterceptors, HttpClient } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { providePrimeNG } from 'primeng/config';
@@ -23,7 +23,11 @@ class CustomTranslateLoader implements TranslateLoader {
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRouter(routes),
+    // Chaque module est un fichier séparé, téléchargé à la première entrée :
+    // d'où un temps mort perceptible au premier clic (08/10/2026). Les
+    // modules sont désormais chargés en arrière-plan juste après l'écran
+    // d'accueil ; l'entrée dans un module ne télécharge plus rien.
+    provideRouter(routes, withPreloading(PreloadAllModules)),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
     // Capte l'invite d'installation dès le chargement, avant la connexion.

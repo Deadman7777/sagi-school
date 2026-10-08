@@ -79,3 +79,26 @@ class NombreDeRequetesTest(APITestCase):
                               {'frais_mensualite': 12500}, format='json')
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.assertEqual(float(r.data['total_annuel']), 20000 + 12500 * 10)
+
+
+class AlleguementsTest(NombreDeRequetesTest):
+    """08/10/2026 (« lenteur en entrant dans Paiements et Élèves », cloud)."""
+
+    def test_liste_memes_montants_que_la_fiche(self):
+        """total_attendu n'est plus calculé qu'une fois par élève dans la
+        liste : les montants doivent rester ceux de la fiche."""
+        self._ajouter(3)
+        liste = {e['id']: e for e in self.client.get('/api/eleves/liste/').data['results']}
+        for e in Eleve.objects.filter(tenant=self.tenant):
+            fiche = self.client.get(f'/api/eleves/liste/{e.id}/').data
+            for champ in ('total_attendu', 'reste_a_payer', 'part_famille', 'reste_famille'):
+                self.assertEqual(float(liste[str(e.id)][champ]), float(fiche[champ]), champ)
+            self.assertEqual(float(fiche['total_attendu']), e.total_attendu)
+
+    def test_resume_du_cahier_mensuel(self):
+        self._ajouter(3)
+        complet = self.client.get('/api/paiements/cahier-mensuel/').data
+        resume = self.client.get('/api/paiements/cahier-mensuel/?resume=1').data
+        self.assertEqual(resume['synthese'], complet['synthese'])
+        self.assertEqual(resume['scolarite'], {'totaux': complet['scolarite']['totaux']})
+        self.assertEqual(resume['charges'], {'totaux': complet['charges']['totaux']})

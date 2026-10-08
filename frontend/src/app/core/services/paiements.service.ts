@@ -62,6 +62,11 @@ export class PaiementsService {
     return this.api.get<any>('/paiements/cahier-mensuel/', annee && mois ? { annee, mois } : {});
   }
 
+  /** Les seuls totaux du mois en cours (bandeau de rappel), sans les lignes. */
+  getResumeCahierMensuel() {
+    return this.api.get<any>('/paiements/cahier-mensuel/', { resume: 1 });
+  }
+
   getRecu(id: string) {
     return this.api.get<any>(`/paiements/paiements/${id}/recu/`);
   }

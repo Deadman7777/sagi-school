@@ -1020,7 +1020,17 @@ class CahierMensuelView(APIView):
 
     def get(self, request):
         cahier, erreur = _cahier_depuis_requete(request)
-        return erreur or Response(cahier)
+        if erreur:
+            return erreur
+        # ?resume=1 : le bandeau « rappel du mois » de l'écran Paiements n'a
+        # besoin que des totaux. Sans les lignes par élève, la réponse passe de
+        # ~65 Ko à moins d'1 Ko pour 300 élèves (08/10/2026).
+        if request.query_params.get('resume') in ('1', 'true'):
+            for cle in ('scolarite', 'charges', 'caisse'):
+                bloc = cahier.get(cle)
+                if isinstance(bloc, dict):
+                    cahier[cle] = {'totaux': bloc.get('totaux', {})}
+        return Response(cahier)
 
 
 class CahierMensuelPdfView(APIView):

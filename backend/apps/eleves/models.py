@@ -639,6 +639,9 @@ class Eleve(TenantModel):
         mois particulier (réduction d'entrée en cours de mois, mois inclus dans
         les frais d'inscription) doit se retrouver dans le total. Le calculer
         autrement ferait diverger la fiche de son propre échéancier."""
+        cache = getattr(self, '_total_attendu_cache', None)
+        if cache is not None:
+            return cache
         if self.fiche_creance:
             return 0.0
         total = self.du_hors_mensualite
