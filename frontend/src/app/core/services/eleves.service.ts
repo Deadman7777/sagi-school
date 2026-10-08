@@ -59,6 +59,11 @@ export class ElevesService {
     return this.api.get<Eleve>(`/eleves/${id}/`);
   }
 
+  /** Fiches semblables à celle en cours de saisie (garde-fou anti-doublon). */
+  verifierDoublons(params: Record<string, string>) {
+    return this.api.get<{ doublons: any[]; message: string }>('/eleves/doublons/', params);
+  }
+
   createEleve(data: Partial<Eleve>) {
     return this.api.post<Eleve>('/eleves/', data);
   }

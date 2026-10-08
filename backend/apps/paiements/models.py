@@ -45,6 +45,28 @@ MODE_CHOICES = [
 ]
 
 
+class Receveur(TenantModel):
+    """Personne qui reçoit l'argent d'un règlement (Laurence, Pape…).
+
+    Le transport d'une école est souvent encaissé par plusieurs personnes qui
+    n'utilisent pas l'application. Le « saisi par » dit qui a tapé le reçu ;
+    le receveur dit qui a l'argent en main — c'est lui qu'on interroge quand
+    un parent conteste ou quand la caisse ne tombe pas juste.
+    """
+    nom   = models.CharField(max_length=100)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'receveurs'
+        ordering = ['nom']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'nom'], name='uniq_receveur_nom_par_ecole'),
+        ]
+
+    def __str__(self):
+        return self.nom
+
+
 class Paiement(TenantModel):
     STATUT_CHOICES = [('ACTIF', 'Actif'), ('ANNULE', 'Annulé')]
 
@@ -117,6 +139,10 @@ class Paiement(TenantModel):
     payeur              = models.ForeignKey('eleves.ResponsableFamille', null=True, blank=True,
                                             on_delete=models.SET_NULL, related_name='paiements')
     saisi_par           = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)
+    # Qui a reçu l'argent, quand ce n'est pas l'utilisateur qui saisit
+    # (receveurs du transport). Vide = la personne qui saisit.
+    receveur            = models.ForeignKey(Receveur, null=True, blank=True,
+                                            on_delete=models.PROTECT, related_name='paiements')
 
     class Meta:
         db_table = 'paiements'

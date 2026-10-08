@@ -148,6 +148,12 @@ class Tenant(TimeStampedModel):
         default=False, help_text="La 1re mensualité est encaissée à l'inscription")
     dernier_mois_a_inscription = models.BooleanField(
         default=False, help_text="La dernière mensualité est encaissée à l'inscription")
+    # Scolarité et services optionnels (transport…) encaissés sur des reçus
+    # DISTINCTS : le reçu de mensualité ne propose plus les services, qui ont
+    # leur propre reçu. Ce que la famille doit ne change pas — seule la façon
+    # d'encaisser diffère.
+    recus_services_separes = models.BooleanField(
+        default=False, help_text="Scolarité et services sur des reçus distincts")
 
     # ── Renouvellement annuel (daaras) ────────────────────────────────────
     # Un daara n'inscrit un ndongo qu'UNE fois, à son arrivée. Les années

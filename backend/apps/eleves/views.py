@@ -572,13 +572,51 @@ class EleveViewSet(viewsets.ModelViewSet):
         # La date d'entrée est celle saisie sur la fiche : un élève inscrit en
         # cours d'année appartient bien à la promo de l'exercice, mais garde
         # sa vraie date d'arrivée.
+        # Garde-fou : le même enfant déjà inscrit cet exercice. On refuse avec
+        # la fiche existante (date, heure, auteur) ; l'utilisateur confirme
+        # s'il s'agit vraiment d'un homonyme (`forcer_doublon`).
+        from .doublons import bloquants, chercher_doublons, message
+        donnees = {**serializer.validated_data}
+        doublons = chercher_doublons(tenant, donnees, exercice=exercice)
+        if bloquants(doublons) and not _vrai(self.request.data.get('forcer_doublon')):
+            from .doublons import DoublonEleve
+            raise DoublonEleve({'code': 'DOUBLON', 'error': message(bloquants(doublons)),
+                           'doublons': doublons})
+
         from .matricules import identite_nouvel_eleve
         identite = identite_nouvel_eleve(
             tenant, exercice,
             date_entree=serializer.validated_data.get('date_inscription'))
 
-        eleve = serializer.save(tenant=tenant, exercice=exercice, **identite)
+        user = self.request.user
+        eleve = serializer.save(tenant=tenant, exercice=exercice,
+                                cree_par=(getattr(user, 'nom', '') or getattr(user, 'email', '') or '')[:150],
+                                **identite)
         self._sync_reliquat(serializer, eleve)
+        if doublons:
+            from core.models import log_audit
+            log_audit(self.request, 'CREATE', 'Eleve', str(eleve.id),
+                      f"{eleve.nom_complet} — créé malgré {len(doublons)} fiche(s) semblable(s)")
+
+    def create(self, request, *args, **kwargs):
+        from .doublons import DoublonEleve
+        try:
+            return super().create(request, *args, **kwargs)
+        except DoublonEleve as exc:
+            return Response(exc.corps, status=409)
+
+    @action(detail=False, methods=['get'])
+    def doublons(self, request):
+        """Fiches semblables à celle en cours de saisie
+        (?nom_complet=&date_naissance=&telephone_pere=…&exclure=<id>).
+        Le formulaire l'appelle dès que le nom et la date sont saisis."""
+        from .doublons import chercher_doublons, message
+        tenant = get_tenant(request)
+        exercice = Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
+        trouves = chercher_doublons(tenant, request.query_params, exercice=exercice,
+                                    exclure=request.query_params.get('exclure') or None)
+        return Response({'doublons': trouves,
+                         'message': message(trouves) if trouves else ''})
 
     def perform_update(self, serializer):
         statut_avant = serializer.instance.statut
@@ -1709,6 +1747,12 @@ class EleveViewSet(viewsets.ModelViewSet):
         nb_dus     = eleve.nb_mensualites_dues
         ech        = construire_echeancier(eleve)
         par_mois   = {ligne['mois']: ligne for ligne in ech['lignes']}
+        # Scolarité et services encaissés sur deux reçus distincts : ce qui
+        # reste de chacun, mois par mois. Leur somme est le reste du mois.
+        from .echeancier import services_payes_par_mois
+        svc_payes = services_payes_par_mois(eleve, Paiement.objects.filter(
+            eleve=eleve, exercice=exercice, statut='ACTIF').only(
+            'mois_regles', 'services_regles')) if exercice else {}
         mois_ecole = []
         if exercice:
             nb_total = eleve.nb_mensualites_annee
@@ -1726,6 +1770,9 @@ class EleveViewSet(viewsets.ModelViewSet):
                     # un montant saisi à la main POUR ce mois est le dû final,
                     # il ne se laisse pas réduire une seconde fois.
                     pec   = 0.0 if (ligne is None or ligne['montant_saisi']) else eleve.pec_du_mois(mo)
+                    svc_du = ({str(ab.service_id): ab.prix
+                               for ab in eleve.abonnements_mensuels_du_mois(mo)}
+                              if ligne and eleve._mois_du_calendrier(mo) else {})
                     mois_ecole.append({
                         'num':     mo,
                         'annee':   ligne['annee'] if ligne else y,
@@ -1753,9 +1800,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                         # le transport peut ne courir qu'une partie de l'année.
                         # Le guichet ne multiplie plus un tarif par le nombre
                         # de mois cochés.
-                        'services': ({str(ab.service_id): ab.prix
-                                      for ab in eleve.abonnements_mensuels_du_mois(mo)}
-                                     if ligne and eleve._mois_du_calendrier(mo) else {}),
+                        'services': svc_du,
+                        **_partage_reste(ligne, svc_du, svc_payes.get(mo, {})),
                     })
                 mo += 1
                 if mo > 12:
@@ -1872,6 +1918,9 @@ class EleveViewSet(viewsets.ModelViewSet):
             'nb_mensualites_dues': nb_dus,
             'mois_ecole':        mois_ecole,
             'services':          services_abonnes,
+            # L'école encaisse scolarité et services sur des reçus distincts :
+            # le reçu de mensualité ne propose alors plus les services.
+            'recus_services_separes': bool(eleve.tenant.recus_services_separes),
             'adhesions':         adhesions,
             # Services dont un élément n'est dû qu'à la première adhésion (kimono) :
             # le guichet décide, enfant par enfant, s'il est dû. Ce choix est
@@ -1900,6 +1949,33 @@ class EleveViewSet(viewsets.ModelViewSet):
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
         })
+
+
+def _vrai(valeur):
+    return valeur is True or str(valeur).lower() in ('1', 'true', 'oui')
+
+
+def _partage_reste(ligne, services_dus, services_payes):
+    """Reste d'un mois partagé entre la scolarité et chaque service.
+
+    Pour l'école qui encaisse la scolarité et le transport sur deux reçus :
+    après le reçu de scolarité, le mois reste ouvert pour le transport, et
+    l'inverse. La somme des parts est TOUJOURS le reste du mois — séparer les
+    reçus change la façon d'encaisser, jamais ce que la famille doit.
+    """
+    reste_mois = float(ligne['reste']) if ligne else 0.0
+    svc = {sid: max(float(du) - services_payes.get(sid, 0.0), 0.0)
+           for sid, du in services_dus.items()}
+    total_svc = sum(svc.values())
+    # La scolarité payée en trop a pu couvrir le service : le reste du mois
+    # fait foi, le service n'en garde que sa part.
+    if total_svc > reste_mois and total_svc > 0:
+        svc = {sid: v * reste_mois / total_svc for sid, v in svc.items()}
+        total_svc = reste_mois
+    return {
+        'reste_services':  {sid: round(v, 2) for sid, v in svc.items()},
+        'reste_scolarite': round(max(reste_mois - total_svc, 0.0), 2),
+    }
 
 
 def _part_entree_guichet(eleve, mois, ligne):

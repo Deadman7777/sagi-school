@@ -59,7 +59,7 @@ import { PassageAnneeComponent } from './passage-annee.component';
       <button class="tab-btn" [class.active]="onglet() === 'services'"
               (click)="onglet.set('services'); chargerServices()">🍽️ {{ 'parametres.services' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'caisses'"
-              (click)="onglet.set('caisses'); chargerCaisses()">🧰 {{ 'parametres.caisses' | translate }}</button>
+              (click)="onglet.set('caisses'); chargerCaisses(); chargerReceveurs()">🧰 {{ 'parametres.caisses' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'fiche'"
               (click)="onglet.set('fiche'); chargerChampsFiche()">🗂️ {{ 'parametres.fiche_eleve' | translate }}</button>
       <button class="tab-btn" [class.active]="onglet() === 'certificat'"
@@ -114,6 +114,14 @@ import { PassageAnneeComponent } from './passage-annee.component';
                           inputId="ech-dernier" />
               <span>{{ 'parametres.echeance_dernier_mois' | translate }}</span>
             </label>
+            <!-- Scolarité et services (transport…) sur deux reçus : la façon
+                 d'encaisser change, pas ce que la famille doit. -->
+            <label class="check-line">
+              <p-checkbox [(ngModel)]="ecole()!.recus_services_separes" [binary]="true"
+                          inputId="ech-separes" />
+              <span>{{ 'parametres.recus_services_separes' | translate }}</span>
+            </label>
+            <small class="fc-hint">{{ 'parametres.recus_services_separes_aide' | translate }}</small>
           </div>
         </div>
       </div>
@@ -763,6 +771,41 @@ import { PassageAnneeComponent } from './passage-annee.component';
         </div>
         <div *ngIf="caisses().length === 0" style="color:var(--text-3);font-size:13px;padding:8px">
           {{ 'parametres.caisses_vide' | translate }}
+        </div>
+      </div>
+
+      <!-- Receveurs : les personnes qui reçoivent l'argent sans utiliser
+           l'application (transport : Laurence, Pape…). Leur nom figure sur
+           le reçu, et la liste des paiements se filtre par receveur. -->
+      <div class="section-header-row" style="margin-top:24px">
+        <div class="fc-title" style="margin:0">👤 {{ 'parametres.receveurs_titre' | translate }}</div>
+        <p-button [label]="'parametres.ajouter_receveur' | translate" severity="success" size="small"
+                  (onClick)="ajouterReceveur()" />
+      </div>
+      <p style="font-size:12px;color:var(--text-3);margin:4px 0 12px">{{ 'parametres.receveurs_aide' | translate }}</p>
+      <div class="sections-list">
+        <div class="section-card" *ngFor="let r of receveurs(); let i = index">
+          <div class="sc-frais-grid">
+            <div class="sc-frais">
+              <span>{{ 'parametres.receveur_nom' | translate }}</span>
+              <input pInputText [(ngModel)]="r.nom" class="w-full" placeholder="Laurence" />
+            </div>
+            <div class="sc-frais">
+              <span>{{ 'parametres.receveur_nb' | translate }}</span>
+              <div class="caisse-solde mono">{{ r.nb_paiements || 0 }}</div>
+              <label class="case-service"><input type="checkbox" [(ngModel)]="r.actif" />
+                {{ 'parametres.champ_actif' | translate }}</label>
+            </div>
+          </div>
+          <div class="sc-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            <p-button [label]="'parametres.enregistrer_btn' | translate" severity="success" size="small"
+                      [loading]="saving()" (onClick)="enregistrerReceveur(r)" />
+            <p-button [label]="'common.supprimer' | translate" severity="danger" size="small" [outlined]="true"
+                      (onClick)="supprimerReceveur(r, i)" />
+          </div>
+        </div>
+        <div *ngIf="receveurs().length === 0" style="color:var(--text-3);font-size:13px;padding:8px">
+          {{ 'parametres.receveurs_vide' | translate }}
         </div>
       </div>
     </div>
@@ -1872,6 +1915,52 @@ export class ParametresComponent implements OnInit {
     if (!confirm(`${this.translate.instant('parametres.caisse_confirm_suppr')}\n« ${c.nom} »`)) return;
     this.api.delete<any>(`/comptabilite/caisses/${c.id}/`).subscribe({
       next: () => this.chargerCaisses(),
+      error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                                   detail: err?.error?.error || '' }),
+    });
+  }
+
+  // ── Receveurs (personnes qui reçoivent l'argent) ───────────────────
+  receveurs = signal<any[]>([]);
+
+  chargerReceveurs() {
+    this.api.get<any>('/paiements/receveurs/').subscribe({
+      next: r => this.receveurs.set(((r?.results || r || []) as any[]).map(x => ({ ...x }))),
+      error: () => {},
+    });
+  }
+
+  ajouterReceveur() {
+    this.receveurs.update(l => [...l, { nom: '', actif: true, nb_paiements: 0 }]);
+  }
+
+  enregistrerReceveur(r: any) {
+    this.saving.set(true);
+    const corps = { nom: r.nom, actif: !!r.actif };
+    const requete = r.id ? this.api.patch<any>(`/paiements/receveurs/${r.id}/`, corps)
+                         : this.api.post<any>('/paiements/receveurs/', corps);
+    requete.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.msg.add({ severity: 'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: r.nom });
+        this.chargerReceveurs();
+      },
+      error: err => {
+        this.saving.set(false);
+        const e = err?.error;
+        const detail: any = e && typeof e === 'object'
+          ? [].concat(...Object.values(e) as any[]).filter(Boolean)[0] : null;
+        this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
+                       detail: detail || this.translate.instant('parametres.sauvegarde_echouee') });
+      },
+    });
+  }
+
+  supprimerReceveur(r: any, i: number) {
+    if (!r.id) { this.receveurs.update(l => l.filter((_, j) => j !== i)); return; }
+    if (!confirm(`${this.translate.instant('parametres.receveur_confirm_suppr')}\n« ${r.nom} »`)) return;
+    this.api.delete<any>(`/paiements/receveurs/${r.id}/`).subscribe({
+      next: () => this.chargerReceveurs(),
       error: err => this.msg.add({ severity: 'error', summary: this.translate.instant('parametres.erreur'),
                                    detail: err?.error?.error || '' }),
     });

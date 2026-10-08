@@ -299,6 +299,38 @@ def parts_services(services_regles):
     return round(mensuel, 2), round(hors, 2)
 
 
+def services_payes_par_mois(eleve, paiements):
+    """{mois: {service_id: montant}} — ce que les reçus ont réglé, service par
+    service, sur chaque mois qu'ils désignent.
+
+    Sert à dire, mois par mois, ce qui reste sur la scolarité et ce qui reste
+    sur le transport, quand l'école les encaisse sur deux reçus distincts.
+    Le dû du mois, lui, ne change pas : c'est la même somme, partagée.
+
+    Une ligne de reçu désigne son service par `service` (id) ; les reçus plus
+    anciens n'avaient que le nom, qu'on rapproche des abonnements de l'élève.
+    Un service payé sans mois désigné ne se rattache à aucun : il reste dans
+    la part scolarité, comme tout montant non désigné.
+    """
+    par_nom = {ab.service.nom: str(ab.service_id) for ab in eleve.abonnements.all()}
+    res = {}
+    for p in paiements:
+        mois = [int(m) for m in (p.mois_regles or [])]
+        if not mois:
+            continue
+        for ligne in p.services_regles or []:
+            if ligne.get('nature') in NATURES_HORS_MENSUALITE:
+                continue
+            sid = str(ligne.get('service') or par_nom.get(ligne.get('nom'), '') or '')
+            if not sid:
+                continue
+            part = float(ligne.get('montant') or 0) / len(mois)
+            for m in mois:
+                res.setdefault(m, {})
+                res[m][sid] = res[m].get(sid, 0.0) + part
+    return res
+
+
 def _services(eleve):
     """(montant mensuel, [(mois|None, montant)] pour les services uniques)."""
     mensuel, uniques = 0.0, []

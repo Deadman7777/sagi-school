@@ -148,6 +148,9 @@ class Eleve(TenantModel):
     date_entree           = models.DateField(null=True, blank=True,
                                              help_text="Date de première entrée dans l'établissement")
     nom_complet           = models.CharField(max_length=200)
+    # Qui a créé la fiche : avec created_at, c'est ce qu'on affiche quand
+    # quelqu'un tente d'inscrire une seconde fois le même enfant.
+    cree_par              = models.CharField(max_length=150, blank=True)
     genre                 = models.CharField(max_length=1, choices=GENRE_CHOICES, blank=True)
     date_naissance        = models.DateField(null=True, blank=True)
     lieu_naissance        = models.CharField(max_length=200, blank=True)

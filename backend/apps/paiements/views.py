@@ -7,8 +7,8 @@ from django.db.models import Sum, Count
 from apps.eleves.models import Eleve
 from core.permissions import IsTenantMember, IsAdminEcole
 from core.tenant import get_tenant
-from .models import Paiement, Exercice
-from .serializers import PaiementSerializer, ExerciceSerializer
+from .models import Paiement, Exercice, Receveur
+from .serializers import PaiementSerializer, ExerciceSerializer, ReceveurSerializer
 
 
 class ExerciceViewSet(viewsets.ModelViewSet):
@@ -29,6 +29,32 @@ class ExerciceViewSet(viewsets.ModelViewSet):
         if not tenant:
             raise PermissionError("Tenant requis pour créer un exercice.")
         serializer.save(tenant=tenant)
+
+
+class ReceveurViewSet(viewsets.ModelViewSet):
+    """Personnes qui reçoivent les règlements (Paramètres → Caisses).
+
+    Un receveur qui a déjà reçu de l'argent ne se supprime pas : ses reçus le
+    nomment. On le désactive — il disparaît du guichet, pas de l'historique.
+    """
+    serializer_class   = ReceveurSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = Receveur.objects.filter(tenant=get_tenant(self.request))
+        if self.request.query_params.get('actifs'):
+            qs = qs.filter(actif=True)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=get_tenant(self.request))
+
+    def destroy(self, request, *args, **kwargs):
+        receveur = self.get_object()
+        if receveur.paiements.exists():
+            return Response({'error': f"« {receveur.nom} » a déjà reçu des règlements : "
+                                      "désactivez-le plutôt que de le supprimer."}, status=409)
+        return super().destroy(request, *args, **kwargs)
 
 
 def _mois_deja_entames(paiement, mois_regles, paiements_avant, meme_jour):
@@ -77,7 +103,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         tenant = self.get_tenant()
         if not tenant:
             return Paiement.objects.none()
-        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'eleve__section', 'eleve__tenant', 'exercice')
+        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'eleve__section', 'eleve__tenant', 'exercice', 'receveur')
         if eleve_id := self.request.query_params.get('eleve'):
             qs = qs.filter(eleve_id=eleve_id)
         if mode := self.request.query_params.get('mode'):
@@ -94,6 +120,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
                 | _Q(eleve__matricule__icontains=q)
                 | _Q(no_piece__icontains=q)
                 | _Q(observations__icontains=q))
+        if receveur := self.request.query_params.get('receveur'):
+            qs = qs.filter(receveur_id=receveur)
         return qs
 
     def perform_create(self, serializer):
@@ -480,6 +508,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
             ] if len(p.modes_reglement or []) > 1 else [],
             'observations':      p.observations or '',
             'saisi_par':         p.saisi_par.nom if p.saisi_par else '—',
+            # Qui a reçu l'argent (receveur du transport…), s'il n'est pas le caissier.
+            'receveur_nom':      p.receveur.nom if p.receveur_id else '',
             # Établissement
             'tenant_nom':        p.tenant.nom   if p.tenant else 'SAGI SCHOOL',
             'tenant_logo':       getattr(p.tenant, 'logo', '') or '',
@@ -584,9 +614,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
         montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
         montant_reliquat    = float(data.get('montant_reliquat',    paiement.montant_reliquat))
         mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
-        modes_reglement_in  = data.get('modes_reglement', paiement.modes_reglement or [])
-        observations        = data.get('observations',  paiement.observations or '')
+        modes_reglement_in  = data.get('modes_reglement')
+        observations       = data.get('observations',  paiement.observations or '')
         mois_regles         = data.get('mois_regles',   paiement.mois_regles or [])
+        receveur_id         = data.get('receveur', paiement.receveur_id)
+        if receveur_id and not Receveur.objects.filter(
+                tenant=tenant, id=receveur_id).exists():
+            return Response({'error': 'Receveur inconnu.'}, status=400)
 
         part_exercice = (montant_inscription + montant_mensualite + montant_uniforme +
                          montant_fournitures + montant_cantine + montant_divers)
@@ -601,6 +635,29 @@ class PaiementViewSet(viewsets.ModelViewSet):
                                     paiement_exclu=paiement):
             return Response({'error': err}, status=400)
 
+        # Ventilation non renvoyée : celle du reçu d'origine n'est reprise que
+        # si elle couvre encore le nouveau total. Sinon, un reçu à un seul mode
+        # prend simplement le nouveau montant — corriger 32 500 en 25 000 ne
+        # doit pas buter sur les 32 500 d'espèces de l'original.
+        if modes_reglement_in is None:
+            ancienne = paiement.modes_reglement or []
+            somme_anc = sum(float((l or {}).get('montant') or 0) for l in ancienne)
+            modes = {(l or {}).get('mode') for l in ancienne}
+            if ancienne and abs(somme_anc - nouveau_total) < 0.01:
+                modes_reglement_in = ancienne
+            elif len(modes) > 1:
+                return Response({'error': (
+                    "Ce reçu était réglé en plusieurs modes "
+                    f"({somme_anc:,.0f} FCFA) : précisez la répartition du "
+                    f"nouveau total ({nouveau_total:,.0f} FCFA) par mode.")},
+                    status=400)
+            else:
+                modes_reglement_in = []
+                if mode_paiement == 'MIXTE' or not mode_paiement:
+                    mode_paiement = next(iter(modes), None) or paiement.mode_paiement
+        if mode_paiement == 'MIXTE' and not modes_reglement_in:
+            mode_paiement = None
+
         # Valider la ventilation multi-mode avant toute écriture.
         from apps.comptabilite.tresorerie import normaliser_ventilation
         try:
@@ -609,8 +666,28 @@ class PaiementViewSet(viewsets.ModelViewSet):
             return Response({'error': str(exc)}, status=400)
         modes_reglement_norm = [
             {'mode': v['mode'], 'montant': float(v['montant'])} for v in ventilation]
-        if len(ventilation) > 1:
-            mode_paiement = 'MIXTE'
+        mode_paiement = 'MIXTE' if len(ventilation) > 1 else ventilation[0]['mode']
+
+        # Le reçu réécrit garde ce que le formulaire ne montre pas : services
+        # itemisés (sans eux, un reçu de transport corrigé ne solderait plus
+        # ses mois), part accessoire (758), caisse, payeur, organisme.
+        # Divers réduit sous le total des services : ils sont réduits d'autant.
+        services_regles = [dict(l) for l in (paiement.services_regles or [])]
+        svc_avant = sum(float(l.get('montant') or 0) for l in services_regles)
+        if svc_avant > montant_divers + 0.01:
+            ratio = montant_divers / svc_avant if svc_avant else 0
+            for l in services_regles:
+                l['montant'] = round(float(l.get('montant') or 0) * ratio, 2)
+            services_regles = [l for l in services_regles if l['montant'] > 0]
+        svc_apres = sum(float(l.get('montant') or 0) for l in services_regles)
+        part_avant = float(paiement.part_accessoire or 0)
+        if abs(part_avant - svc_avant) < 0.01:
+            part_accessoire = svc_apres
+        else:
+            ancienne_part = float(paiement.total_exercice or 0)
+            part_accessoire = (part_avant * part_exercice / ancienne_part
+                               if ancienne_part else 0.0)
+        part_accessoire = round(min(part_accessoire, part_exercice), 2)
 
         # 1 — Annuler l'original (contre-écritures)
         ecritures_orig = JournalEntry.objects.filter(
@@ -667,6 +744,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
             observations=observations,
             statut='ACTIF',
             saisi_par=request.user,
+            services_regles=services_regles,
+            part_accessoire=part_accessoire,
+            caisse=paiement.caisse,
+            organisme=paiement.organisme,
+            payeur=paiement.payeur,
+            reference_groupe=paiement.reference_groupe,
+            receveur_id=receveur_id or None,
         )
 
         # 3 — Nouvelles écritures SYSCOHADA (règlement ventilé par mode)

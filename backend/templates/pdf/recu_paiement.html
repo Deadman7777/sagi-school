@@ -274,7 +274,7 @@
     </td>
     <td style="width:30%">
       <div class="lbl">Caissier / Agent</div>
-      <div class="val">{{ saisi_par }}</div>
+      <div class="val">{{ saisi_par }}{% if receveur_nom %}<br/><span style="font-size:8px;color:#555">Reçu par : {{ receveur_nom }}</span>{% endif %}</div>
     </td>
     <td style="width:40%">
       <div class="lbl">Date &amp; heure de la transaction</div>

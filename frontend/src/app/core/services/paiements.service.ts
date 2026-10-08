@@ -18,7 +18,7 @@ export interface Paiement {
   // hors produits de l'année (elle solde une créance reportée).
   montant_reliquat?:   number;
   mois_regles?:        number[];
-  services_regles?:    { nom: string; montant: number }[];
+  services_regles?:    { nom: string; montant: number; nature?: string; cle?: string; service?: string }[];
   mode_paiement: string;
   // Ventilation multi-mode : un même règlement réparti sur plusieurs moyens.
   modes_reglement?: { mode: string; montant: number }[];
@@ -32,6 +32,9 @@ export interface Paiement {
   // Part du règlement qui porte sur des services extra : elle va au compte de
   // produits divers (758) et non au 706 du service éducatif.
   part_accessoire?: number;
+  // Qui a reçu l'argent (receveur du transport…). null = la personne qui saisit.
+  receveur?: string | null;
+  receveur_nom?: string;
   caisse_nom?: string;
   organisme_nom?: string;
   total?: number;

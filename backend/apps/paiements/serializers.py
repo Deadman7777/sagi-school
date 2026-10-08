@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from core.serializers import TenantModelSerializer
-from .models import Paiement, Exercice
+from .models import Paiement, Exercice, Receveur
 
 
 def erreur_libelle_exercice(libelle, debut):
@@ -100,6 +100,21 @@ class PaiementSerializer(TenantModelSerializer):
             raise serializers.ValidationError("Ce responsable n'appartient pas à l'école.")
         return payeur
 
+    receveur_nom = serializers.CharField(source='receveur.nom', read_only=True, default='')
+
+    def validate_receveur(self, receveur):
+        """Le receveur est une personne de l'école, encore en activité."""
+        if receveur is None:
+            return receveur
+        from core.tenant import get_tenant
+        request = self.context.get('request')
+        tenant = get_tenant(request) if request is not None else None
+        if tenant is not None and receveur.tenant_id != tenant.id:
+            raise serializers.ValidationError('Receveur inconnu.')
+        if not receveur.actif:
+            raise serializers.ValidationError(f"« {receveur.nom} » ne reçoit plus de règlements.")
+        return receveur
+
     def validate_caisse(self, caisse):
         """Une caisse d'une AUTRE école n'existe pas pour ce règlement."""
         if caisse is None:
@@ -121,3 +136,28 @@ class PaiementSerializer(TenantModelSerializer):
             'exercice': {'required': False, 'read_only': True},
             'no_piece': {'required': False, 'read_only': True},
         }
+
+
+class ReceveurSerializer(TenantModelSerializer):
+    """Une personne qui reçoit des règlements (Paramètres → Caisses)."""
+    nb_paiements = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Receveur
+        fields = ['id', 'nom', 'actif', 'nb_paiements']
+
+    def get_nb_paiements(self, obj):
+        return obj.paiements.filter(statut='ACTIF').count()
+
+    def validate_nom(self, nom):
+        nom = (nom or '').strip()
+        if not nom:
+            raise serializers.ValidationError('Donnez le nom du receveur.')
+        from core.tenant import get_tenant
+        tenant = get_tenant(self.context['request'])
+        doublon = Receveur.objects.filter(tenant=tenant, nom__iexact=nom)
+        if self.instance is not None:
+            doublon = doublon.exclude(pk=self.instance.pk)
+        if doublon.exists():
+            raise serializers.ValidationError(f"« {nom} » existe déjà.")
+        return nom

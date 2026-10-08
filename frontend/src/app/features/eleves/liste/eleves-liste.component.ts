@@ -1363,8 +1363,32 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
       <div class="form-grid">
         <div class="form-group full">
           <label>{{ 'eleves.nom_complet' | translate }} *</label>
-          <input pInputText [(ngModel)]="nouvelEleve.nom_complet" class="w-full" />
+          <input pInputText [(ngModel)]="nouvelEleve.nom_complet" class="w-full"
+                 (blur)="verifierDoublons()" />
         </div>
+        <!-- Garde-fou : le même enfant déjà enregistré. Signalé dès la saisie
+             du nom et de la date de naissance, avec la date, l'heure et
+             l'auteur de la fiche existante. -->
+        @if (doublonsSaisie().length) {
+          <div class="form-group full doublon-alerte">
+            @for (d of doublonsSaisie(); track d.id) {
+              <div class="doublon-ligne">
+                <span>⚠️ <strong>{{ d.nom_complet }}</strong>
+                  {{ d.certitude === 'CERTAIN' ? 'est déjà enregistré(e)' : 'ressemble à une fiche existante' }}
+                  @if (d.cree_le_texte) { — le {{ d.cree_le_texte }} }
+                  @if (d.cree_par) { par {{ d.cree_par }} }
+                  <span class="doublon-detail">
+                    {{ [d.matricule, d.section, d.classe, d.date_naissance ? ('né(e) le ' + (d.date_naissance | date:'dd/MM/yyyy')) : '', d.exercice].filter(estRenseigne).join(' · ') }}
+                    @if (!d.meme_exercice) { — autre année : pensez à la réinscription }
+                  </span>
+                </span>
+                @if (d.meme_exercice) {
+                  <p-button label="Voir la fiche" size="small" [text]="true" (onClick)="ouvrirDoublon(d)" />
+                }
+              </div>
+            }
+          </div>
+        }
         <div class="form-group">
           <label>{{ 'eleves.section' | translate }} *</label>
           <p-select appendTo="body" [options]="sections()" [(ngModel)]="nouvelEleve.section"
@@ -1399,7 +1423,8 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
         </div>
         <div class="form-group">
           <label>{{ 'eleves.date_naissance' | translate }} *</label>
-          <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full" />
+          <input pInputText type="date" [(ngModel)]="nouvelEleve.date_naissance" class="w-full"
+                 (change)="verifierDoublons()" />
         </div>
         <div class="form-group">
           <label>{{ 'eleves.date_entree' | translate }} *</label>
@@ -1642,6 +1667,34 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler'    | translate" severity="secondary" (onClick)="dialogVisible=false" />
         <p-button [label]="'common.enregistrer'| translate" severity="success" [loading]="saving()" (onClick)="sauvegarder()" />
+      </ng-template>
+    </p-dialog>
+
+    <!-- Refus du serveur : cet enfant est déjà inscrit cette année. -->
+    <p-dialog header="⚠️ Élève déjà enregistré" [(visible)]="dialogDoublonVisible"
+              [modal]="true" [style]="{width:'480px', maxWidth:'96vw'}" [draggable]="false">
+      <p style="margin:0 0 10px;font-size:13px">{{ messageDoublon() }}</p>
+      @for (d of doublonsBloquants(); track d.id) {
+        <div class="doublon-carte">
+          <div><strong>{{ d.nom_complet }}</strong>
+            <span class="doublon-badge" [class.certain]="d.certitude === 'CERTAIN'">
+              {{ d.certitude === 'CERTAIN' ? 'Même nom, même date de naissance' : 'Probable' }}
+            </span>
+          </div>
+          <div class="doublon-detail">
+            {{ [d.matricule, d.section, d.classe, d.exercice].filter(estRenseigne).join(' · ') }}
+          </div>
+          <div class="doublon-detail">
+            Enregistré(e) le {{ d.cree_le_texte || '—' }}@if (d.cree_par) { par {{ d.cree_par }} }
+          </div>
+        </div>
+      }
+      <ng-template pTemplate="footer">
+        <p-button label="Annuler" severity="secondary" (onClick)="dialogDoublonVisible = false" />
+        <p-button label="Ouvrir la fiche existante" severity="info"
+                  (onClick)="ouvrirDoublon(doublonsBloquants()[0])" />
+        <p-button label="C'est un autre enfant : enregistrer" severity="warn" [outlined]="true"
+                  [loading]="saving()" (onClick)="sauvegarder(true)" />
       </ng-template>
     </p-dialog>
 
@@ -2184,6 +2237,12 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
 
     /* Formulaires */
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .doublon-alerte { background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.45); border-radius:8px; padding:8px 10px; font-size:12px; }
+    .doublon-ligne { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .doublon-detail { display:block; color:var(--text-3); font-size:11px; margin-top:2px; }
+    .doublon-carte { border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px; }
+    .doublon-badge { font-size:10px; margin-left:6px; padding:1px 6px; border-radius:10px; background:rgba(245,158,11,0.15); color:#f59e0b; }
+    .doublon-badge.certain { background:rgba(239,68,68,0.15); color:#ef4444; }
     @media (max-width: 560px) { .form-grid { grid-template-columns:1fr; } }
     .form-grid > * { min-width:0; }
     .form-group { display:flex; flex-direction:column; gap:5px; }
@@ -3714,8 +3773,43 @@ export class ElevesListeComponent implements OnInit {
                          mois_services: {} };
     this.calendrierEdition = [];
     this.champsSaisis = {};
+    this.doublonsSaisie.set([]);
     this.chargerFamillesChoix();
     this.dialogVisible = true;
+  }
+
+  // ── Garde-fou anti-doublon ─────────────────────────────────────────────
+  doublonsSaisie = signal<any[]>([]);
+  doublonsBloquants = signal<any[]>([]);
+  messageDoublon = signal('');
+  dialogDoublonVisible = false;
+  readonly estRenseigne = (x: unknown) => !!x;
+
+  /** Cherche les fiches semblables dès que le nom et la date de naissance
+   *  sont saisis. Une fiche en cours de modification ne se signale pas
+   *  elle-même. */
+  verifierDoublons() {
+    const e = this.nouvelEleve;
+    if (!e.nom_complet?.trim() || !e.date_naissance) { this.doublonsSaisie.set([]); return; }
+    const params: Record<string, string> = { nom_complet: e.nom_complet, date_naissance: e.date_naissance };
+    for (const k of ['telephone_pere', 'telephone_mere', 'telephone_tuteur'] as const) {
+      if ((e as any)[k]) params[k] = (e as any)[k];
+    }
+    if (this.editId) params['exclure'] = this.editId;
+    this.elevesService.verifierDoublons(params).subscribe({
+      next: r => this.doublonsSaisie.set(r?.doublons || []),
+      error: () => this.doublonsSaisie.set([]),
+    });
+  }
+
+  /** Ferme la saisie et ouvre la fiche existante. */
+  ouvrirDoublon(d: any) {
+    if (!d?.id) return;
+    this.dialogDoublonVisible = false;
+    this.dialogVisible = false;
+    this.elevesService.getEleve(d.id).subscribe({
+      next: eleve => { this.voirFiche(eleve); this.cdr.markForCheck(); },
+    });
   }
 
   // ── Famille d'un nouvel inscrit ─────────────────────────────────────────
@@ -3851,7 +3945,9 @@ export class ElevesListeComponent implements OnInit {
     this.dialogVisible = true;
   }
 
-  sauvegarder() {
+  /** `forcer` : l'utilisateur a confirmé qu'il s'agit d'un autre enfant
+   *  (vrai homonyme) malgré le garde-fou anti-doublon. */
+  sauvegarder(forcer = false) {
     if (!this.nouvelEleve.nom_complet) {
       this.msg.add({ severity: 'warn', summary: this.translate.instant('eleves.champ_requis'),
                      detail: this.translate.instant('eleves.nom_obligatoire') });
@@ -3902,6 +3998,7 @@ export class ElevesListeComponent implements OnInit {
     const payload = { ...this.nouvelEleve, champs_perso: this.champsSaisis } as any;
     payload.mois_services = this.moisAEnvoyer(this.nouvelEleve.mois_services || {},
                                               this.nouvelEleve.abonnements || []);
+    if (forcer) payload.forcer_doublon = true;
     const obs = this.editId
       ? this.elevesService.updateEleve(this.editId, payload)
       : this.elevesService.createEleve(payload);
@@ -3910,12 +4007,23 @@ export class ElevesListeComponent implements OnInit {
         this.msg.add({ severity: 'success', summary: this.translate.instant('common.succes'),
                        detail: this.translate.instant(this.editId ? 'eleves.modifie' : 'eleves.ajoute') });
         this.dialogVisible = false;
+        this.dialogDoublonVisible = false;
         this.saving.set(false);
         this.editId = null;
         this.statsPEC.set(null);  // les montants peuvent changer (section, PEC…)
         this.chargerEleves();
       },
       error: (err) => {
+        // Même enfant déjà inscrit cette année : on montre la fiche existante
+        // (date, heure, auteur) et on laisse confirmer un vrai homonyme.
+        if (err?.status === 409 && err?.error?.code === 'DOUBLON') {
+          this.doublonsBloquants.set(err.error.doublons.filter((d: any) => d.meme_exercice));
+          this.messageDoublon.set(err.error.error || '');
+          this.dialogDoublonVisible = true;
+          this.saving.set(false);
+          this.cdr.markForCheck();
+          return;
+        }
         // Remonter le motif du backend quand il y en a un : « montant inférieur
         // au déjà encaissé », « exercice clôturé »… un message générique
         // laisserait l'école corriger à l'aveugle.

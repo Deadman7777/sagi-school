@@ -105,6 +105,7 @@ Reçu thermique 80 mm. Pièges xhtml2pdf rencontrés ici :
     <tr><td class="info-l">&nbsp;&nbsp;{{ mr.mode_label }}</td><td class="info-v">{{ mr.montant|fcfa }} F</td></tr>
     {% endfor %}
     <tr><td class="info-l">Caissier</td><td class="info-v">{{ saisi_par }}</td></tr>
+    {% if receveur_nom %}<tr><td class="info-l">Reçu par</td><td class="info-v">{{ receveur_nom }}</td></tr>{% endif %}
   </table>
 
   <hr class="sep">

@@ -234,6 +234,8 @@ class EleveSerializer(TenantModelSerializer):
             # après coup ; la promo, elle, découle de l'exercice d'entrée.
             'annee_entree':     {'read_only': True},
             'matricule_ancien': {'read_only': True},
+            # Posé par le serveur à la création (garde-fou anti-doublon).
+            'cree_par':         {'read_only': True},
         }
 
     # Photo d'identité : une image réduite dans le navigateur (≈ 30 Ko). Le

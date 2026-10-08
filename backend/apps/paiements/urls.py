@@ -3,11 +3,13 @@ from django.urls import path
 from .views_proformas import ProformaViewSet
 from .views import (PaiementViewSet, ExerciceViewSet, CloturerExerciceView,
                     ReporterReliquatsView, CahierMensuelView, CahierMensuelPdfView,
-                    PointTresorerieView, PointTresoreriePdfView, PassageAnneeView)
+                    PointTresorerieView, PointTresoreriePdfView, PassageAnneeView,
+                    ReceveurViewSet)
 
 router = DefaultRouter()
 router.register('paiements', PaiementViewSet, basename='paiement')
 router.register('exercices', ExerciceViewSet, basename='exercice')
+router.register('receveurs', ReceveurViewSet, basename='receveur')
 router.register('proformas', ProformaViewSet, basename='proforma')
 
 urlpatterns = router.urls + [

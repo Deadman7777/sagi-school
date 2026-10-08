@@ -131,6 +131,13 @@ import { ProformasComponent } from './proformas.component';
           <button type="button" class="search-x" (click)="effacerRecherchePaiement()"
                   title="Effacer">✕</button>
         }
+        <!-- Qui a reçu l'argent : pour faire le compte avec Laurence ou Pape. -->
+        @if (receveurs().length) {
+          <p-select appendTo="body" [options]="receveurs()" [(ngModel)]="filtreReceveur"
+                    optionLabel="nom" optionValue="id" [showClear]="true"
+                    placeholder="Tous les receveurs" (onChange)="chargerPaiements()"
+                    styleClass="filtre-receveur" />
+        }
       </div>
       <p-table [value]="paiements()" [loading]="loading()"
                styleClass="p-datatable-sm" [paginator]="true" [rows]="20">
@@ -174,6 +181,9 @@ import { ProformasComponent } from './proformas.component';
                 </div>
               } @else {
                 <p-tag [value]="libelleMode(p.mode_paiement)" severity="info" />
+              }
+              @if (p.receveur_nom) {
+                <div class="receveur-ligne">👤 {{ p.receveur_nom }}</div>
               }
             </td>
             <td>
@@ -245,6 +255,24 @@ import { ProformasComponent } from './proformas.component';
           </div>
         </div>
 
+        <!-- Montant réellement encaissé : le saisir répartit le versement
+             sur les lignes du reçu d'origine ; ce qui manque reste dû. -->
+        <div class="form-group" style="margin-bottom:12px">
+          <label>💵 Montant réellement encaissé</label>
+          <p-inputNumber [(ngModel)]="montantEncaisseModif" [min]="0" mode="decimal"
+                         [fluid]="true" [ngModelOptions]="{updateOn:'blur'}" />
+          @if (resteModif() > 0) {
+            <small style="color:#f59e0b">
+              Reste dû sur ce reçu : {{ resteModif() | number:'1.0-0' }} FCFA
+              (sur {{ paiementModifier.total | number:'1.0-0' }} FCFA prévus)
+            </small>
+          } @else if (resteModif() < 0) {
+            <small style="color:#00d4aa">
+              Avance de {{ -resteModif() | number:'1.0-0' }} FCFA, portée sur la scolarité
+            </small>
+          }
+        </div>
+
         <!-- Montants -->
         <div class="montants-grid" style="margin-bottom:12px">
           <div class="form-group">
@@ -273,7 +301,7 @@ import { ProformasComponent } from './proformas.component';
           </div>
           <!-- Part reliquat du reçu d'origine : modifiable, plafonnée au
                reliquat encore dû (le backend refuse tout dépassement). -->
-          @if (modifForm.montant_reliquat > 0) {
+          @if (paiementModifier.montant_reliquat > 0) {
             <div class="form-group">
               <label>🔁 Reliquat antérieur</label>
               <p-inputNumber [(ngModel)]="modifForm.montant_reliquat" [min]="0" mode="decimal" styleClass="w-full" />
@@ -292,6 +320,15 @@ import { ProformasComponent } from './proformas.component';
                     optionLabel="label" optionValue="value"
                     placeholder="Choisir le mode..." styleClass="w-full" />
         </div>
+
+        @if (receveurs().length) {
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Reçu par</label>
+            <p-select appendTo="body" [options]="receveurs()" [(ngModel)]="modifForm.receveur"
+                      optionLabel="nom" optionValue="id" [showClear]="true"
+                      placeholder="La personne qui saisit" styleClass="w-full" />
+          </div>
+        }
 
         <div class="form-group">
           <label>Observations</label>
@@ -486,9 +523,21 @@ import { ProformasComponent } from './proformas.component';
             </button>
             <button [class]="typePaiement === 'MENSUALITE' ? 'type-btn active-mens' : 'type-btn'"
                     (click)="setTypePaiement('MENSUALITE')">
-              📅 Mensualité
+              📅 {{ recusSepares() ? 'Scolarité' : 'Mensualité' }}
             </button>
+            <!-- Services (transport…) sur leur propre reçu. Le dû de la famille
+                 ne change pas : la scolarité et le service se partagent le
+                 reste de chaque mois. -->
+            @if (aDesServices()) {
+              <button [class]="typePaiement === 'SERVICES' ? 'type-btn active-svc' : 'type-btn'"
+                      (click)="setTypePaiement('SERVICES')">
+                🚌 Services
+              </button>
+            }
           </div>
+          @if (recusSepares() && typePaiement === 'MENSUALITE' && aDesServices()) {
+            <small class="fc-hint">Les services se règlent sur leur propre reçu (bouton « Services »).</small>
+          }
         </div>
 
         <!-- Montants avec indication reste -->
@@ -566,7 +615,7 @@ import { ProformasComponent } from './proformas.component';
           }
         }
 
-        @if (typePaiement === 'MENSUALITE') {
+        @if (typePaiement !== 'INSCRIPTION') {
           @if (saisieDonnees()?.mois_ecole?.length) {
             <div class="form-group full" style="margin-bottom:10px">
               <label>Mois concerné(s) <span style="color:var(--text-3);font-weight:400">— cocher plusieurs pour anticiper</span></label>
@@ -574,17 +623,17 @@ import { ProformasComponent } from './proformas.component';
                 <!-- Un mois entamé porte son reste : c'est la seule façon de
                      voir, au guichet, qu'un acompte a déjà été versé dessus. -->
                 @for (m of saisieDonnees()!.mois_ecole; track m.num) {
-                  <button type="button" [disabled]="!m.du"
-                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (m.statut === 'SOLDE' ? 'var(--pos-bg)' : (m.statut === 'PARTIEL' ? 'rgba(245,158,11,0.14)' : 'var(--surface)'))"
-                    [style.border-color]="m.statut === 'PARTIEL' && !moisSelected(m.num) ? 'rgba(245,158,11,0.45)' : 'var(--border)'"
-                    [style.color]="moisSelected(m.num) ? '#06281f' : (m.du ? 'var(--text)' : 'var(--text-5)')"
+                  <button type="button" [disabled]="!moisFacture(m)"
+                    [style.background]="moisSelected(m.num) ? '#00d4aa' : (statutMois(m) === 'SOLDE' ? 'var(--pos-bg)' : (statutMois(m) === 'PARTIEL' ? 'rgba(245,158,11,0.14)' : 'var(--surface)'))"
+                    [style.border-color]="statutMois(m) === 'PARTIEL' && !moisSelected(m.num) ? 'rgba(245,158,11,0.45)' : 'var(--border)'"
+                    [style.color]="moisSelected(m.num) ? '#06281f' : (moisFacture(m) ? 'var(--text)' : 'var(--text-5)')"
                     style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer"
                     (click)="toggleMois(m.num)">
                     {{ m.label }}
-                    @if (m.statut === 'SOLDE') { ✓ }
-                    @else if (m.statut === 'PARTIEL') {
+                    @if (statutMois(m) === 'SOLDE') { ✓ }
+                    @else if (statutMois(m) === 'PARTIEL') {
                       <span class="mois-reste" [style.color]="moisSelected(m.num) ? '#06281f' : '#f59e0b'">
-                        reste {{ m.reste | number:'1.0-0' }}
+                        reste {{ resteMois(m) | number:'1.0-0' }}
                       </span>
                     }
                   </button>
@@ -593,6 +642,7 @@ import { ProformasComponent } from './proformas.component';
             </div>
           }
 
+          @if (typePaiement === 'MENSUALITE') {
           <div class="montants-grid">
             <div class="form-group">
               <label>{{ saisieDonnees()!.a_la_journee ? ('garderie.libelle_guichet' | translate) : 'Mensualité' }}
@@ -622,6 +672,7 @@ import { ProformasComponent } from './proformas.component';
               <p-inputNumber [(ngModel)]="form.montant_divers" [min]="0" mode="decimal" styleClass="w-full" />
             </div>
           </div>
+          }
 
         }
 
@@ -630,7 +681,7 @@ import { ProformasComponent } from './proformas.component';
         @if (form.services.length) {
           <div class="form-group full" style="margin-top:6px">
             <label>Services / Activités abonnés
-              @if (typePaiement === 'MENSUALITE' && form.mois_regles.length > 1) {
+              @if (typePaiement !== 'INSCRIPTION' && form.mois_regles.length > 1) {
                 <span class="fee-hint">mensuels × {{ form.mois_regles.length }} mois</span>
               }
             </label>
@@ -751,6 +802,17 @@ import { ProformasComponent } from './proformas.component';
                         [placeholder]="'paiements.caisse_principale' | translate" styleClass="w-full" />
             </div>
           }
+          <!-- Qui a l'argent en main (receveurs du transport…). Vide = la
+               personne qui saisit. Gardé d'un reçu à l'autre : c'est souvent
+               la même personne qui rapporte plusieurs encaissements. -->
+          @if (receveurs().length) {
+            <div class="form-group" style="margin-bottom:10px">
+              <label>Reçu par</label>
+              <p-select appendTo="body" [options]="receveurs()" [(ngModel)]="form.receveur"
+                        optionLabel="nom" optionValue="id" [showClear]="true"
+                        placeholder="La personne qui saisit" styleClass="w-full" />
+            </div>
+          }
           <!-- Date du règlement. Volontairement VIDE par défaut : le serveur
                pose alors « aujourd'hui », exactement comme avant. La remplir
                sert au cas qu'on ne savait pas traiter — enregistrer le
@@ -854,6 +916,9 @@ import { ProformasComponent } from './proformas.component';
           <span style="padding-left:10px">↳ {{ mr.mode_label }}</span><span>{{ mr.montant | number:'1.0-0' }} FCFA</span>
         </div>
         <div class="recu-row"><span>Caissier</span><span>{{ recuData().saisi_par }}</span></div>
+        @if (recuData().receveur_nom) {
+          <div class="recu-row"><span>Reçu par</span><span>{{ recuData().receveur_nom }}</span></div>
+        }
 
         <!-- Suivi -->
         <div class="recu-section" style="margin-top:10px">📊 Suivi Financier</div>
@@ -1284,6 +1349,8 @@ import { ProformasComponent } from './proformas.component';
     .type-btn:hover { border-color:#00d4aa; color:var(--text); }
     .active-inscr { background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b; font-weight:600; }
     .active-mens  { background:rgba(0,212,170,0.15);  border-color:#00d4aa; color:#00d4aa; font-weight:600; }
+    .active-svc   { background:rgba(99,102,241,0.15); border-color:#6366f1; color:#818cf8; font-weight:600; }
+    .receveur-ligne { font-size:11px; color:var(--text-3); margin-top:3px; white-space:nowrap; }
     .tabs-bar { display:flex; gap:4px; margin-bottom:16px; }
     .tab-btn  { padding:8px 18px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text-3); cursor:pointer; font-size:13px; transition:all 0.15s; }
     .tab-btn:hover  { border-color:#00d4aa; color:var(--text); }
@@ -1378,6 +1445,7 @@ export class PaiementsComponent implements OnInit {
     montant_fournitures: 0, montant_cantine: 0,    montant_divers: 0,
     montant_reliquat: 0,
     mode_paiement: '', observations: '',
+    receveur: null as string | null,
   };
   dialogVisible     = false;
   recuVisible       = false;
@@ -1393,7 +1461,7 @@ export class PaiementsComponent implements OnInit {
   rechercheInput    = '';
   private _searchTimer: any = null;
   exerciceId        = '';
-  typePaiement: 'INSCRIPTION' | 'MENSUALITE' = 'MENSUALITE';
+  typePaiement: 'INSCRIPTION' | 'MENSUALITE' | 'SERVICES' = 'MENSUALITE';
 
   form = {
     montant_inscription: 0,
@@ -1408,6 +1476,8 @@ export class PaiementsComponent implements OnInit {
     montant_reliquat:    0,
     // Caisse qui reçoit les espèces (null = caisse principale).
     caisse:              null as string | null,
+    // Qui a reçu l'argent (null = la personne qui saisit).
+    receveur:            null as string | null,
     mois_regles:         [] as number[],
     // `du` = ce que le service coûte dans ce contexte (tarif × mois cochés pour
     // un service mensuel) ; `montant` = ce qu'on en encaisse. Deux champs, parce
@@ -1465,6 +1535,7 @@ export class PaiementsComponent implements OnInit {
       { label: this.translate.instant('paiements.cheque'),       value: 'CHEQUE' },
     ];
     this.chargerCaisses();
+    this.chargerReceveurs();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
     const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
     if (['cahier', 'charges', 'proformas', 'tresorerie'].includes(ongletDemande ?? '')) this.onglet.set(ongletDemande!);
@@ -1510,7 +1581,10 @@ export class PaiementsComponent implements OnInit {
   chargerPaiements() {
     this.loading.set(true);
     const q = this.recherchePaiement.trim();
-    this.paiementsService.getPaiements(q ? { q } : undefined).subscribe({
+    const params: Record<string, string> = {};
+    if (q) params['q'] = q;
+    if (this.filtreReceveur) params['receveur'] = this.filtreReceveur;
+    this.paiementsService.getPaiements(Object.keys(params).length ? params : undefined).subscribe({
       next: res => { 
           const data = Array.isArray(res) ? res : (res.results || []);
           this.paiements.set(data); 
@@ -1594,16 +1668,21 @@ export class PaiementsComponent implements OnInit {
       // Tous les mois ÉCHUS non soldés, pas seulement le premier : un reliquat
       // se réclame au passage suivant, il ne s'oublie pas jusqu'à ce que la
       // famille repasse. Le caissier peut décocher ce qu'elle ne règle pas.
+      // Le reste qui compte dépend du reçu : celui du mois entier, de la seule
+      // scolarité ou des seuls services quand l'école les sépare.
       const echus = (data.mois_ecole || [])
-        .filter((m: any) => m.du && m.reste > 0 && m.echu)
+        .filter((m: any) => this.moisFacture(m) && this.resteMois(m) > 0 && m.echu)
         .map((m: any) => m.num);
       // À défaut d'arriéré, le prochain mois à solder.
-      const ouverts = (data.mois_ecole || []).filter((m: any) => m.du && m.reste > 0);
+      const ouverts = (data.mois_ecole || []).filter((m: any) => this.moisFacture(m) && this.resteMois(m) > 0);
       this.form.mois_regles = echus.length ? echus
                             : (ouverts.length ? [ouverts[0].num] : []);
       // Frais d'entrée partiellement réglés : leur reliquat se réclame avec la
       // mensualité, sur le même reçu. Il n'apparaissait nulle part au guichet.
-      this.form.montant_inscription  = data.arrieres?.entree?.reste || 0;
+      // Pas sur un reçu de services : ce n'est pas ce qu'il encaisse.
+      this.form.montant_inscription  = this.typePaiement === 'SERVICES'
+                                     ? 0 : (data.arrieres?.entree?.reste || 0);
+      this.form.montant_mensualite   = this.typePaiement === 'SERVICES' ? 0 : this.form.montant_mensualite;
       this.form.montant_uniforme     = 0;
       this.form.montant_fournitures  = 0;
     }
@@ -1686,11 +1765,16 @@ export class PaiementsComponent implements OnInit {
     const inclusAvant = new Map((this.form.services || []).map(s => [s.id, s.inclus]));
     const tous = data.services || [];
     let retenus: any[];
+    // Reçu de scolarité d'une école qui sépare : aucun service ici.
+    if (this.perimetre() === 'SCOLARITE') { this.form.services = []; return; }
     const choisis = this.moisChoisis();
+    // Sur un reçu de services, chaque service propose ce qu'il en reste sur
+    // les mois cochés — le reçu de scolarité n'en a rien réglé.
+    const cle = this.typePaiement === 'SERVICES' ? 'reste_services' : 'services';
     const mensuels = tous.filter((s: any) => s.periodicite === 'MENSUEL')
       .map((s: any) => ({ id: s.id, nom: s.nom, periodicite: 'MENSUEL', nature: 'MENSUEL',
                           tarif: s.montant || 0,
-                          du: Math.round(choisis.reduce((a, m) => a + (Number(m.services?.[s.id]) || 0), 0)) }))
+                          du: Math.round(choisis.reduce((a, m) => a + (Number(m[cle]?.[s.id]) || 0), 0)) }))
       // Un service qui ne court sur aucun des mois cochés n'a rien à régler ici.
       .filter((s: any) => !choisis.length || s.du > 0);
     if (this.typePaiement === 'INSCRIPTION') {
@@ -1824,6 +1908,23 @@ export class PaiementsComponent implements OnInit {
     }
     const mois = this.moisChoisis();
     const cumul = (cle: string) => mois.reduce((a, m) => a + (Number(m[cle]) || 0), 0);
+    const perimetre = this.perimetre();
+    if (perimetre !== 'TOUT') {
+      // Reçus séparés : la part du mois que CE reçu encaisse. Scolarité et
+      // services se partagent le reste du mois, sans rien y ajouter.
+      const svcDu = mois.reduce((a, m) => a + this.servicesDuMois(m), 0);
+      const svcReste = mois.reduce((a, m) => a + this.resteServicesMois(m), 0);
+      if (perimetre === 'SERVICES') {
+        const net = svcDu + svc, reste = svcReste + svc;
+        return { brut: Math.round(net), pec: 0, net: Math.round(net),
+                 verse: Math.round(net - reste), reste: Math.round(reste) };
+      }
+      const entree = this.reliquatEntree();
+      const net = cumul('montant') - svcDu + entree;
+      const reste = cumul('reste_scolarite') + entree;
+      return { brut: Math.round(cumul('du_brut') - svcDu + entree), pec: Math.round(cumul('pec')),
+               net: Math.round(net), verse: Math.round(net - reste), reste: Math.round(reste) };
+    }
     // Reliquat des frais d'entrée : il se réclame avec la mensualité, sur le
     // même reçu. Sans lui ici, le total proposé serait inférieur à ce que
     // l'école demande réellement à la famille.
@@ -1879,6 +1980,58 @@ export class PaiementsComponent implements OnInit {
     return this.saisieDonnees()?.libelle_entree || 'Inscription';
   }
 
+  // ── Reçus séparés : scolarité d'un côté, services de l'autre ────────────
+
+  /** L'école encaisse scolarité et services sur deux reçus distincts. */
+  recusSepares(): boolean {
+    return !!this.saisieDonnees()?.recus_services_separes;
+  }
+
+  /** L'élève a des services à régler par le bouton « Services ». */
+  aDesServices(): boolean {
+    const d = this.saisieDonnees();
+    return !!d && ((d.services || []).length > 0 || (d.adhesions || []).some((a: any) => a.reste > 0));
+  }
+
+  /** Ce que CE reçu encaisse sur les mois : tout, la scolarité seule, ou les
+   *  services seuls. Le dû de la famille est le même dans les trois cas. */
+  perimetre(): 'TOUT' | 'SCOLARITE' | 'SERVICES' {
+    if (this.typePaiement === 'SERVICES') return 'SERVICES';
+    if (this.typePaiement === 'MENSUALITE' && this.recusSepares()) return 'SCOLARITE';
+    return 'TOUT';
+  }
+
+  private resteServicesMois(m: any): number {
+    return Object.values(m?.reste_services || {}).reduce((a: number, v: any) => a + (Number(v) || 0), 0);
+  }
+
+  /** Le mois concerne-t-il ce reçu ? Un reçu de services ne propose que les
+   *  mois où un service court. */
+  moisFacture(m: any): boolean {
+    if (!m?.du) return false;
+    return this.perimetre() !== 'SERVICES' || this.servicesDuMois(m) > 0;
+  }
+
+  /** Reste du mois pour ce reçu. */
+  resteMois(m: any): number {
+    switch (this.perimetre()) {
+      case 'SERVICES':  return this.resteServicesMois(m);
+      case 'SCOLARITE': return Number(m.reste_scolarite) || 0;
+      default:          return Number(m.reste) || 0;
+    }
+  }
+
+  /** SOLDE / PARTIEL / IMPAYE du mois, pour ce reçu. */
+  statutMois(m: any): string {
+    if (this.perimetre() === 'TOUT') return m.statut;
+    const du = this.perimetre() === 'SERVICES'
+      ? this.servicesDuMois(m)
+      : Math.max((Number(m.montant) || 0) - this.servicesDuMois(m), 0);
+    const reste = this.resteMois(m);
+    if (!du || reste <= 0) return du ? 'SOLDE' : '';
+    return reste < du ? 'PARTIEL' : 'IMPAYE';
+  }
+
   /** L'échéance en cours de règlement, en clair. Sans article : le mot varie
    *  d'une école à l'autre (« Renouvellement », « Réinscription »…) et aucun
    *  article ne leur va à tous. */
@@ -1888,7 +2041,9 @@ export class PaiementsComponent implements OnInit {
       return mois.length ? `${this.libelleEntree()} + ${mois.join(', ')}` : this.libelleEntree();
     }
     const noms = this.moisChoisis().map(m => m.label);
-    return noms.length ? noms.join(', ') : 'ce paiement';
+    const prefixe = this.perimetre() === 'SERVICES' ? 'Services — '
+                  : this.perimetre() === 'SCOLARITE' ? 'Scolarité — ' : '';
+    return noms.length ? prefixe + noms.join(', ') : 'ce paiement';
   }
 
   /** Montant réellement remis par la famille. Ce n'est pas un état de plus :
@@ -1934,6 +2089,16 @@ export class PaiementsComponent implements OnInit {
       reste -= part;
       return part;
     };
+    if (this.typePaiement === 'SERVICES') {
+      // Reçu de services : le versement solde les services dans l'ordre ;
+      // ce qui dépasse est une avance sur le premier.
+      this.form.montant_mensualite  = 0;
+      this.form.montant_inscription = 0;
+      const inclus = this.form.services.filter(s => s.inclus);
+      for (const s of this.form.services) s.montant = s.inclus ? prendre(s.du) : 0;
+      if (reste > 0 && inclus.length) inclus[0].montant += reste;
+      return;
+    }
     if (this.typePaiement === 'INSCRIPTION') {
       const r = d.reste || {};
       this.form.montant_inscription = prendre(r.inscription || 0);
@@ -1996,6 +2161,7 @@ export class PaiementsComponent implements OnInit {
       montant_fournitures: 0, montant_cantine: 0, montant_divers: 0,
       montant_reliquat: 0,
       mois_regles: [], services: [], inclure_premier_mois: false, caisse: this.form.caisse || null,
+      receveur: this.form.receveur || null,
       mode_paiement: this.form.mode_paiement || '',
       multi_mode: false, modes_reglement: [], observations: '',
       // Le payeur n'est PAS conservé d'une saisie à l'autre, contrairement au
@@ -2015,10 +2181,61 @@ export class PaiementsComponent implements OnInit {
       .reduce((s, [, v]) => s + (Number(v) || 0), 0) + this.servicesTotal();
   }
 
+  /** Montant réellement remis, vu depuis le formulaire de modification :
+   *  c'est la somme des lignes. Le saisir les recalcule — même principe que
+   *  `montantVerse` à l'encaissement, un seul état. */
+  get montantEncaisseModif(): number {
+    return this.totalModifForm();
+  }
+  set montantEncaisseModif(v: number) {
+    this.ventilerModif(Number(v) || 0);
+  }
+
+  /** Ce que le reçu d'origine prévoyait et qui n'est pas encaissé.
+   *  Négatif = la famille a remis plus que prévu (avance). */
+  resteModif(): number {
+    const prevu = Number(this.paiementModifier?.total) || 0;
+    return Math.round((prevu - this.totalModifForm()) * 100) / 100;
+  }
+
+  /** Répartit le montant encaissé sur les lignes du reçu d'origine, chacune
+   *  plafonnée à ce qui était prévu : la scolarité d'abord, les services
+   *  ensuite, le reliquat antérieur en dernier. L'excédent est une avance sur
+   *  la scolarité. Les lignes restent modifiables à la main ensuite. */
+  private ventilerModif(verse: number) {
+    const p = this.paiementModifier;
+    if (!p) return;
+    const ordre = ['montant_inscription', 'montant_mensualite', 'montant_uniforme',
+                   'montant_fournitures', 'montant_cantine', 'montant_divers',
+                   'montant_reliquat'] as const;
+    let reste = Math.max(0, Math.round(verse));
+    const f: any = this.modifForm;
+    for (const k of ordre) {
+      const part = Math.min(Math.max(Number(p[k]) || 0, 0), reste);
+      f[k] = part;
+      reste -= part;
+    }
+    if (reste > 0) {
+      const cle = (Number(p.montant_mensualite) || 0) > 0 || !(Number(p.montant_inscription) > 0)
+        ? 'montant_mensualite' : 'montant_inscription';
+      f[cle] += reste;
+    }
+  }
+
   totalModifForm(): number {
     return Object.entries(this.modifForm)
       .filter(([k]) => k.startsWith('montant_'))
       .reduce((s, [, v]) => s + (Number(v) || 0), 0);
+  }
+
+  // ── Receveurs : qui a l'argent en main (transport…) ──────────────────
+  receveurs = signal<{ id: string; nom: string }[]>([]);
+  filtreReceveur: string | null = null;
+
+  private chargerReceveurs() {
+    this.apiCaisses.get<any>('/paiements/receveurs/', { actifs: 1 }).subscribe({
+      next: r => this.receveurs.set((r?.results || r || []) as any[]),
+    });
   }
 
   // ── Caisses de l'école (espèces d'un service extra) ──────────────────
@@ -2103,8 +2320,10 @@ export class PaiementsComponent implements OnInit {
       montant_divers:      Number(this.form.montant_divers || 0) + servicesTotal,
       montant_reliquat:    Number(this.form.montant_reliquat || 0),
       mois_regles:         this.form.mois_regles,
+      // `service` : l'id du service, pour que le reste du mois se partage
+      // entre scolarité et service quand ils ont chacun leur reçu.
       services_regles:     servicesIncl.map(s => ({ nom: s.nom, montant: Number(s.montant), nature: s.nature,
-                                                ...(s.cle ? { cle: s.cle } : {}) })),
+                                                ...(s.cle ? { cle: s.cle } : { service: s.id }) })),
       mode_paiement:       this.form.multi_mode ? 'MIXTE' : this.form.mode_paiement,
       modes_reglement:     this.form.multi_mode
         ? this.form.modes_reglement.map(m => ({ mode: m.mode, montant: Number(m.montant) }))
@@ -2112,6 +2331,7 @@ export class PaiementsComponent implements OnInit {
       observations:        this.form.observations,
       organisme:           this.form.organisme || null,
       caisse:              this.form.caisse || null,
+      receveur:            this.form.receveur || null,
       // Absent du corps quand l'utilisateur n'a rien saisi : c'est le défaut
       // du modèle (aujourd'hui) qui s'applique, et le contrôle d'exercice
       // côté serveur ne se déclenche pas.
@@ -2157,6 +2377,7 @@ export class PaiementsComponent implements OnInit {
       montant_reliquat:    p.montant_reliquat    || 0,
       mode_paiement:       p.mode_paiement       || '',
       observations:        p.observations        || '',
+      receveur:            p.receveur            || null,
     };
     this.modifVisible = true;
   }
@@ -2287,7 +2508,7 @@ export class PaiementsComponent implements OnInit {
     });
   }
 
-  setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE') {
+  setTypePaiement(type: 'INSCRIPTION' | 'MENSUALITE' | 'SERVICES') {
     this.typePaiement = type;
     const data = this.saisieDonnees();
     if (data) this.appliquerAutoRemplissage(data);
