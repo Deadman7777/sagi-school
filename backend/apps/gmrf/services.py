@@ -352,6 +352,7 @@ def generer_ecriture_echeance(echeance, tenant):
         return
 
     pret  = echeance.pret
+    treso = echeance.compte_tresorerie or pret.compte_tresorerie
     ref   = _next_piece(tenant, 'GMRF_PRET_ECH', 'PRET-E')
     date  = echeance.date_paiement or datetime.date.today()
     label = f"Prêt {pret.reference} — échéance {echeance.numero}/{pret.nb_echeances}"
@@ -378,7 +379,7 @@ def generer_ecriture_echeance(echeance, tenant):
                                  debit=penalite, credit=0, source='GMRF_PRET_ECH', source_id=echeance.id, ordre=ordre))
         ordre += 1
     rows.append(JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-                             no_compte=pret.compte_tresorerie, libelle=label,
+                             no_compte=treso, libelle=label,
                              debit=0, credit=total, source='GMRF_PRET_ECH', source_id=echeance.id, ordre=ordre))
     JournalEntry.objects.bulk_create(rows)
 

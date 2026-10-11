@@ -206,7 +206,10 @@ class NattCotisation(TenantModel):
     montant       = models.DecimalField(max_digits=15, decimal_places=2)
     statut        = models.CharField(max_length=10, choices=STATUT_CHOICES, default='A_PAYER')
     date_paiement = models.DateField(null=True, blank=True)
-    compte_tresorerie = models.CharField(max_length=10, blank=True, default='')  # renseigné au paiement
+    # Mode de règlement (ESPECE, WAVE…) : il décide du compte de trésorerie
+    # (apps.comptabilite.tresorerie.COMPTE_MODE). Renseignés au paiement.
+    mode_paiement = models.CharField(max_length=20, blank=True, default='')
+    compte_tresorerie = models.CharField(max_length=10, blank=True, default='')
 
     class Meta:
         db_table = 'gmrf_natt_cotisations'
@@ -224,6 +227,7 @@ class NattReception(TenantModel):
     numero_echeance = models.IntegerField(help_text="Échéance à laquelle la cagnotte est perçue")
     date_reception  = models.DateField()
     montant_recu    = models.DecimalField(max_digits=15, decimal_places=2)
+    mode_paiement   = models.CharField(max_length=20, blank=True, default='')
     compte_tresorerie = models.CharField(max_length=10, default='571')
     # Ventilation calculée à la comptabilisation (traçabilité)
     montant_creance_soldee = models.DecimalField(max_digits=15, decimal_places=2, default=0)
@@ -336,6 +340,10 @@ class PretEcheance(TenantModel):
     penalite      = models.DecimalField(max_digits=13, decimal_places=2, default=0)
     statut        = models.CharField(max_length=10, choices=STATUT_CHOICES, default='A_PAYER')
     date_paiement = models.DateField(null=True, blank=True)
+    # Mode du remboursement et compte de trésorerie qui en découle. Vide :
+    # le compte de trésorerie du prêt.
+    mode_paiement = models.CharField(max_length=20, blank=True, default='')
+    compte_tresorerie = models.CharField(max_length=10, blank=True, default='')
 
     class Meta:
         db_table = 'gmrf_pret_echeances'

@@ -302,7 +302,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
 
         <p-table [value]="c.cotisations" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
-            <tr><th>Éch.</th><th>Date</th><th class="r">Montant</th><th>Statut</th><th></th></tr>
+            <tr><th>Éch.</th><th>Date</th><th class="r">Montant</th><th>Statut</th><th>Réglée</th><th></th></tr>
           </ng-template>
           <ng-template pTemplate="body" let-co>
             <tr [class.recept-row]="c.numero_echeance_reception === co.numero">
@@ -318,9 +318,14 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
                   @default            { <p-tag severity="warn" value="À payer" /> }
                 }
               </td>
+              <td class="muted">
+                @if (co.statut === 'PAYE') {
+                  {{ co.date_paiement | date:'dd/MM/yyyy' }}@if (co.mode_paiement) { · {{ modePaiementLabel(co.mode_paiement) }} }
+                }
+              </td>
               <td class="r">
                 @if (co.statut !== 'PAYE') {
-                  <button class="btn xs" (click)="payerCotisation(co)">Payer</button>
+                  <button class="btn xs" (click)="ouvrirPaiementCotisation(co)">Payer</button>
                 } @else {
                   <button class="btn xs ghost" (click)="annulerCotisation(co)">Annuler</button>
                 }
@@ -406,7 +411,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
         <p-table [value]="p.echeances" styleClass="p-datatable-sm" [scrollable]="true" scrollHeight="440px">
           <ng-template pTemplate="header">
             <tr><th>N°</th><th>Date</th><th class="r">Capital dû</th><th class="r">Échéance</th>
-                <th class="r">Capital</th><th class="r">Intérêts</th><th>Statut</th><th></th></tr>
+                <th class="r">Capital</th><th class="r">Intérêts</th><th>Statut</th><th>Réglée</th><th></th></tr>
           </ng-template>
           <ng-template pTemplate="body" let-e>
             <tr>
@@ -421,6 +426,11 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
                   @case ('PAYE')      { <p-tag severity="success" value="Payée" /> }
                   @case ('EN_RETARD') { <p-tag severity="danger" value="En retard" /> }
                   @default            { <p-tag severity="warn" value="À payer" /> }
+                }
+              </td>
+              <td class="muted">
+                @if (e.statut === 'PAYE') {
+                  {{ e.date_paiement | date:'dd/MM/yyyy' }}@if (e.mode_paiement) { · {{ modePaiementLabel(e.mode_paiement) }} }
                 }
               </td>
               <td class="r">
@@ -545,6 +555,23 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
   </ng-template>
 </p-dialog>
 
+<!-- Paiement d'une cotisation -->
+<p-dialog [(visible)]="dlgCotis" [modal]="true" header="Payer la cotisation" [style]="{width:'420px'}">
+  <div class="form">
+    <div class="calc">Cotisation #{{ cotisEdit.numero }} — {{ cotisEdit.montant | number:'1.0-0' }} F</div>
+    <div class="row">
+      <div><label>Date de paiement</label>
+        <p-datepicker [(ngModel)]="cotisEdit.date_paiement" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>Mode de paiement</label>
+        <p-select [options]="modesPaiement" optionLabel="label" optionValue="value" [(ngModel)]="cotisEdit.mode_paiement" appendTo="body" /></div>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="btn ghost" (click)="dlgCotis.set(false)">Annuler</button>
+    <button class="btn primary" (click)="payerCotisation()">Payer</button>
+  </ng-template>
+</p-dialog>
+
 <!-- Réception cagnotte -->
 <p-dialog [(visible)]="dlgRecep" [modal]="true" header="Réception de la cagnotte" [style]="{width:'460px'}">
   <div class="form">
@@ -552,8 +579,11 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
       <div><label>Échéance de réception</label><p-inputNumber [(ngModel)]="recep.numero_echeance" [min]="1" /></div>
       <div><label>Date</label><p-datepicker [(ngModel)]="recep.date_reception" dateFormat="dd/mm/yy" appendTo="body" /></div>
     </div>
-    <label>Montant reçu (F)</label>
-    <p-inputNumber [(ngModel)]="recep.montant_recu" [min]="0" />
+    <div class="row">
+      <div><label>Montant reçu (F)</label><p-inputNumber [(ngModel)]="recep.montant_recu" [min]="0" /></div>
+      <div><label>Mode de paiement</label>
+        <p-select [options]="modesPaiement" optionLabel="label" optionValue="value" [(ngModel)]="recep.mode_paiement" appendTo="body" /></div>
+    </div>
     <p class="hint">Écriture auto : débit trésorerie / crédit créance (cotisations versées) + crédit dette (avance du groupe).</p>
   </div>
   <ng-template pTemplate="footer">
@@ -675,8 +705,12 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
       Échéance #{{ echeanceEdit.numero }} — capital {{ echeanceEdit.part_capital | number:'1.0-0' }} F +
       intérêts {{ echeanceEdit.part_interet | number:'1.0-0' }} F
     </div>
-    <label>Date de paiement</label>
-    <p-datepicker [(ngModel)]="echeanceEdit.date_paiement" dateFormat="dd/mm/yy" appendTo="body" />
+    <div class="row">
+      <div><label>Date de paiement</label>
+        <p-datepicker [(ngModel)]="echeanceEdit.date_paiement" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>Mode de paiement</label>
+        <p-select [options]="modesPaiement" optionLabel="label" optionValue="value" [(ngModel)]="echeanceEdit.mode_paiement" appendTo="body" /></div>
+    </div>
     <label>Pénalité de retard (F) — optionnel</label>
     <p-inputNumber [(ngModel)]="echeanceEdit.penalite" [min]="0" />
   </div>
@@ -809,7 +843,7 @@ export class GmrfComponent implements OnInit {
   amortSimule  = signal<any[]>([]);
 
   dlgFin = signal(false); dlgCycle = signal(false); dlgRecep = signal(false); dlgType = signal(false);
-  dlgPret = signal(false); dlgEcheance = signal(false); dlgDates = signal(false);
+  dlgPret = signal(false); dlgEcheance = signal(false); dlgDates = signal(false); dlgCotis = signal(false);
 
   fin: any = {};
   cyc: any = {};
@@ -818,6 +852,7 @@ export class GmrfComponent implements OnInit {
   pret: any = {};
   echeanceEdit: any = {};
   datesEdit: any = {};
+  cotisEdit: any = {};
   private receptionCycleId = '';
 
   statutFinOpts = [{ label: 'Reçu', value: 'RECU' }, { label: 'Attendu', value: 'ATTENDU' }];
@@ -825,6 +860,12 @@ export class GmrfComponent implements OnInit {
     { label: 'Association', value: 'ASSOCIATION' }, { label: 'Particulier', value: 'PARTICULIER' },
     { label: 'Groupement', value: 'GROUPEMENT' }, { label: 'Entreprise', value: 'ENTREPRISE' },
     { label: 'Autre', value: 'AUTRE' },
+  ];
+  // Le mode décide du compte de trésorerie côté serveur (571, 5521, 5522, 5523, 521).
+  modesPaiement = [
+    { label: 'Espèces', value: 'ESPECE' }, { label: 'Wave', value: 'WAVE' },
+    { label: 'Orange Money', value: 'ORANGE_MONEY' }, { label: 'Free Money', value: 'FREE_MONEY' },
+    { label: 'Virement', value: 'VIREMENT' }, { label: 'Chèque', value: 'CHEQUE' },
   ];
   modeOpts = [
     { label: 'Tirage au sort', value: 'TIRAGE' }, { label: 'Ordre prédéfini', value: 'ORDRE' },
@@ -880,6 +921,7 @@ export class GmrfComponent implements OnInit {
   private err(e: any) { this.msg.add({ severity: 'error', summary: e?.error?.error || 'Erreur' }); }
 
   periodeLabel(v: string) { return this.periodeOpts.find(o => o.value === v)?.label || v; }
+  modePaiementLabel(v: string) { return this.modesPaiement.find(o => o.value === v)?.label || v; }
   modeLabel(v: string) { return this.modeOpts.find(o => o.value === v)?.label || v; }
   natureLabel(v: string) { return this.natureOpts.find(o => o.value === v)?.label || v; }
   modeAmortLabel(v: string) { return this.modeAmortOpts.find(o => o.value === v)?.label || v; }
@@ -935,9 +977,15 @@ export class GmrfComponent implements OnInit {
   ouvrirDetail(id: string) { this.gmrf.getCycle(id).subscribe(c => this.cycleActif.set(c)); }
   rafraichirDetail() { if (this.cycleActif()) this.ouvrirDetail(this.cycleActif().id); }
 
-  payerCotisation(co: any) {
-    this.gmrf.actionCotisation(co.id, { action: 'payer' }).subscribe({
-      next: () => { this.ok('Cotisation payée'); this.rafraichirDetail(); this.chargerCycles(); this.chargerDashboard(); },
+  ouvrirPaiementCotisation(co: any) {
+    this.cotisEdit = { ...co, date_paiement: new Date(), mode_paiement: 'ESPECE' };
+    this.dlgCotis.set(true);
+  }
+  payerCotisation() {
+    const co = this.cotisEdit;
+    this.gmrf.actionCotisation(co.id, { action: 'payer', date_paiement: this.toIso(co.date_paiement),
+                                         mode_paiement: co.mode_paiement }).subscribe({
+      next: () => { this.dlgCotis.set(false); this.ok('Cotisation payée'); this.rafraichirDetail(); this.chargerCycles(); this.chargerDashboard(); },
       error: e => this.err(e),
     });
   }
@@ -948,7 +996,8 @@ export class GmrfComponent implements OnInit {
   }
   ouvrirReception(c: any) {
     this.receptionCycleId = c.id;
-    this.recep = { numero_echeance: 1, date_reception: new Date(), montant_recu: c.montant_cagnotte };
+    this.recep = { numero_echeance: 1, date_reception: new Date(), montant_recu: c.montant_cagnotte,
+                   mode_paiement: 'ESPECE' };
     this.dlgRecep.set(true);
   }
   enregistrerReception() {
@@ -999,13 +1048,13 @@ export class GmrfComponent implements OnInit {
   rafraichirPret() { if (this.pretActif()) this.ouvrirDetailPret(this.pretActif().id); }
 
   ouvrirPaiementEcheance(e: any) {
-    this.echeanceEdit = { ...e, date_paiement: new Date(), penalite: 0 };
+    this.echeanceEdit = { ...e, date_paiement: new Date(), penalite: 0, mode_paiement: 'VIREMENT' };
     this.dlgEcheance.set(true);
   }
   payerEcheance() {
     this.gmrf.actionEcheance(this.echeanceEdit.id, {
       action: 'payer', date_paiement: this.toIso(this.echeanceEdit.date_paiement),
-      penalite: this.echeanceEdit.penalite || 0,
+      penalite: this.echeanceEdit.penalite || 0, mode_paiement: this.echeanceEdit.mode_paiement,
     }).subscribe({
       next: () => { this.dlgEcheance.set(false); this.ok('Échéance réglée'); this.rafraichirPret(); this.chargerPrets(); this.chargerDashboard(); },
       error: e => this.err(e),

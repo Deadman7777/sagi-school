@@ -15,6 +15,7 @@ from core.models import log_audit
 from .models import (TypeFinancement, Financement, NattCycle,
                      NattCotisation, NattReception, Pret, PretEcheance)
 from . import services
+from apps.comptabilite.tresorerie import COMPTE_MODE, compte_du_mode
 
 
 # ── Types de financement par défaut (paramétrables ensuite par l'école) ──────
@@ -62,6 +63,20 @@ def _date(v):
     if not v:
         return None
     return datetime.date.fromisoformat(str(v)[:10])
+
+
+def _tresorerie_du_reglement(data, compte_defaut):
+    """(mode, compte de trésorerie) d'un règlement GMRF.
+
+    Le mode choisi décide du compte (espèces 571, Wave 5521…). Sans mode, on
+    garde l'ancien comportement : compte saisi, sinon celui de l'opération.
+    ValueError si le mode est inconnu."""
+    mode = (data.get('mode_paiement') or '').strip()
+    if not mode:
+        return '', (data.get('compte_tresorerie') or compte_defaut)
+    if mode not in COMPTE_MODE:
+        raise ValueError(f"Mode de paiement inconnu : {mode}")
+    return mode, compte_du_mode(mode)[0]
 
 
 def _redater_echeancier(echeances, d0, delta):
@@ -261,6 +276,7 @@ def _cotis_to_dict(c):
         'id': str(c.id), 'numero': c.numero, 'date_echeance': str(c.date_echeance),
         'montant': float(c.montant), 'statut': c.statut,
         'date_paiement': str(c.date_paiement) if c.date_paiement else None,
+        'mode_paiement': c.mode_paiement, 'compte_tresorerie': c.compte_tresorerie,
     }
 
 
@@ -305,6 +321,7 @@ def _cycle_to_dict(cycle, detail=False):
             'date_reception': str(reception.date_reception),
             'montant_recu': float(reception.montant_recu),
             'compte_tresorerie': reception.compte_tresorerie,
+            'mode_paiement': reception.mode_paiement,
             'montant_creance_soldee': float(reception.montant_creance_soldee),
             'montant_dette': float(reception.montant_dette),
         } if reception else None)
@@ -423,15 +440,20 @@ class NattCotisationView(APIView):
 
         action = request.data.get('action')
         if action == 'payer' and c.statut != 'PAYE':
+            try:
+                c.mode_paiement, c.compte_tresorerie = _tresorerie_du_reglement(
+                    request.data, c.cycle.compte_tresorerie)
+            except ValueError as e:
+                return Response({'error': str(e)}, status=400)
             c.statut = 'PAYE'
             c.date_paiement = request.data.get('date_paiement') or datetime.date.today()
-            c.compte_tresorerie = request.data.get('compte_tresorerie', '') or c.cycle.compte_tresorerie
             c.save()
             services.generer_ecriture_cotisation(c, tenant)
         elif action == 'annuler' and c.statut == 'PAYE':
             services.annuler_ecriture_cotisation(c, tenant)
             c.statut = 'A_PAYER'
             c.date_paiement = None
+            c.mode_paiement = c.compte_tresorerie = ''
             c.save()
         else:
             return Response({'error': 'Action invalide pour ce statut'}, status=400)
@@ -462,11 +484,15 @@ class NattReceptionView(APIView):
         if montant is None or montant <= 0:
             return Response({'error': 'Montant reçu invalide'}, status=400)
 
+        try:
+            mode, treso = _tresorerie_du_reglement(d, cycle.compte_tresorerie)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+
         reception = NattReception.objects.create(
             tenant=tenant, cycle=cycle, numero_echeance=numero,
             date_reception=d.get('date_reception') or datetime.date.today(),
-            montant_recu=montant,
-            compte_tresorerie=d.get('compte_tresorerie', cycle.compte_tresorerie),
+            montant_recu=montant, mode_paiement=mode, compte_tresorerie=treso,
             observations=d.get('observations', ''),
         )
         services.generer_ecriture_reception(reception, tenant)
@@ -491,6 +517,8 @@ def _echeance_to_dict(e):
         'part_capital': float(e.part_capital), 'part_interet': float(e.part_interet),
         'capital_fin': float(e.capital_fin), 'penalite': float(e.penalite),
         'statut': e.statut, 'date_paiement': str(e.date_paiement) if e.date_paiement else None,
+        'mode_paiement': e.mode_paiement,
+        'compte_tresorerie': e.compte_tresorerie or e.pret.compte_tresorerie,
     }
 
 
@@ -691,6 +719,11 @@ class PretEcheanceView(APIView):
 
         action = request.data.get('action')
         if action == 'payer' and e.statut != 'PAYE':
+            try:
+                e.mode_paiement, e.compte_tresorerie = _tresorerie_du_reglement(
+                    request.data, e.pret.compte_tresorerie)
+            except ValueError as err:
+                return Response({'error': str(err)}, status=400)
             penalite = _d(request.data.get('penalite', 0)) or Decimal('0')
             e.penalite = penalite
             e.statut = 'PAYE'
@@ -706,6 +739,7 @@ class PretEcheanceView(APIView):
             e.statut = 'A_PAYER'
             e.date_paiement = None
             e.penalite = 0
+            e.mode_paiement = e.compte_tresorerie = ''
             e.save()
             if e.pret.statut == 'SOLDE':
                 e.pret.statut = 'EN_COURS'
