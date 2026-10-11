@@ -17,6 +17,14 @@
     <td><div class="sb-label">Cagnotte</div><div class="sb-value">{{ natt.montant_cagnotte|floatformat:0 }}</div></td>
   </tr>
 </table>
+<table class="school-band" cellspacing="0">
+  <tr>
+    <td><div class="sb-label">Souscription</div><div class="sb-value">{{ objet.date_souscription|date:"d/m/Y"|default:"—" }}</div></td>
+    <td><div class="sb-label">1re échéance</div><div class="sb-value">{{ objet.date_debut|date:"d/m/Y" }}</div></td>
+    <td><div class="sb-label">Dernière échéance</div><div class="sb-value">{{ objet.date_fin|date:"d/m/Y"|default:"—" }}</div></td>
+    <td><div class="sb-label">Périodicité</div><div class="sb-value">{{ objet.get_periodicite_display }}</div></td>
+  </tr>
+</table>
 
 <table class="kpi-table" cellspacing="0" cellpadding="0" style="margin-bottom:16px">
   <tr>

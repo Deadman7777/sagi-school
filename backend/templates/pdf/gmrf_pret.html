@@ -15,7 +15,15 @@
     <td><div class="sb-label">Montant emprunté</div><div class="sb-value">{{ pret.montant|floatformat:0 }} {{ pret.devise }}</div></td>
     <td><div class="sb-label">Taux annuel</div><div class="sb-value">{{ pret.taux_interet }} %</div></td>
     <td><div class="sb-label">Durée</div><div class="sb-value">{{ pret.duree_mois }} mois</div></td>
-    <td><div class="sb-label">Déblocage</div><div class="sb-value">{{ pret.date_deblocage }}</div></td>
+    <td><div class="sb-label">Périodicité</div><div class="sb-value">{{ objet.get_periodicite_display }}</div></td>
+  </tr>
+</table>
+<table class="school-band" cellspacing="0">
+  <tr>
+    <td><div class="sb-label">Souscription</div><div class="sb-value">{{ objet.date_souscription|date:"d/m/Y"|default:"—" }}</div></td>
+    <td><div class="sb-label">Déblocage</div><div class="sb-value">{{ objet.date_deblocage|date:"d/m/Y" }}</div></td>
+    <td><div class="sb-label">1re échéance</div><div class="sb-value">{{ objet.date_premiere_echeance|default:objet.date_deblocage|date:"d/m/Y" }}</div></td>
+    <td><div class="sb-label">Échéances</div><div class="sb-value">{{ objet.nb_echeances }}</div></td>
   </tr>
 </table>
 

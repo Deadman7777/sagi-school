@@ -277,8 +277,14 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
           <div>
             <h2>{{ c.nom }} <small class="muted">{{ c.reference }}</small></h2>
             <div class="muted">{{ c.organisateur }} · {{ modeLabel(c.mode_attribution) }} · cagnotte {{ c.montant_cagnotte | number:'1.0-0' }} F</div>
+            <div class="muted dates">
+              Souscrit le {{ c.date_souscription ? (c.date_souscription | date:'dd/MM/yyyy') : '—' }}
+              · 1ʳᵉ cotisation le {{ c.date_debut | date:'dd/MM/yyyy' }}
+              · dernière le {{ c.date_fin | date:'dd/MM/yyyy' }}
+            </div>
           </div>
           <div class="head-actions">
+            <button class="btn ghost sm" (click)="ouvrirDatesCycle(c)">✏️ Dates</button>
             <button class="btn ghost sm" (click)="telechargerPdfNatt(c)">📄 PDF</button>
             <app-bouton-imprimer [pdf]="pdfNatt" [arg]="c" [avecLibelle]="false" [texte]="true" [contour]="false" />
             @if (!c.cagnotte_recue && c.statut === 'EN_COURS') {
@@ -378,8 +384,14 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
           <div>
             <h2>{{ p.organisme_preteur }} <small class="muted">{{ p.reference }}</small></h2>
             <div class="muted">{{ p.type_label }} · {{ modeAmortLabel(p.mode_amortissement) }} · {{ p.taux_interet }}% / an</div>
+            <div class="muted dates">
+              Souscrit le {{ p.date_souscription ? (p.date_souscription | date:'dd/MM/yyyy') : '—' }}
+              · débloqué le {{ p.date_deblocage | date:'dd/MM/yyyy' }}
+              · 1ʳᵉ échéance le {{ (p.date_premiere_echeance || p.date_deblocage) | date:'dd/MM/yyyy' }}
+            </div>
           </div>
           <div class="head-actions">
+            <button class="btn ghost sm" (click)="ouvrirDatesPret(p)">✏️ Dates</button>
             <button class="btn ghost sm" (click)="telechargerPdfPret(p)">📄 PDF</button>
             <app-bouton-imprimer [pdf]="pdfPret" [arg]="p" [avecLibelle]="false" [texte]="true" [contour]="false" />
           </div>
@@ -513,8 +525,10 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
     </div>
     <div class="row">
       <div><label>Cotisation (F)</label><p-inputNumber [(ngModel)]="cyc.montant_cotisation" [min]="0" /></div>
-      <div><label>Date de début</label><p-datepicker [(ngModel)]="cyc.date_debut" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>Date de souscription</label><p-datepicker [(ngModel)]="cyc.date_souscription" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>1ʳᵉ échéance de cotisation</label><p-datepicker [(ngModel)]="cyc.date_debut" dateFormat="dd/mm/yy" appendTo="body" /></div>
     </div>
+    <p class="hint">Les cotisations suivantes tombent le même jour à chaque période (ex. le 5 de chaque mois).</p>
     <div class="calc" >
       Cagnotte perçue : <b>{{ (cyc.montant_cotisation || 0) * (cyc.nb_participants || 0) | number:'1.0-0' }} F</b> ·
       Total à cotiser : <b>{{ (cyc.montant_cotisation || 0) * (cyc.duree || 0) | number:'1.0-0' }} F</b>
@@ -545,6 +559,25 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
   <ng-template pTemplate="footer">
     <button class="btn ghost" (click)="dlgRecep.set(false)">Annuler</button>
     <button class="btn primary" (click)="enregistrerReception()">Enregistrer</button>
+  </ng-template>
+</p-dialog>
+
+<!-- Correction des dates (NATT ou prêt) -->
+<p-dialog [(visible)]="dlgDates" [modal]="true" header="Modifier les dates" [style]="{width:'460px'}">
+  <div class="form">
+    <div class="row">
+      <div><label>Date de souscription</label><p-datepicker [(ngModel)]="datesEdit.souscription" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>1ʳᵉ échéance {{ datesEdit.type === 'natt' ? 'de cotisation' : 'de remboursement' }}</label>
+        <p-datepicker [(ngModel)]="datesEdit.premiere" dateFormat="dd/mm/yy" appendTo="body" /></div>
+    </div>
+    @if (datesEdit.type === 'pret') {
+      <p class="hint">Déblocage le {{ datesEdit.deblocage | date:'dd/MM/yyyy' }} : déjà comptabilisé, il n'est pas modifié ici.</p>
+    }
+    <p class="hint">Changer la 1ʳᵉ échéance redate tout l'échéancier. Les montants et les paiements déjà enregistrés ne changent pas.</p>
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="btn ghost" (click)="dlgDates.set(false)">Annuler</button>
+    <button class="btn primary" (click)="enregistrerDates()">Enregistrer</button>
   </ng-template>
 </p-dialog>
 
@@ -593,8 +626,9 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
       <div><label>Frais de dossier (F)</label><p-inputNumber [(ngModel)]="pret.frais_dossier" [min]="0" /></div>
     </div>
     <div class="row">
+      <div><label>Date de souscription</label><p-datepicker [(ngModel)]="pret.date_souscription" dateFormat="dd/mm/yy" appendTo="body" /></div>
       <div><label>Date de déblocage</label><p-datepicker [(ngModel)]="pret.date_deblocage" dateFormat="dd/mm/yy" appendTo="body" /></div>
-      <div><label>1ʳᵉ échéance (option)</label><p-datepicker [(ngModel)]="pret.date_premiere_echeance" dateFormat="dd/mm/yy" appendTo="body" /></div>
+      <div><label>1ʳᵉ échéance de remboursement</label><p-datepicker [(ngModel)]="pret.date_premiere_echeance" dateFormat="dd/mm/yy" appendTo="body" /></div>
     </div>
     <div class="row">
       <div><label>Compte trésorerie</label><input pInputText [(ngModel)]="pret.compte_tresorerie" /></div>
@@ -726,6 +760,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
     .card-line { display:flex; justify-content:space-between; font-size:12px; }
     .detail-head { display:flex; justify-content:space-between; align-items:center; margin:12px 0 18px; }
     .detail-head h2 { margin:0; font-size:18px; }
+    .detail-head .dates { margin-top:4px; font-size:12px; }
     .suivi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
     .suivi-box { background:var(--surface-3); border:1px solid var(--surface); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:4px; }
     .suivi-box span { color:var(--text-3); font-size:11px; } .suivi-box b { font-size:16px; }
@@ -774,7 +809,7 @@ export class GmrfComponent implements OnInit {
   amortSimule  = signal<any[]>([]);
 
   dlgFin = signal(false); dlgCycle = signal(false); dlgRecep = signal(false); dlgType = signal(false);
-  dlgPret = signal(false); dlgEcheance = signal(false);
+  dlgPret = signal(false); dlgEcheance = signal(false); dlgDates = signal(false);
 
   fin: any = {};
   cyc: any = {};
@@ -782,6 +817,7 @@ export class GmrfComponent implements OnInit {
   typeEdit: any = {};
   pret: any = {};
   echeanceEdit: any = {};
+  datesEdit: any = {};
   private receptionCycleId = '';
 
   statutFinOpts = [{ label: 'Reçu', value: 'RECU' }, { label: 'Attendu', value: 'ATTENDU' }];
@@ -883,12 +919,14 @@ export class GmrfComponent implements OnInit {
   // ── NATT ──
   ouvrirCycle() {
     this.cyc = { periodicite: 'MENSUELLE', type_organisateur: 'AUTRE', mode_attribution: 'TIRAGE',
-                 nb_participants: 10, duree: 10, montant_cotisation: 0, date_debut: new Date(),
+                 nb_participants: 10, duree: 10, montant_cotisation: 0,
+                 date_souscription: new Date(), date_debut: new Date(),
                  compte_tresorerie: '571', compte_creance: '4718', compte_dette: '4798' };
     this.dlgCycle.set(true);
   }
   enregistrerCycle() {
-    const p = { ...this.cyc, date_debut: this.toIso(this.cyc.date_debut) };
+    const p = { ...this.cyc, date_debut: this.toIso(this.cyc.date_debut),
+                date_souscription: this.toIso(this.cyc.date_souscription) };
     this.gmrf.creerCycle(p).subscribe({
       next: () => { this.dlgCycle.set(false); this.ok('NATT créé'); this.chargerCycles(); this.chargerDashboard(); },
       error: e => this.err(e),
@@ -937,7 +975,7 @@ export class GmrfComponent implements OnInit {
   ouvrirPret() {
     this.pret = { type_pret: 'BANCAIRE', montant: 0, taux_interet: 0, duree_mois: 12,
                   periodicite: 'MENSUELLE', mode_amortissement: 'CONSTANT', frais_dossier: 0,
-                  date_deblocage: new Date(), date_premiere_echeance: null,
+                  date_souscription: new Date(), date_deblocage: new Date(), date_premiere_echeance: null,
                   compte_tresorerie: '521', compte_emprunt: '162', compte_interets: '671' };
     this.amortSimule.set([]);
     this.dlgPret.set(true);
@@ -950,6 +988,7 @@ export class GmrfComponent implements OnInit {
   }
   enregistrerPret() {
     const p = { ...this.pret, date_deblocage: this.toIso(this.pret.date_deblocage),
+                date_souscription: this.toIso(this.pret.date_souscription),
                 date_premiere_echeance: this.pret.date_premiere_echeance ? this.toIso(this.pret.date_premiere_echeance) : null };
     this.gmrf.creerPret(p).subscribe({
       next: () => { this.dlgPret.set(false); this.ok('Prêt créé, fonds débloqués'); this.chargerPrets(); this.chargerDashboard(); },
@@ -977,6 +1016,36 @@ export class GmrfComponent implements OnInit {
       next: () => { this.ok('Échéance annulée'); this.rafraichirPret(); this.chargerPrets(); this.chargerDashboard(); },
       error: e => this.err(e),
     });
+  }
+
+  // ── Correction des dates (souscription, 1ʳᵉ échéance) ──
+  ouvrirDatesCycle(c: any) {
+    this.datesEdit = { type: 'natt', id: c.id, souscription: this.versDate(c.date_souscription),
+                       premiere: this.versDate(c.date_debut) };
+    this.dlgDates.set(true);
+  }
+  ouvrirDatesPret(p: any) {
+    this.datesEdit = { type: 'pret', id: p.id, souscription: this.versDate(p.date_souscription),
+                       premiere: this.versDate(p.date_premiere_echeance || p.date_deblocage),
+                       deblocage: p.date_deblocage };
+    this.dlgDates.set(true);
+  }
+  enregistrerDates() {
+    const e = this.datesEdit;
+    if (!e.premiere) { this.err({ error: { error: 'La 1ʳᵉ échéance est requise' } }); return; }
+    const souscription = e.souscription ? this.toIso(e.souscription) : null;
+    const premiere = this.toIso(e.premiere);
+    if (e.type === 'natt') {
+      this.gmrf.modifierDatesCycle(e.id, { date_souscription: souscription, date_debut: premiere }).subscribe({
+        next: c => { this.dlgDates.set(false); this.ok('Dates modifiées'); this.cycleActif.set(c); this.chargerCycles(); this.chargerDashboard(); },
+        error: err => this.err(err),
+      });
+    } else {
+      this.gmrf.modifierDatesPret(e.id, { date_souscription: souscription, date_premiere_echeance: premiere }).subscribe({
+        next: p => { this.dlgDates.set(false); this.ok('Dates modifiées'); this.pretActif.set(p); this.chargerPrets(); this.chargerDashboard(); },
+        error: err => this.err(err),
+      });
+    }
   }
 
   // ── PDF ──
@@ -1041,6 +1110,13 @@ export class GmrfComponent implements OnInit {
   private rafraichirApres(type: string) {
     if (type === 'natt') this.rafraichirDetail();
     else if (type === 'pret') this.rafraichirPret();
+  }
+
+  /** « 2026-10-05 » → Date locale (évite le décalage UTC de new Date(iso)). */
+  private versDate(iso: string | null): Date | null {
+    if (!iso) return null;
+    const [a, m, j] = iso.split('-').map(Number);
+    return new Date(a, m - 1, j);
   }
 
   private toIso(d: any): string {

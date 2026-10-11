@@ -45,7 +45,7 @@ class PretPDFView(APIView):
         ctx = {
             'tenant': tenant, 'exercice': _exercice(tenant),
             'date_edition': timezone.now(), 'pret': data,
-            'echeances': data['echeances'],
+            'echeances': data['echeances'], 'objet': pret,
         }
         return _render_pdf('pdf/gmrf_pret.html', ctx, f"pret_{pret.reference}.pdf")
 
@@ -64,5 +64,6 @@ class NattPDFView(APIView):
             'tenant': tenant, 'exercice': _exercice(tenant),
             'date_edition': timezone.now(), 'natt': data,
             'cotisations': data['cotisations'], 'reception': data['reception'],
+            'objet': cycle,
         }
         return _render_pdf('pdf/gmrf_natt.html', ctx, f"natt_{cycle.reference}.pdf")

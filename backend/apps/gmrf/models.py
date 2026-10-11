@@ -159,6 +159,9 @@ class NattCycle(TenantModel):
     periodicite      = models.CharField(max_length=15, choices=PERIODICITE_CHOICES, default='MENSUELLE')
     montant_cotisation = models.DecimalField(max_digits=15, decimal_places=2)
     mode_attribution = models.CharField(max_length=12, choices=MODE_ATTRIBUTION_CHOICES, default='TIRAGE')
+    # Souscription (adhésion au groupe) ≠ première échéance de cotisation :
+    # date_debut est la date de la 1ʳᵉ cotisation, d'où part l'échéancier.
+    date_souscription = models.DateField(null=True, blank=True)
     date_debut       = models.DateField()
     date_fin         = models.DateField(null=True, blank=True)
     compte_tresorerie = models.CharField(max_length=10, default='571')
@@ -281,6 +284,9 @@ class Pret(TenantModel):
     duree_mois       = models.IntegerField()
     periodicite      = models.CharField(max_length=15, choices=PERIODICITE_CHOICES, default='MENSUELLE')
     mode_amortissement = models.CharField(max_length=18, choices=MODE_CHOICES, default='CONSTANT')
+    # Souscription (signature du contrat) ≠ déblocage (écriture comptable)
+    # ≠ première échéance (départ du tableau d'amortissement).
+    date_souscription = models.DateField(null=True, blank=True)
     date_deblocage   = models.DateField()
     date_premiere_echeance = models.DateField(null=True, blank=True)
     frais_dossier    = models.DecimalField(max_digits=13, decimal_places=2, default=0)

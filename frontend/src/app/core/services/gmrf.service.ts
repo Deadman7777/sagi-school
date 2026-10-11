@@ -24,6 +24,7 @@ export class GmrfService {
   getCycles()                       { return this.api.get<any[]>('/gmrf/natt/'); }
   getCycle(id: string)              { return this.api.get<any>(`/gmrf/natt/${id}/`); }
   creerCycle(data: any)             { return this.api.post<any>('/gmrf/natt/', data); }
+  modifierDatesCycle(id: string, data: any)    { return this.api.patch<any>(`/gmrf/natt/${id}/`, data); }
   recevoirCagnotte(cycleId: string, data: any) { return this.api.post<any>(`/gmrf/natt/${cycleId}/reception/`, data); }
   actionCotisation(id: string, data: any)      { return this.api.patch<any>(`/gmrf/cotisations/${id}/`, data); }
 
@@ -31,6 +32,7 @@ export class GmrfService {
   getPrets()                        { return this.api.get<any>('/gmrf/prets/'); }
   getPret(id: string)               { return this.api.get<any>(`/gmrf/prets/${id}/`); }
   creerPret(data: any)              { return this.api.post<any>('/gmrf/prets/', data); }
+  modifierDatesPret(id: string, data: any) { return this.api.patch<any>(`/gmrf/prets/${id}/`, data); }
   simulerAmortissement(data: any)   { return this.api.post<any>('/gmrf/prets/', { ...data, action: 'simuler' }); }
   actionEcheance(id: string, data: any) { return this.api.patch<any>(`/gmrf/echeances/${id}/`, data); }
 

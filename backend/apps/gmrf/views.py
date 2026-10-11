@@ -57,6 +57,27 @@ def _next_ref(tenant, model, prefix):
     return f"{prefix}-{n:04d}"
 
 
+def _date(v):
+    """Date ISO (AAAA-MM-JJ) → date ; None si vide, ValueError si illisible."""
+    if not v:
+        return None
+    return datetime.date.fromisoformat(str(v)[:10])
+
+
+def _redater_echeancier(echeances, d0, delta):
+    """Recale les dates d'un échéancier sur une nouvelle 1ʳᵉ échéance.
+
+    Les montants et les paiements ne bougent pas (les écritures portent la
+    date de paiement, pas la date d'échéance) ; seul le statut des échéances
+    non payées suit la nouvelle date (en retard ou non)."""
+    today = datetime.date.today()
+    for e in echeances:
+        e.date_echeance = d0 + delta * (e.numero - 1)
+        if e.statut != 'PAYE':
+            e.statut = 'EN_RETARD' if e.date_echeance < today else 'A_PAYER'
+        e.save(update_fields=['date_echeance', 'statut', 'updated_at'])
+
+
 # ── Types de financement ─────────────────────────────────────────────────────
 def _type_to_dict(t):
     return {
@@ -259,6 +280,7 @@ def _cycle_to_dict(cycle, detail=False):
         'montant_cagnotte': cycle.montant_cagnotte,
         'total_a_cotiser': cycle.total_a_cotiser,
         'mode_attribution': cycle.mode_attribution,
+        'date_souscription': str(cycle.date_souscription) if cycle.date_souscription else None,
         'date_debut': str(cycle.date_debut),
         'date_fin': str(cycle.date_fin) if cycle.date_fin else None,
         'compte_tresorerie': cycle.compte_tresorerie,
@@ -315,13 +337,18 @@ class NattCycleView(APIView):
             return Response({'error': 'Durée invalide'}, status=400)
         if montant is None or montant <= 0 or duree <= 0:
             return Response({'error': 'Cotisation et durée doivent être > 0'}, status=400)
-        date_debut = d.get('date_debut')
-        if not date_debut:
-            return Response({'error': 'Date de début requise'}, status=400)
+        try:
+            d0 = _date(d.get('date_debut'))
+            souscription = _date(d.get('date_souscription')) or d0
+        except ValueError:
+            return Response({'error': 'Date invalide'}, status=400)
+        if not d0:
+            return Response({'error': 'Date de la 1ʳᵉ échéance requise'}, status=400)
+        if souscription > d0:
+            return Response({'error': 'La souscription ne peut pas être postérieure à la 1ʳᵉ échéance'}, status=400)
 
         periodicite = d.get('periodicite', 'MENSUELLE')
         delta = _PERIODE_DELTA.get(periodicite, _PERIODE_DELTA['MENSUELLE'])
-        d0 = datetime.date.fromisoformat(str(date_debut))
         date_fin = d0 + delta * (duree - 1)
 
         cycle = NattCycle.objects.create(
@@ -332,7 +359,7 @@ class NattCycleView(APIView):
             nb_participants=int(d.get('nb_participants') or 0), duree=duree,
             periodicite=periodicite, montant_cotisation=montant,
             mode_attribution=d.get('mode_attribution', 'TIRAGE'),
-            date_debut=d0, date_fin=date_fin,
+            date_souscription=souscription, date_debut=d0, date_fin=date_fin,
             compte_tresorerie=d.get('compte_tresorerie', '571'),
             compte_creance=d.get('compte_creance', '4718'),
             compte_dette=d.get('compte_dette', '4798'),
@@ -348,6 +375,38 @@ class NattCycleView(APIView):
         log_audit(request, 'CREATION', 'NattCycle', cycle.id, cycle.nom)
         cycle = NattCycle.objects.prefetch_related('cotisations').get(id=cycle.id)
         return Response(_cycle_to_dict(cycle, detail=True), status=201)
+
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        """Corrige les dates d'un cycle saisies par erreur : souscription et
+        1ʳᵉ échéance (l'échéancier est recalé, les paiements ne bougent pas)."""
+        tenant = get_tenant(request)
+        try:
+            cycle = NattCycle.objects.get(tenant=tenant, id=pk)
+        except NattCycle.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+        d = request.data
+        try:
+            souscription = _date(d['date_souscription']) if 'date_souscription' in d else cycle.date_souscription
+            d0 = _date(d.get('date_debut')) or cycle.date_debut
+        except ValueError:
+            return Response({'error': 'Date invalide'}, status=400)
+        if souscription and souscription > d0:
+            return Response({'error': 'La souscription ne peut pas être postérieure à la 1ʳᵉ échéance'}, status=400)
+
+        avant = f"souscription {cycle.date_souscription}, 1re échéance {cycle.date_debut}"
+        delta = _PERIODE_DELTA.get(cycle.periodicite, _PERIODE_DELTA['MENSUELLE'])
+        if d0 != cycle.date_debut:
+            _redater_echeancier(cycle.cotisations.all(), d0, delta)
+        cycle.date_souscription = souscription
+        cycle.date_debut = d0
+        cycle.date_fin = d0 + delta * (cycle.duree - 1)
+        cycle.save(update_fields=['date_souscription', 'date_debut', 'date_fin', 'updated_at'])
+        log_audit(request, 'MODIFICATION', 'NattCycle', cycle.id,
+                  f"{cycle.reference} dates : {avant} → souscription {souscription}, 1re échéance {d0}")
+        cycle = NattCycle.objects.prefetch_related('cotisations').get(id=cycle.id)
+        return Response(_cycle_to_dict(cycle, detail=True))
 
 
 class NattCotisationView(APIView):
@@ -448,7 +507,9 @@ def _pret_to_dict(pret, detail=False):
         'objet': pret.objet, 'montant': float(pret.montant), 'devise': pret.devise,
         'taux_interet': float(pret.taux_interet), 'duree_mois': pret.duree_mois,
         'periodicite': pret.periodicite, 'mode_amortissement': pret.mode_amortissement,
+        'date_souscription': str(pret.date_souscription) if pret.date_souscription else None,
         'date_deblocage': str(pret.date_deblocage),
+        'date_premiere_echeance': str(pret.date_premiere_echeance) if pret.date_premiere_echeance else None,
         'frais_dossier': float(pret.frais_dossier),
         'compte_tresorerie': pret.compte_tresorerie, 'compte_emprunt': pret.compte_emprunt,
         'compte_interets': pret.compte_interets, 'compte_frais': pret.compte_frais,
@@ -527,9 +588,16 @@ class PretView(APIView):
             return Response({'error': 'Montant et durée doivent être > 0'}, status=400)
         if not d.get('organisme_preteur'):
             return Response({'error': 'Organisme prêteur requis'}, status=400)
-        date_deblocage = d.get('date_deblocage')
+        try:
+            date_deblocage = _date(d.get('date_deblocage'))
+            souscription = _date(d.get('date_souscription')) or date_deblocage
+            premiere = _date(d.get('date_premiere_echeance'))
+        except ValueError:
+            return Response({'error': 'Date invalide'}, status=400)
         if not date_deblocage:
             return Response({'error': 'Date de déblocage requise'}, status=400)
+        if premiere and souscription > premiere:
+            return Response({'error': 'La souscription ne peut pas être postérieure à la 1ʳᵉ échéance'}, status=400)
 
         periodicite = d.get('periodicite', 'MENSUELLE')
         pret = Pret.objects.create(
@@ -539,8 +607,8 @@ class PretView(APIView):
             objet=d.get('objet', ''), montant=montant, devise=d.get('devise', 'XOF'),
             taux_interet=_d(d.get('taux_interet', 0)), duree_mois=duree,
             periodicite=periodicite, mode_amortissement=d.get('mode_amortissement', 'CONSTANT'),
-            date_deblocage=date_deblocage,
-            date_premiere_echeance=d.get('date_premiere_echeance') or None,
+            date_souscription=souscription, date_deblocage=date_deblocage,
+            date_premiere_echeance=premiere,
             frais_dossier=_d(d.get('frais_dossier', 0)),
             compte_tresorerie=d.get('compte_tresorerie', '521'),
             compte_emprunt=d.get('compte_emprunt', '162'),
@@ -553,7 +621,7 @@ class PretView(APIView):
 
         # Tableau d'amortissement + dates
         delta = _PRET_PERIODE_DELTA.get(periodicite, _PRET_PERIODE_DELTA['MENSUELLE'])
-        d0 = datetime.date.fromisoformat(str(pret.date_premiere_echeance or date_deblocage))
+        d0 = premiere or date_deblocage
         rows = services.calcul_amortissement(montant, pret.taux_interet, pret.nb_echeances,
                                              periodicite, pret.mode_amortissement)
         PretEcheance.objects.bulk_create([
@@ -572,6 +640,41 @@ class PretView(APIView):
         log_audit(request, 'CREATION', 'Pret', pret.id, pret.organisme_preteur)
         pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
         return Response(_pret_to_dict(pret, detail=True), status=201)
+
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        """Corrige les dates d'un prêt saisies par erreur : souscription et
+        1ʳᵉ échéance (le tableau d'amortissement est redaté, ses montants et
+        les remboursements ne bougent pas). Le déblocage, déjà comptabilisé,
+        n'est pas modifiable ici."""
+        tenant = get_tenant(request)
+        try:
+            pret = Pret.objects.get(tenant=tenant, id=pk)
+        except Pret.DoesNotExist:
+            return Response({'error': 'Non trouvé'}, status=404)
+        d = request.data
+        try:
+            souscription = _date(d['date_souscription']) if 'date_souscription' in d else pret.date_souscription
+            premiere = (_date(d['date_premiere_echeance']) if 'date_premiere_echeance' in d
+                        else pret.date_premiere_echeance)
+        except ValueError:
+            return Response({'error': 'Date invalide'}, status=400)
+        d0 = premiere or pret.date_deblocage
+        if souscription and souscription > d0:
+            return Response({'error': 'La souscription ne peut pas être postérieure à la 1ʳᵉ échéance'}, status=400)
+
+        avant = f"souscription {pret.date_souscription}, 1re échéance {pret.date_premiere_echeance}"
+        if d0 != (pret.date_premiere_echeance or pret.date_deblocage):
+            delta = _PRET_PERIODE_DELTA.get(pret.periodicite, _PRET_PERIODE_DELTA['MENSUELLE'])
+            _redater_echeancier(pret.echeances.all(), d0, delta)
+        pret.date_souscription = souscription
+        pret.date_premiere_echeance = premiere
+        pret.save(update_fields=['date_souscription', 'date_premiere_echeance', 'updated_at'])
+        log_audit(request, 'MODIFICATION', 'Pret', pret.id,
+                  f"{pret.reference} dates : {avant} → souscription {souscription}, 1re échéance {premiere}")
+        pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
+        return Response(_pret_to_dict(pret, detail=True))
 
 
 class PretEcheanceView(APIView):
