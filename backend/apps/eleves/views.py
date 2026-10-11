@@ -1712,7 +1712,10 @@ class EleveViewSet(viewsets.ModelViewSet):
 
         # ── Déjà payé par catégorie pour cet exercice ──────────────────
         if exercice:
-            pmt_qs = Paiement.objects.filter(eleve=eleve, exercice=exercice)
+            # Reçus ACTIFS seulement : un reçu annulé n'a rien encaissé. Le
+            # compter laissait l'inscription « payée » au guichet après
+            # l'annulation de son reçu.
+            pmt_qs = Paiement.objects.filter(eleve=eleve, exercice=exercice, statut='ACTIF')
             agg    = pmt_qs.aggregate(
                 inscription  = _Sum('montant_inscription'),
                 mensualite   = _Sum('montant_mensualite'),
@@ -2079,7 +2082,7 @@ class SuiviMensuelView(APIView):
                 return Response({'eleve': None})
 
             paiements_eleve = Paiement.objects.filter(
-                tenant=tenant, exercice=exercice, eleve=eleve
+                tenant=tenant, exercice=exercice, eleve=eleve, statut='ACTIF'
             ).order_by('date_paiement').only(
                 'no_piece', 'date_paiement', 'mode_paiement',
                 'montant_inscription', 'montant_mensualite', 'montant_uniforme',

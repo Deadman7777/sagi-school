@@ -78,6 +78,34 @@ class PaiementAnnuleTest(APITestCase):
 
         self.assertEqual(float(Eleve.objects.get(id=self.eleve.id).total_paye), 50000)
 
+    # ── Le guichet ─────────────────────────────────────────────────────────
+    def test_le_guichet_redemande_l_inscription_d_un_recu_annule(self):
+        """Signalé le 11/10/2026 : après annulation du reçu d'inscription, le
+        guichet la donnait encore pour payée (reste 0)."""
+        self._annuler(self._encaisser(self.eleve, montant_inscription=50000))
+
+        d = self.client.get(f'/api/eleves/{self.eleve.id}/saisie-paiement/').data
+
+        self.assertEqual(d['deja_paye']['inscription'], 0)
+        self.assertEqual(d['reste']['inscription'], 50000)
+        self.assertEqual((d['total_paye'], d['nb_paiements']), (0, 0))
+
+    def test_le_guichet_et_la_fiche_disent_le_meme_paye(self):
+        self._le_cas_du_client()
+
+        d = self.client.get(f'/api/eleves/{self.eleve.id}/saisie-paiement/').data
+
+        self.assertEqual(d['total_paye'], float(Eleve.objects.get(id=self.eleve.id).total_paye))
+        self.assertEqual(d['nb_paiements'], 1)
+
+    def test_le_suivi_mensuel_de_l_eleve_ignore_les_annules(self):
+        self._le_cas_du_client()
+
+        d = self.client.get(f'/api/eleves/suivi-mensuel/?eleve_id={self.eleve.id}').data['eleve']
+
+        self.assertEqual(d['total_paye'], 50000)
+        self.assertEqual(len(d['paiements']), 1)
+
     # ── La comptabilité ────────────────────────────────────────────────────
     def test_le_411_n_est_plus_gonfle_au_grand_livre(self):
         self._le_cas_du_client()
