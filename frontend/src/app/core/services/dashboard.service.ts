@@ -39,12 +39,13 @@ export interface DashboardKPI {
 export interface CanalTresorerie {
   canal: string; libelle: string; compte: string; nb: number;
   solde_initial: number; encaissements: number; decaissements: number; solde: number;
+  encaissements_eleves: number; autres_entrees: number;
 }
 
 export interface TresorerieCanaux {
   exercice: string;
   canaux: CanalTresorerie[];
-  totaux: { solde_initial: number; encaissements: number; decaissements: number; solde: number; };
+  totaux: { solde_initial: number; encaissements: number; autres_entrees: number; decaissements: number; solde: number; };
 }
 
 export interface DashboardSuperAdmin {

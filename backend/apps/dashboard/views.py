@@ -448,16 +448,24 @@ class DashboardTresorerieCanauView(APIView):
         enc_by_canal = encaissements_par_mode(Paiement.objects.filter(
             tenant=tenant, exercice=exercice, statut='ACTIF'))
 
-        # Décaissements (charges/paie/invest) — crédits trésorerie hors scolarité
-        dec_qs = JournalEntry.objects.filter(
+        # Hors scolarité, entrées et sorties se lisent au journal. Les reçus
+        # élèves sont comptés ci-dessus (actifs seulement) ; les transferts
+        # internes ne sont ni une entrée ni une sortie.
+        hors_scolarite = JournalEntry.objects.filter(
             _filtre_tresorerie(), tenant=tenant, exercice=exercice,
-            credit__gt=0
-        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT',
-                              'TRANSFERT', 'ANNUL_TRANSFERT')).values('no_compte').annotate(
-            montant=Sum('credit')
-        )
+        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT', 'TRANSFERT', 'ANNUL_TRANSFERT'))
+
+        # Autres entrées : prêts débloqués, financements, cagnotte NATT,
+        # journal de caisse migré… Sans elles, un prêt versé en caisse gonflait
+        # le solde sans apparaître dans aucune colonne.
+        autres_by_compte = {}
+        for d in hors_scolarite.filter(debit__gt=0).values('no_compte').annotate(montant=Sum('debit')):
+            cpt = _canal_compte(d['no_compte'])
+            autres_by_compte[cpt] = autres_by_compte.get(cpt, 0.0) + float(d['montant'] or 0)
+
+        # Décaissements (charges/paie/invest, cotisations NATT, remboursements…)
         dec_by_compte = {}
-        for d in dec_qs:
+        for d in hors_scolarite.filter(credit__gt=0).values('no_compte').annotate(montant=Sum('credit')):
             cpt = _canal_compte(d['no_compte'])
             dec_by_compte[cpt] = dec_by_compte.get(cpt, 0.0) + float(d['montant'] or 0)
 
@@ -472,30 +480,36 @@ class DashboardTresorerieCanauView(APIView):
                 if not compte521_attribue:
                     net_journal   = balance_by_compte.get('521', 0.0)
                     decaissements = dec_by_compte.get('521', 0.0)
+                    autres        = autres_by_compte.get('521', 0.0)
                     compte521_attribue = True
                 else:
                     net_journal   = 0.0
                     decaissements = 0.0
+                    autres        = 0.0
             else:
                 net_journal   = balance_by_compte.get(compte, 0.0)
                 decaissements = dec_by_compte.get(compte, 0.0)
+                autres        = autres_by_compte.get(compte, 0.0)
 
             solde = round(solde_initial + net_journal, 2)
 
-            if enc['nb'] > 0 or solde_initial > 0 or decaissements > 0 or net_journal != 0:
+            if enc['nb'] > 0 or solde_initial > 0 or decaissements > 0 or autres > 0 or net_journal != 0:
                 canaux_result.append({
                     'canal':         mode,
                     'libelle':       libelle,
                     'compte':        compte,
                     'nb':            enc['nb'],
                     'solde_initial': round(solde_initial, 2),
-                    'encaissements': round(enc['montant'], 2),
+                    'encaissements': round(enc['montant'] + autres, 2),
+                    'encaissements_eleves': round(enc['montant'], 2),
+                    'autres_entrees': round(autres, 2),
                     'decaissements': round(decaissements, 2),
                     'solde':         solde,
                 })
 
         total_initial = sum(soldes_initiaux.values())
         total_enc     = sum(c['encaissements'] for c in canaux_result)
+        total_autres  = sum(c['autres_entrees'] for c in canaux_result)
         total_dec     = sum(c['decaissements'] for c in canaux_result)
         total_solde   = round(sum(c['solde'] for c in canaux_result), 2)
 
@@ -505,6 +519,7 @@ class DashboardTresorerieCanauView(APIView):
             'totaux': {
                 'solde_initial': round(total_initial, 2),
                 'encaissements': round(total_enc, 2),
+                'autres_entrees': round(total_autres, 2),
                 'decaissements': round(total_dec, 2),
                 'solde':         total_solde,
             },

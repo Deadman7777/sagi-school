@@ -338,6 +338,13 @@ import { ApiService } from '../../core/services/api.service';
                         </td>
                         <td style="padding:8px;text-align:right;color:#10b981;font-family:monospace">
                           {{ c.encaissements | number:'1.0-0' }}
+                          <!-- Prêts, financements, cagnotte NATT… : hors reçus élèves. -->
+                          @if (c.autres_entrees > 0) {
+                            <div style="color:var(--text-3);font-size:10px;margin-top:2px"
+                                 title="Prêts, financements, cagnotte NATT et autres entrées hors reçus élèves">
+                              dont autres {{ c.autres_entrees | number:'1.0-0' }}
+                            </div>
+                          }
                         </td>
                         <td style="padding:8px;text-align:right;color:#ef4444;font-family:monospace">
                           {{ c.decaissements > 0 ? (c.decaissements | number:'1.0-0') : '—' }}
