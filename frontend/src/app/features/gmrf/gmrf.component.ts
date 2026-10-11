@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild, inject, signal
 } from '@angular/core';
-import { DecimalPipe, DatePipe } from '@angular/common';
+import { DecimalPipe, DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessageService } from 'primeng/api';
 import { ButtonModule }      from 'primeng/button';
@@ -25,7 +25,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [BoutonImprimerComponent, 
-    DecimalPipe, DatePipe, FormsModule, TableModule, ButtonModule, DialogModule,
+    DecimalPipe, DatePipe, NgTemplateOutlet, FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, InputNumberModule, SelectModule, TagModule, ToastModule,
     TooltipModule, ProgressBarModule, DatePickerModule, Textarea, TranslateModule,
   ],
@@ -327,6 +327,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
                 @if (co.statut !== 'PAYE') {
                   <button class="btn xs" (click)="ouvrirPaiementCotisation(co)">Payer</button>
                 } @else {
+                  <button class="btn xs ghost" (click)="ouvrirPaiementCotisation(co, true)">Modifier</button>
                   <button class="btn xs ghost" (click)="annulerCotisation(co)">Annuler</button>
                 }
               </td>
@@ -397,6 +398,9 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
           </div>
           <div class="head-actions">
             <button class="btn ghost sm" (click)="ouvrirDatesPret(p)">✏️ Dates</button>
+            @if (p.statut !== 'ANNULE') {
+              <button class="btn ghost sm" (click)="ouvrirDeblocage(p)">✏️ Déblocage</button>
+            }
             <button class="btn ghost sm" (click)="telechargerPdfPret(p)">📄 PDF</button>
             <app-bouton-imprimer [pdf]="pdfPret" [arg]="p" [avecLibelle]="false" [texte]="true" [contour]="false" />
           </div>
@@ -556,9 +560,12 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
 </p-dialog>
 
 <!-- Paiement d'une cotisation -->
-<p-dialog [(visible)]="dlgCotis" [modal]="true" header="Payer la cotisation" [style]="{width:'420px'}">
+<p-dialog [(visible)]="dlgCotis" [modal]="true" [header]="cotisEdit.modifier ? 'Modifier le paiement' : 'Payer la cotisation'" [style]="{width:'420px'}">
   <div class="form">
     <div class="calc">Cotisation #{{ cotisEdit.numero }} — {{ cotisEdit.montant | number:'1.0-0' }} F</div>
+    @if (cotisEdit.modifier) {
+      <p class="hint">L'écriture du paiement est extournée puis repassée avec la date et le mode corrigés.</p>
+    }
     <div class="row">
       <div><label>Date de paiement</label>
         <p-datepicker [(ngModel)]="cotisEdit.date_paiement" dateFormat="dd/mm/yy" appendTo="body" /></div>
@@ -568,7 +575,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
   </div>
   <ng-template pTemplate="footer">
     <button class="btn ghost" (click)="dlgCotis.set(false)">Annuler</button>
-    <button class="btn primary" (click)="payerCotisation()">Payer</button>
+    <button class="btn primary" (click)="payerCotisation()">{{ cotisEdit.modifier ? 'Enregistrer' : 'Payer' }}</button>
   </ng-template>
 </p-dialog>
 
@@ -589,6 +596,42 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
   <ng-template pTemplate="footer">
     <button class="btn ghost" (click)="dlgRecep.set(false)">Annuler</button>
     <button class="btn primary" (click)="enregistrerReception()">Enregistrer</button>
+  </ng-template>
+</p-dialog>
+
+<!-- Fonds reçus d'un prêt : un mode, ou une répartition (caisse + banque…) -->
+<ng-template #fondsRecus let-o>
+  <label>Fonds reçus en</label>
+  @for (l of o.lignes; track $index) {
+    <div class="row ventil">
+      <div><p-select [options]="modesPaiement" optionLabel="label" optionValue="value" [(ngModel)]="l.mode" appendTo="body" /></div>
+      @if (o.lignes.length > 1) {
+        <div><p-inputNumber [(ngModel)]="l.montant" [min]="0" placeholder="Montant" /></div>
+        <button class="btn xs ghost" (click)="o.lignes.splice($index, 1)">✕</button>
+      }
+    </div>
+  }
+  <div class="ventil-pied">
+    <button class="btn xs" (click)="ajouterMode(o)">+ Répartir sur un autre mode</button>
+    @if (o.lignes.length > 1) {
+      <span [class.danger]="resteAVentiler(o) !== 0">Reste à répartir : {{ resteAVentiler(o) | number:'1.0-0' }} F</span>
+    }
+  </div>
+</ng-template>
+
+<!-- Correction du déblocage d'un prêt déjà enregistré -->
+<p-dialog [(visible)]="dlgDeblocage" [modal]="true" header="Modifier le déblocage" [style]="{width:'520px'}">
+  <div class="form">
+    <div class="calc">{{ deblocageEdit.reference }} — {{ deblocageEdit.montant | number:'1.0-0' }} F</div>
+    <label>Date de déblocage</label>
+    <p-datepicker [(ngModel)]="deblocageEdit.date_deblocage" dateFormat="dd/mm/yy" appendTo="body" />
+    <ng-container *ngTemplateOutlet="fondsRecus; context: { $implicit: deblocageEdit }" />
+    <p class="hint">L'écriture de déblocage est extournée puis repassée sur le(s) compte(s) choisi(s).
+      Le journal garde l'erreur et sa correction.</p>
+  </div>
+  <ng-template pTemplate="footer">
+    <button class="btn ghost" (click)="dlgDeblocage.set(false)">Annuler</button>
+    <button class="btn primary" (click)="enregistrerDeblocage()">Enregistrer</button>
   </ng-template>
 </p-dialog>
 
@@ -660,8 +703,8 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
       <div><label>Date de déblocage</label><p-datepicker [(ngModel)]="pret.date_deblocage" dateFormat="dd/mm/yy" appendTo="body" /></div>
       <div><label>1ʳᵉ échéance de remboursement</label><p-datepicker [(ngModel)]="pret.date_premiere_echeance" dateFormat="dd/mm/yy" appendTo="body" /></div>
     </div>
+    <ng-container *ngTemplateOutlet="fondsRecus; context: { $implicit: pret }" />
     <div class="row">
-      <div><label>Compte trésorerie</label><input pInputText [(ngModel)]="pret.compte_tresorerie" /></div>
       <div><label>Compte emprunt (16x)</label><input pInputText [(ngModel)]="pret.compte_emprunt" /></div>
       <div><label>Compte intérêts</label><input pInputText [(ngModel)]="pret.compte_interets" /></div>
     </div>
@@ -795,6 +838,9 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
     .detail-head { display:flex; justify-content:space-between; align-items:center; margin:12px 0 18px; }
     .detail-head h2 { margin:0; font-size:18px; }
     .detail-head .dates { margin-top:4px; font-size:12px; }
+    .ventil { align-items:center; margin-bottom:6px; }
+    .ventil-pied { display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom:8px; }
+    .ventil-pied .danger { color:#ef4444; }
     .suivi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
     .suivi-box { background:var(--surface-3); border:1px solid var(--surface); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:4px; }
     .suivi-box span { color:var(--text-3); font-size:11px; } .suivi-box b { font-size:16px; }
@@ -844,6 +890,7 @@ export class GmrfComponent implements OnInit {
 
   dlgFin = signal(false); dlgCycle = signal(false); dlgRecep = signal(false); dlgType = signal(false);
   dlgPret = signal(false); dlgEcheance = signal(false); dlgDates = signal(false); dlgCotis = signal(false);
+  dlgDeblocage = signal(false);
 
   fin: any = {};
   cyc: any = {};
@@ -853,6 +900,7 @@ export class GmrfComponent implements OnInit {
   echeanceEdit: any = {};
   datesEdit: any = {};
   cotisEdit: any = {};
+  deblocageEdit: any = {};
   private receptionCycleId = '';
 
   statutFinOpts = [{ label: 'Reçu', value: 'RECU' }, { label: 'Attendu', value: 'ATTENDU' }];
@@ -977,15 +1025,19 @@ export class GmrfComponent implements OnInit {
   ouvrirDetail(id: string) { this.gmrf.getCycle(id).subscribe(c => this.cycleActif.set(c)); }
   rafraichirDetail() { if (this.cycleActif()) this.ouvrirDetail(this.cycleActif().id); }
 
-  ouvrirPaiementCotisation(co: any) {
-    this.cotisEdit = { ...co, date_paiement: new Date(), mode_paiement: 'ESPECE' };
+  /** Payer une cotisation, ou corriger un paiement déjà enregistré. */
+  ouvrirPaiementCotisation(co: any, modifier = false) {
+    this.cotisEdit = modifier
+      ? { ...co, modifier, date_paiement: this.versDate(co.date_paiement), mode_paiement: co.mode_paiement || 'ESPECE' }
+      : { ...co, modifier, date_paiement: new Date(), mode_paiement: 'ESPECE' };
     this.dlgCotis.set(true);
   }
   payerCotisation() {
     const co = this.cotisEdit;
-    this.gmrf.actionCotisation(co.id, { action: 'payer', date_paiement: this.toIso(co.date_paiement),
+    this.gmrf.actionCotisation(co.id, { action: co.modifier ? 'modifier' : 'payer',
+                                         date_paiement: this.toIso(co.date_paiement),
                                          mode_paiement: co.mode_paiement }).subscribe({
-      next: () => { this.dlgCotis.set(false); this.ok('Cotisation payée'); this.rafraichirDetail(); this.chargerCycles(); this.chargerDashboard(); },
+      next: () => { this.dlgCotis.set(false); this.ok(co.modifier ? 'Paiement modifié' : 'Cotisation payée'); this.rafraichirDetail(); this.chargerCycles(); this.chargerDashboard(); },
       error: e => this.err(e),
     });
   }
@@ -1025,7 +1077,8 @@ export class GmrfComponent implements OnInit {
     this.pret = { type_pret: 'BANCAIRE', montant: 0, taux_interet: 0, duree_mois: 12,
                   periodicite: 'MENSUELLE', mode_amortissement: 'CONSTANT', frais_dossier: 0,
                   date_souscription: new Date(), date_deblocage: new Date(), date_premiere_echeance: null,
-                  compte_tresorerie: '521', compte_emprunt: '162', compte_interets: '671' };
+                  lignes: [{ mode: 'VIREMENT', montant: 0 }],
+                  compte_emprunt: '162', compte_interets: '671' };
     this.amortSimule.set([]);
     this.dlgPret.set(true);
   }
@@ -1036,7 +1089,11 @@ export class GmrfComponent implements OnInit {
       .subscribe({ next: r => this.amortSimule.set(r.echeances || []), error: () => this.amortSimule.set([]) });
   }
   enregistrerPret() {
-    const p = { ...this.pret, date_deblocage: this.toIso(this.pret.date_deblocage),
+    if (this.pret.lignes.length > 1 && this.resteAVentiler(this.pret) !== 0) {
+      this.err({ error: { error: 'La répartition doit faire exactement le montant du prêt' } }); return;
+    }
+    const p = { ...this.pret, ...this.fondsPayload(this.pret, this.pret.montant),
+                date_deblocage: this.toIso(this.pret.date_deblocage),
                 date_souscription: this.toIso(this.pret.date_souscription),
                 date_premiere_echeance: this.pret.date_premiere_echeance ? this.toIso(this.pret.date_premiere_echeance) : null };
     this.gmrf.creerPret(p).subscribe({
@@ -1095,6 +1152,48 @@ export class GmrfComponent implements OnInit {
         error: err => this.err(err),
       });
     }
+  }
+
+  // ── Fonds reçus d'un prêt (création et correction du déblocage) ──
+  ajouterMode(o: any) {
+    o.lignes.push({ mode: 'ESPECE', montant: Math.max(this.resteAVentiler(o), 0) });
+  }
+  resteAVentiler(o: any): number {
+    const total = Number(o.montant) || 0;
+    return Math.round(total - o.lignes.reduce((a: number, l: any) => a + (Number(l.montant) || 0), 0));
+  }
+  /** Un seul mode → mode_paiement ; plusieurs → modes_deblocage (somme = montant). */
+  private fondsPayload(o: any, montant: number): any {
+    const lignes = o.lignes || [];
+    return lignes.length > 1
+      ? { modes_deblocage: lignes.map((l: any) => ({ mode: l.mode, montant: Number(l.montant) || 0 })) }
+      : { mode_paiement: lignes[0]?.mode, montant };
+  }
+  ouvrirDeblocage(p: any) {
+    const modes = (p.modes_deblocage || []).length
+      ? p.modes_deblocage.map((m: any) => ({ ...m }))
+      : [{ mode: this.modeDuCompte(p.compte_tresorerie), montant: p.montant }];
+    this.deblocageEdit = { id: p.id, reference: p.reference, montant: p.montant,
+                           date_deblocage: this.versDate(p.date_deblocage), lignes: modes };
+    this.dlgDeblocage.set(true);
+  }
+  enregistrerDeblocage() {
+    const e = this.deblocageEdit;
+    if (e.lignes.length > 1 && this.resteAVentiler(e) !== 0) {
+      this.err({ error: { error: 'La répartition doit faire exactement le montant du prêt' } }); return;
+    }
+    const fonds = this.fondsPayload(e, e.montant);
+    delete fonds.montant;
+    this.gmrf.modifierDatesPret(e.id, { action: 'modifier_deblocage', ...fonds,
+                                         date_deblocage: this.toIso(e.date_deblocage) }).subscribe({
+      next: p => { this.dlgDeblocage.set(false); this.ok('Déblocage modifié'); this.pretActif.set(p); this.chargerPrets(); this.chargerDashboard(); },
+      error: err => this.err(err),
+    });
+  }
+  /** Compte de trésorerie → mode, pour préremplir la correction. */
+  private modeDuCompte(compte: string): string {
+    if (compte?.startsWith('571')) return 'ESPECE';
+    return ({ '5521': 'WAVE', '5522': 'ORANGE_MONEY', '5523': 'FREE_MONEY' } as any)[compte] || 'VIREMENT';
   }
 
   // ── PDF ──

@@ -39,6 +39,42 @@ def _next_piece(tenant, source, prefix):
     return f"{prefix}-{n:04d}"
 
 
+# Chaque opération a sa source d'annulation. Une opération peut être passée,
+# annulée, repassée… : elle est comptabilisée tant qu'elle a plus de pièces
+# que d'extournes. Tester la seule EXISTENCE d'une pièce empêchait de la
+# repasser après une annulation (cotisation re-payée sans aucune écriture).
+SOURCE_ANNUL = {
+    'GMRF_FIN':      'GMRF_ANNUL_FIN',
+    'GMRF_COTIS':    'GMRF_ANNUL_COTIS',
+    'GMRF_RECEP':    'GMRF_ANNUL_RECEP',
+    'GMRF_PRET':     'GMRF_ANNUL_PRET',
+    'GMRF_PRET_ECH': 'GMRF_ANNUL_PRET_ECH',
+}
+
+
+def _pieces(tenant, source, source_id):
+    """Pièces d'une opération, de la plus ancienne à la plus récente."""
+    from apps.comptabilite.models import JournalEntry
+    pieces = set(JournalEntry.objects.filter(tenant=tenant, source=source, source_id=source_id)
+                 .values_list('no_piece', flat=True))
+    return sorted(pieces, key=lambda p: [int(n) for n in re.findall(r'\d+', p)] or [0])
+
+
+def est_comptabilise(tenant, source, source_id):
+    """L'opération a-t-elle une pièce en vigueur (non extournée) ?"""
+    return (len(_pieces(tenant, source, source_id))
+            > len(_pieces(tenant, SOURCE_ANNUL[source], source_id)))
+
+
+def piece_en_vigueur(tenant, source, source_id):
+    """Lignes de la pièce en vigueur d'une opération (queryset vide sinon)."""
+    from apps.comptabilite.models import JournalEntry
+    qs = JournalEntry.objects.filter(tenant=tenant, source=source, source_id=source_id)
+    if not est_comptabilise(tenant, source, source_id):
+        return qs.none()
+    return qs.filter(no_piece=_pieces(tenant, source, source_id)[-1]).order_by('ordre')
+
+
 def _cotisations_versees(cycle):
     """Cumul des cotisations déjà payées sur le cycle (créance accumulée envers
     le groupe), utilisé pour ventiler créance / dette à la réception."""
@@ -87,7 +123,7 @@ def generer_ecriture_financement(financement, tenant):
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    if JournalEntry.objects.filter(tenant=tenant, source='GMRF_FIN', source_id=financement.id).exists():
+    if est_comptabilise(tenant, 'GMRF_FIN', financement.id):
         return
 
     ref   = _next_piece(tenant, 'GMRF_FIN', 'GRF')
@@ -113,26 +149,29 @@ def annuler_ecriture_financement(financement, tenant):
 
 
 # ── NATT / Tontine ───────────────────────────────────────────────────────────
-def generer_ecriture_cotisation(cotisation, tenant):
+def generer_ecriture_cotisation(cotisation, tenant, compte_contrepartie=None):
     """Comptabilise une cotisation payée.
 
     Avant la réception de la cagnotte : D compte_creance / C trésorerie.
-    Après la réception : D compte_dette / C trésorerie (remboursement du groupe)."""
+    Après la réception : D compte_dette / C trésorerie (remboursement du groupe).
+    `compte_contrepartie` : imposé quand on MODIFIE un paiement — une
+    cotisation versée avant la cagnotte reste une créance, même corrigée après."""
     from apps.comptabilite.models import JournalEntry
     from .models import NattReception
 
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    if JournalEntry.objects.filter(tenant=tenant, source='GMRF_COTIS', source_id=cotisation.id).exists():
+    if est_comptabilise(tenant, 'GMRF_COTIS', cotisation.id):
         return
 
     cycle = cotisation.cycle
     # Tant que la cagnotte n'a pas été perçue, chaque cotisation constitue une
     # créance envers le groupe. Une fois la cagnotte reçue, chaque cotisation
     # rembourse la dette (avance consentie par le groupe).
-    apres_reception = NattReception.objects.filter(tenant=tenant, cycle=cycle).exists()
-    compte_contrepartie = cycle.compte_dette if apres_reception else cycle.compte_creance
+    if not compte_contrepartie:
+        apres_reception = NattReception.objects.filter(tenant=tenant, cycle=cycle).exists()
+        compte_contrepartie = cycle.compte_dette if apres_reception else cycle.compte_creance
 
     treso = cotisation.compte_tresorerie or cycle.compte_tresorerie
     ref   = _next_piece(tenant, 'GMRF_COTIS', 'NATT-C')
@@ -164,7 +203,7 @@ def generer_ecriture_reception(reception, tenant):
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    if JournalEntry.objects.filter(tenant=tenant, source='GMRF_RECEP', source_id=reception.id).exists():
+    if est_comptabilise(tenant, 'GMRF_RECEP', reception.id):
         return
 
     cycle   = reception.cycle
@@ -210,12 +249,11 @@ def _extourner(tenant, source, source_annul, source_id, prefix, libelle_prefix):
     """Génère les contre-écritures (débit ↔ crédit) d'une opération GMRF."""
     from apps.comptabilite.models import JournalEntry
 
-    if JournalEntry.objects.filter(tenant=tenant, source=source_annul, source_id=source_id).exists():
-        return
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    origines = JournalEntry.objects.filter(tenant=tenant, source=source, source_id=source_id).order_by('ordre')
+    # Seule la pièce en vigueur s'extourne : les précédentes l'ont déjà été.
+    origines = piece_en_vigueur(tenant, source, source_id)
     if not origines.exists():
         return
 
@@ -305,8 +343,10 @@ def generer_ecriture_deblocage_pret(pret, tenant):
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    if JournalEntry.objects.filter(tenant=tenant, source='GMRF_PRET', source_id=pret.id).exists():
+    if est_comptabilise(tenant, 'GMRF_PRET', pret.id):
         return
+
+    from apps.comptabilite.tresorerie import lignes_tresorerie, normaliser_ventilation
 
     ref   = _next_piece(tenant, 'GMRF_PRET', 'PRET')
     date  = pret.date_deblocage
@@ -314,22 +354,24 @@ def generer_ecriture_deblocage_pret(pret, tenant):
     montant = _d(pret.montant)
     frais   = _d(pret.frais_dossier)
 
-    rows = [
-        JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-                     no_compte=pret.compte_tresorerie, libelle=label,
-                     debit=montant, credit=0, source='GMRF_PRET', source_id=pret.id, ordre=1),
-        JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-                     no_compte=pret.compte_emprunt, libelle=label,
-                     debit=0, credit=montant, source='GMRF_PRET', source_id=pret.id, ordre=2),
-    ]
+    def ligne(ordre, compte, debit, credit, libelle=label):
+        return JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
+                            no_compte=compte, libelle=libelle, debit=debit, credit=credit,
+                            source='GMRF_PRET', source_id=pret.id, ordre=ordre)
+
+    # Fonds reçus : sur un seul compte, ou répartis par mode (caisse + banque…).
+    if pret.modes_deblocage:
+        jambes = lignes_tresorerie(normaliser_ventilation(pret.modes_deblocage, montant),
+                                   'debit', label)
+        rows = [ligne(j['ordre'], j['no_compte'], j['debit'], 0, j['libelle']) for j in jambes]
+    else:
+        rows = [ligne(1, pret.compte_tresorerie, montant, 0)]
+    ordre = len(rows) + 1
+    rows.append(ligne(ordre, pret.compte_emprunt, 0, montant))
     if frais > 0:
         rows += [
-            JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-                         no_compte=pret.compte_frais, libelle=f"{label} — frais de dossier",
-                         debit=frais, credit=0, source='GMRF_PRET', source_id=pret.id, ordre=3),
-            JournalEntry(tenant=tenant, exercice=exercice, no_piece=ref, date_ecriture=date,
-                         no_compte=pret.compte_tresorerie, libelle=f"{label} — frais de dossier",
-                         debit=0, credit=frais, source='GMRF_PRET', source_id=pret.id, ordre=4),
+            ligne(ordre + 1, pret.compte_frais, frais, 0, f"{label} — frais de dossier"),
+            ligne(ordre + 2, pret.compte_tresorerie, 0, frais, f"{label} — frais de dossier"),
         ]
     JournalEntry.objects.bulk_create(rows)
 
@@ -340,6 +382,16 @@ def annuler_ecriture_deblocage_pret(pret, tenant):
                libelle_prefix=f"Annulation prêt {pret.reference}")
 
 
+def rectifier_deblocage_pret(pret, tenant):
+    """Corrige le déblocage d'un prêt (date, comptes de trésorerie) :
+    extourne de la pièce en vigueur, puis nouvelle pièce. Le journal garde
+    l'erreur et sa correction."""
+    if not _exercice_actif(tenant):
+        raise ValueError("Aucun exercice ouvert : impossible de passer la correction.")
+    annuler_ecriture_deblocage_pret(pret, tenant)
+    generer_ecriture_deblocage_pret(pret, tenant)
+
+
 def generer_ecriture_echeance(echeance, tenant):
     """Remboursement d'une échéance : D emprunt (capital) + D intérêts / C
     trésorerie ; pénalité de retard éventuelle en charge financière."""
@@ -348,7 +400,7 @@ def generer_ecriture_echeance(echeance, tenant):
     exercice = _exercice_actif(tenant)
     if not exercice:
         return
-    if JournalEntry.objects.filter(tenant=tenant, source='GMRF_PRET_ECH', source_id=echeance.id).exists():
+    if est_comptabilise(tenant, 'GMRF_PRET_ECH', echeance.id):
         return
 
     pret  = echeance.pret

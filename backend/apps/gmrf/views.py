@@ -15,7 +15,7 @@ from core.models import log_audit
 from .models import (TypeFinancement, Financement, NattCycle,
                      NattCotisation, NattReception, Pret, PretEcheance)
 from . import services
-from apps.comptabilite.tresorerie import COMPTE_MODE, compte_du_mode
+from apps.comptabilite.tresorerie import COMPTE_MODE, compte_du_mode, normaliser_ventilation
 
 
 # ── Types de financement par défaut (paramétrables ensuite par l'école) ──────
@@ -77,6 +77,28 @@ def _tresorerie_du_reglement(data, compte_defaut):
     if mode not in COMPTE_MODE:
         raise ValueError(f"Mode de paiement inconnu : {mode}")
     return mode, compte_du_mode(mode)[0]
+
+
+def _ventilation_deblocage(data, montant, compte_defaut):
+    """(modes_deblocage, compte principal) des fonds d'un prêt.
+
+    `modes_deblocage` (plusieurs modes) ou `mode_paiement` (un seul) ; sans
+    l'un ni l'autre, le compte saisi. Le compte principal — celui de la plus
+    grosse part — sert ensuite de compte par défaut aux remboursements.
+    ValueError si un mode est inconnu ou si la répartition ne fait pas le total."""
+    lignes = data.get('modes_deblocage') or []
+    if not lignes and data.get('mode_paiement'):
+        lignes = [{'mode': data['mode_paiement'], 'montant': montant}]
+    if not lignes:
+        return [], (data.get('compte_tresorerie') or compte_defaut)
+    for l in lignes:
+        if (l or {}).get('mode') not in COMPTE_MODE:
+            raise ValueError(f"Mode de paiement inconnu : {(l or {}).get('mode')}")
+    ventilation = normaliser_ventilation(lignes, montant)
+    principal = max(ventilation, key=lambda v: v['montant'])
+    modes = [{'mode': v['mode'], 'montant': float(v['montant'])} for v in ventilation]
+    # Un seul mode : pas besoin de répartition, le compte suffit.
+    return (modes if len(modes) > 1 else []), compte_du_mode(principal['mode'])[0]
 
 
 def _redater_echeancier(echeances, d0, delta):
@@ -449,6 +471,24 @@ class NattCotisationView(APIView):
             c.date_paiement = request.data.get('date_paiement') or datetime.date.today()
             c.save()
             services.generer_ecriture_cotisation(c, tenant)
+        elif action == 'modifier' and c.statut == 'PAYE':
+            # Paiement saisi avec une erreur (date, mode) : extourne puis
+            # nouvelle pièce. La contrepartie (créance ou dette) ne change pas.
+            try:
+                mode, treso = _tresorerie_du_reglement(request.data, c.cycle.compte_tresorerie)
+                date_paiement = _date(request.data.get('date_paiement')) or c.date_paiement
+            except ValueError as e:
+                return Response({'error': str(e)}, status=400)
+            if not services._exercice_actif(tenant):
+                return Response({'error': 'Aucun exercice ouvert.'}, status=400)
+            avant = f"{c.date_paiement} {c.mode_paiement or c.compte_tresorerie}"
+            en_vigueur = services.piece_en_vigueur(tenant, 'GMRF_COTIS', c.id).filter(debit__gt=0).first()
+            contrepartie = en_vigueur.no_compte if en_vigueur else None
+            services.annuler_ecriture_cotisation(c, tenant)
+            c.mode_paiement, c.compte_tresorerie, c.date_paiement = mode, treso, date_paiement
+            c.save()
+            services.generer_ecriture_cotisation(c, tenant, compte_contrepartie=contrepartie)
+            action = f"modifier ({avant} → {date_paiement} {mode or treso})"
         elif action == 'annuler' and c.statut == 'PAYE':
             services.annuler_ecriture_cotisation(c, tenant)
             c.statut = 'A_PAYER'
@@ -538,6 +578,7 @@ def _pret_to_dict(pret, detail=False):
         'date_souscription': str(pret.date_souscription) if pret.date_souscription else None,
         'date_deblocage': str(pret.date_deblocage),
         'date_premiere_echeance': str(pret.date_premiere_echeance) if pret.date_premiere_echeance else None,
+        'modes_deblocage': pret.modes_deblocage or [],
         'frais_dossier': float(pret.frais_dossier),
         'compte_tresorerie': pret.compte_tresorerie, 'compte_emprunt': pret.compte_emprunt,
         'compte_interets': pret.compte_interets, 'compte_frais': pret.compte_frais,
@@ -627,6 +668,11 @@ class PretView(APIView):
         if premiere and souscription > premiere:
             return Response({'error': 'La souscription ne peut pas être postérieure à la 1ʳᵉ échéance'}, status=400)
 
+        try:
+            modes_deblocage, compte_treso = _ventilation_deblocage(d, montant, '521')
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+
         periodicite = d.get('periodicite', 'MENSUELLE')
         pret = Pret.objects.create(
             tenant=tenant, reference=_next_ref(tenant, Pret, 'PRET'),
@@ -638,7 +684,7 @@ class PretView(APIView):
             date_souscription=souscription, date_deblocage=date_deblocage,
             date_premiere_echeance=premiere,
             frais_dossier=_d(d.get('frais_dossier', 0)),
-            compte_tresorerie=d.get('compte_tresorerie', '521'),
+            compte_tresorerie=compte_treso, modes_deblocage=modes_deblocage,
             compte_emprunt=d.get('compte_emprunt', '162'),
             compte_interets=d.get('compte_interets', '671'),
             compte_frais=d.get('compte_frais', '6312'),
@@ -682,6 +728,8 @@ class PretView(APIView):
         except Pret.DoesNotExist:
             return Response({'error': 'Non trouvé'}, status=404)
         d = request.data
+        if d.get('action') == 'modifier_deblocage':
+            return self._modifier_deblocage(request, tenant, pret)
         try:
             souscription = _date(d['date_souscription']) if 'date_souscription' in d else pret.date_souscription
             premiere = (_date(d['date_premiere_echeance']) if 'date_premiere_echeance' in d
@@ -701,6 +749,37 @@ class PretView(APIView):
         pret.save(update_fields=['date_souscription', 'date_premiere_echeance', 'updated_at'])
         log_audit(request, 'MODIFICATION', 'Pret', pret.id,
                   f"{pret.reference} dates : {avant} → souscription {souscription}, 1re échéance {premiere}")
+        pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
+        return Response(_pret_to_dict(pret, detail=True))
+
+
+    def _modifier_deblocage(self, request, tenant, pret):
+        """Corrige la réception des fonds d'un prêt déjà enregistré : date de
+        déblocage et compte(s) de trésorerie (caisse, Wave, banque…, ou une
+        répartition). Extourne de l'écriture en vigueur puis nouvelle pièce."""
+        d = request.data
+        if pret.statut == 'ANNULE':
+            return Response({'error': 'Prêt annulé.'}, status=400)
+        try:
+            date_deblocage = _date(d.get('date_deblocage')) or pret.date_deblocage
+            modes, compte = _ventilation_deblocage(d, pret.montant, pret.compte_tresorerie)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+        if not services._exercice_actif(tenant):
+            return Response({'error': 'Aucun exercice ouvert : impossible de passer la correction.'}, status=400)
+
+        avant = f"{pret.date_deblocage} {pret.modes_deblocage or pret.compte_tresorerie}"
+        # Sans 1ʳᵉ échéance propre, l'échéancier part du déblocage : il suit.
+        if not pret.date_premiere_echeance and date_deblocage != pret.date_deblocage:
+            delta = _PRET_PERIODE_DELTA.get(pret.periodicite, _PRET_PERIODE_DELTA['MENSUELLE'])
+            _redater_echeancier(pret.echeances.all(), date_deblocage, delta)
+        pret.date_deblocage, pret.modes_deblocage, pret.compte_tresorerie = date_deblocage, modes, compte
+        pret.save(update_fields=['date_deblocage', 'modes_deblocage', 'compte_tresorerie', 'updated_at'])
+        services.rectifier_deblocage_pret(pret, tenant)
+        from apps.gouvernance.liaison_gmrf import suivre_pret
+        suivre_pret(pret)
+        log_audit(request, 'MODIFICATION', 'Pret', pret.id,
+                  f"{pret.reference} déblocage : {avant} → {date_deblocage} {modes or compte}")
         pret = Pret.objects.prefetch_related('echeances').get(id=pret.id)
         return Response(_pret_to_dict(pret, detail=True))
 

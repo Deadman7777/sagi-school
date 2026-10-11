@@ -293,6 +293,9 @@ class Pret(TenantModel):
     date_souscription = models.DateField(null=True, blank=True)
     date_deblocage   = models.DateField()
     date_premiere_echeance = models.DateField(null=True, blank=True)
+    # Fonds reçus sur plusieurs modes : [{"mode": "ESPECE", "montant": 300000},
+    # {"mode": "VIREMENT", "montant": 110000}]. Vide = tout sur compte_tresorerie.
+    modes_deblocage  = models.JSONField(default=list, blank=True)
     frais_dossier    = models.DecimalField(max_digits=13, decimal_places=2, default=0)
     # Comptes paramétrables
     compte_tresorerie = models.CharField(max_length=10, default='521')
