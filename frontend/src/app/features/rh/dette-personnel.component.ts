@@ -89,7 +89,12 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
         {{ s.employe.salaire_mensuel | number:'1.0-0' }} FCFA/mois · année {{ s.exercice.annee_scolaire }}
         ({{ s.exercice.nb_mois }} mois : {{ s.exercice.premier_mois }} → {{ s.exercice.dernier_mois }})
       </span>
-      <app-bouton-imprimer [pdf]="pdfSituation" [arg]="s.employe.id" />
+      <div class="dp-actions">
+        <p-button icon="pi pi-file-pdf" label="PDF" size="small" severity="secondary" [outlined]="true"
+                  pTooltip="Télécharger la fiche en PDF" ariaLabel="Télécharger la fiche en PDF"
+                  [loading]="telechargement()" (onClick)="telechargerPdf()" />
+        <app-bouton-imprimer [pdf]="pdfSituation" [arg]="s.employe.id" />
+      </div>
     </div>
     <div class="dp-kpis">
       <div><span>Dû antérieur</span><strong>{{ s.totaux.du_anterieur | number:'1.0-0' }}</strong></div>
@@ -216,6 +221,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
     th.num { text-align:right; }
     .dp-kpis { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin-bottom:12px; }
     .dp-barre { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .dp-actions { display:flex; gap:6px; flex-shrink:0; }
     .dp-avenir td { color:var(--text-3); }
     .dp-kpis div { background:var(--surface-4); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; }
     .dp-kpis span { font-size:11px; color:var(--text-3); }
@@ -247,6 +253,7 @@ export class DettePersonnelComponent {
   resteEchuTotal = signal(0);
   /** Requête du PDF pour <app-bouton-imprimer>. */
   readonly pdfSituation = (id: string) => this.rh.situationDettePdf(id);
+  telechargement = signal(false);
   chargement = signal(false);
   situation = signal<SituationDettePersonnel | null>(null);
   enCours = signal(false);
@@ -345,6 +352,24 @@ export class DettePersonnelComponent {
   private formVide() {
     return { montant: 0, mode_paiement: 'CAISSE',
              date_versement: new Date().toISOString().slice(0, 10), observations: '' };
+  }
+
+  telechargerPdf() {
+    const s = this.situation();
+    if (!s || this.telechargement()) return;
+    this.telechargement.set(true);
+    this.rh.situationDettePdf(s.employe.id).subscribe({
+      next: blob => {
+        this.telechargement.set(false);
+        const url = URL.createObjectURL(blob);
+        const lien = document.createElement('a');
+        lien.href = url;
+        lien.download = `fiche_personnel_${s.employe.matricule || s.employe.id}.pdf`;
+        lien.click();
+        URL.revokeObjectURL(url);
+      },
+      error: err => { this.telechargement.set(false); this.erreur(err); },
+    });
   }
 
   private erreur(err: unknown) {
