@@ -157,7 +157,8 @@ const MOIS_OPTIONS = [
         <tr>
           <td class="mono">{{ e.matricule }}</td>
           <td>
-            <div class="bold">{{ e.nom_complet }}</div>
+            <!-- Le nom ouvre la fiche : dû de l'école mois par mois, PDF. -->
+            <button type="button" class="lien-fiche bold" (click)="dette.ouvrir(e.id)">{{ e.nom_complet }}</button>
             @if (e.est_cadre) { <span class="badge-cadre">CADRE</span> }
           </td>
           <td>{{ e.type_employe }}</td>
@@ -176,7 +177,7 @@ const MOIS_OPTIONS = [
             <div class="btn-row">
               <p-button icon="pi pi-pencil"     [rounded]="true" [text]="true" severity="info"    (onClick)="ouvrirDialogEmploye(e)" pTooltip="Modifier l'employé" tooltipPosition="top" />
               <p-button icon="pi pi-file-edit"  [rounded]="true" [text]="true" severity="success" (onClick)="ouvrirDialogBulletin(e)" pTooltip="Générer un bulletin de paie" tooltipPosition="top" />
-              <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="secondary" (onClick)="dette.ouvrir(e.id)" pTooltip="Dû de l'école à l'employé (mois par mois)" tooltipPosition="top" [ariaLabel]="'Dû à ' + e.nom_complet" />
+              <p-button icon="pi pi-id-card" [rounded]="true" [text]="true" severity="info" (onClick)="dette.ouvrir(e.id)" pTooltip="Fiche : dû de l'école mois par mois, imprimable" tooltipPosition="top" [ariaLabel]="'Fiche de ' + e.nom_complet" />
               @if (e.statut !== 'QUITTE') {
                 <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" tooltipPosition="top" />
                 <p-button icon="pi pi-sign-out" [rounded]="true" [text]="true" severity="danger" (onClick)="ouvrirDepart(e)" pTooltip="Départ / supprimer" tooltipPosition="top" />
@@ -1187,6 +1188,9 @@ const MOIS_OPTIONS = [
     .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .form-group.full { grid-column:1/-1; }
     .form-separator { grid-column:1/-1; font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:6px; margin-top:4px; }
+    .lien-fiche { background:none; border:0; padding:0; color:var(--text); cursor:pointer; text-align:left;
+                  font:inherit; text-decoration:underline dotted; }
+    .lien-fiche:hover, .lien-fiche:focus-visible { color:#00d4aa; }
     .hint-reliquat { font-size:11px; color:var(--text-3); line-height:1.45; }
     .w-full { width:100%; }
     .toggle-label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-2); cursor:pointer; }

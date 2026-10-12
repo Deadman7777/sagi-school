@@ -11,8 +11,9 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import {
-  LigneSuiviDette, RhService, SituationDettePersonnel,
+  LigneDettePersonnel, LigneSuiviDette, RhService, SituationDettePersonnel,
 } from '../../core/services/rh.service';
+import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /** Ce que l'école doit à son personnel : reliquat d'un exercice antérieur et
  *  reste de chaque bulletin, réglés ensuite en versements ou par compensation
@@ -22,7 +23,7 @@ import {
   selector: 'app-dette-personnel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DecimalPipe, DatePipe, FormsModule, ButtonModule, DialogModule, InputNumberModule,
-            InputTextModule, SelectModule, TableModule, TagModule, TooltipModule],
+            InputTextModule, SelectModule, TableModule, TagModule, TooltipModule, BoutonImprimerComponent],
   template: `
 @if (afficherTableau()) {
   <div class="table-card">
@@ -30,25 +31,29 @@ import {
       <div>
         <div class="dp-titre">Dû au personnel</div>
         <div class="dp-aide">
-          Reliquat de l'année passée (fiche de l'employé) et reste des bulletins validés
-          sans être entièrement versés. Les enfants du personnel peuvent régler leur
-          scolarité avec cette somme : mode « Compensation » au guichet.
+          Pour chaque employé : le reliquat de l'année passée (fiche de l'employé) et chaque mois
+          de paie de l'année scolaire — le net du bulletin validé, sinon le salaire convenu.
+          Les enfants du personnel peuvent régler leur scolarité avec cette somme : mode
+          « Compensation » au guichet.
         </div>
       </div>
       <div class="dp-total">
-        <span>Reste dû au personnel</span>
-        <strong>{{ resteTotal() | number:'1.0-0' }} FCFA</strong>
+        <span>Dû à ce jour</span>
+        <strong>{{ resteEchuTotal() | number:'1.0-0' }} FCFA</strong>
+        <span class="dp-sous">sur {{ resteTotal() | number:'1.0-0' }} FCFA pour toute l'année</span>
       </div>
     </div>
     <p-table [value]="lignes()" [loading]="chargement()" styleClass="p-datatable-sm">
       <ng-template pTemplate="header">
         <tr>
           <th>Employé</th>
-          <th class="num">Reliquat antérieur</th>
+          <th class="num">Antérieur</th>
+          <th class="num">Dû de l'année</th>
           <th class="num">Total dû</th>
-          <th class="num">Versé</th>
-          <th class="num">Compensé (scolarité)</th>
-          <th class="num">Reste dû</th>
+          <th class="num">Réglé</th>
+          <th class="num">dont compensé</th>
+          <th class="num">Dû à ce jour</th>
+          <th class="num">Reste (année)</th>
           <th class="num">Enfants</th>
           <th></th>
         </tr>
@@ -56,22 +61,20 @@ import {
       <ng-template pTemplate="body" let-l>
         <tr>
           <td><strong>{{ l.nom_complet }}</strong><div class="dp-sous">{{ l.matricule }} · {{ l.poste }}</div></td>
-          <td class="num">{{ l.reliquat | number:'1.0-0' }}</td>
+          <td class="num">{{ l.du_anterieur | number:'1.0-0' }}</td>
+          <td class="num">{{ l.du_annee | number:'1.0-0' }}</td>
           <td class="num">{{ l.du | number:'1.0-0' }}</td>
-          <td class="num">{{ (l.verse_validation + l.versements) | number:'1.0-0' }}</td>
+          <td class="num">{{ l.regle | number:'1.0-0' }}</td>
           <td class="num">{{ l.compense | number:'1.0-0' }}</td>
-          <td class="num"><strong [class.dp-rouge]="l.reste > 0">{{ l.reste | number:'1.0-0' }}</strong></td>
+          <td class="num"><strong [class.dp-rouge]="l.reste_echu > 0">{{ l.reste_echu | number:'1.0-0' }}</strong></td>
+          <td class="num">{{ l.reste | number:'1.0-0' }}</td>
           <td class="num">{{ l.nb_enfants }}</td>
-          <td><p-button icon="pi pi-eye" [rounded]="true" [text]="true" severity="info"
-                        (onClick)="ouvrir(l.id)" pTooltip="Situation mois par mois" tooltipPosition="top"
-                        [ariaLabel]="'Situation de ' + l.nom_complet" /></td>
+          <td><p-button label="Fiche" icon="pi pi-id-card" size="small" severity="info" [outlined]="true"
+                        (onClick)="ouvrir(l.id)" [ariaLabel]="'Fiche de ' + l.nom_complet" /></td>
         </tr>
       </ng-template>
       <ng-template pTemplate="emptymessage">
-        <tr><td colspan="8" class="dp-vide">
-          Aucun membre du personnel à qui l'école doit quelque chose. Saisissez un reliquat
-          sur la fiche de l'employé, ou reliez un élève à son parent employé.
-        </td></tr>
+        <tr><td colspan="10" class="dp-vide">Aucun membre du personnel.</td></tr>
       </ng-template>
     </p-table>
   </div>
@@ -80,34 +83,52 @@ import {
 <p-dialog [header]="'Situation — ' + (situation()?.employe?.nom_complet || '')" [(visible)]="dialogVisible"
           [modal]="true" [style]="{width:'820px'}" [draggable]="false">
   @if (situation(); as s) {
+    <div class="dp-barre">
+      <span class="dp-sous">
+        {{ s.employe.poste }} · {{ s.employe.matricule }} · salaire convenu
+        {{ s.employe.salaire_mensuel | number:'1.0-0' }} FCFA/mois · année {{ s.exercice.annee_scolaire }}
+        ({{ s.exercice.nb_mois }} mois : {{ s.exercice.premier_mois }} → {{ s.exercice.dernier_mois }})
+      </span>
+      <app-bouton-imprimer [pdf]="pdfSituation" [arg]="s.employe.id" />
+    </div>
     <div class="dp-kpis">
+      <div><span>Dû antérieur</span><strong>{{ s.totaux.du_anterieur | number:'1.0-0' }}</strong></div>
+      <div><span>Dû de l'année</span><strong>{{ s.totaux.du_annee | number:'1.0-0' }}</strong></div>
       <div><span>Total dû</span><strong>{{ s.totaux.du | number:'1.0-0' }}</strong></div>
-      <div><span>Versé à la paie</span><strong>{{ s.totaux.verse_validation | number:'1.0-0' }}</strong></div>
-      <div><span>Versements</span><strong>{{ s.totaux.versements | number:'1.0-0' }}</strong></div>
-      <div><span>Compensé (scolarité)</span><strong>{{ s.totaux.compense | number:'1.0-0' }}</strong></div>
-      <div class="dp-kpi-reste"><span>Reste dû</span><strong>{{ s.totaux.reste | number:'1.0-0' }} FCFA</strong></div>
+      <div><span>Réglé (dont compensé {{ s.totaux.compense | number:'1.0-0' }})</span><strong>{{ s.totaux.regle | number:'1.0-0' }}</strong></div>
+      <div class="dp-kpi-reste"><span>Dû à ce jour</span><strong>{{ s.totaux.reste_echu | number:'1.0-0' }}</strong></div>
+      <div><span>Reste sur l'année</span><strong>{{ s.totaux.reste | number:'1.0-0' }} FCFA</strong></div>
     </div>
 
     <div class="dp-section">Mois par mois</div>
     <table class="dp-tbl">
       <thead><tr>
-        <th>Période</th><th class="num">Dû</th><th class="num">Versé à la paie</th>
+        <th>Période</th><th>Base</th><th class="num">Dû</th><th class="num">Versé à la paie</th>
         <th class="num">Réglé ensuite</th><th class="num">Reste</th><th>Statut</th>
       </tr></thead>
       <tbody>
         @for (l of s.lignes; track $index) {
-          <tr>
-            <td>{{ l.type === 'RELIQUAT' ? '🔁 ' : '' }}{{ l.libelle }}</td>
+          <tr [class.dp-avenir]="!l.echu">
+            <td>{{ l.type !== 'MOIS' ? '🔁 ' : '' }}{{ l.libelle }}</td>
+            <td class="dp-sous">{{ libelleBase(l) }}</td>
             <td class="num">{{ l.du | number:'1.0-0' }}</td>
             <td class="num">{{ l.verse | number:'1.0-0' }}</td>
             <td class="num">{{ l.regle_ensuite | number:'1.0-0' }}</td>
             <td class="num"><strong>{{ l.reste | number:'1.0-0' }}</strong></td>
-            <td><p-tag [value]="libelleStatut(l.statut)" [severity]="severiteStatut(l.statut)" /></td>
+            <td><p-tag [value]="libelleStatut(l)" [severity]="severiteStatut(l)" /></td>
           </tr>
         } @empty {
-          <tr><td colspan="6" class="dp-vide">Aucune dette : ni reliquat ni bulletin validé.</td></tr>
+          <tr><td colspan="7" class="dp-vide">Aucun mois de paie : vérifiez l'exercice et le salaire de la fiche.</td></tr>
         }
       </tbody>
+      <tfoot><tr>
+        <td colspan="2"><strong>Total</strong></td>
+        <td class="num"><strong>{{ s.totaux.du | number:'1.0-0' }}</strong></td>
+        <td class="num"><strong>{{ s.totaux.verse_validation | number:'1.0-0' }}</strong></td>
+        <td class="num"><strong>{{ (s.totaux.versements + s.totaux.compense) | number:'1.0-0' }}</strong></td>
+        <td class="num"><strong>{{ s.totaux.reste | number:'1.0-0' }}</strong></td>
+        <td></td>
+      </tr></tfoot>
     </table>
     <div class="dp-note">Un règlement (versement ou compensation) solde d'abord la dette la plus ancienne.</div>
 
@@ -127,7 +148,8 @@ import {
         <div class="dp-section">Compensations sur la scolarité</div>
         @for (c of s.compensations; track c.paiement) {
           <div class="dp-ligne">
-            <span>{{ c.date | date:'dd/MM/yyyy' }} · {{ c.no_piece }} · {{ c.eleve }}</span>
+            <span>{{ c.date | date:'dd/MM/yyyy' }} · {{ c.no_piece }} · {{ c.eleve }}
+              @if (c.objet) { <span class="dp-sous">({{ c.objet }})</span> }</span>
             <strong>{{ c.montant | number:'1.0-0' }}</strong>
           </div>
         } @empty {
@@ -152,12 +174,12 @@ import {
       <div class="dp-sous">Aucun versement.</div>
     }
 
-    @if (s.totaux.reste > 0) {
+    @if (s.totaux.reste_echu > 0) {
       <div class="dp-section">Verser à l'employé</div>
       <div class="dp-form">
         <div class="form-group">
           <label for="dp-montant">Montant</label>
-          <p-inputNumber inputId="dp-montant" [(ngModel)]="form.montant" [min]="0" [max]="s.totaux.reste"
+          <p-inputNumber inputId="dp-montant" [(ngModel)]="form.montant" [min]="0" [max]="s.totaux.reste_echu"
                          mode="decimal" [fluid]="true" />
         </div>
         <div class="form-group">
@@ -192,7 +214,9 @@ import {
     .dp-vide { text-align:center; color:var(--text-3); padding:16px; }
     .num { text-align:right; }
     th.num { text-align:right; }
-    .dp-kpis { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; margin-bottom:12px; }
+    .dp-kpis { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; margin-bottom:12px; }
+    .dp-barre { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .dp-avenir td { color:var(--text-3); }
     .dp-kpis div { background:var(--surface-4); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; }
     .dp-kpis span { font-size:11px; color:var(--text-3); }
     .dp-kpis strong { font-size:14px; color:var(--text); }
@@ -220,6 +244,9 @@ export class DettePersonnelComponent {
 
   lignes = signal<LigneSuiviDette[]>([]);
   resteTotal = signal(0);
+  resteEchuTotal = signal(0);
+  /** Requête du PDF pour <app-bouton-imprimer>. */
+  readonly pdfSituation = (id: string) => this.rh.situationDettePdf(id);
   chargement = signal(false);
   situation = signal<SituationDettePersonnel | null>(null);
   enCours = signal(false);
@@ -242,7 +269,12 @@ export class DettePersonnelComponent {
   charger() {
     this.chargement.set(true);
     this.rh.suiviDettes().subscribe({
-      next: r => { this.lignes.set(r.results); this.resteTotal.set(r.reste_total); this.chargement.set(false); },
+      next: r => {
+        this.lignes.set(r.results);
+        this.resteTotal.set(r.reste_total);
+        this.resteEchuTotal.set(r.reste_echu_total);
+        this.chargement.set(false);
+      },
       error: err => { this.erreur(err); this.chargement.set(false); },
     });
   }
@@ -267,7 +299,7 @@ export class DettePersonnelComponent {
         this.form = this.formVide();
         this.enCours.set(false);
         this.msg.add({ severity: 'success', summary: 'Versement enregistré',
-                       detail: `Reste dû : ${maj.totaux.reste.toLocaleString('fr-FR')} FCFA` });
+                       detail: `Dû à ce jour : ${maj.totaux.reste_echu.toLocaleString('fr-FR')} FCFA` });
         if (this.afficherTableau()) this.charger();
       },
       error: err => { this.erreur(err); this.enCours.set(false); },
@@ -289,12 +321,21 @@ export class DettePersonnelComponent {
     });
   }
 
-  libelleStatut(s: string): string {
-    return ({ SOLDE: 'Soldé', PARTIEL: 'Partiel', IMPAYE: 'Impayé' } as Record<string, string>)[s] || s;
+  libelleStatut(l: LigneDettePersonnel): string {
+    if (l.statut !== 'SOLDE' && !l.echu) return l.statut === 'PARTIEL' ? 'Avancé' : 'À venir';
+    return ({ SOLDE: 'Soldé', PARTIEL: 'Partiel', IMPAYE: 'Impayé' } as Record<string, string>)[l.statut] || l.statut;
   }
 
-  severiteStatut(s: string): 'success' | 'warn' | 'danger' {
-    return s === 'SOLDE' ? 'success' : s === 'PARTIEL' ? 'warn' : 'danger';
+  severiteStatut(l: LigneDettePersonnel): 'success' | 'warn' | 'danger' | 'secondary' {
+    if (l.statut === 'SOLDE') return 'success';
+    if (!l.echu) return 'secondary';
+    return l.statut === 'PARTIEL' ? 'warn' : 'danger';
+  }
+
+  libelleBase(l: LigneDettePersonnel): string {
+    if (l.type === 'RELIQUAT') return 'Reliquat saisi';
+    if (l.type === 'ANTERIEUR') return 'Bulletin antérieur';
+    return l.source === 'BULLETIN' ? 'Bulletin' : 'Salaire convenu';
   }
 
   libelleMode(m: string): string {

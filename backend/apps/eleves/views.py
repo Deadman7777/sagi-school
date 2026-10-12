@@ -2687,6 +2687,20 @@ class ElevesListePDFView(APIView):
         return response
 
 
+def _libelle_modes(p):
+    """[« Compensation 40 000 », « Espèce 7 000 »] : un reçu ventilé montre
+    ses modes, une ligne chacun, et la compensation (dû au parent employé)
+    s'y lit en clair."""
+    lignes = p.modes_reglement or []
+    from apps.paiements.models import MODE_CHOICES
+    noms = dict(MODE_CHOICES)
+    noms['COMPENSATION'] = 'Compensation'
+    if len(lignes) > 1:
+        return [f"{noms.get(l.get('mode'), l.get('mode'))}\u00a0"
+                f"{int(float(l.get('montant') or 0)):,}".replace(',', '\u00a0') for l in lignes]
+    return [noms.get(p.mode_paiement, p.get_mode_paiement_display())]
+
+
 class SituationElevePDFView(APIView):
     """PDF de situation financière individuelle d'un élève (paiements + solde)."""
     permission_classes = [IsAuthenticated]
@@ -2727,7 +2741,7 @@ class SituationElevePDFView(APIView):
             paiements_list.append({
                 'date':          p.date_paiement,
                 'no_recu':       p.no_piece or '—',
-                'mode':          p.get_mode_paiement_display() if hasattr(p, 'get_mode_paiement_display') else p.mode_paiement,
+                'mode':          _libelle_modes(p),
                 'inscription':   float(p.montant_inscription  or 0),
                 'mensualite':    float(p.montant_mensualite    or 0),
                 'uniforme':      float(p.montant_uniforme      or 0),

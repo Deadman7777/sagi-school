@@ -228,23 +228,67 @@ class EmployeViewSet(viewsets.ModelViewSet):
         from .dette_personnel import situation_personnel
         return Response(situation_personnel(self.get_object()))
 
+    @action(detail=True, methods=['get'], url_path='situation-pdf')
+    def situation_pdf(self, request, pk=None):
+        """Fiche imprimable : dû antérieur et de l'année, mois par mois,
+        règlements (versements, compensations), enfants."""
+        from io import BytesIO
+        from xhtml2pdf import pisa
+        from .dette_personnel import exercice_courant, situation_personnel
+
+        employe = self.get_object()
+        tenant = get_tenant(request)
+        exercice = exercice_courant(tenant)
+        s = situation_personnel(employe, exercice=exercice)
+        bases = {'RELIQUAT': 'Reliquat saisi', 'ANTERIEUR': 'Bulletin antérieur',
+                 'BULLETIN': 'Bulletin', 'SALAIRE': 'Salaire convenu'}
+        statuts = {'SOLDE': 'Soldé', 'PARTIEL': 'Partiel', 'IMPAYE': 'Impayé'}
+        for l in s['lignes']:
+            l['base_libelle'] = bases.get(l['source'], '—')
+            l['statut_libelle'] = statuts.get(l['statut'], l['statut'])
+            if l['statut'] != 'SOLDE' and not l['echu']:
+                l['statut_libelle'] = 'À venir'
+        reglements = sorted(
+            [{'date': v['date'], 'no_piece': v['no_piece'], 'montant': v['montant'],
+              'nature': f"Versement — {v['mode_libelle']}"
+                        + (f" ({v['observations']})" if v['observations'] else '')}
+             for v in s['versements']]
+            + [{'date': c['date'], 'no_piece': c['no_piece'], 'montant': c['montant'],
+                'nature': f"Compensation — {c['objet'] or 'scolarité'} de {c['eleve']}"}
+               for c in s['compensations']],
+            key=lambda r: (r['date'], r['no_piece'] or ''))
+        t = s['totaux']
+        context = {
+            'tenant': tenant, 'exercice': exercice, 'date_edition': timezone.now(),
+            's': s, 't': t, 'reglements': reglements,
+            'regle_ensuite': round(t['versements'] + t['compense'], 2),
+            'reste_echu_annee': round(t['reste_echu'] - t['reste_anterieur'], 2),
+        }
+        html = render_to_string('pdf/situation_personnel.html', context)
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF', status=500)
+        reponse = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        nom = employe.nom_complet.replace(' ', '_').replace('/', '-')
+        reponse['Content-Disposition'] = f'inline; filename="situation_personnel_{nom}.pdf"'
+        return reponse
+
     @action(detail=False, methods=['get'], url_path='dettes')
     def dettes(self, request):
         """Une ligne par employé à qui l'école doit quelque chose (ou qui a
         des enfants dans l'établissement) : le tableau de suivi."""
         from .dette_personnel import situation_personnel
         lignes = []
-        for e in self.get_queryset().prefetch_related('enfants'):
-            if not (e.reliquat_anterieur or e.enfants.exists()
-                    or e.bulletins.filter(montant_verse__isnull=False).exists()
-                    or e.versements.exists()):
-                continue
+        for e in self.get_queryset():
             s = situation_personnel(e)
+            if e.statut == 'QUITTE' and s['totaux']['reste'] <= 0:
+                continue
             lignes.append({**s['employe'], **s['totaux'],
                            'reliquat': s['reliquat']['du'],
                            'nb_enfants': len(s['enfants'])})
         return Response({'results': lignes,
-                         'reste_total': round(sum(l['reste'] for l in lignes), 2)})
+                         'reste_total': round(sum(l['reste'] for l in lignes), 2),
+                         'reste_echu_total': round(sum(l['reste_echu'] for l in lignes), 2)})
 
     @action(detail=True, methods=['post'])
     def verser(self, request, pk=None):
@@ -266,8 +310,10 @@ class EmployeViewSet(viewsets.ModelViewSet):
         reste = reste_du_employe(employe)
         if float(montant) > reste + 0.01:
             return Response({'error': f"Versement de {montant:,.0f} FCFA supérieur à ce que "
-                                      f"l'école doit encore à {employe.nom_complet} "
-                                      f"({reste:,.0f} FCFA)."}, status=400)
+                                      f"l'école doit à ce jour à {employe.nom_complet} "
+                                      f"({reste:,.0f} FCFA : antérieur et mois commencés). "
+                                      "Un salaire à venir se verse en avance sur salaire."},
+                            status=400)
         mode = request.data.get('mode_paiement') or 'CAISSE'
         with transaction.atomic():
             v = VersementPersonnel.objects.create(

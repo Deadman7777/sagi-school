@@ -186,11 +186,15 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
                 <!-- Multi-mode : le détail, pas un mode fictif « MIXTE ». -->
                 <div class="modes-detail">
                   @for (mr of p.modes_reglement; track $index) {
-                    <span class="mode-chip">{{ libelleMode(mr.mode) }} {{ mr.montant | number:'1.0-0' }}</span>
+                    <span class="mode-chip" [class.mode-chip-compensation]="mr.mode === 'COMPENSATION'">{{ libelleMode(mr.mode) }} {{ mr.montant | number:'1.0-0' }}</span>
                   }
                 </div>
               } @else {
-                <p-tag [value]="libelleMode(p.mode_paiement)" severity="info" />
+                <p-tag [value]="libelleMode(p.mode_paiement)" [severity]="p.mode_paiement === 'COMPENSATION' ? 'success' : 'info'" />
+              }
+              <!-- Réglé par ce que l'école doit au parent : rien en caisse. -->
+              @if (p.employe_compense_nom) {
+                <div class="receveur-ligne">🤝 Compensation : {{ p.employe_compense_nom }}</div>
               }
               @if (p.receveur_nom) {
                 <div class="receveur-ligne">👤 {{ p.receveur_nom }}</div>
@@ -1312,6 +1316,7 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
     .page-sub    { font-size:12px; color:var(--text-3); }
 
     .modes-detail { display:flex; flex-wrap:wrap; gap:4px; }
+    .mode-chip-compensation { background:rgba(0,212,170,.15) !important; color:#00a884 !important; }
     .mode-chip { font-size:11px; padding:2px 6px; border-radius:6px; white-space:nowrap;
                  background:var(--surface-4); color:var(--text); border:1px solid var(--border); }
     .modes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }

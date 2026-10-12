@@ -120,7 +120,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         tenant = self.get_tenant()
         if not tenant:
             return Paiement.objects.none()
-        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'eleve__section', 'eleve__tenant', 'exercice', 'receveur')
+        qs = Paiement.objects.filter(tenant=tenant).select_related('eleve', 'eleve__section', 'eleve__tenant', 'exercice', 'receveur', 'employe_compense')
         if eleve_id := self.request.query_params.get('eleve'):
             qs = qs.filter(eleve_id=eleve_id)
         if mode := self.request.query_params.get('mode'):
@@ -328,6 +328,11 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
             'COMPENSATION': 'Compensation sur salaire dû',
         }
+        # La compensation nomme le parent employé : la famille et l'école
+        # voient sur le reçu que rien n'a été versé en caisse.
+        if p.employe_compense_id:
+            MODE_LABELS['COMPENSATION'] = (f"Compensation sur salaire dû "
+                                           f"({p.employe_compense.nom_complet})")
 
         # Cumul des paiements AVANT ce reçu. Les reçus ANNULÉS n'ont rien
         # encaissé : les compter gonflait « déjà versé » et faisait imprimer un

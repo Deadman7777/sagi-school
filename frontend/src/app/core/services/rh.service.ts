@@ -41,7 +41,11 @@ export interface Employe {
 
 /** Une dette de l'école envers l'employé : reliquat antérieur ou mois de paie. */
 export interface LigneDettePersonnel {
-  type: 'RELIQUAT' | 'MOIS';
+  type: 'RELIQUAT' | 'ANTERIEUR' | 'MOIS';
+  /** D'où vient le dû : reliquat saisi, bulletin validé ou salaire convenu. */
+  source: 'RELIQUAT' | 'BULLETIN' | 'SALAIRE';
+  echu: boolean;
+  regle: number;
   libelle: string;
   mois: number | null;
   annee: number | null;
@@ -53,6 +57,13 @@ export interface LigneDettePersonnel {
 }
 
 export interface TotauxDettePersonnel {
+  du_anterieur: number;
+  du_annee: number;
+  du_echu: number;
+  reste_anterieur: number;
+  reste_annee: number;
+  reste_echu: number;
+  reste_a_venir: number;
   du: number;
   verse_validation: number;
   versements: number;
@@ -63,13 +74,14 @@ export interface TotauxDettePersonnel {
 }
 
 export interface SituationDettePersonnel {
-  employe: { id: string; nom_complet: string; matricule: string; poste: string };
+  employe: { id: string; nom_complet: string; matricule: string; poste: string; salaire_mensuel: number };
+  exercice: { annee_scolaire: string; nb_mois: number; premier_mois: string; dernier_mois: string };
   lignes: LigneDettePersonnel[];
   reliquat: { du: number; note: string };
   versements: { id: string; date: string; no_piece: string; montant: number;
                 mode_paiement: string; observations: string }[];
   compensations: { paiement: string; date: string; no_piece: string; eleve: string;
-                   eleve_id: string; montant: number }[];
+                   eleve_id: string; montant: number; objet: string }[];
   enfants: { id: string; nom_complet: string; matricule: string; section: string;
              classe: string; reste_a_payer: number }[];
   totaux: TotauxDettePersonnel;
@@ -211,7 +223,11 @@ export class RhService {
     return this.api.get<SituationDettePersonnel>(`/rh/employes/${employeId}/situation-dette/`);
   }
   suiviDettes() {
-    return this.api.get<{ results: LigneSuiviDette[]; reste_total: number }>('/rh/employes/dettes/');
+    return this.api.get<{ results: LigneSuiviDette[]; reste_total: number; reste_echu_total: number }>(
+      '/rh/employes/dettes/');
+  }
+  situationDettePdf(employeId: string) {
+    return this.api.getBlob(`/rh/employes/${employeId}/situation-pdf/`);
   }
   verserPersonnel(employeId: string, data: { montant: number; mode_paiement: string;
                                              date_versement: string; observations: string }) {

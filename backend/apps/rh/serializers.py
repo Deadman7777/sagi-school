@@ -30,8 +30,10 @@ class EmployeSerializer(TenantModelSerializer):
                 data[f] = None
         # Numériques à valeur par défaut : un champ vidé à l'écran ne doit pas
         # faire échouer l'enregistrement, il vaut 0.
-        for f in ('salaire_base', 'nb_enfants'):
-            if data.get(f) in ('', None):
+        # Seulement s'il est ENVOYÉ : une modification partielle (reliquat
+        # seul) remettait sinon le salaire à 0.
+        for f in ('salaire_base', 'nb_enfants', 'reliquat_anterieur'):
+            if f in data and data.get(f) in ('', None):
                 data[f] = 0
         return super().to_internal_value(data)
 

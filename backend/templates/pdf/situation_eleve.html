@@ -90,7 +90,7 @@
     <tr>
       <th>Date</th>
       <th>N° Reçu</th>
-      <th>Mode</th>
+      <th style="width:18%">Mode</th>
       <th class="text-right">{{ libelle_entree|default:"Inscription" }}</th>
       <th class="text-right">Mensualité</th>
       <th class="text-right">Uniforme</th>
@@ -105,7 +105,7 @@
     <tr>
       <td>{{ p.date|date:"d/m/Y" }}</td>
       <td>{{ p.no_recu }}</td>
-      <td>{{ p.mode }}</td>
+      <td>{% for m in p.mode %}{{ m }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}</td>
       <td class="text-right">{% if p.inscription %}{{ p.inscription|floatformat:0 }}{% else %}—{% endif %}</td>
       <td class="text-right">{% if p.mensualite %}{{ p.mensualite|floatformat:0 }}{% else %}—{% endif %}</td>
       <td class="text-right">{% if p.uniforme %}{{ p.uniforme|floatformat:0 }}{% else %}—{% endif %}</td>
