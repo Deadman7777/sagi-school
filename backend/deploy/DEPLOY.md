@@ -513,10 +513,11 @@ pendant 1 à 2 s. Le nombre de processus (`--workers` dans
 `gunicorn.service`) fixe combien de requêtes avancent en même temps.
 
 La dernière colonne de `/var/log/sagi-school/access.log` est la durée de la
-requête en ms. Écrans les plus coûteux (temps cumulé, nombre, moyenne) :
+requête en ms ; l'URL est la 5e en partant de la fin (l'adresse client, en
+tête, est vide derrière le socket). Écrans les plus coûteux (temps cumulé, nombre, moyenne) :
 
 ```bash
-awk '{d=$NF; sub(/\?.*/,"",$7); gsub(/\/[0-9]+\//,"/N/",$7); n[$7]++; t[$7]+=d}
+awk '{d=$NF; u=$(NF-4); sub(/\?.*/,"",u); gsub(/\/[0-9]+\//,"/N/",u); n[u]++; t[u]+=d}
      END{for(u in n) printf "%8.0f s %6d %6.0f ms  %s\n", t[u]/1000, n[u], t[u]/n[u], u}' \
   /var/log/sagi-school/access.log | sort -rn | head -20
 ```
