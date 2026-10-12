@@ -293,6 +293,12 @@ export class ElevesService {
       '/eleves/impayes-anterieurs/', { lignes });
   }
 
+  /** Membres du personnel désignables comme parent d'un élève (nom et poste
+   *  seulement — sans exiger l'accès aux Ressources humaines). */
+  getPersonnelParents() {
+    return this.api.get<PersonnelParent[]>('/eleves/personnel-parents/');
+  }
+
   // ── Familles (fratries) ─────────────────────────────────────────────
   /** Toujours un TABLEAU, quelle que soit la pagination du serveur — même
    *  précaution que pour les organismes, où un `{count, results}` non
@@ -424,4 +430,11 @@ export class ElevesService {
   getClasses() {
     return this.api.get<any>('/academique/classes/');
   }
+}
+
+export interface PersonnelParent {
+  id: string;
+  nom_complet: string;
+  poste: string;
+  matricule: string;
 }

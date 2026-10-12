@@ -103,6 +103,8 @@ class PaiementSerializer(TenantModelSerializer):
         return payeur
 
     receveur_nom = serializers.CharField(source='receveur.nom', read_only=True, default='')
+    employe_compense_nom = serializers.CharField(source='employe_compense.nom_complet',
+                                                 read_only=True, default='')
 
     def validate_receveur(self, receveur):
         """Le receveur est une personne de l'école, encore en activité."""
@@ -137,6 +139,8 @@ class PaiementSerializer(TenantModelSerializer):
             'tenant':   {'required': False, 'read_only': True},
             'exercice': {'required': False, 'read_only': True},
             'no_piece': {'required': False, 'read_only': True},
+            # Posé par le serveur après contrôle du plafond (voir perform_create).
+            'employe_compense': {'required': False, 'read_only': True},
         }
 
 

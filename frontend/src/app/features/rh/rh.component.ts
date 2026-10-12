@@ -22,6 +22,7 @@ import {
   RhService
 } from '../../core/services/rh.service';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
+import { DettePersonnelComponent } from './dette-personnel.component';
 
 const MOIS_OPTIONS = [
   { label: 'Janvier',   value: 1  }, { label: 'Février',   value: 2  },
@@ -36,7 +37,7 @@ const MOIS_OPTIONS = [
   selector: 'app-rh',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BoutonImprimerComponent, 
+  imports: [BoutonImprimerComponent, DettePersonnelComponent, 
     DecimalPipe, DatePipe,
     FormsModule, TableModule, ButtonModule, DialogModule,
     InputTextModule, SelectModule, TagModule, InputNumberModule,
@@ -98,12 +99,19 @@ const MOIS_OPTIONS = [
   <button class="tab-btn" [class.active]="onglet() === 'avances'"   (click)="chargerAvances(); onglet.set('avances')">
     💸 {{ 'rh.onglet_avances' | translate }}
   </button>
+  <button class="tab-btn" [class.active]="onglet() === 'dettes'" (click)="onglet.set('dettes')">
+    🤝 Dû au personnel
+  </button>
   @if (canEditParams()) {
     <button class="tab-btn" [class.active]="onglet() === 'params'" (click)="chargerParams(); onglet.set('params')">
       ⚙️ {{ 'rh.onglet_params' | translate }}
     </button>
   }
 </div>
+
+<!-- Dû de l'école au personnel : tableau sur son onglet, fiche de situation
+     ouvrable aussi depuis la liste des employés. -->
+<app-dette-personnel #dette [afficherTableau]="onglet() === 'dettes'" />
 
 <!-- ══════════════════════ EMPLOYÉS ══════════════════════ -->
 @if (onglet() === 'employes') {
@@ -168,6 +176,7 @@ const MOIS_OPTIONS = [
             <div class="btn-row">
               <p-button icon="pi pi-pencil"     [rounded]="true" [text]="true" severity="info"    (onClick)="ouvrirDialogEmploye(e)" pTooltip="Modifier l'employé" tooltipPosition="top" />
               <p-button icon="pi pi-file-edit"  [rounded]="true" [text]="true" severity="success" (onClick)="ouvrirDialogBulletin(e)" pTooltip="Générer un bulletin de paie" tooltipPosition="top" />
+              <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="secondary" (onClick)="dette.ouvrir(e.id)" pTooltip="Dû de l'école à l'employé (mois par mois)" tooltipPosition="top" [ariaLabel]="'Dû à ' + e.nom_complet" />
               @if (e.statut !== 'QUITTE') {
                 <p-button icon="pi pi-credit-card" [rounded]="true" [text]="true" severity="warn"   (onClick)="ouvrirDialogAvance(e)"   pTooltip="Avance sur salaire" tooltipPosition="top" />
                 <p-button icon="pi pi-sign-out" [rounded]="true" [text]="true" severity="danger" (onClick)="ouvrirDepart(e)" pTooltip="Départ / supprimer" tooltipPosition="top" />
@@ -660,6 +669,25 @@ const MOIS_OPTIONS = [
       </label>
     </div>
 
+    <!-- Salaires restés impayés l'année passée : l'école les doit encore. -->
+    <div class="form-separator full">🔁 Reliquat dû par l'école (exercice antérieur)</div>
+    <div class="form-group">
+      <label for="emp-reliquat">Montant que l'école lui doit</label>
+      <p-inputNumber inputId="emp-reliquat" [(ngModel)]="formEmploye.reliquat_anterieur" [min]="0"
+                     mode="decimal" [fluid]="true" />
+    </div>
+    <div class="form-group">
+      <label for="emp-reliquat-note">Origine</label>
+      <input pInputText id="emp-reliquat-note" [(ngModel)]="formEmploye.reliquat_note" class="w-full"
+             placeholder="Ex. Salaires 2025-2026" />
+    </div>
+    <div class="form-group full">
+      <small class="hint-reliquat">
+        Passé en à-nouveau (890 / 422). Réglé ensuite par versement, ou par compensation sur la
+        scolarité de ses enfants (relier l'élève à son parent sur la fiche élève).
+      </small>
+    </div>
+
     @if (formEmploye.type_employe === 'ENSEIGNANT') {
       <div class="form-separator full">🎓 {{ 'rh.autorisation_titre' | translate }}</div>
       <div class="form-group">
@@ -1054,6 +1082,19 @@ const MOIS_OPTIONS = [
       <strong>{{ bulletinAValider()!.employe_nom }}</strong> — {{ bulletinAValider()!.periode }}<br>
       Net à payer : <strong class="success-txt">{{ bulletinAValider()!.net_a_payer | number:'1.0-0' }} FCFA</strong>
     </div>
+    <!-- L'école ne verse pas toujours tout le salaire : le reste devient une
+         dette envers l'employé, suivie dans « Dû au personnel ». -->
+    <div class="form-group" style="margin-top:12px">
+      <label for="montant-verse">Montant versé maintenant</label>
+      <p-inputNumber inputId="montant-verse" [(ngModel)]="montantVerseValidation" [min]="0"
+                     [max]="bulletinAValider()!.net_a_payer" mode="decimal" [fluid]="true" />
+      @if (montantVerseValidation < bulletinAValider()!.net_a_payer) {
+        <small class="hint-reliquat">
+          Reste dû à l'employé : {{ (bulletinAValider()!.net_a_payer - montantVerseValidation) | number:'1.0-0' }} FCFA
+          — suivi dans « Dû au personnel ».
+        </small>
+      }
+    </div>
   }
   <ng-template pTemplate="footer">
     <p-button [label]="'common.annuler' | translate"    severity="secondary" (onClick)="dialogConfirmValidation=false" />
@@ -1146,6 +1187,7 @@ const MOIS_OPTIONS = [
     .form-group label { font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:.3px; }
     .form-group.full { grid-column:1/-1; }
     .form-separator { grid-column:1/-1; font-size:11px; font-weight:700; color:#00d4aa; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:6px; margin-top:4px; }
+    .hint-reliquat { font-size:11px; color:var(--text-3); line-height:1.45; }
     .w-full { width:100%; }
     .toggle-label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-2); cursor:pointer; }
     .toggle-cb    { width:16px; height:16px; cursor:pointer; }
@@ -1554,8 +1596,12 @@ export class RhComponent implements OnInit {
     this.dialogDetailVisible = true;
   }
 
+  /** Part du net versée à la validation ; par défaut le net entier. */
+  montantVerseValidation = 0;
+
   demanderValidation(b: BulletinPaie) {
     this.bulletinAValider.set(b);
+    this.montantVerseValidation = Number(b.net_a_payer) || 0;
     this.dialogConfirmValidation = true;
   }
 
@@ -1563,7 +1609,9 @@ export class RhComponent implements OnInit {
     const b = this.bulletinAValider();
     if (!b) return;
     this.saving.set(true);
-    this.rh.validerBulletin(b.id).subscribe({
+    const net = Number(b.net_a_payer) || 0;
+    const verse = Number(this.montantVerseValidation);
+    this.rh.validerBulletin(b.id, verse >= 0 && verse < net ? verse : undefined).subscribe({
       next: () => {
         this.msg.add({ severity: 'success', summary: 'Validé', detail: this.t('rh.bulletin_valide_msg') });
         this.dialogConfirmValidation = false;

@@ -62,6 +62,9 @@ MODE_CHOICES = [
     # Règlement réparti sur plusieurs modes à la fois (voir modes_reglement).
     # mode_paiement vaut 'MIXTE' à titre indicatif ; le détail fait foi.
     ('MIXTE',        'Multi-mode'),
+    # Réglé par ce que l'école doit au parent, membre du personnel (salaires
+    # impayés) : aucun argent n'entre, la dette 422 diminue d'autant.
+    ('COMPENSATION', 'Compensation (dû au personnel)'),
     # Migration : montants réglés avant la bascule sur SAGI SCHOOL.
     # Comptabilisé au 890 (bilan d'ouverture), jamais en trésorerie —
     # ne doit pas apparaître dans les formulaires de saisie de paiement.
@@ -163,6 +166,12 @@ class Paiement(TenantModel):
     payeur              = models.ForeignKey('eleves.ResponsableFamille', null=True, blank=True,
                                             on_delete=models.SET_NULL, related_name='paiements')
     saisi_par           = models.ForeignKey('users.User', null=True, on_delete=models.SET_NULL)
+    # Employé dont la créance sur l'école a réglé la part COMPENSATION de ce
+    # reçu. Figé à l'encaissement : changer plus tard le parent de la fiche
+    # ne déplace pas une compensation déjà faite.
+    employe_compense    = models.ForeignKey('rh.Employe', null=True, blank=True,
+                                            on_delete=models.PROTECT,
+                                            related_name='compensations')
     # Qui a reçu l'argent, quand ce n'est pas l'utilisateur qui saisit
     # (receveurs du transport). Vide = la personne qui saisit.
     receveur            = models.ForeignKey(Receveur, null=True, blank=True,

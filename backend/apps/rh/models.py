@@ -86,6 +86,14 @@ class Employe(TenantModel):
     autorisation_date      = models.DateField(null=True, blank=True)
     autorisation_autorite  = models.CharField(max_length=150, blank=True, default='')
     autorisation_obs       = models.TextField(blank=True, default='')
+    # ── Dû de l'école à l'employé, d'un exercice antérieur ─────────────────
+    # Salaires restés impayés l'année passée. Comptabilisé en à-nouveau
+    # (890 D / 422 C, voir apps.rh.dette_personnel) : l'école le doit encore,
+    # elle le règle en espèces (VersementPersonnel) ou en compensant la
+    # scolarité des enfants de l'employé (Paiement mode COMPENSATION).
+    reliquat_anterieur     = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reliquat_note          = models.CharField(max_length=120, blank=True, default='',
+                                              help_text="Origine du reliquat (ex. « Salaires 2025-2026 »)")
 
     class Meta:
         db_table = 'employes'
@@ -281,6 +289,11 @@ class BulletinPaie(TenantModel):
     modes_reglement = models.JSONField(default=list, blank=True)
 
     avances = models.ManyToManyField(AvanceSalaire, blank=True, related_name='bulletins')
+    # Part du net réellement versée à la validation. VIDE = le net entier —
+    # le comportement de toujours, inchangé pour les bulletins existants. Le
+    # reste est une dette de l'école envers l'employé (422), suivie mois par
+    # mois et réglée ensuite (apps.rh.dette_personnel).
+    montant_verse = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     # Ventilation de `avance_sur_salaire` avance par avance — nécessaire parce
     # qu'une avance peut n'être retenue que pour partie sur ce bulletin.
     # Ex. [{"avance_id": "…", "montant": 180000.0}].
@@ -312,3 +325,29 @@ class BulletinPaie(TenantModel):
             9: 'Septembre', 10: 'Octobre', 11: 'Novembre', 12: 'Décembre',
         }
         return f"{MOIS[self.mois]} {self.annee}"
+
+
+class VersementPersonnel(TenantModel):
+    """Règlement à l'employé de ce que l'école lui doit encore : reliquat d'un
+    exercice antérieur ou reste d'un bulletin. D 422 / C trésorerie.
+
+    Il ne désigne pas de mois : comme pour les élèves, il s'impute sur la dette
+    la plus ancienne (voir apps.rh.dette_personnel.situation_personnel)."""
+    STATUT_CHOICES = [('ACTIF', 'Actif'), ('ANNULE', 'Annulé')]
+
+    employe          = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name='versements')
+    montant          = models.DecimalField(max_digits=12, decimal_places=2)
+    date_versement   = models.DateField()
+    mode_paiement    = models.CharField(max_length=15, choices=Employe.MODE_PAIEMENT_CHOICES,
+                                        default='CAISSE')
+    no_piece         = models.CharField(max_length=30, blank=True)
+    statut           = models.CharField(max_length=10, choices=STATUT_CHOICES, default='ACTIF')
+    observations     = models.TextField(blank=True, default='')
+    saisi_par        = models.ForeignKey('users.User', null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        db_table = 'versements_personnel'
+        ordering = ['-date_versement']
+
+    def __str__(self):
+        return f"Versement {self.employe.nom_complet} — {self.montant} FCFA ({self.date_versement})"

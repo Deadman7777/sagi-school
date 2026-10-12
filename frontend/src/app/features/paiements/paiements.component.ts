@@ -333,14 +333,14 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
             </label>
           </div>
           @if (!modifForm.multi_mode) {
-            <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="modifForm.mode_paiement"
+            <p-select appendTo="body" [options]="modesModif()" [(ngModel)]="modifForm.mode_paiement"
                       optionLabel="label" optionValue="value"
                       placeholder="Choisir le mode..." styleClass="w-full" />
           } @else {
             <div style="margin-top:6px">
               @for (m of modifForm.modes_reglement; track $index; let i = $index) {
                 <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-                  <p-select appendTo="body" [options]="modesPaiement" [(ngModel)]="m.mode"
+                  <p-select appendTo="body" [options]="modesModif()" [(ngModel)]="m.mode"
                             optionLabel="label" optionValue="value" placeholder="Mode..."
                             styleClass="w-full" [style]="{flex:'1'}" />
                   <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
@@ -896,14 +896,14 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
             </label>
           </div>
 
-          <p-select *ngIf="!form.multi_mode" [options]="modesPaiement" [(ngModel)]="form.mode_paiement"
+          <p-select *ngIf="!form.multi_mode" [options]="modesGuichet()" [(ngModel)]="form.mode_paiement"
                     optionLabel="label" optionValue="value"
                     placeholder="Choisir le mode..." styleClass="w-full" />
 
           <div *ngIf="form.multi_mode" style="margin-top:6px">
             <div *ngFor="let m of form.modes_reglement; let i = index"
                  style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-              <p-select [options]="modesPaiement" [(ngModel)]="m.mode"
+              <p-select [options]="modesGuichet()" [(ngModel)]="m.mode"
                         optionLabel="label" optionValue="value" placeholder="Mode..."
                         styleClass="w-full" [style]="{flex:'1'}" />
               <input pInputText type="number" [(ngModel)]="m.montant" placeholder="Montant"
@@ -920,6 +920,27 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
             </div>
           </div>
         </div>
+
+        <!-- Parent membre du personnel : ce que l'école lui doit encore peut
+             régler ce reçu, en tout ou partie (mode « Compensation »). -->
+        @if (saisieDonnees()?.parent_employe; as pe) {
+          <div class="alerte-compensation">
+            👤 Parent membre du personnel : <strong>{{ pe.nom_complet }}</strong>
+            @if (pe.poste) { ({{ pe.poste }}) }.
+            L'école lui doit encore <strong>{{ pe.reste_du | number:'1.0-0' }} FCFA</strong>.
+            @if (pe.reste_du > 0) {
+              <div class="aide-adhesion">
+                Choisissez le mode « Compensation (dû au personnel) » pour régler ce reçu avec
+                cette somme — en multi-mode pour n'en régler qu'une partie.
+              </div>
+            }
+            @if (montantCompensationSaisi() > pe.reste_du + 0.01) {
+              <div style="color:#ef4444;margin-top:4px">
+                La compensation ({{ montantCompensationSaisi() | number:'1.0-0' }} FCFA) dépasse ce dû.
+              </div>
+            }
+          </div>
+        }
 
         <div class="form-group" style="margin-top:10px">
           <label>Observations</label>
@@ -1280,6 +1301,8 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
   styles: [`
     .aide-adhesion { font-size:11px; color:var(--text-3); margin-top:4px; }
     .premier-mois { margin-top:10px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; }
+    .alerte-compensation { margin-top:10px; padding:8px 10px; border-radius:6px; font-size:12px;
+                           background:rgba(0,212,170,.10); border-left:3px solid #00d4aa; color:var(--text); }
     .alerte-double { margin-bottom:8px; padding:8px 10px; border-radius:6px; font-size:12px;
                      background:rgba(245,158,11,.12); border-left:3px solid #f59e0b; color:var(--text); }
     .alerte-double-active { background:rgba(239,68,68,.12); border-left-color:#ef4444; }
@@ -1582,10 +1605,34 @@ export class PaiementsComponent implements OnInit {
     private msg: MessageService
   ) {}
 
+  /** Mode « Compensation » : réservé à l'enfant d'un membre du personnel.
+   *  Aucun argent n'entre — la dette de l'école envers le parent diminue. */
+  private readonly modeCompensation = { label: 'Compensation (dû au personnel)', value: 'COMPENSATION' };
+  private modesGuichetSig = computed(() =>
+    this.saisieDonnees()?.parent_employe ? [...this.modesPaiementSig(), this.modeCompensation]
+                                         : this.modesPaiementSig());
+  private modesPaiementSig = signal<any[]>([]);
+  modesGuichet(): any[] { return this.modesGuichetSig(); }
+  /** Modification : un reçu déjà compensé garde le mode dans la liste. */
+  modesModif(): any[] {
+    return this.paiementModifier?.employe_compense ? this.modesAvecCompensation : this.modesPaiement;
+  }
+  private modesAvecCompensation: any[] = [];
+
+  montantCompensationSaisi(): number {
+    if (this.form.multi_mode) {
+      return (this.form.modes_reglement || [])
+        .filter((m: any) => m.mode === 'COMPENSATION')
+        .reduce((t: number, m: any) => t + (Number(m.montant) || 0), 0);
+    }
+    return this.form.mode_paiement === 'COMPENSATION' ? this.totalForm() : 0;
+  }
+
   /** Libellé lisible d'un code de mode (ESPECE → Espèce, MIXTE → Multi-mode). */
   libelleMode(code: string): string {
     if (code === 'MIXTE') return 'Multi-mode';
     if (code === 'REPRISE') return 'Reprise';
+    if (code === 'COMPENSATION') return 'Compensation (dû au personnel)';
     return this.modesPaiement.find(m => m.value === code)?.label || code;
   }
 
@@ -1598,6 +1645,8 @@ export class PaiementsComponent implements OnInit {
       { label: this.translate.instant('paiements.virement'),     value: 'VIREMENT' },
       { label: this.translate.instant('paiements.cheque'),       value: 'CHEQUE' },
     ];
+    this.modesPaiementSig.set(this.modesPaiement);
+    this.modesAvecCompensation = [...this.modesPaiement, this.modeCompensation];
     this.chargerCaisses();
     this.chargerReceveurs();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier

@@ -164,6 +164,9 @@ class EleveSerializer(TenantModelSerializer):
     famille_code                 = serializers.CharField(source='famille.code', read_only=True,
                                                          default='')
     contact                      = serializers.SerializerMethodField()
+    # Parent membre du personnel (salaires dus réglables par compensation).
+    parent_employe_nom           = serializers.CharField(source='parent_employe.nom_complet',
+                                                         read_only=True, default='')
     date_inscription_libelle     = serializers.ReadOnlyField()
     total_theorique              = serializers.ReadOnlyField()
     total_attendu                = serializers.ReadOnlyField()
@@ -244,6 +247,17 @@ class EleveSerializer(TenantModelSerializer):
     PHOTO_MAX_OCTETS = 400_000
     PHOTO_PREFIXES = ('data:image/jpeg;base64,', 'data:image/png;base64,',
                       'data:image/webp;base64,')
+
+    def validate_parent_employe(self, employe):
+        """Un employé d'une AUTRE école n'existe pas pour cette fiche."""
+        if employe is None:
+            return employe
+        from core.tenant import get_tenant
+        request = self.context.get('request')
+        tenant = get_tenant(request) if request is not None else None
+        if tenant is not None and employe.tenant_id != tenant.id:
+            raise serializers.ValidationError('Membre du personnel inconnu.')
+        return employe
 
     def validate_photo(self, valeur):
         if not valeur:

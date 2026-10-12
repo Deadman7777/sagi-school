@@ -48,6 +48,8 @@ CHAMPS_IDENTITE = (
     # l'autre, et l'école n'a à regrouper qu'une fois. Sans cette ligne, toute
     # la fratrie se défait à chaque passage d'exercice.
     'famille',
+    # Parent membre du personnel : il le reste d'une année sur l'autre.
+    'parent_employe',
     'etat_sante', 'observations_sante',
     'statut',
     'prise_en_charge', 'obs_prise_en_charge',

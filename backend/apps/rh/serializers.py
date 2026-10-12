@@ -82,6 +82,8 @@ class BulletinPaieSerializer(TenantModelSerializer):
         fields = '__all__'
         extra_kwargs = {
             'tenant': {'required': False, 'read_only': True},
+            # Fixé à la validation (action valider), jamais par une édition.
+            'montant_verse': {'read_only': True},
         }
 
 

@@ -606,6 +606,19 @@ class EleveViewSet(viewsets.ModelViewSet):
         except DoublonEleve as exc:
             return Response(exc.corps, status=409)
 
+    @action(detail=False, methods=['get'], url_path='personnel-parents')
+    def personnel_parents(self, request):
+        """Membres du personnel qu'on peut désigner comme parent d'un élève.
+
+        Le nom et le poste seulement : la secrétaire qui inscrit un enfant n'a
+        pas forcément accès aux Ressources humaines, et n'a pas à voir les
+        salaires pour relier une fiche à son parent."""
+        from apps.rh.models import Employe
+        tenant = get_tenant(request)
+        qs = Employe.objects.filter(tenant=tenant).exclude(statut='QUITTE').order_by('nom_complet')
+        return Response([{'id': str(e.id), 'nom_complet': e.nom_complet, 'poste': e.poste,
+                          'matricule': e.matricule} for e in qs])
+
     @action(detail=False, methods=['get'])
     def doublons(self, request):
         """Fiches semblables à celle en cours de saisie
@@ -1989,10 +2002,22 @@ class EleveViewSet(viewsets.ModelViewSet):
             # pas le mois, sinon il serait encaissé deux fois.
             'inscription_contient_mensualite': (eleve.section.elements_mensualite()
                                                 if eleve.section else []),
+            # Parent membre du personnel : ce que l'école lui doit encore peut
+            # régler ce reçu (mode COMPENSATION), dans cette limite.
+            'parent_employe': _parent_employe_guichet(eleve),
             'formule_nom': eleve.formule_actuelle.nom if eleve.formule_actuelle else '',
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
         })
+
+
+def _parent_employe_guichet(eleve):
+    if not eleve.parent_employe_id:
+        return None
+    from apps.rh.dette_personnel import reste_du_employe
+    e = eleve.parent_employe
+    return {'id': str(e.id), 'nom_complet': e.nom_complet, 'poste': e.poste,
+            'reste_du': reste_du_employe(e)}
 
 
 def repartition_genre(eleves):

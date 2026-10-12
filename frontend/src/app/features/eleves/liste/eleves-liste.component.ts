@@ -848,6 +848,10 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
           </div>
           <div class="fiche-section">
             <div class="fiche-title">Parents / Tuteurs</div>
+            @if (e.parent_employe_nom) {
+              <div class="fiche-row"><span>Parent membre du personnel</span>
+                <strong style="color:#00d4aa">{{ e.parent_employe_nom }}</strong></div>
+            }
             <div class="fiche-row"><span>Père</span><strong>{{ e.nom_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Tél. père</span><strong class="mono">{{ e.telephone_pere || '—' }}</strong></div>
             <div class="fiche-row"><span>Mère</span><strong>{{ e.nom_mere || '—' }}</strong></div>
@@ -1520,6 +1524,21 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                       [placeholder]="'eleves.famille_existante_ph' | translate"
                       [emptyMessage]="'eleves.famille_aucune' | translate" />
             <small class="stat-aide">{{ 'eleves.famille_existante_aide' | translate }}</small>
+          </div>
+        }
+        <!-- Parent qui travaille dans l'établissement : ce que l'école lui doit
+             (salaires impayés) pourra régler la scolarité par compensation. -->
+        @if (personnelParents().length) {
+          <div class="form-group full">
+            <label for="nv-parent-employe">Parent membre du personnel</label>
+            <p-select appendTo="body" inputId="nv-parent-employe" [options]="personnelParents()"
+                      optionLabel="libelle" optionValue="id" [(ngModel)]="nouvelEleve.parent_employe"
+                      [filter]="true" filterBy="libelle" [showClear]="true" styleClass="w-full"
+                      placeholder="Aucun — le parent ne travaille pas dans l'école" />
+            <small class="stat-aide">
+              Ce que l'école doit à ce parent pourra régler l'inscription et la scolarité
+              (mode « Compensation » au guichet). Suivi dans Ressources humaines → Dû au personnel.
+            </small>
           </div>
         }
         <div class="form-group full" style="margin-top:2px">
@@ -3863,6 +3882,7 @@ export class ElevesListeComponent implements OnInit {
     this.champsSaisis = {};
     this.doublonsSaisie.set([]);
     this.chargerFamillesChoix();
+    this.chargerPersonnelParents();
     this.dialogVisible = true;
   }
 
@@ -3897,6 +3917,18 @@ export class ElevesListeComponent implements OnInit {
     this.dialogVisible = false;
     this.elevesService.getEleve(d.id).subscribe({
       next: eleve => { this.voirFiche(eleve); this.cdr.markForCheck(); },
+    });
+  }
+
+  // ── Parent membre du personnel ─────────────────────────────────────────
+  personnelParents = signal<{ id: string; libelle: string }[]>([]);
+
+  private chargerPersonnelParents() {
+    this.elevesService.getPersonnelParents().subscribe({
+      next: ps => this.personnelParents.set((ps || []).map(p => ({
+        id: p.id, libelle: [p.nom_complet, p.poste].filter(Boolean).join(' — '),
+      }))),
+      error: () => this.personnelParents.set([]),
     });
   }
 
@@ -4014,7 +4046,9 @@ export class ElevesListeComponent implements OnInit {
       contact_urgence_telephone: eleve['contact_urgence_telephone'] || '',
       reliquat_anterieur: Number(eleve.reliquat_anterieur || 0),
       reliquat_note:      eleve.reliquat_note || '',
+      parent_employe:     eleve.parent_employe ?? null,
     };
+    this.chargerPersonnelParents();
     // La liste n'envoie pas les photos : on la lit sur la fiche détaillée.
     // Tant qu'elle n'est pas arrivée, le champ reste absent du formulaire et
     // l'enregistrement ne touche pas à la photo existante.

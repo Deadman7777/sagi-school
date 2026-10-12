@@ -44,6 +44,9 @@ export interface Eleve {
   classe_nom: string;
   date_naissance: string;
   lieu_naissance: string;
+  /** Parent membre du personnel (salaires dus réglables par compensation). */
+  parent_employe?: string | null;
+  parent_employe_nom?: string;
   nom_pere: string;
   telephone_pere: string;
   nom_mere: string;

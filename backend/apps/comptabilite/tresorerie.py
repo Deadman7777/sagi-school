@@ -24,6 +24,15 @@ COMPTE_MODE = {
 }
 MODE_DEFAUT = 'ESPECE'
 
+# Modes de règlement d'un reçu d'élève qui ne sont PAS de la trésorerie : la
+# compensation règle la scolarité par ce que l'école doit au parent, membre du
+# personnel (salaires impayés) — sa contrepartie est la dette 422, rien n'entre
+# en caisse. Hors de COMPTE_MODE à dessein : les autres modules (charges, GMRF)
+# valident leurs modes sur COMPTE_MODE et ne doivent pas l'accepter.
+COMPTE_HORS_TRESORERIE = {
+    'COMPENSATION': ('422', 'Compensation dû au personnel'),
+}
+
 # Tolérance d'arrondi (les montants FCFA sont entiers, mais on reste prudent).
 _EPS = Decimal('0.01')
 
@@ -35,6 +44,8 @@ def compte_du_mode(mode, caisse=None):
     Elle ne change rien aux autres modes — un versement Wave n'entre pas dans
     une caisse en espèces.
     """
+    if mode in COMPTE_HORS_TRESORERIE:
+        return COMPTE_HORS_TRESORERIE[mode]
     compte, libelle = COMPTE_MODE.get(mode, COMPTE_MODE[MODE_DEFAUT])
     if caisse is not None and compte == COMPTE_MODE['ESPECE'][0]:
         return (caisse.no_compte, caisse.nom)
@@ -194,6 +205,7 @@ LIBELLES_MODE = {
     'VIREMENT':     'Virement',
     'CHEQUE':       'Chèque',
     'REPRISE':      'Reprise (migration)',
+    'COMPENSATION': 'Compensation (dû au personnel)',
 }
 
 

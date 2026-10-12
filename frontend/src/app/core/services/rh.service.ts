@@ -34,6 +34,54 @@ export interface Employe {
   est_cadre: boolean;
   mode_paiement: string;
   numero_compte: string;
+  /** Salaires d'un exercice antérieur que l'école doit encore. */
+  reliquat_anterieur?: number;
+  reliquat_note?: string;
+}
+
+/** Une dette de l'école envers l'employé : reliquat antérieur ou mois de paie. */
+export interface LigneDettePersonnel {
+  type: 'RELIQUAT' | 'MOIS';
+  libelle: string;
+  mois: number | null;
+  annee: number | null;
+  du: number;
+  verse: number;
+  regle_ensuite: number;
+  reste: number;
+  statut: 'SOLDE' | 'PARTIEL' | 'IMPAYE';
+}
+
+export interface TotauxDettePersonnel {
+  du: number;
+  verse_validation: number;
+  versements: number;
+  compense: number;
+  regle: number;
+  reste: number;
+  excedent: number;
+}
+
+export interface SituationDettePersonnel {
+  employe: { id: string; nom_complet: string; matricule: string; poste: string };
+  lignes: LigneDettePersonnel[];
+  reliquat: { du: number; note: string };
+  versements: { id: string; date: string; no_piece: string; montant: number;
+                mode_paiement: string; observations: string }[];
+  compensations: { paiement: string; date: string; no_piece: string; eleve: string;
+                   eleve_id: string; montant: number }[];
+  enfants: { id: string; nom_complet: string; matricule: string; section: string;
+             classe: string; reste_a_payer: number }[];
+  totaux: TotauxDettePersonnel;
+}
+
+export interface LigneSuiviDette extends TotauxDettePersonnel {
+  id: string;
+  nom_complet: string;
+  matricule: string;
+  poste: string;
+  reliquat: number;
+  nb_enfants: number;
 }
 
 export interface BulletinPaie {
@@ -142,7 +190,11 @@ export class RhService {
   getBulletins(params?: Record<string, string>) { return this.api.get<any>('/rh/bulletins/', params); }
   creerBulletin(data: unknown)                  { return this.api.post<BulletinPaie>('/rh/bulletins/', data); }
   calculerBulletin(data: unknown)               { return this.api.post<any>('/rh/bulletins/calculer/', data); }
-  validerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/valider/`, {}); }
+  /** `montantVerse` absent = le net entier ; moins = le reste reste dû à l'employé. */
+  validerBulletin(id: string, montantVerse?: number) {
+    return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/valider/`,
+                                       montantVerse === undefined ? {} : { montant_verse: montantVerse });
+  }
   payerBulletin(id: string, mode?: string)      { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/payer/`, mode ? { mode_paiement_effectif: mode } : {}); }
   supprimerBulletin(id: string)                 { return this.api.delete<void>(`/rh/bulletins/${id}/`); }
   annulerBulletin(id: string)                   { return this.api.post<BulletinPaie>(`/rh/bulletins/${id}/annuler/`, {}); }
@@ -153,6 +205,22 @@ export class RhService {
   getAvancesEmploye(employeId: string)                     { return this.api.get<any>('/rh/avances/', { employe: employeId, statut: 'EN_ATTENTE' }); }
   creerAvance(employeId: string, data: unknown)            { return this.api.post<AvanceSalaire>(`/rh/employes/${employeId}/avance/`, data); }
   annulerAvance(id: string)                                { return this.api.post<AvanceSalaire>(`/rh/avances/${id}/annuler/`, {}); }
+
+  // — Dû de l'école au personnel —
+  situationDette(employeId: string) {
+    return this.api.get<SituationDettePersonnel>(`/rh/employes/${employeId}/situation-dette/`);
+  }
+  suiviDettes() {
+    return this.api.get<{ results: LigneSuiviDette[]; reste_total: number }>('/rh/employes/dettes/');
+  }
+  verserPersonnel(employeId: string, data: { montant: number; mode_paiement: string;
+                                             date_versement: string; observations: string }) {
+    return this.api.post<SituationDettePersonnel>(`/rh/employes/${employeId}/verser/`, data);
+  }
+  annulerVersementPersonnel(employeId: string, versementId: string) {
+    return this.api.post<SituationDettePersonnel>(`/rh/employes/${employeId}/annuler-versement/`,
+                                                  { versement: versementId });
+  }
 
   // — Paramètres fiscaux —
   getParametresFiscaux()                                   { return this.api.get<ParametresFiscaux[]>('/rh/parametres-fiscaux/'); }

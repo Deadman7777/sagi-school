@@ -191,6 +191,13 @@ class Eleve(TenantModel):
                                               on_delete=models.SET_NULL,
                                               related_name='eleves',
                                               help_text='Foyer payeur commun à la fratrie')
+    # Parent membre du personnel. Ce que l'école lui doit (salaires impayés)
+    # peut régler la scolarité de l'enfant par compensation — voir
+    # apps.rh.dette_personnel. Un lien, pas une copie : son nom reste celui
+    # de la fiche employé.
+    parent_employe        = models.ForeignKey('rh.Employe', null=True, blank=True,
+                                              on_delete=models.SET_NULL,
+                                              related_name='enfants')
     nom_pere              = models.CharField(max_length=200, blank=True)
     telephone_pere        = models.CharField(max_length=20, blank=True)
     profession_pere       = models.CharField(max_length=150, blank=True)

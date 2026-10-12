@@ -561,18 +561,32 @@ def generer_ecritures_paie(bulletin, tenant):
             entry('4421', f"CFCE {emp}", credit=bulletin.cfce),
         ]
 
-    # — Étape 4 : net à payer (jambe de trésorerie ventilée par mode) —
-    rows.append(entry('422', f"Net à payer {emp} {bulletin.mois:02d}/{bulletin.annee}",
-                      debit=bulletin.net_a_payer))
-    ventilation = _ventiler_reglement(getattr(bulletin, 'modes_reglement', None), bulletin.net_a_payer)
-    if ventilation:
-        for compte, montant in ventilation:
-            rows.append(entry(compte, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
-                              credit=montant))
-    else:
-        cpt = _compte_paiement(bulletin.mode_paiement_effectif)
-        rows.append(entry(cpt, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
-                          credit=bulletin.net_a_payer))
+    # — Étape 4 : part du net versée (jambe de trésorerie ventilée par mode) —
+    # montant_verse vide = le net entier, l'usage de toujours. Une part
+    # moindre laisse le reste au crédit du 422 : l'école le doit encore à
+    # l'employé (apps.rh.dette_personnel), qui le reçoit plus tard en
+    # versement ou en compensation sur la scolarité de ses enfants.
+    verse = (_d(bulletin.net_a_payer) if bulletin.montant_verse is None
+             else min(_d(bulletin.montant_verse), _d(bulletin.net_a_payer)))
+    if verse > 0:
+        rows.append(entry('422', f"Net à payer {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                          debit=verse))
+        modes = getattr(bulletin, 'modes_reglement', None)
+        # Une ventilation saisie pour le net entier ne vaut plus pour une
+        # part : on retombe alors sur le mode du bulletin.
+        if modes and bulletin.montant_verse is not None:
+            somme = sum(_d((m or {}).get('montant', 0)) for m in modes)
+            if abs(somme - verse) > Decimal('0.01'):
+                modes = None
+        ventilation = _ventiler_reglement(modes, verse)
+        if ventilation:
+            for compte, montant in ventilation:
+                rows.append(entry(compte, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                                  credit=montant))
+        else:
+            cpt = _compte_paiement(bulletin.mode_paiement_effectif)
+            rows.append(entry(cpt, f"Paiement salaire {emp} {bulletin.mois:02d}/{bulletin.annee}",
+                              credit=verse))
 
     JournalEntry.objects.bulk_create(rows)
 

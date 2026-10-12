@@ -73,6 +73,23 @@ def _mois_deja_entames(paiement, mois_regles, paiements_avant, meme_jour):
     return deja & set(mois_regles)
 
 
+def _part_compensation_saisie(donnees, total=None):
+    """Montant réglé en mode COMPENSATION dans une saisie (ventilation, ou
+    reçu entier en mode simple)."""
+    lignes = donnees.get('modes_reglement') or []
+    if lignes:
+        return round(sum(float((l or {}).get('montant') or 0) for l in lignes
+                         if (l or {}).get('mode') == 'COMPENSATION'), 2)
+    if donnees.get('mode_paiement') != 'COMPENSATION':
+        return 0.0
+    if total is not None:
+        return round(float(total), 2)
+    return round(sum(float(donnees.get(c) or 0) for c in (
+        'montant_inscription', 'montant_mensualite', 'montant_uniforme',
+        'montant_fournitures', 'montant_cantine', 'montant_divers',
+        'montant_reliquat')), 2)
+
+
 def _exercice_extourne(paiement, tenant):
     """L'exercice où passer l'annulation d'un règlement : le SIEN tant qu'il
     est ouvert, comme à l'encaissement (voir perform_create).
@@ -201,11 +218,22 @@ class PaiementViewSet(viewsets.ModelViewSet):
             if services:
                 donnees['part_accessoire'] = services
 
+        # Part réglée par compensation (ce que l'école doit au parent, membre
+        # du personnel) : plafonnée à cette dette, contrôlée AVANT d'écrire.
+        employe_compense = None
+        compensation = _part_compensation_saisie(donnees)
+        if compensation > 0:
+            from apps.rh.dette_personnel import verifier_compensation
+            employe_compense, err = verifier_compensation(eleve, compensation)
+            if err:
+                raise ValidationError(err)
+
         paiement = serializer.save(
             tenant=tenant,
             exercice=exercice,
             no_piece=no_piece,
-            saisi_par=self.request.user
+            saisi_par=self.request.user,
+            employe_compense=employe_compense,
         )
 
         # Double écriture SYSCOHADA
@@ -298,6 +326,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'ESPECE': 'Espèces (caisse)', 'WAVE': 'Wave',
             'ORANGE_MONEY': 'Orange Money', 'FREE_MONEY': 'Free Money',
             'VIREMENT': 'Virement bancaire', 'CHEQUE': 'Chèque',
+            'COMPENSATION': 'Compensation sur salaire dû',
         }
 
         # Cumul des paiements AVANT ce reçu. Les reçus ANNULÉS n'ont rien
@@ -683,6 +712,18 @@ class PaiementViewSet(viewsets.ModelViewSet):
             {'mode': v['mode'], 'montant': float(v['montant'])} for v in ventilation]
         mode_paiement = 'MIXTE' if len(ventilation) > 1 else ventilation[0]['mode']
 
+        # Compensation : plafonnée à ce que l'école doit au parent, ce reçu
+        # mis à part (il est en train d'être réécrit).
+        employe_compense = None
+        compensation = _part_compensation_saisie(
+            {'modes_reglement': modes_reglement_norm, 'mode_paiement': mode_paiement})
+        if compensation > 0:
+            from apps.rh.dette_personnel import verifier_compensation
+            employe_compense, err = verifier_compensation(
+                paiement.eleve, compensation, paiement_exclu=paiement)
+            if err:
+                return Response({'error': err}, status=400)
+
         # Le reçu réécrit garde ce que le formulaire ne montre pas : services
         # itemisés (sans eux, un reçu de transport corrigé ne solderait plus
         # ses mois), part accessoire (758), caisse, payeur, organisme.
@@ -763,6 +804,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
             payeur=paiement.payeur,
             reference_groupe=paiement.reference_groupe,
             receveur_id=receveur_id or None,
+            employe_compense=employe_compense,
         )
 
         # 3 — Nouvelles écritures SYSCOHADA (règlement ventilé par mode)

@@ -54,7 +54,30 @@ class EmployeViewSet(viewsets.ModelViewSet):
                 (re.match(r'EMP-(\d+)$', x or '') for x in
                  Employe.objects.filter(tenant=tenant).values_list('matricule', flat=True))
                 if m]
-        serializer.save(tenant=tenant, matricule=f"EMP-{(max(nums, default=0) + 1):04d}")
+        employe = serializer.save(tenant=tenant, matricule=f"EMP-{(max(nums, default=0) + 1):04d}")
+        if employe.reliquat_anterieur:
+            from .dette_personnel import comptabiliser_reliquat
+            comptabiliser_reliquat(employe)
+
+    def perform_update(self, serializer):
+        """Le reliquat dû à l'employé est une donnée d'ouverture : le corriger
+        réécrit son à-nouveau. Il ne descend pas sous ce qui est déjà réglé —
+        l'école aurait alors payé plus qu'elle ne devait."""
+        from django.db import transaction
+        from rest_framework.exceptions import ValidationError
+        from .dette_personnel import comptabiliser_reliquat, situation_personnel
+        avant = serializer.instance.reliquat_anterieur
+        avant_note = serializer.instance.reliquat_note
+        with transaction.atomic():
+            employe = serializer.save()
+            if employe.reliquat_anterieur != avant or employe.reliquat_note != avant_note:
+                excedent = situation_personnel(employe)['totaux']['excedent']
+                if excedent > 0.01:
+                    transaction.set_rollback(True)
+                    raise ValidationError({'reliquat_anterieur': (
+                        f"L'école a déjà réglé {excedent:,.0f} FCFA de plus que ce nouveau "
+                        "montant : annulez d'abord les versements ou compensations en trop.")})
+                comptabiliser_reliquat(employe)
 
     def destroy(self, request, *args, **kwargs):
         """Suppression réservée aux fiches SANS histoire comptable.
@@ -196,6 +219,87 @@ class EmployeViewSet(viewsets.ModelViewSet):
         )
         generer_ecriture_avance(avance, tenant)
         return Response(AvanceSalaireSerializer(avance).data, status=status.HTTP_201_CREATED)
+
+    # ── Dû de l'école à l'employé ─────────────────────────────────────────
+    @action(detail=True, methods=['get'], url_path='situation-dette')
+    def situation_dette(self, request, pk=None):
+        """Reliquat antérieur + chaque mois de paie : dû, versé, réglé ensuite
+        (versements, compensation sur la scolarité des enfants), reste."""
+        from .dette_personnel import situation_personnel
+        return Response(situation_personnel(self.get_object()))
+
+    @action(detail=False, methods=['get'], url_path='dettes')
+    def dettes(self, request):
+        """Une ligne par employé à qui l'école doit quelque chose (ou qui a
+        des enfants dans l'établissement) : le tableau de suivi."""
+        from .dette_personnel import situation_personnel
+        lignes = []
+        for e in self.get_queryset().prefetch_related('enfants'):
+            if not (e.reliquat_anterieur or e.enfants.exists()
+                    or e.bulletins.filter(montant_verse__isnull=False).exists()
+                    or e.versements.exists()):
+                continue
+            s = situation_personnel(e)
+            lignes.append({**s['employe'], **s['totaux'],
+                           'reliquat': s['reliquat']['du'],
+                           'nb_enfants': len(s['enfants'])})
+        return Response({'results': lignes,
+                         'reste_total': round(sum(l['reste'] for l in lignes), 2)})
+
+    @action(detail=True, methods=['post'])
+    def verser(self, request, pk=None):
+        """Règle à l'employé une partie de ce que l'école lui doit."""
+        from django.db import transaction
+        from .dette_personnel import (comptabiliser_versement, prochain_no_versement,
+                                      reste_du_employe)
+        from .models import VersementPersonnel
+        employe = self.get_object()
+        tenant = get_tenant(request)
+        try:
+            montant = Decimal(str(request.data.get('montant') or 0))
+            date_v = datetime.date.fromisoformat(
+                str(request.data.get('date_versement') or datetime.date.today().isoformat()))
+        except (ValueError, ArithmeticError):
+            return Response({'error': 'Montant ou date invalide.'}, status=400)
+        if montant <= 0:
+            return Response({'error': 'Le montant doit être positif.'}, status=400)
+        reste = reste_du_employe(employe)
+        if float(montant) > reste + 0.01:
+            return Response({'error': f"Versement de {montant:,.0f} FCFA supérieur à ce que "
+                                      f"l'école doit encore à {employe.nom_complet} "
+                                      f"({reste:,.0f} FCFA)."}, status=400)
+        mode = request.data.get('mode_paiement') or 'CAISSE'
+        with transaction.atomic():
+            v = VersementPersonnel.objects.create(
+                tenant=tenant, employe=employe, montant=montant, date_versement=date_v,
+                mode_paiement=mode, no_piece=prochain_no_versement(tenant),
+                observations=request.data.get('observations', '') or '',
+                saisi_par=request.user)
+            try:
+                comptabiliser_versement(v)
+            except ValueError as exc:
+                transaction.set_rollback(True)
+                return Response({'error': str(exc)}, status=400)
+        from core.models import log_audit
+        log_audit(request, 'CREATE', 'VersementPersonnel', str(v.id),
+                  f"{employe.nom_complet} — {v.no_piece} — {float(montant):,.0f} FCFA")
+        from .dette_personnel import situation_personnel
+        return Response(situation_personnel(employe), status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='annuler-versement')
+    def annuler_versement(self, request, pk=None):
+        from django.db import transaction
+        from .dette_personnel import annuler_versement, situation_personnel
+        employe = self.get_object()
+        v = employe.versements.filter(id=request.data.get('versement'), statut='ACTIF').first()
+        if v is None:
+            return Response({'error': 'Versement introuvable ou déjà annulé.'}, status=404)
+        with transaction.atomic():
+            annuler_versement(v)
+        from core.models import log_audit
+        log_audit(request, 'ANNULER', 'VersementPersonnel', str(v.id),
+                  f"{employe.nom_complet} — {v.no_piece} — {float(v.montant):,.0f} FCFA")
+        return Response(situation_personnel(employe))
 
 
 class PaieViewSet(viewsets.ModelViewSet):
@@ -409,6 +513,19 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
                 {'error': 'Seul un bulletin en statut BROUILLON peut être validé.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Part du net versée maintenant. Absente = le net entier (l'usage de
+        # toujours). Moins = le reste devient une dette de l'école envers
+        # l'employé, suivie dans sa situation et réglée plus tard.
+        if (brut := request.data.get('montant_verse')) not in (None, ''):
+            try:
+                verse = Decimal(str(brut))
+            except ArithmeticError:
+                return Response({'error': 'Montant versé invalide.'}, status=400)
+            if verse < 0 or verse > bulletin.net_a_payer:
+                return Response({'error': f"Le montant versé doit être compris entre 0 et le net "
+                                          f"à payer ({float(bulletin.net_a_payer):,.0f} FCFA)."},
+                                status=400)
+            bulletin.montant_verse = None if verse == bulletin.net_a_payer else verse
         bulletin.statut          = 'VALIDE'
         bulletin.date_validation = timezone.now()
         bulletin.save()
