@@ -36,6 +36,18 @@ DATABASES = {
     }
 }
 
+# ─── Cache partagé entre les processus gunicorn ────────────────────
+# LocMemCache (base.py) vit dans CHAQUE processus : un save() du Tenant
+# jette la copie du seul processus qui l'a fait, les autres resservent
+# l'ancienne 5 min (voir core/tenant.py). Sur disque, tous voient la même.
+CACHES = {
+    'default': {
+        'BACKEND':  'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': config('CACHE_DIR', default='/opt/sagi-school/cache'),
+        'TIMEOUT':  300,
+    }
+}
+
 # ─── Pas de debug toolbar en cloud ─────────────────────────────────
 INSTALLED_APPS = [a for a in INSTALLED_APPS if 'debug_toolbar' not in a]
 MIDDLEWARE     = [m for m in MIDDLEWARE if 'debug_toolbar' not in m]

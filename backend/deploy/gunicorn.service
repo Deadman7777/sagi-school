@@ -25,12 +25,23 @@ EnvironmentFile=/opt/sagi-school/backend/.env
 Environment="DJANGO_SETTINGS_MODULE=config.settings.cloud"
 Environment="PYTHONUNBUFFERED=1"
 
+; Processus : 2 x coeurs + 1 (CPX32 = 4 coeurs). Le goulot est le GIL, pas
+; la base : un ecran lourd tient son processus 1 a 2 s, et a 3 processus
+; trois utilisateurs simultanes suffisaient a faire attendre tous les autres.
+; 2 fils par processus couvrent l'attente sur PostgreSQL. max-requests recycle
+; les processus pour borner la memoire. La derniere colonne du journal
+; d'acces est la duree de la requete en ms : voir DEPLOY.md, « Lenteurs ».
 ExecStart=/opt/sagi-school/backend/venv/bin/gunicorn \
-    --workers 3 \
+    --workers 9 \
+    --worker-class gthread \
+    --threads 2 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
     --bind unix:/run/sagi-school/gunicorn.sock \
     --access-logfile /var/log/sagi-school/access.log \
+    --access-logformat '%%(h)s %%(t)s "%%(r)s" %%(s)s %%(b)s %%(M)s' \
     --error-logfile  /var/log/sagi-school/error.log \
-    --timeout 60 \
+    --timeout 120 \
     config.wsgi:application
 
 Restart=on-failure

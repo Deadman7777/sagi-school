@@ -504,3 +504,21 @@ dossier créé automatiquement — déjà couvert par le `mkdir` du §2).
    `pg_restore -h localhost -U postgres -d sagi_school --clean --if-exists chemin\vers\sagi_XXXX.dump`
 4. Lancer l'application — wizard : mêmes identifiants Postgres, l'étape
    école est ignorée (l'école existe déjà dans la base restaurée).
+
+## Annexe — Lenteurs
+
+Le serveur cloud est partagé par toutes les écoles. Ce qui le ralentit n'est
+pas la base mais le calcul Python : un écran lourd occupe un processus gunicorn
+pendant 1 à 2 s. Le nombre de processus (`--workers` dans
+`gunicorn.service`) fixe combien de requêtes avancent en même temps.
+
+La dernière colonne de `/var/log/sagi-school/access.log` est la durée de la
+requête en ms. Écrans les plus coûteux (temps cumulé, nombre, moyenne) :
+
+```bash
+awk '{d=$NF; sub(/\?.*/,"",$7); gsub(/\/[0-9]+\//,"/N/",$7); n[$7]++; t[$7]+=d}
+     END{for(u in n) printf "%8.0f s %6d %6.0f ms  %s\n", t[u]/1000, n[u], t[u]/n[u], u}' \
+  /var/log/sagi-school/access.log | sort -rn | head -20
+```
+
+Requêtes de plus de 2 s : `awk '$NF>2000' /var/log/sagi-school/access.log | tail -30`.
