@@ -620,6 +620,9 @@ class SectionSerializer(TenantModelSerializer):
     # Vide = les mensualités de l'exercice ; renseigné = celles de la section.
     nb_mensualites     = serializers.IntegerField(required=False, allow_null=True,
                                                   min_value=1, max_value=12)
+    # Éléments de l'inscription qui sont une mensualité : comptés deux fois si
+    # l'école encaisse aussi ce mois à l'inscription par son réglage.
+    elements_mensualite = serializers.SerializerMethodField()
 
     class Meta:
         model  = Section
@@ -628,6 +631,9 @@ class SectionSerializer(TenantModelSerializer):
             'tenant': {'required': False, 'read_only': True},
             'niveau': {'required': False, 'allow_null': True},
         }
+
+    def get_elements_mensualite(self, obj):
+        return obj.elements_mensualite()
 
     def validate(self, attrs):
         """Composition libre de l'inscription : quand des éléments sont définis,

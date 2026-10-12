@@ -638,6 +638,25 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
                l'école) : chaque mois coché passe payé. -->
           @if (moisInscriptionProposables().length) {
             <div class="premier-mois">
+              <!-- La composition de l'inscription contient déjà une mensualité
+                   (« Dernier mois 15 000 ») : cocher le mois la ferait payer
+                   deux fois. Signalé ici, refusé à l'enregistrement. -->
+              @if (mensualiteDansInscription().length) {
+                <div class="alerte-double" [class.alerte-double-active]="doubleEncaissementMois()">
+                  ⚠️ L'inscription de cette classe comprend déjà
+                  <strong>{{ libelleMensualiteDansInscription() }}</strong>.
+                  @if (doubleEncaissementMois()) {
+                    Ce mois serait encaissé <strong>deux fois</strong> : décochez la case ci-dessous.
+                  } @else {
+                    La case du mois est laissée décochée pour ne pas l'encaisser deux fois.
+                  }
+                  <div class="aide-adhesion">
+                    À corriger dans Paramètres → Sections : retirez cet élément de la composition
+                    de l'inscription (le réglage « mois encaissé à l'inscription » suffit), sinon le
+                    total annuel dû compte ce mois deux fois.
+                  </div>
+                </div>
+              }
               @for (pm of moisInscriptionProposables(); track pm.mois.num) {
                 <label class="premier-mois-case">
                   <input type="checkbox" [checked]="moisSelected(pm.mois.num)" (change)="toggleMois(pm.mois.num)" />
@@ -1261,6 +1280,9 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
   styles: [`
     .aide-adhesion { font-size:11px; color:var(--text-3); margin-top:4px; }
     .premier-mois { margin-top:10px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; }
+    .alerte-double { margin-bottom:8px; padding:8px 10px; border-radius:6px; font-size:12px;
+                     background:rgba(245,158,11,.12); border-left:3px solid #f59e0b; color:var(--text); }
+    .alerte-double-active { background:rgba(239,68,68,.12); border-left-color:#ef4444; }
     .premier-mois-case { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); flex-wrap:wrap; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
@@ -1702,7 +1724,10 @@ export class PaiementsComponent implements OnInit {
       this.form.montant_cantine      = 0;
       // Mois à régler avec l'inscription (premier et/ou dernier) : proposés
       // cochés, et ce sont eux que le paiement désigne — ils passent payés.
-      const aInscription = this.moisInscriptionProposables().map(p => p.mois.num);
+      // Sauf si la composition de l'inscription contient déjà la mensualité :
+      // le mois serait alors encaissé deux fois.
+      const aInscription = this.mensualiteDansInscription().length ? []
+                         : this.moisInscriptionProposables().map(p => p.mois.num);
       this.form.inclure_premier_mois = aInscription.length > 0;
       this.form.mois_regles          = aInscription;
     } else {
@@ -1759,6 +1784,26 @@ export class PaiementsComponent implements OnInit {
     const dernier = trouver(d.dernier_mois);
     if (dernier && dernier.num !== premier?.num) res.push({ role: 'dernier', mois: dernier });
     return res;
+  }
+
+  /** Éléments de la composition de l'inscription qui sont une mensualité
+   *  (repérés par le serveur), quand l'école encaisse aussi un mois à
+   *  l'inscription par son réglage — le cas du double encaissement. */
+  mensualiteDansInscription(): { libelle: string; montant: number }[] {
+    if (this.typePaiement !== 'INSCRIPTION' || !this.moisInscriptionProposables().length) return [];
+    return this.saisieDonnees()?.inscription_contient_mensualite || [];
+  }
+
+  libelleMensualiteDansInscription(): string {
+    return this.mensualiteDansInscription()
+      .map(el => `« ${el.libelle} » (${Number(el.montant).toLocaleString('fr-FR')} F)`).join(', ');
+  }
+
+  /** Un mois proposé à l'inscription est coché alors que l'inscription le
+   *  contient déjà. */
+  doubleEncaissementMois(): boolean {
+    return this.mensualiteDansInscription().length > 0
+      && this.moisInscriptionProposables().some(pm => this.moisSelected(pm.mois.num));
   }
 
   /** « Octobre + Juin », pour le libellé de la mensualité à l'inscription. */
@@ -2354,6 +2399,12 @@ export class PaiementsComponent implements OnInit {
     }
     if (!this.form.multi_mode && !this.form.mode_paiement) {
       this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'), detail: this.translate.instant('paiements.choisir_mode') });
+      return;
+    }
+    if (this.doubleEncaissementMois()) {
+      this.msg.add({ severity:'warn', summary: 'Mois encaissé deux fois', life: 8000,
+        detail: `L'inscription comprend déjà ${this.libelleMensualiteDansInscription()}. `
+              + `Décochez le mois, ou retirez cet élément de la composition dans Paramètres → Sections.` });
       return;
     }
     if (this.form.multi_mode) {

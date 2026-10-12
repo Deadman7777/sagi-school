@@ -588,7 +588,17 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def modifier(self, request, pk=None):
-        """Modifie un paiement : annule l'original (contre-écritures) puis crée un nouveau."""
+        """Modifie un paiement : annule l'original (contre-écritures) puis crée un nouveau.
+
+        Tout ou rien : l'annulation de l'original et la création du nouveau
+        reçu forment une seule opération. Sans transaction, un échec à la
+        création laissait l'original annulé sans remplaçant — la famille
+        n'avait plus de reçu actif et ses mois redevenaient dus."""
+        from django.db import transaction
+        with transaction.atomic():
+            return self._modifier(request)
+
+    def _modifier(self, request):
         import datetime
         import re
         from apps.comptabilite.models import JournalEntry
@@ -723,14 +733,11 @@ class PaiementViewSet(viewsets.ModelViewSet):
         paiement.save()
 
         # 2 — Créer le nouveau paiement
-        from django.db.models import Max
-        last_piece = Paiement.objects.filter(tenant=tenant).aggregate(Max('no_piece'))['no_piece__max']
-        if last_piece:
-            nums2 = re.findall(r'\d+', last_piece)
-            next_num2 = int(nums2[-1]) + 1 if nums2 else 1
-        else:
-            next_num2 = 1
-        no_piece_new = f"REC-{next_num2:04d}"
+        # Séquence NUMÉRIQUE commune (voir numerotation.py) : le Max()
+        # alphabétique rendait « REP-0002 » supérieur à « REC-0010 » dans une
+        # école ayant des pièces de reprise, et le numéro calculé était pris.
+        from .numerotation import prochain_no_piece
+        no_piece_new = prochain_no_piece(tenant, 'REC')
 
         nouveau = Paiement.objects.create(
             tenant=tenant, exercice=exercice,

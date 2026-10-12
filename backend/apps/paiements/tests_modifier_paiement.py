@@ -145,3 +145,41 @@ class ModifierVentilationTest(ModifierPaiementTest):
         self.assertEqual(r.status_code, 200, r.content[:300])
         nouveau = Paiement.objects.get(no_piece=r.data['nouveau_no_piece'])
         self.assertEqual(nouveau.mode_paiement, 'ESPECE')
+
+
+class ModifierPaiementNumerotationTest(APITestCase):
+    """Signalé le 12/10/2026 : « en modifiant, l'opération est annulée » et un
+    message d'erreur. Le nouveau reçu prenait son numéro sur le maximum
+    ALPHABÉTIQUE des pièces : dans une école ayant des pièces de reprise
+    (REP-…), « REP-0002 » > « REC-0010 », le numéro calculé était déjà pris,
+    l'insertion échouait… après l'annulation de l'original, faute de
+    transaction. La famille se retrouvait sans reçu actif."""
+
+    setUp = ModifierPaiementTest.setUp
+    _encaisser = ModifierPaiementTest._encaisser
+    _modifier = ModifierPaiementTest._modifier
+
+    def test_ecole_avec_reprise_modification_aboutit(self):
+        Paiement.objects.create(tenant=self.tenant, exercice=self.exercice,
+                                eleve=self.eleve, no_piece='REP-0002',
+                                montant_divers=1000, mode_paiement='ESPECE')
+        for _ in range(3):
+            p = self._encaisser(montant_mensualite=12000)
+        self.assertEqual(p.no_piece, 'REC-0005')
+        r = self._modifier(p, montant_mensualite=10000, mode_paiement='ESPECE')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nouveau_no_piece'], 'REC-0006')
+
+    def test_echec_de_la_modification_laisse_l_original_intact(self):
+        from unittest import mock
+        p = self._encaisser(montant_inscription=47000, montant_mensualite=15000)
+        nb_ecritures = JournalEntry.objects.filter(tenant=self.tenant).count()
+        with mock.patch('apps.paiements.ecritures.lignes_paiement',
+                        side_effect=RuntimeError('panne')):
+            with self.assertRaises(RuntimeError):
+                self._modifier(p, montant_inscription=32000, montant_mensualite=15000,
+                               mode_paiement='ESPECE')
+        p.refresh_from_db()
+        self.assertEqual(p.statut, 'ACTIF')
+        self.assertEqual(Paiement.objects.filter(tenant=self.tenant).count(), 1)
+        self.assertEqual(JournalEntry.objects.filter(tenant=self.tenant).count(), nb_ecritures)

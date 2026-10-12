@@ -70,6 +70,27 @@ class Section(TenantModel):
         return (entree + dec(self.frais_uniforme) +
                 dec(self.frais_fournitures) + (dec(self.frais_mensualite) * nb_mois))
 
+    def elements_mensualite(self):
+        """Éléments de la composition de l'inscription qui sont en réalité une
+        mensualité (« Dernier mois », « 1er mois », « Mensualité »…).
+
+        Une école qui encaisse le premier/dernier mois à l'inscription le règle
+        par le RÉGLAGE de l'école (Tenant.premier/dernier_mois_a_inscription) :
+        le guichet propose alors le mois et le passe payé. L'ajouter EN PLUS à
+        la composition le fait payer deux fois — 47 000 d'inscription dont
+        15 000 de « dernier mois », puis encore 15 000 pour le mois lui-même —
+        et gonfle le total annuel dû d'autant. On le repère sur le libellé."""
+        import re
+        import unicodedata
+
+        def simple(txt):
+            txt = unicodedata.normalize('NFKD', str(txt or '')).encode('ascii', 'ignore').decode()
+            return txt.lower()
+
+        motif = re.compile(r'\b(mois|mensualite|mensuel)')
+        return [el for el in (self.composition_inscription or [])
+                if motif.search(simple(el.get('libelle')))]
+
     @property
     def a_la_journee(self):
         return self.mode_tarif == 'JOURNEE'

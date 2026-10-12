@@ -128,6 +128,30 @@ class DerniereMensualiteInscriptionTest(APITestCase):
         self.assertTrue(juin['du'])
         self.assertEqual(juin['reste'], 15000)
 
+    def test_mensualite_dans_la_composition_signalee(self):
+        """Signalé le 12/10/2026 : composition « Droit d'inscription 20 000 +
+        Uniforme 12 000 + Dernier mois 15 000 » ET réglage « dernier mois à
+        l'inscription » coché : le guichet affichait 47 000 + 15 000."""
+        self.cm2.composition_inscription = [
+            {'libelle': "Droit d'inscription", 'montant': 20000},
+            {'libelle': 'Uniforme', 'montant': 12000},
+            {'libelle': 'Dernier MOIS', 'montant': 15000}]
+        self.cm2.save()
+        _, d = self._saisie(self.cm2)
+        self.assertEqual(d['inscription_contient_mensualite'],
+                         [{'libelle': 'Dernier MOIS', 'montant': 15000}])
+        r = self.client.get('/api/eleves/sections/')
+        cm2 = next(s for s in (r.data.get('results', r.data)) if s['nom'] == 'CM2')
+        self.assertEqual(len(cm2['elements_mensualite']), 1)
+
+    def test_composition_sans_mensualite_rien_a_signaler(self):
+        self.cm2.composition_inscription = [
+            {'libelle': 'Frais de dossier', 'montant': 5000},
+            {'libelle': 'Tenue de sport', 'montant': 7000}]
+        self.cm2.save()
+        _, d = self._saisie(self.cm2)
+        self.assertEqual(d['inscription_contient_mensualite'], [])
+
     def test_pour_la_3eme_la_derniere_mensualite_est_juillet(self):
         _, d = self._saisie(self.troisieme)
         self.assertEqual(d['dernier_mois'], 7)

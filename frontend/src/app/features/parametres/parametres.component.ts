@@ -114,6 +114,12 @@ import { PassageAnneeComponent } from './passage-annee.component';
                           inputId="ech-dernier" />
               <span>{{ 'parametres.echeance_dernier_mois' | translate }}</span>
             </label>
+            @if (sectionsMensualiteEnDouble().length) {
+              <small class="alerte-double">
+                ⚠️ Mois compté deux fois : l'inscription de {{ nomsSectionsEnDouble() }} contient déjà
+                une mensualité. Retirez-la de la composition (Sections → Composer l'inscription).
+              </small>
+            }
             <!-- Scolarité et services (transport…) sur deux reçus : la façon
                  d'encaisser change, pas ce que la famille doit. -->
             <label class="check-line">
@@ -613,6 +619,14 @@ import { PassageAnneeComponent } from './passage-annee.component';
                 🧩 {{ 'parametres.composer_inscription' | translate }}
                 <span *ngIf="s.composition_inscription?.length"> ({{ s.composition_inscription.length }})</span>
               </a>
+              <!-- « Dernier mois » dans la composition + réglage de l'école :
+                   la famille paierait ce mois deux fois. -->
+              @if (moisAInscription() && s.elements_mensualite?.length) {
+                <small class="alerte-double">
+                  ⚠️ {{ libellesChamps(s.elements_mensualite) }} : déjà encaissé à l'inscription
+                  par le réglage de l'école — à retirer de la composition.
+                </small>
+              }
             </div>
             <!-- Au mois (mensualité) ou à la journée (garderie ponctuelle) : dans
                  le second cas, le dû naît de l'appel du jour, jour par jour. -->
@@ -1571,6 +1585,8 @@ import { PassageAnneeComponent } from './passage-annee.component';
                      padding:8px 10px; font-family:inherit; font-size:13px; resize:vertical; }
     .fc-title  { font-size:14px; font-weight:600; color:var(--text); margin-bottom:16px; }
     .fc-hint   { font-size:11px; color:var(--text-3); line-height:1.45; }
+    .alerte-double { display:block; margin-top:6px; padding:6px 8px; border-radius:6px; font-size:11px; line-height:1.45;
+                     background:rgba(239,68,68,.10); border-left:3px solid #ef4444; color:var(--text); }
 
     .form-grid    { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .form-group   { display:flex; flex-direction:column; gap:6px; }
@@ -1758,6 +1774,23 @@ export class ParametresComponent implements OnInit {
   ajouterCompoRow()        { this.compoRows.push({ libelle: '', montant: 0 }); }
   retirerCompoRow(i: number) { this.compoRows.splice(i, 1); }
   totalCompo(): number     { return this.compoRows.reduce((t, r) => t + (+r.montant || 0), 0); }
+
+  /** L'école encaisse le premier et/ou le dernier mois à l'inscription. */
+  moisAInscription(): boolean {
+    const e = this.ecole();
+    return !!(e?.premier_mois_a_inscription || e?.dernier_mois_a_inscription);
+  }
+
+  /** Sections dont la composition contient une mensualité (repérée par le
+   *  serveur) alors que le réglage de l'école l'encaisse déjà. */
+  sectionsMensualiteEnDouble(): any[] {
+    return this.moisAInscription()
+      ? this.sections().filter((s: any) => s.elements_mensualite?.length) : [];
+  }
+
+  nomsSectionsEnDouble(): string {
+    return this.sectionsMensualiteEnDouble().map((s: any) => s.nom).join(', ');
+  }
 
   validerComposition() {
     const rows = this.compoRows
@@ -2625,8 +2658,14 @@ chargerExercice() {
   sauvegarderSection(s: any) {
     this.saving.set(true);
     this.api.patch<any>(`/eleves/sections/${s.id}/`, s).subscribe({
-      next: () => {
+      next: (res: any) => {
         this.msg.add({ severity:'success', summary: this.translate.instant('parametres.sauvegarde_ok'), detail: s.nom });
+        s.elements_mensualite = res?.elements_mensualite || [];
+        if (this.moisAInscription() && s.elements_mensualite.length) {
+          this.msg.add({ severity:'warn', summary: 'Mois compté deux fois', life: 10000,
+            detail: `${s.nom} : « ${this.libellesChamps(s.elements_mensualite)} » est dans l'inscription, `
+                  + `alors que l'école encaisse déjà ce mois à l'inscription. Retirez-le de la composition.` });
+        }
         this.saving.set(false);
       },
       // Le serveur dit ce qui manque (ex. aucun tarif pour une section à la journée).

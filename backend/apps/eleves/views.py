@@ -1984,6 +1984,11 @@ class EleveViewSet(viewsets.ModelViewSet):
             # l'avoir réglée, et elle tombait aussitôt en retard.
             'dernier_mois_a_inscription': bool(getattr(eleve.tenant, 'dernier_mois_a_inscription', False)),
             'dernier_mois': ech['lignes'][-1]['mois'] if ech['lignes'] else None,
+            # Mensualité déjà comprise dans la composition de l'inscription
+            # (« Dernier mois 15 000 ») : le guichet le signale et ne coche
+            # pas le mois, sinon il serait encaissé deux fois.
+            'inscription_contient_mensualite': (eleve.section.elements_mensualite()
+                                                if eleve.section else []),
             'formule_nom': eleve.formule_actuelle.nom if eleve.formule_actuelle else '',
             'exercice_id':       str(exercice.id) if exercice else '',
             'annee_scolaire':    exercice.annee_scolaire if exercice else '',
