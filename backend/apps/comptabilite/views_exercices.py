@@ -57,7 +57,7 @@ class ANouveauxView(APIView):
             'source_cloture': source.cloture, 'cible_cloture': cible.cloture,
             'lignes': [{**l, 'debit': float(l['debit']), 'credit': float(l['credit'])}
                        for l in calcul['lignes']],
-            'tresorerie': {k: float(v) for k, v in calcul['tresorerie'].items()},
+            'tresorerie': exercices.tresorerie_en_float(calcul['tresorerie']),
             'reliquats_reportes': float(calcul['reliquats_reportes']),
             'deja_generes': deja,
             'ecarts': exercices.controle_continuite(source, cible) if deja else [],

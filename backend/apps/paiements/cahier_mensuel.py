@@ -26,7 +26,7 @@ from apps.comptabilite.models import BudgetLigne, JournalEntry
 from apps.eleves.echeancier import (NOMS_MOIS, construire_echeancier, lignes_retenues,
                                     precharger)
 from apps.eleves.models import Eleve
-from apps.eleves.parcours import STATUTS_SORTIE
+from apps.eleves.parcours import eleves_presents
 
 from .models import Paiement
 
@@ -59,14 +59,15 @@ def _telephone(e):
 
 
 def _eleves_du_mois(tenant, exercice):
-    """Élèves concernés : présents, et sortants encore là à l'échéance.
+    """Élèves concernés : les présents seulement, comme la liste Élèves.
 
-    Un enfant parti en mars n'a rien à faire dans le cahier d'avril. Mais celui
-    qui part le 20 d'un mois dont la mensualité était exigible le 5 la devait
-    bien : il est retenu, et filtré par `lignes_retenues`.
+    Les sortis (abandon, transfert, diplômé) quittent le cahier dès que leur
+    statut change, quel que soit le mois consulté — demande du 11/10/2026.
+    Ce qu'ils doivent encore n'est pas perdu : état des impayés et carte
+    « impayés des sortants » du tableau de bord.
     """
     return precharger(
-        Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False)
+        eleves_presents(Eleve.objects.filter(tenant=tenant, exercice=exercice))
         .select_related('section', 'classe', 'exercice', 'tenant'))
 
 
@@ -81,7 +82,6 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
                       if l['mois'] == mois and l['annee'] == annee), None)
         if ligne is None:
             continue
-        sorti = e.statut in STATUTS_SORTIE
         if ligne['du'] < SEUIL:
             nb_exoneres += 1
             continue
@@ -97,7 +97,6 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
             'reste':       round(ligne['reste'], 2),
             'exigible_le': ligne['exigible_le'],
             'echu':        ligne['echu'],
-            'sorti':       sorti,
         }
         if ligne['reste'] < SEUIL:
             payes.append(item)

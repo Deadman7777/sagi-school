@@ -265,15 +265,15 @@ class PieceJustificativeView(APIView):
 
 # ── Transferts internes de trésorerie (Lot 1) ────────────────────────────────
 # Canaux de trésorerie par défaut (compte, libellé, clé de solde initial exercice).
-# Comptes paramétrables : l'UI accepte aussi un compte libre.
+# Canaux de trésorerie par défaut (compte, libellé, poste). Solde initial : tresorerie.SOLDES_INITIAUX.
 CANAUX_TRESORERIE = [
     ('571',  'Caisse principale', 'caisse'),
     ('5715', 'Petite caisse',     None),
     ('521',  'Banque',            'banque'),
     ('522',  'Banque — épargne',  None),
-    ('5521', 'Wave',              'mobile'),
-    ('5522', 'Orange Money',      None),
-    ('5523', 'Free Money',        None),
+    ('5521', 'Wave',              'wave'),
+    ('5522', 'Orange Money',      'orange_money'),
+    ('5523', 'Free Money',        'free_money'),
     ('5524', 'Wizall',            None),
 ]
 
@@ -285,17 +285,13 @@ def _exercice_actif(tenant):
 def _soldes_canaux(tenant, exercice):
     """Solde courant de chaque canal = solde initial + (débits − crédits) au journal.
 
-    Cohérent avec `DashboardTresorerieCanauView` : le solde initial mobile est
-    porté par le compte Wave (5521)."""
+    Cohérent avec `DashboardTresorerieCanauView` : chaque compte porte son
+    propre solde initial (comptabilite/tresorerie.SOLDES_INITIAUX)."""
     net = {}
     for row in JournalEntry.objects.filter(tenant=tenant, exercice=exercice).values(
             'no_compte').annotate(d=Sum('debit'), c=Sum('credit')):
         net[row['no_compte']] = float(row['d'] or 0) - float(row['c'] or 0)
-    initiaux = {
-        'caisse': float(exercice.solde_initial_caisse),
-        'banque': float(exercice.solde_initial_banque),
-        'mobile': float(exercice.solde_initial_mobile),
-    }
+    from apps.comptabilite.tresorerie import solde_initial_compte
     plan = get_plan_dict(tenant)
     canaux = []
     # Caisses de service créées par l'école (garderie, cantine…) : elles sont
@@ -305,7 +301,7 @@ def _soldes_canaux(tenant, exercice):
                        for c in CaisseEncaissement.objects.filter(tenant=tenant, actif=True)
                        if c.no_compte not in {x[0] for x in CANAUX_TRESORERIE}]
     for compte, libelle, cle in list(CANAUX_TRESORERIE) + supplementaires:
-        init = initiaux.get(cle, 0.0) if cle else 0.0
+        init = solde_initial_compte(exercice, compte)
         canaux.append({
             'compte': compte,
             'libelle': plan.get(compte, libelle),

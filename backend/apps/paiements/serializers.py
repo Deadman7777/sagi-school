@@ -31,7 +31,9 @@ def erreur_libelle_exercice(libelle, debut):
 class ExerciceSerializer(TenantModelSerializer):
     solde_initial_caisse = serializers.FloatField()
     solde_initial_banque = serializers.FloatField()
-    solde_initial_mobile = serializers.FloatField()
+    solde_initial_mobile = serializers.FloatField()          # Wave
+    solde_initial_orange_money = serializers.FloatField(required=False)
+    solde_initial_free_money = serializers.FloatField(required=False)
 
     class Meta:
         model  = Exercice

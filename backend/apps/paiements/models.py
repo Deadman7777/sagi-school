@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models
 from django.utils import timezone
 from core.models import TenantModel
@@ -10,7 +12,13 @@ class Exercice(TenantModel):
     nb_mensualites         = models.IntegerField(default=10)
     solde_initial_caisse   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     solde_initial_banque   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    # Mobile money : un solde par opérateur. `solde_initial_mobile` est le
+    # solde Wave (5521) — nom historique, du temps où un seul solde portait
+    # tout le mobile money. Correspondance compte ↔ champ :
+    # comptabilite/tresorerie.SOLDES_INITIAUX.
     solde_initial_mobile   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    solde_initial_orange_money = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    solde_initial_free_money   = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     devise                 = models.CharField(max_length=10, default='FCFA')
     cloture                = models.BooleanField(default=False)
     date_cloture           = models.DateTimeField(null=True, blank=True)
@@ -26,6 +34,22 @@ class Exercice(TenantModel):
 
     def __str__(self):
         return f"{self.tenant} — {self.annee_scolaire}"
+
+    @property
+    def solde_initial_mobile_money(self):
+        """Wave + Orange Money + Free Money."""
+        return sum(_dec(getattr(self, c)) for c in
+                   ('solde_initial_mobile', 'solde_initial_orange_money', 'solde_initial_free_money'))
+
+    @property
+    def solde_initial_total(self):
+        return (_dec(self.solde_initial_caisse) + _dec(self.solde_initial_banque)
+                + self.solde_initial_mobile_money)
+
+
+def _dec(x):
+    # Un champ affecté depuis une requête reste float/str jusqu'au rechargement.
+    return Decimal(str(x or 0))
 
 
 MODE_CHOICES = [

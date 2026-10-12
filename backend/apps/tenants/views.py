@@ -19,6 +19,8 @@ def _exercice_to_dict(ex):
         'solde_initial_caisse':  float(ex.solde_initial_caisse),
         'solde_initial_banque':  float(ex.solde_initial_banque),
         'solde_initial_mobile':  float(ex.solde_initial_mobile),
+        'solde_initial_orange_money': float(ex.solde_initial_orange_money),
+        'solde_initial_free_money':   float(ex.solde_initial_free_money),
         'cloture':               ex.cloture,
     }
 
@@ -94,7 +96,8 @@ class TenantViewSet(viewsets.ModelViewSet):
                     raise ValidationError({'annee_scolaire': erreur})
                 for field in ('annee_scolaire', 'date_debut', 'date_fin',
                               'solde_initial_caisse', 'solde_initial_banque',
-                              'solde_initial_mobile'):
+                              'solde_initial_mobile', 'solde_initial_orange_money',
+                              'solde_initial_free_money'):
                     if field in exercice_data:
                         setattr(exercice, field, exercice_data[field])
                 exercice.save()

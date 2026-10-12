@@ -38,8 +38,8 @@ COMPTES_TRESO = [
     ('571',  'caisse'),
     ('521',  'banque'),
     ('5521', 'mobile'),
-    ('5522', None),
-    ('5523', None),
+    ('5522', 'orange_money'),
+    ('5523', 'free_money'),
 ]
 
 
@@ -71,6 +71,8 @@ class Command(BaseCommand):
         soldes_init = {'caisse': Decimal(str(ex.solde_initial_caisse or 0)),
                        'banque': Decimal(str(ex.solde_initial_banque or 0)),
                        'mobile': Decimal(str(ex.solde_initial_mobile or 0)),
+                       'orange_money': Decimal(str(ex.solde_initial_orange_money or 0)),
+                       'free_money': Decimal(str(ex.solde_initial_free_money or 0)),
                        None: Decimal('0')}
 
         # ── Soldes affichés actuels (solde initial + net écritures) ──

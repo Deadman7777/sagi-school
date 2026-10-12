@@ -424,9 +424,19 @@ function exerciceParDefaut() {
               <p-inputNumber [(ngModel)]="d.exercice.solde_initial_banque"
                              [min]="0" suffix=" FCFA" styleClass="w-full" />
             </div>
-            <div class="form-group full">
-              <label>Solde initial mobile money</label>
+            <div class="form-group">
+              <label>Solde initial Wave</label>
               <p-inputNumber [(ngModel)]="d.exercice.solde_initial_mobile"
+                             [min]="0" suffix=" FCFA" styleClass="w-full" />
+            </div>
+            <div class="form-group">
+              <label>Solde initial Orange Money</label>
+              <p-inputNumber [(ngModel)]="d.exercice.solde_initial_orange_money"
+                             [min]="0" suffix=" FCFA" styleClass="w-full" />
+            </div>
+            <div class="form-group full">
+              <label>Solde initial Free Money</label>
+              <p-inputNumber [(ngModel)]="d.exercice.solde_initial_free_money"
                              [min]="0" suffix=" FCFA" styleClass="w-full" />
             </div>
           </div>

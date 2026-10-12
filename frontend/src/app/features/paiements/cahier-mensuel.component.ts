@@ -11,7 +11,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
 /** Une ligne élève du cahier : ce qu'il devait pour le mois, payé, reste. */
 export interface LigneEleveCahier {
   eleve_id: string; matricule: string; nom_complet: string; classe: string;
-  telephone: string; du: number; paye: number; reste: number; sorti: boolean;
+  telephone: string; du: number; paye: number; reste: number;
 }
 
 export interface LigneChargeCahier {
@@ -185,7 +185,6 @@ const RAFRAICHISSEMENT_MS = 60_000;
               <tr>
                 <td>{{ i + 1 }}</td>
                 <td class="gras">{{ e.nom_complet }}
-                  @if (e.sorti) { <span class="badge-sorti">sorti</span> }
                   <div class="petit">{{ e.matricule }}</div>
                 </td>
                 <td>{{ e.classe }}</td>
@@ -291,7 +290,6 @@ const RAFRAICHISSEMENT_MS = 60_000;
     .vide { text-align:center; padding:24px; color:var(--text-3); }
     .txt-rouge { color:#dc2626; }
     .txt-vert { color:#059669; }
-    .badge-sorti { font-size:10px; background:var(--surface-2); color:var(--text-3); border-radius:4px; padding:1px 5px; margin-left:4px; font-weight:400; }
     .etat { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; white-space:nowrap; }
     .etat-PAYEE { background:rgba(5,150,105,.15); color:#059669; }
     .etat-PARTIELLE { background:rgba(234,88,12,.15); color:#ea580c; }

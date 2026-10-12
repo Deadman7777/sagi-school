@@ -75,8 +75,8 @@ def ouverture(exercice):
     for r in (JournalEntry.objects.filter(_filtre_ouverture(), tenant=exercice.tenant, exercice=exercice)
               .values('no_compte').annotate(d=Sum('debit'), c=Sum('credit'))):
         out[r['no_compte']] += _d(r['d']) - _d(r['c'])
-    for compte, champ in (('571', 'solde_initial_caisse'), ('521', 'solde_initial_banque'),
-                          ('5521', 'solde_initial_mobile')):
+    from .tresorerie import SOLDES_INITIAUX
+    for compte, champ in SOLDES_INITIAUX.items():
         out[compte] += _d(getattr(exercice, champ))
     return out
 
@@ -99,8 +99,7 @@ def capitaux_ouverture_non_ventiles(exercice, s=None):
     """Soldes initiaux de trésorerie + 890 net créditeur : la part des capitaux
     d'ouverture que l'école n'a pas détaillée dans un bilan d'entrée."""
     s = s if s is not None else soldes(exercice)
-    init = (_d(exercice.solde_initial_caisse) + _d(exercice.solde_initial_banque)
-            + _d(exercice.solde_initial_mobile))
+    init = _d(exercice.solde_initial_total)
     return init - s.get(COMPTE_A_NOUVEAUX, ZERO)
 
 

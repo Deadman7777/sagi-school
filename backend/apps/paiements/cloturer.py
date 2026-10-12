@@ -144,7 +144,7 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True, a_nou
         # paie, les investissements et les remboursements d'emprunt, et versait
         # le tout dans la caisse en remettant banque et mobile money à zéro.
         # Une école ouvrait donc son année suivante sur des soldes faux.
-        from apps.comptabilite.tresorerie import soldes_cloture
+        from apps.comptabilite.tresorerie import soldes_cloture, CHAMP_POSTE
         soldes = soldes_cloture(exercice)
 
         nouvel_exercice = Exercice.objects.create(
@@ -152,9 +152,7 @@ def cloturer_exercice(exercice, creer_suivant=True, reporter_impayes=True, a_nou
             annee_scolaire     = nouvelle_annee,
             date_debut         = exercice.date_fin + datetime.timedelta(days=1),
             date_fin           = exercice.date_fin + relativedelta(years=1),
-            solde_initial_caisse = max(soldes['caisse'], 0),
-            solde_initial_banque = max(soldes['banque'], 0),
-            solde_initial_mobile = max(soldes['mobile'], 0),
+            **{champ: max(soldes[poste], 0) for poste, champ in CHAMP_POSTE.items()},
             devise             = exercice.devise,
             cloture            = False,
         )

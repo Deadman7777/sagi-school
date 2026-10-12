@@ -65,7 +65,7 @@
     {% for e in c.scolarite.impayes %}
     <tr>
       <td>{{ forloop.counter }}</td>
-      <td class="bold">{{ e.nom_complet }}{% if e.sorti %} (sorti){% endif %}</td>
+      <td class="bold">{{ e.nom_complet }}</td>
       <td>{{ e.classe }}</td>
       <td>{{ e.telephone }}</td>
       <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
@@ -76,7 +76,7 @@
     {% for e in c.scolarite.partiels %}
     <tr>
       <td>{{ forloop.counter|add:t.nb_impayes }}</td>
-      <td class="bold">{{ e.nom_complet }} (partiel){% if e.sorti %} (sorti){% endif %}</td>
+      <td class="bold">{{ e.nom_complet }} (partiel)</td>
       <td>{{ e.classe }}</td>
       <td>{{ e.telephone }}</td>
       <td class="text-right">{{ e.du|floatformat:"0g" }}</td>

@@ -155,7 +155,7 @@ class ExportPDFView(APIView):
             soldes_initiaux = {
                 '521': float(exercice.solde_initial_banque),
                 '571': float(exercice.solde_initial_caisse),
-                '552': float(exercice.solde_initial_mobile),
+                '552': float(exercice.solde_initial_mobile_money),
             }
             comptes = _ecritures_synthese(tenant, exercice).exclude(
                 no_compte__in=('5521', '5522', '5523')
@@ -192,7 +192,7 @@ class ExportPDFView(APIView):
                     tot_sf_d  += sf_d;  tot_sf_c  += sf_c
 
             if '552' not in lignes and (mob_d > 0 or mob_c > 0):
-                so_d = float(exercice.solde_initial_mobile)
+                so_d = float(exercice.solde_initial_mobile_money)
                 total_d = so_d + mob_d
                 sf_d = round(max(total_d - mob_c, 0), 2)
                 sf_c = round(max(mob_c - total_d, 0), 2)
@@ -368,7 +368,7 @@ class ExportPDFView(APIView):
             for no, lib in [('521', 'Banque'), ('571', 'Caisse'), ('552', 'Mobile Money')]:
                 if no == '552':
                     mob_d, mob_c = _mobile_aggregate(tenant, exercice)
-                    solde = float(exercice.solde_initial_mobile) + mob_d - mob_c
+                    solde = float(exercice.solde_initial_mobile_money) + mob_d - mob_c
                 else:
                     so_key = 'solde_initial_banque' if no == '521' else 'solde_initial_caisse'
                     so = float(getattr(exercice, so_key, 0))

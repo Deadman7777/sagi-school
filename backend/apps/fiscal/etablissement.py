@@ -73,8 +73,7 @@ def donnees_financieres(tenant, exercice):
     treso_mvt = j.filter(no_compte__in=('571', '5521', '5522', '5523', '521')) \
                  .aggregate(d=Sum('debit'), c=Sum('credit'))
     tresorerie = round(
-        float(exercice.solde_initial_caisse + exercice.solde_initial_banque +
-              exercice.solde_initial_mobile) +
+        float(exercice.solde_initial_total) +
         float(treso_mvt['d'] or 0) - float(treso_mvt['c'] or 0), 2)
 
     # Équilibre du journal (débits = crédits) — contrôle d'intégrité

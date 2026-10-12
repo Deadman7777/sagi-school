@@ -150,9 +150,7 @@ class DashboardKPIView(APIView):
             JournalEntry.objects.filter(tenant=tenant, exercice=exercice))
         total_recettes = max(0.0, _totaux['total_produits'])
         total_charges  = max(0.0, _totaux['total_charges'])
-        solde_initial  = float(exercice.solde_initial_caisse +
-                               exercice.solde_initial_banque +
-                               exercice.solde_initial_mobile)
+        solde_initial  = float(exercice.solde_initial_total)
 
         today = timezone.now().date()
 
@@ -394,14 +392,16 @@ class DashboardTresorerieCanauView(APIView):
     """Solde de trésorerie par canal de paiement — encaissements vs décaissements."""
     permission_classes = [IsAuthenticated]
 
-    # (mode_paiement, libellé, compte_trésorerie, clé_solde_initial)
+    # (mode_paiement, libellé, compte_trésorerie, porte le solde initial du compte)
+    # Le chèque partage la banque (521) avec le virement : le solde initial
+    # n'est compté qu'une fois.
     CANAUX = [
-        ('ESPECE',       'Espèce',       '571',  'caisse'),
-        ('WAVE',         'Wave',          '5521', 'mobile'),
-        ('ORANGE_MONEY', 'Orange Money',  '5522', None),
-        ('FREE_MONEY',   'Free Money',    '5523', None),
-        ('VIREMENT',     'Virement',      '521',  'banque'),
-        ('CHEQUE',       'Chèque',        '521',  None),
+        ('ESPECE',       'Espèce',       '571',  True),
+        ('WAVE',         'Wave',          '5521', True),
+        ('ORANGE_MONEY', 'Orange Money',  '5522', True),
+        ('FREE_MONEY',   'Free Money',    '5523', True),
+        ('VIREMENT',     'Virement',      '521',  True),
+        ('CHEQUE',       'Chèque',        '521',  False),
     ]
 
     def get(self, request):
@@ -418,11 +418,7 @@ class DashboardTresorerieCanauView(APIView):
         if not exercice:
             return Response({'exercice': None, 'canaux': [], 'totaux': {}})
 
-        soldes_initiaux = {
-            'caisse': float(exercice.solde_initial_caisse),
-            'banque': float(exercice.solde_initial_banque),
-            'mobile': float(exercice.solde_initial_mobile),
-        }
+        from apps.comptabilite.tresorerie import solde_initial_compte
 
         # Mouvements nets sur comptes de trésorerie — arithmétique pure journal (toutes sources)
         # Toute annulation (ANNUL_PAIEMENT, ANNUL_PAIE, ANNUL_AVANCE, contre-écriture charge) est
@@ -472,9 +468,9 @@ class DashboardTresorerieCanauView(APIView):
         canaux_result = []
         compte521_attribue = False
 
-        for mode, libelle, compte, initial_key in self.CANAUX:
+        for mode, libelle, compte, porte_initial in self.CANAUX:
             enc           = enc_by_canal.get(mode, {'nb': 0, 'montant': 0.0})
-            solde_initial = soldes_initiaux.get(initial_key, 0.0) if initial_key else 0.0
+            solde_initial = solde_initial_compte(exercice, compte) if porte_initial else 0.0
 
             if compte == '521':
                 if not compte521_attribue:
@@ -507,7 +503,7 @@ class DashboardTresorerieCanauView(APIView):
                     'solde':         solde,
                 })
 
-        total_initial = sum(soldes_initiaux.values())
+        total_initial = float(exercice.solde_initial_total)
         total_enc     = sum(c['encaissements'] for c in canaux_result)
         total_autres  = sum(c['autres_entrees'] for c in canaux_result)
         total_dec     = sum(c['decaissements'] for c in canaux_result)

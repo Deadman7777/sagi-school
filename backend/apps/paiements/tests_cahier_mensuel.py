@@ -82,21 +82,26 @@ class CahierScolariteTest(CahierBase):
         s = self._cahier()['scolarite']
         self.assertIn('Fatou SALL', [e['nom_complet'] for e in s['payes']])
 
-    def test_abandon_avant_l_echeance_sort_du_cahier(self):
+    def test_eleve_sorti_quitte_le_cahier_de_tous_les_mois(self):
+        """Demande du 11/10/2026 : les sortis ne figurent plus au cahier, même
+        pour un mois exigible avant leur départ (leur dette reste à l'état
+        des impayés et au tableau de bord)."""
         self.fatou.statut = 'ABANDONNE'
         self.fatou.date_sortie = datetime.date(2026, 2, 15)
         self.fatou.save()
-        s = self._cahier()['scolarite']
-        noms = [e['nom_complet'] for e in s['payes'] + s['partiels'] + s['impayes']]
-        self.assertNotIn('Fatou SALL', noms)
-        # … mais février, exigible avant son départ, elle le devait.
-        fev = self._cahier(mois=2)['scolarite']
-        self.assertIn('Fatou SALL', [e['nom_complet'] for e in fev['impayes']])
+        for mois in (1, 2, 3):
+            s = self._cahier(mois=mois)['scolarite']
+            noms = [e['nom_complet'] for e in s['payes'] + s['partiels'] + s['impayes']]
+            self.assertNotIn('Fatou SALL', noms, f'mois {mois}')
+            self.assertEqual(s['totaux']['nb_eleves'], len(noms))
+
+    def test_eleve_sorti_par_l_api_quitte_le_cahier(self):
+        avant = self._cahier()['scolarite']['totaux']['nb_eleves']
+        r = self.client.patch(f'/api/eleves/{self.moussa.id}/', {'statut': 'TRANSFERE'}, format='json')
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(self._cahier()['scolarite']['totaux']['nb_eleves'], avant - 1)
 
     def test_meme_attendu_que_le_suivi_mensuel(self):
-        self.fatou.statut = 'ABANDONNE'
-        self.fatou.date_sortie = datetime.date(2026, 2, 15)
-        self.fatou.save()
         suivi = self.client.get('/api/eleves/suivi-mensuel/').data
         for mois in (1, 2, 3):
             ligne = next(r for r in suivi['global'] if r['mois_num'] == mois)

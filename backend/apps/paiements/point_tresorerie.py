@@ -62,12 +62,10 @@ def mode_du_compte(no_compte):
 
 
 def soldes_initiaux(exercice):
-    """Comme le tableau de bord : le solde initial « mobile » est porté par Wave."""
-    return {
-        'ESPECE': float(exercice.solde_initial_caisse),
-        'WAVE':   float(exercice.solde_initial_mobile),
-        'BANQUE': float(exercice.solde_initial_banque),
-    }
+    """Comme le tableau de bord : un solde initial par compte de trésorerie."""
+    from apps.comptabilite.tresorerie import SOLDES_INITIAUX
+    return {mode_du_compte(compte): float(getattr(exercice, champ) or 0)
+            for compte, champ in SOLDES_INITIAUX.items()}
 
 
 def _nom(prenom, nom):

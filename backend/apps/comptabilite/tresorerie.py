@@ -113,14 +113,36 @@ def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1, caisse=None):
 
 
 # ── Soldes de trésorerie à la clôture ────────────────────────────────────────
-# Regroupement des comptes de trésorerie par poste d'exercice. Le mobile money
-# tient sur trois comptes (Wave, Orange Money, Free Money) mais l'exercice n'en
-# porte qu'un seul solde d'ouverture.
-POSTES_TRESORERIE = {
-    'caisse': ('571',),
-    'banque': ('521',),
-    'mobile': ('5521', '5522', '5523'),
+# Solde d'ouverture de chaque compte de trésorerie : le champ de l'exercice qui
+# le porte. Seule correspondance compte ↔ champ ; le reste du code s'y réfère.
+# `solde_initial_mobile` est le solde Wave (nom historique du champ).
+SOLDES_INITIAUX = {
+    '571':  'solde_initial_caisse',
+    '521':  'solde_initial_banque',
+    '5521': 'solde_initial_mobile',
+    '5522': 'solde_initial_orange_money',
+    '5523': 'solde_initial_free_money',
 }
+
+
+def solde_initial_compte(exercice, no_compte):
+    """Solde d'ouverture du compte, 0 s'il n'en porte pas (5715, 522…)."""
+    champ = SOLDES_INITIAUX.get(no_compte)
+    return float(getattr(exercice, champ) or 0) if champ else 0.0
+
+
+# Regroupement des comptes de trésorerie par poste. Le mobile money se détaille
+# par opérateur ; le poste « mobile » en est la somme.
+POSTES_TRESORERIE = {
+    'caisse':       ('571',),
+    'banque':       ('521',),
+    'wave':         ('5521',),
+    'orange_money': ('5522',),
+    'free_money':   ('5523',),
+}
+POSTES_MOBILE = ('wave', 'orange_money', 'free_money')
+# Champ de l'exercice qui porte le solde d'ouverture de chaque poste.
+CHAMP_POSTE = {poste: SOLDES_INITIAUX[comptes[0]] for poste, comptes in POSTES_TRESORERIE.items()}
 
 
 def soldes_cloture(exercice):
@@ -131,7 +153,8 @@ def soldes_cloture(exercice):
     annulations sont prises en compte d'office : leurs contre-écritures se
     compensent au débit et au crédit.
 
-    Retourne {'caisse': …, 'banque': …, 'mobile': …, 'total': …}.
+    Retourne {'caisse', 'banque', 'wave', 'orange_money', 'free_money',
+    'mobile' (somme des trois opérateurs), 'total'}.
     """
     from django.db.models import Sum
     from .models import JournalEntry
@@ -151,18 +174,14 @@ def soldes_cloture(exercice):
         .values('no_compte').annotate(d=Sum('debit'), c=Sum('credit'))
     }
 
-    ouverture = {
-        'caisse': float(exercice.solde_initial_caisse),
-        'banque': float(exercice.solde_initial_banque),
-        'mobile': float(exercice.solde_initial_mobile),
-    }
-
     soldes = {
-        poste: ouverture[poste] + sum(montant for compte, montant in mouvements.items()
-                                       if compte.startswith(tuple(comptes_poste)))
+        poste: float(getattr(exercice, CHAMP_POSTE[poste]) or 0)
+        + sum(montant for compte, montant in mouvements.items()
+              if compte.startswith(tuple(comptes_poste)))
         for poste, comptes_poste in POSTES_TRESORERIE.items()
     }
     soldes['total'] = sum(soldes.values())
+    soldes['mobile'] = sum(soldes[p] for p in POSTES_MOBILE)
     return soldes
 
 

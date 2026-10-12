@@ -482,9 +482,21 @@ import { PassageAnneeComponent } from './passage-annee.component';
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_banque"
                            mode="decimal" [min]="0" styleClass="w-full" />
           </div>
+          <!-- Mobile money : un solde par opérateur (comptes 5521, 5522, 5523).
+               solde_initial_mobile est le solde Wave. -->
           <div class="form-group">
-            <label>{{ 'parametres.solde_mobile' | translate }}</label>
+            <label>{{ 'parametres.solde_wave' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_mobile"
+                           mode="decimal" [min]="0" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>{{ 'parametres.solde_orange_money' | translate }}</label>
+            <p-inputNumber [(ngModel)]="exercice()!.solde_initial_orange_money"
+                           mode="decimal" [min]="0" styleClass="w-full" />
+          </div>
+          <div class="form-group">
+            <label>{{ 'parametres.solde_free_money' | translate }}</label>
+            <p-inputNumber [(ngModel)]="exercice()!.solde_initial_free_money"
                            mode="decimal" [min]="0" styleClass="w-full" />
           </div>
         </div>
@@ -495,7 +507,9 @@ import { PassageAnneeComponent } from './passage-annee.component';
           <span class="tt-val">
             {{ (exercice()!.solde_initial_caisse +
                 exercice()!.solde_initial_banque +
-                exercice()!.solde_initial_mobile) | number:'1.0-0' }} FCFA
+                exercice()!.solde_initial_mobile +
+                exercice()!.solde_initial_orange_money +
+                exercice()!.solde_initial_free_money) | number:'1.0-0' }} FCFA
           </span>
         </div>
 
@@ -2289,6 +2303,8 @@ chargerExercice() {
           solde_initial_caisse: +e.solde_initial_caisse,
           solde_initial_banque: +e.solde_initial_banque,
           solde_initial_mobile: +e.solde_initial_mobile,
+          solde_initial_orange_money: +(e.solde_initial_orange_money || 0),
+          solde_initial_free_money: +(e.solde_initial_free_money || 0),
         });
       }
     }

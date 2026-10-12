@@ -47,6 +47,7 @@ from django.utils import timezone
 from apps.paiements.models import Exercice
 
 from .models import JournalEntry
+from .tresorerie import CHAMP_POSTE, POSTES_MOBILE, POSTES_TRESORERIE, SOLDES_INITIAUX
 
 SOURCE_AN = 'AN'
 SOURCE_OD = 'OD'
@@ -56,9 +57,9 @@ COMPTE_A_NOUVEAUX = '890'
 COMPTE_REPORT_CREDITEUR = '121'
 COMPTE_REPORT_DEBITEUR = '129'
 
-# Trésorerie portée par les soldes initiaux (même découpage que
-# tresorerie.POSTES_TRESORERIE).
-PREFIXES_TRESO = {'caisse': ('571',), 'banque': ('521',), 'mobile': ('5521', '5522', '5523')}
+# Trésorerie portée par les soldes initiaux : un poste par champ de l'exercice
+# (caisse, banque, Wave, Orange Money, Free Money).
+PREFIXES_TRESO = POSTES_TRESORERIE
 TOUS_PREFIXES_TRESO = tuple(p for ps in PREFIXES_TRESO.values() for p in ps)
 
 ZERO = Decimal('0')
@@ -66,6 +67,13 @@ ZERO = Decimal('0')
 
 def _d(x):
     return Decimal(str(x or 0)).quantize(Decimal('0.01'))
+
+
+def tresorerie_en_float(treso):
+    """{poste: float} + 'mobile', la somme des trois opérateurs (affichage)."""
+    t = {k: float(v) for k, v in treso.items()}
+    t['mobile'] = sum(t[p] for p in POSTES_MOBILE)
+    return t
 
 
 def est_tresorerie(no_compte):
@@ -88,16 +96,14 @@ def exercice_precedent(exercice):
 
 def soldes_comptes(exercice, exclure_sources=()):
     """{compte: solde débiteur (D − C)} de l'exercice, soldes initiaux de
-    trésorerie compris (571 caisse, 521 banque, 5521 mobile — porté par Wave,
-    comme au tableau de bord)."""
+    trésorerie compris (571 caisse, 521 banque, 5521/5522/5523 mobile money)."""
     qs = JournalEntry.objects.filter(tenant=exercice.tenant, exercice=exercice)
     if exclure_sources:
         qs = qs.exclude(source__in=exclure_sources)
     soldes = defaultdict(lambda: ZERO)
     for r in qs.values('no_compte').annotate(d=Sum('debit'), c=Sum('credit')):
         soldes[r['no_compte']] += _d(r['d']) - _d(r['c'])
-    for compte, champ in (('571', 'solde_initial_caisse'), ('521', 'solde_initial_banque'),
-                          ('5521', 'solde_initial_mobile')):
+    for compte, champ in SOLDES_INITIAUX.items():
         if getattr(exercice, champ):
             soldes[compte] += _d(getattr(exercice, champ))
     return {c: s for c, s in soldes.items() if s != 0}
@@ -200,16 +206,14 @@ def generer_a_nouveaux(source, cible=None):
             tenant=cible.tenant, exercice=cible, no_piece=no_piece, date_ecriture=cible.date_debut,
             source=SOURCE_AN, source_id=source.id, ordre=i, **l)
     t = calcul['tresorerie']
-    cible.solde_initial_caisse = t['caisse']
-    cible.solde_initial_banque = t['banque']
-    cible.solde_initial_mobile = t['mobile']
+    for poste, champ in CHAMP_POSTE.items():
+        setattr(cible, champ, t[poste])
     cible.an_source = source
     cible.an_genere_le = timezone.now()
-    cible.save(update_fields=['solde_initial_caisse', 'solde_initial_banque',
-                              'solde_initial_mobile', 'an_source', 'an_genere_le'])
+    cible.save(update_fields=[*CHAMP_POSTE.values(), 'an_source', 'an_genere_le'])
     return {'source': source.annee_scolaire, 'cible': cible.annee_scolaire,
             'nb_lignes': len(calcul['lignes']),
-            'tresorerie': {k: float(v) for k, v in t.items()},
+            'tresorerie': tresorerie_en_float(t),
             'report': float(calcul['report']), 'no_piece': no_piece,
             'provisoire': not source.cloture}
 
@@ -233,8 +237,7 @@ def controle_continuite(source, cible):
             ecarts.append({'compte': compte, 'attendu': float(attendu[compte]),
                            'present': float(present[compte]), 'ecart': float(e)})
     t = calculer_a_nouveaux(source, cible)['tresorerie']
-    for poste, champ in (('caisse', 'solde_initial_caisse'), ('banque', 'solde_initial_banque'),
-                         ('mobile', 'solde_initial_mobile')):
+    for poste, champ in CHAMP_POSTE.items():
         if _d(getattr(cible, champ)) != t[poste]:
             ecarts.append({'compte': f'solde initial {poste}', 'attendu': float(t[poste]),
                            'present': float(getattr(cible, champ)),
@@ -472,13 +475,9 @@ def importer_balance(exercice, lignes, nature='CLOTURE'):
             source=SOURCE_BALANCE, ordre=i, no_compte=l['no_compte'], debit=l['debit'],
             credit=l['credit'],
             libelle=l.get('libelle') or f"Balance {nature.lower()} — {plan.get(l['no_compte'], l['no_compte'])}")
-    if nature == 'OUVERTURE':
-        exercice.solde_initial_caisse = treso['caisse']
-        exercice.solde_initial_banque = treso['banque']
-        exercice.solde_initial_mobile = treso['mobile']
-    else:
-        exercice.solde_initial_caisse = exercice.solde_initial_banque = exercice.solde_initial_mobile = ZERO
-    exercice.save(update_fields=['solde_initial_caisse', 'solde_initial_banque', 'solde_initial_mobile'])
+    for poste, champ in CHAMP_POSTE.items():
+        setattr(exercice, champ, treso[poste] if nature == 'OUVERTURE' else ZERO)
+    exercice.save(update_fields=list(CHAMP_POSTE.values()))
     return {'no_piece': no_piece, 'nb_lignes': len(a_ecrire), 'nature': nature,
-            'tresorerie': {k: float(v) for k, v in treso.items()},
+            'tresorerie': tresorerie_en_float(treso),
             'total': float(sum((l['debit'] for l in lignes), ZERO))}
