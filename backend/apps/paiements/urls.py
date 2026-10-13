@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
 from .views_proformas import ProformaViewSet
+from .views_cheques import ChequeRecuViewSet
 from .views import (PaiementViewSet, ExerciceViewSet, CloturerExerciceView,
                     ReporterReliquatsView, CahierMensuelView, CahierMensuelPdfView,
                     PointTresorerieView, PointTresoreriePdfView, PassageAnneeView,
@@ -11,6 +12,7 @@ router.register('paiements', PaiementViewSet, basename='paiement')
 router.register('exercices', ExerciceViewSet, basename='exercice')
 router.register('receveurs', ReceveurViewSet, basename='receveur')
 router.register('proformas', ProformaViewSet, basename='proforma')
+router.register('cheques', ChequeRecuViewSet, basename='cheque')
 
 urlpatterns = router.urls + [
     path('cloturer-exercice/', CloturerExerciceView.as_view()),

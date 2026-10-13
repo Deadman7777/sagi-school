@@ -22,6 +22,9 @@ export interface Paiement {
   mode_paiement: string;
   // Ventilation multi-mode : un même règlement réparti sur plusieurs moyens.
   modes_reglement?: { mode: string; montant: number }[];
+  /** Chèque(s) reçu(s), inscrits au registre des chèques. */
+  cheques?: { numero: string; banque: string; tireur: string; date_emission: string; montant?: number }[];
+  reference_groupe?: string;
   observations?: string;
   // Qui règle. null/absent = la famille. Renseigné = l'organisme verse la part
   // qu'il prend en charge : le versement solde SA créance, pas celle de la
@@ -39,6 +42,34 @@ export interface Paiement {
   organisme_nom?: string;
   total?: number;
   statut?: 'ACTIF' | 'ANNULE';
+}
+
+export type StatutCheque = 'EN_PORTEFEUILLE' | 'REMIS' | 'ENCAISSE' | 'IMPAYE' | 'ANNULE';
+
+export interface ChequeRecu {
+  id: string;
+  numero: string;
+  banque: string;
+  tireur: string;
+  date_emission: string | null;
+  date_reception: string;
+  montant: number;
+  montant_affecte: number;
+  statut: StatutCheque;
+  compte_reception: string;
+  recus: { paiement: string; no_piece: string; eleve: string; montant: number; statut: string }[];
+  recu_par_nom: string;
+  date_remise: string | null;
+  bordereau: string;
+  no_piece_remise: string;
+  remis_par_nom: string;
+  date_encaissement: string | null;
+  encaisse_par_nom: string;
+  date_impaye: string | null;
+  motif_impaye: string;
+  impaye_par_nom: string;
+  observations: string;
+  exercice_nom: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -83,6 +114,28 @@ export class PaiementsService {
 
   modifierPaiement(id: string, data: Partial<Paiement>) {
     return this.api.post<any>(`/paiements/paiements/${id}/modifier/`, data);
+  }
+
+  // — Registre des chèques —
+  getCheques(params?: Record<string, string>) {
+    return this.api.get<{ results: ChequeRecu[]; totaux: Record<string, { nb: number; montant: number }> }>(
+      '/paiements/cheques/', params);
+  }
+  completerCheque(id: string, data: Partial<ChequeRecu>) {
+    return this.api.patch<ChequeRecu>(`/paiements/cheques/${id}/`, data);
+  }
+  remettreCheques(ids: string[], date: string, bordereau: string) {
+    return this.api.post<{ no_piece: string; nb: number; total: number }>(
+      '/paiements/cheques/remettre/', { ids, date, bordereau });
+  }
+  encaisserCheques(ids: string[], date: string) {
+    return this.api.post<{ nb: number }>('/paiements/cheques/encaisser/', { ids, date });
+  }
+  declarerChequeImpaye(id: string, date: string, motif: string) {
+    return this.api.post<{ no_piece_retour: string;
+                           recus_annules: { no_piece: string; eleve: string; montant: number }[];
+                           autres_modes: { no_piece: string; eleve: string; montant: number }[] }>(
+      `/paiements/cheques/${id}/impaye/`, { date, motif });
   }
 
   getExerciceActif() {

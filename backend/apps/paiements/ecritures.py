@@ -67,7 +67,10 @@ def lignes_paiement(total, part_exercice, ventilation, libelle, organisme=False,
             ordre += 1
 
     compte_creance = COMPTE_CREANCE_ORGANISME if organisme else '411'
-    tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre, caisse=caisse)
+    # Un chèque reçu entre au 513 et n'ira en banque qu'à sa remise
+    # (registre des chèques, apps.paiements.cheques).
+    tresor = lignes_tresorerie(ventilation, 'debit', libelle, ordre_debut=ordre, caisse=caisse,
+                               cheques_a_encaisser=True)
     ecritures += tresor
     ecritures.append(
         dict(ordre=ordre + len(tresor), no_compte=compte_creance,

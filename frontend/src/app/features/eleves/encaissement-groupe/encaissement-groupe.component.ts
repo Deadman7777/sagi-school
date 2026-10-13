@@ -16,6 +16,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ElevesService, PreparationDemande } from '../../../core/services/eleves.service';
 import { PaiementsService } from '../../../core/services/paiements.service';
 import { LigneMode, ventilerSurReglements } from './ventilation-modes';
+import { SaisieChequeComponent, chequeVide } from '../../paiements/saisie-cheque.component';
 
 export interface FinEncaissement {
   reference: string;
@@ -40,7 +41,7 @@ export interface FinEncaissement {
 @Component({
   selector: 'app-encaissement-groupe',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, ButtonModule, CheckboxModule, InputNumberModule,
+  imports: [SaisieChequeComponent, CommonModule, FormsModule, ButtonModule, CheckboxModule, InputNumberModule,
             InputTextModule, SelectModule, TagModule, TranslateModule],
   template: `
     @if (chargement()) {
@@ -182,6 +183,9 @@ export interface FinEncaissement {
             </div>
           </div>
         }
+        <!-- Un seul chèque pour toute la famille : inscrit une fois au
+             registre, réparti sur les reçus des enfants. -->
+        @if (payeParCheque()) { <app-saisie-cheque [cheque]="cheque" /> }
         @if (avecEspeces() && caisses().length) {
           <label class="champ">
             <span>{{ 'encaissement.caisse' | translate }}</span>
@@ -294,6 +298,7 @@ export class EncaissementGroupeComponent {
   observations = '';
   /** Plusieurs moyens pour le même versement (espèces + Wave…). */
   multiMode = signal(false);
+  cheque = chequeVide();
   erreurVentilation = signal('');
   lignesModes = signal<LigneMode[]>([]);
   resteAVentiler = computed(() => Math.round(
@@ -421,6 +426,17 @@ export class EncaissementGroupeComponent {
     this.lignesModes.update(l => l.map((m, j) => j === i ? { ...m, ...champ } : m));
   }
 
+  /** Part du versement payée par chèque (0 sans chèque). */
+  partCheque(): number {
+    if (this.multiMode()) {
+      return this.lignesModes().filter(m => m.mode === 'CHEQUE')
+        .reduce((t, m) => t + (Number(m.montant) || 0), 0);
+    }
+    return this.mode === 'CHEQUE' ? this.total() : 0;
+  }
+
+  payeParCheque(): boolean { return this.partCheque() > 0; }
+
   // ── Encaissement ────────────────────────────────────────────────────
   async encaisser() {
     const selection = Object.entries(this.choix())
@@ -431,6 +447,13 @@ export class EncaissementGroupeComponent {
       });
     if (!selection.length) return;
     this.erreurVentilation.set('');
+    if (this.payeParCheque() && (!this.cheque.numero.trim() || !this.cheque.banque.trim())) {
+      this.erreurVentilation.set('Indiquez le numéro et la banque du chèque.');
+      return;
+    }
+    // Le même chèque accompagne chaque reçu : le serveur le retrouve par son
+    // numéro et sa banque, et le montant total l'empêche d'être dépassé.
+    const cheques = this.payeParCheque() ? [{ ...this.cheque, montant: this.partCheque() }] : [];
     this.enCours.set(true);
     const reference = this.nouvelleReference();
     const echecs: string[] = [];
@@ -471,6 +494,8 @@ export class EncaissementGroupeComponent {
             payeur: this.type() === 'famille' ? this.payeur : null,
             reference_groupe: reference,
             observations: this.observations,
+            ...(mode_paiement === 'CHEQUE' || modes_reglement.some(m => m.mode === 'CHEQUE')
+              ? { cheques } : {}),
           } as any));
           nb++;
         } catch {
@@ -481,6 +506,7 @@ export class EncaissementGroupeComponent {
       this.enCours.set(false);
       this.progression.set('');
     }
+    if (nb) this.cheque = chequeVide();
     this.termine.emit({ reference, nbReglements: nb, echecs });
     this.charger(this.cibleId());
   }

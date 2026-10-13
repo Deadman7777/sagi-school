@@ -25,6 +25,18 @@ def verifier_avant_cloture(exercice):
     if ecart > 1:
         problemes.append(f"Journal déséquilibré — écart de {ecart:,.0f} FCFA entre débit et crédit")
 
+    # Chèques en portefeuille : le 513 n'a pas de solde d'ouverture sur
+    # l'exercice suivant. Ils doivent être remis en banque (ou déclarés
+    # impayés) avant la clôture, sinon leur montant disparaîtrait.
+    from .models import ChequeRecu
+    en_portefeuille = ChequeRecu.objects.filter(tenant=tenant, exercice=exercice,
+                                                statut='EN_PORTEFEUILLE', compte_reception='513')
+    if en_portefeuille.exists():
+        total = float(en_portefeuille.aggregate(t=Sum('montant'))['t'] or 0)
+        problemes.append(
+            f"{en_portefeuille.count()} chèque(s) en portefeuille ({total:,.0f} FCFA) — "
+            f"remettez-les en banque ou déclarez-les impayés (Paiements → Chèques)")
+
     # 2. Compter élèves avec solde impayé
     actif = Q(paiements__statut='ACTIF')  # un paiement annulé n'est pas payé
     eleves = Eleve.objects.filter(tenant=tenant, exercice=exercice).annotate(

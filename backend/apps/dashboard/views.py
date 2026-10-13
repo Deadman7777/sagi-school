@@ -14,10 +14,11 @@ from .models import AuditLog
 
 def _filtre_tresorerie():
     """Comptes de trésorerie suivis par le tableau de bord. Par préfixe : les
-    caisses de service (5711, 5712…) sont des caisses comme la 571."""
+    caisses de service (5711, 5712…) sont des caisses comme la 571. Le 513
+    porte les chèques reçus pas encore remis en banque (registre des chèques)."""
     from django.db.models import Q
     return (Q(no_compte__startswith='571') | Q(no_compte__in=('5521', '5522', '5523'))
-            | Q(no_compte__startswith='521'))
+            | Q(no_compte__startswith='521') | Q(no_compte='513'))
 
 
 def _canal_compte(no_compte):
@@ -393,15 +394,14 @@ class DashboardTresorerieCanauView(APIView):
     permission_classes = [IsAuthenticated]
 
     # (mode_paiement, libellé, compte_trésorerie, porte le solde initial du compte)
-    # Le chèque partage la banque (521) avec le virement : le solde initial
-    # n'est compté qu'une fois.
+    # Un chèque reçu attend au 513 jusqu'à sa remise en banque (521).
     CANAUX = [
         ('ESPECE',       'Espèce',       '571',  True),
         ('WAVE',         'Wave',          '5521', True),
         ('ORANGE_MONEY', 'Orange Money',  '5522', True),
         ('FREE_MONEY',   'Free Money',    '5523', True),
         ('VIREMENT',     'Virement',      '521',  True),
-        ('CHEQUE',       'Chèque',        '521',  False),
+        ('CHEQUE',       'Chèques à encaisser', '513', False),
     ]
 
     def get(self, request):
@@ -449,7 +449,8 @@ class DashboardTresorerieCanauView(APIView):
         # internes ne sont ni une entrée ni une sortie.
         hors_scolarite = JournalEntry.objects.filter(
             _filtre_tresorerie(), tenant=tenant, exercice=exercice,
-        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT', 'TRANSFERT', 'ANNUL_TRANSFERT'))
+        ).exclude(source__in=('PAIEMENT', 'ANNUL_PAIEMENT', 'TRANSFERT', 'ANNUL_TRANSFERT',
+                              'REMISE_CHEQUE', 'IMPAYE_CHEQUE'))
 
         # Autres entrées : prêts débloqués, financements, cagnotte NATT,
         # journal de caisse migré… Sans elles, un prêt versé en caisse gonflait

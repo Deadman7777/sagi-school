@@ -95,7 +95,14 @@ def normaliser_ventilation(modes_reglement, total, mode_simple=None):
     return lignes
 
 
-def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1, caisse=None):
+# Chèque REÇU : un titre à encaisser, pas encore de la banque. Il n'entre au
+# 521 qu'à la remise (voir apps.paiements.cheques). Seuls les reçus élèves,
+# suivis au registre des chèques, le demandent (`cheques_a_encaisser`).
+COMPTE_CHEQUES_A_ENCAISSER = ('513', 'Chèques à encaisser')
+
+
+def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1, caisse=None,
+                      cheques_a_encaisser=False):
     """Construit les dict d'écriture de la jambe de trésorerie.
 
     - `ventilation` : sortie de `normaliser_ventilation`.
@@ -112,6 +119,8 @@ def lignes_tresorerie(ventilation, sens, libelle, ordre_debut=1, caisse=None):
     lignes = []
     for i, v in enumerate(ventilation):
         compte, lib_compte = compte_du_mode(v['mode'], caisse)
+        if cheques_a_encaisser and sens == 'debit' and v['mode'] == 'CHEQUE':
+            compte, lib_compte = COMPTE_CHEQUES_A_ENCAISSER
         montant = float(v['montant'])
         lignes.append(dict(
             ordre=ordre_debut + i,

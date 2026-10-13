@@ -43,9 +43,12 @@ MODES = [
     ('ORANGE_MONEY', 'Orange Money'),
     ('FREE_MONEY',   'Free Money'),
     ('BANQUE',       'Banque'),
+    ('CHEQUE',       'Chèques'),          # 513 : reçus, pas encore remis
 ]
 LIBELLE_MODE = dict(MODES)
-SOURCES_TRANSFERT = ('TRANSFERT', 'ANNUL_TRANSFERT')
+# Remise d'un chèque en banque (513 → 521) et son retour s'il est impayé :
+# l'argent change de poste, il n'entre ni ne sort.
+SOURCES_TRANSFERT = ('TRANSFERT', 'ANNUL_TRANSFERT', 'REMISE_CHEQUE', 'IMPAYE_CHEQUE')
 SOURCES_CHARGE = ('CHARGE', 'BUDGET')
 NON_RENSEIGNE = 'Non renseigné'
 
@@ -58,6 +61,8 @@ def mode_du_compte(no_compte):
         return 'ESPECE'
     if no_compte.startswith('521'):
         return 'BANQUE'
+    if no_compte == '513':
+        return 'CHEQUE'
     return {'5521': 'WAVE', '5522': 'ORANGE_MONEY', '5523': 'FREE_MONEY'}.get(no_compte)
 
 

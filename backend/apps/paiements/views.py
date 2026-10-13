@@ -9,6 +9,7 @@ from core.permissions import IsTenantMember, IsAdminEcole
 from core.tenant import get_tenant
 from .models import Paiement, Exercice, Receveur
 from .serializers import PaiementSerializer, ExerciceSerializer, ReceveurSerializer
+from .annulation import _exercice_extourne, _date_extourne
 
 
 class ExerciceViewSet(viewsets.ModelViewSet):
@@ -90,25 +91,6 @@ def _part_compensation_saisie(donnees, total=None):
         'montant_reliquat')), 2)
 
 
-def _exercice_extourne(paiement, tenant):
-    """L'exercice où passer l'annulation d'un règlement : le SIEN tant qu'il
-    est ouvert, comme à l'encaissement (voir perform_create).
-
-    Prendre « le dernier exercice ouvert » envoyait l'extourne sur un autre
-    exercice dès qu'une école en avait deux ouverts : le règlement annulé
-    restait entier dans le 411, le 706 et la caisse de son exercice.
-    """
-    if paiement.exercice_id and not paiement.exercice.cloture:
-        return paiement.exercice
-    return Exercice.objects.filter(tenant=tenant, cloture=False).order_by('-date_debut').first()
-
-
-def _date_extourne(exercice):
-    """Aujourd'hui, ramené dans les bornes de l'exercice de l'extourne."""
-    import datetime
-    return min(datetime.date.today(), exercice.date_fin)
-
-
 class PaiementViewSet(viewsets.ModelViewSet):
     serializer_class   = PaiementSerializer
     permission_classes = [IsAuthenticated]
@@ -142,6 +124,13 @@ class PaiementViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        # Tout ou rien : un chèque refusé au registre ne laisse ni reçu ni
+        # écriture derrière lui.
+        from django.db import transaction
+        with transaction.atomic():
+            self._perform_create(serializer)
+
+    def _perform_create(self, serializer):
         tenant = self.get_tenant()
         from rest_framework.exceptions import ValidationError
 
@@ -281,6 +270,14 @@ class PaiementViewSet(viewsets.ModelViewSet):
                 source_id=paiement.id,
                 **e
             )
+
+        # Registre des chèques : numéro, banque, tireur, pour suivre le chèque
+        # jusqu'à son encaissement.
+        from .cheques import enregistrer_cheques
+        try:
+            enregistrer_cheques(paiement, self.request.data.get('cheques'), self.request.user)
+        except ValueError as exc:
+            raise ValidationError(str(exc))
 
         from core.models import log_audit
         log_audit(self.request, 'CREATE', 'Paiement', str(paiement.id),
@@ -556,9 +553,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def annuler(self, request, pk=None):
         """Annule un paiement scolarité : crée des contre-écritures SYSCOHADA et marque ANNULE."""
-        import datetime
-        import re
-        from apps.comptabilite.models import JournalEntry
+        from django.db import transaction
         from core.models import log_audit
 
         paiement = self.get_object()
@@ -567,53 +562,26 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         tenant = self.get_tenant()
 
-        # Vérifier qu'il n'y a pas déjà des contre-écritures pour ce paiement
-        if JournalEntry.objects.filter(tenant=tenant, source='ANNUL_PAIEMENT', source_id=paiement.id).exists():
-            paiement.statut = 'ANNULE'
-            paiement.save()
-            return Response({'success': True, 'message': 'Paiement marqué annulé (contre-écritures déjà existantes).'})
-
         exercice = _exercice_extourne(paiement, tenant)
         if not exercice:
             return Response({'error': 'Aucun exercice actif pour enregistrer les contre-écritures.'}, status=400)
 
-        # Récupérer les écritures originales liées à ce paiement
-        ecritures_orig = JournalEntry.objects.filter(
-            tenant=tenant, source='PAIEMENT', source_id=paiement.id
-        ).order_by('ordre')
+        # Un chèque déjà remis en banque ne s'annule pas avec le reçu :
+        # l'argent est au 521, l'extourne viderait le 513. S'il revient
+        # impayé, c'est le registre des chèques qui annule le reçu.
+        from .cheques import liberer_cheques, verifier_cheques_modifiables
+        if err := verifier_cheques_modifiables(paiement):
+            return Response({'error': err}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not ecritures_orig.exists():
-            return Response({'error': 'Aucune écriture comptable trouvée pour ce paiement.'}, status=400)
-
-        # Numéro de pièce de l'annulation
-        last_ann = JournalEntry.objects.filter(
-            tenant=tenant, source='ANNUL_PAIEMENT'
-        ).values_list('no_piece', flat=True).order_by('-no_piece')
-        nums = [re.findall(r'\d+', p) for p in last_ann if re.findall(r'\d+', p)]
-        next_n = int(nums[0][-1]) + 1 if nums else 1
-        no_piece_annul = f"ANN-REC-{next_n:04d}"
-        date_annul = _date_extourne(exercice)
-
-        # Créer les contre-écritures (extourne : inverser débit/crédit)
-        contre_ecritures = []
-        for i, e in enumerate(ecritures_orig, start=1):
-            contre_ecritures.append(JournalEntry(
-                tenant=tenant,
-                exercice=exercice,
-                no_piece=no_piece_annul,
-                date_ecriture=date_annul,
-                no_compte=e.no_compte,
-                libelle=f"ANNUL — {e.libelle}",
-                debit=e.credit,
-                credit=e.debit,
-                source='ANNUL_PAIEMENT',
-                source_id=paiement.id,
-                ordre=i,
-            ))
-        JournalEntry.objects.bulk_create(contre_ecritures)
-
-        paiement.statut = 'ANNULE'
-        paiement.save()
+        from .annulation import annuler_paiement
+        try:
+            with transaction.atomic():
+                no_piece_annul = annuler_paiement(paiement, exercice, _date_extourne(exercice))
+                liberer_cheques(paiement)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        if not no_piece_annul:
+            return Response({'success': True, 'message': 'Paiement marqué annulé (contre-écritures déjà existantes).'})
 
         log_audit(request, 'ANNULER', 'Paiement', str(paiement.id),
                   f"Annulation {paiement.no_piece} — {float(paiement.total):,.0f} FCFA — contre-écriture {no_piece_annul}")
@@ -634,6 +602,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     def _modifier(self, request):
         import datetime
+        from django.db import transaction
         import re
         from apps.comptabilite.models import JournalEntry
         from core.models import log_audit
@@ -750,6 +719,12 @@ class PaiementViewSet(viewsets.ModelViewSet):
                                if ancienne_part else 0.0)
         part_accessoire = round(min(part_accessoire, part_exercice), 2)
 
+        # Chèques du reçu : une part chèque déjà remise en banque ne change plus.
+        from .cheques import part_cheque, transferer_cheques, verifier_cheques_modifiables
+        if err := verifier_cheques_modifiables(
+                paiement, part_cheque(modes_reglement_norm, mode_paiement, nouveau_total)):
+            return Response({'error': err}, status=400)
+
         # 1 — Annuler l'original (contre-écritures)
         ecritures_orig = JournalEntry.objects.filter(
             tenant=tenant, source='PAIEMENT', source_id=paiement.id
@@ -825,6 +800,12 @@ class PaiementViewSet(viewsets.ModelViewSet):
                 no_piece=no_piece_new, date_ecriture=nouveau.date_paiement,
                 source='PAIEMENT', source_id=nouveau.id, **e
             )
+
+        try:
+            transferer_cheques(paiement, nouveau, request.data.get('cheques'), request.user)
+        except ValueError as exc:
+            transaction.set_rollback(True)
+            return Response({'error': str(exc)}, status=400)
 
         log_audit(request, 'MODIFIER', 'Paiement', str(paiement.id),
                   f"Modification {paiement.no_piece} → {no_piece_new} — "

@@ -8,7 +8,7 @@ import { SelectModule } from 'primeng/select';
 import { ApiService } from '../../core/services/api.service';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
-type CodeMode = 'ESPECE' | 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY' | 'BANQUE';
+type CodeMode = 'ESPECE' | 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY' | 'BANQUE' | 'CHEQUE';
 
 interface Montants { total: number; par_mode: Record<CodeMode, number>; }
 

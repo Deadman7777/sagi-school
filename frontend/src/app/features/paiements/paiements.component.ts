@@ -30,6 +30,8 @@ import { CahierMensuelComponent } from './cahier-mensuel.component';
 import { PointTresorerieComponent } from './point-tresorerie.component';
 import { ProformasComponent } from './proformas.component';
 import { ServicesAbonnesComponent } from './services-abonnes.component';
+import { SaisieChequeComponent, chequeVide } from './saisie-cheque.component';
+import { RegistreChequesComponent } from './registre-cheques.component';
 
 @Component({
   selector: 'app-paiements',
@@ -38,7 +40,7 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
             InputTextModule, SelectModule, TagModule, ToastModule,
             InputNumberModule, CheckboxModule, DatePickerModule, TooltipModule, SplitButtonModule, PiecesJustificativesComponent,
             ImportChargesDialogComponent, CahierMensuelComponent, PointTresorerieComponent, ProformasComponent,
-            ServicesAbonnesComponent],
+            ServicesAbonnesComponent, SaisieChequeComponent, RegistreChequesComponent],
   providers: [MessageService],
   template: `
     <p-toast />
@@ -72,6 +74,10 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
       <button class="tab-btn" [class.active]="onglet() === 'tresorerie'"
               (click)="onglet.set('tresorerie')">
         🧾 Point de trésorerie
+      </button>
+      <button class="tab-btn" [class.active]="onglet() === 'cheques'"
+              (click)="onglet.set('cheques')">
+        🧾 Chèques
       </button>
       <button class="tab-btn" [class.active]="onglet() === 'proformas'"
               (click)="onglet.set('proformas')">
@@ -110,6 +116,9 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
       <app-point-tresorerie />
     }
 
+    @if (onglet() === 'cheques') {
+      <app-registre-cheques />
+    }
     @if (onglet() === 'proformas') {
       <app-proformas />
     }
@@ -923,6 +932,7 @@ import { ServicesAbonnesComponent } from './services-abonnes.component';
               </span>
             </div>
           </div>
+          @if (payeParCheque()) { <app-saisie-cheque [cheque]="form.cheque" /> }
         </div>
 
         <!-- Parent membre du personnel : ce que l'école lui doit encore peut
@@ -1586,6 +1596,8 @@ export class PaiementsComponent implements OnInit {
     // Paiement multi-mode : un même règlement réparti sur plusieurs modes.
     multi_mode:          false,
     modes_reglement:     [] as { mode: string; montant: number }[],
+    // Chèque reçu : inscrit au registre des chèques (Paiements → Chèques).
+    cheque:              chequeVide(),
     observations:        '',
     // Qui règle : null = la famille, sinon l'organisme qui verse sa part.
     organisme:           null as string | null,
@@ -1656,7 +1668,7 @@ export class PaiementsComponent implements OnInit {
     this.chargerReceveurs();
     // Lien direct depuis le tableau de bord : /paiements?onglet=cahier
     const ongletDemande = this.route.snapshot.queryParamMap.get('onglet');
-    if (['cahier', 'charges', 'proformas', 'tresorerie'].includes(ongletDemande ?? '')) this.onglet.set(ongletDemande!);
+    if (['cahier', 'charges', 'proformas', 'tresorerie', 'cheques'].includes(ongletDemande ?? '')) this.onglet.set(ongletDemande!);
     this.chargerPaiements();
     this.chargerStats();
     this.chargerRappelMois();
@@ -2296,6 +2308,13 @@ export class PaiementsComponent implements OnInit {
     return premier(corps) || this.translate.instant('paiements.erreur_save');
   }
 
+  /** Le règlement saisi comprend-il un chèque ? */
+  payeParCheque(): boolean {
+    return this.form.multi_mode
+      ? this.form.modes_reglement.some(m => m.mode === 'CHEQUE')
+      : this.form.mode_paiement === 'CHEQUE';
+  }
+
   private resetForm() {
     this.form = {
       montant_inscription: 0, montant_mensualite: 0, montant_uniforme: 0,
@@ -2304,7 +2323,7 @@ export class PaiementsComponent implements OnInit {
       mois_regles: [], services: [], inclure_premier_mois: false, caisse: this.form.caisse || null,
       receveur: this.form.receveur || null,
       mode_paiement: this.form.mode_paiement || '',
-      multi_mode: false, modes_reglement: [], observations: '',
+      multi_mode: false, modes_reglement: [], cheque: chequeVide(), observations: '',
       // Le payeur n'est PAS conservé d'une saisie à l'autre, contrairement au
       // mode : enchaîner deux reçus et attribuer le second à l'organisme par
       // inadvertance fausserait le suivi des deux côtés.
@@ -2471,6 +2490,11 @@ export class PaiementsComponent implements OnInit {
         return;
       }
     }
+    if (this.payeParCheque() && (!this.form.cheque.numero.trim() || !this.form.cheque.banque.trim())) {
+      this.msg.add({ severity:'warn', summary: this.translate.instant('paiements.champ_requis'),
+                     detail: 'Indiquez le numéro et la banque du chèque.' });
+      return;
+    }
     this.saving.set(true);
     // Services inclus : itemisés dans services_regles ; leur montant est ajouté au montant_divers
     const servicesIncl  = (this.form.services || []).filter(s => s.inclus && Number(s.montant) > 0);
@@ -2493,6 +2517,7 @@ export class PaiementsComponent implements OnInit {
         ? this.form.modes_reglement.map(m => ({ mode: m.mode, montant: Number(m.montant) }))
         : [],
       observations:        this.form.observations,
+      ...(this.payeParCheque() ? { cheques: [{ ...this.form.cheque }] } : {}),
       organisme:           this.form.organisme || null,
       caisse:              this.form.caisse || null,
       receveur:            this.form.receveur || null,

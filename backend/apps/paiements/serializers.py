@@ -167,3 +167,46 @@ class ReceveurSerializer(TenantModelSerializer):
         if doublon.exists():
             raise serializers.ValidationError(f"« {nom} » existe déjà.")
         return nom
+
+
+def _nom_user(u):
+    return f"{u.prenom or ''} {u.nom or ''}".strip() or u.email if u else ''
+
+
+class ChequeRecuSerializer(TenantModelSerializer):
+    """Un chèque du registre, avec les reçus qu'il règle et qui a fait quoi."""
+    recus          = serializers.SerializerMethodField()
+    montant_affecte = serializers.SerializerMethodField()
+    recu_par_nom   = serializers.SerializerMethodField()
+    remis_par_nom  = serializers.SerializerMethodField()
+    encaisse_par_nom = serializers.SerializerMethodField()
+    impaye_par_nom = serializers.SerializerMethodField()
+    exercice_nom   = serializers.CharField(source='exercice.annee_scolaire', read_only=True)
+
+    class Meta:
+        from .models import ChequeRecu
+        model  = ChequeRecu
+        fields = '__all__'
+        # Le cycle du chèque (statut, dates, auteurs, compte) ne se change que
+        # par les actions du registre, qui passent les écritures.
+        read_only_fields = [
+            'tenant', 'exercice', 'statut', 'compte_reception', 'reference_groupe',
+            'date_reception', 'recu_par', 'date_remise', 'bordereau', 'no_piece_remise',
+            'remis_par', 'date_encaissement', 'encaisse_par', 'date_impaye',
+            'motif_impaye', 'impaye_par', 'montant',
+        ]
+
+    def get_recus(self, c):
+        return [{'paiement': str(a.paiement_id), 'no_piece': a.paiement.no_piece,
+                 'eleve': a.paiement.eleve.nom_complet, 'montant': float(a.montant),
+                 'statut': a.paiement.statut}
+                for a in c.affectations.all()]
+
+    def get_montant_affecte(self, c):
+        return round(sum(float(a.montant) for a in c.affectations.all()
+                         if a.paiement.statut == 'ACTIF'), 2)
+
+    def get_recu_par_nom(self, c):     return _nom_user(c.recu_par)
+    def get_remis_par_nom(self, c):    return _nom_user(c.remis_par)
+    def get_encaisse_par_nom(self, c): return _nom_user(c.encaisse_par)
+    def get_impaye_par_nom(self, c):   return _nom_user(c.impaye_par)

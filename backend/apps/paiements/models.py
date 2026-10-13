@@ -213,6 +213,76 @@ class Paiement(TenantModel):
         super().save(*args, **kwargs)
 
 
+class ChequeRecu(TenantModel):
+    """Un chèque reçu, suivi de sa réception à son encaissement.
+
+    Le chèque est un TITRE, pas encore de l'argent : à la réception il entre
+    au 513 « Chèques à encaisser » (D 513), il ne passe en banque qu'à la
+    remise (D 521 / C 513). Le solde du 521 est ainsi le vrai solde bancaire,
+    et le 513 dit ce que l'école détient en portefeuille.
+
+    Un chèque peut régler plusieurs reçus (un père, un chèque, trois enfants) :
+    ses parts sont dans AffectationCheque. Voir apps.paiements.cheques.
+    """
+    STATUT_CHOICES = [
+        ('EN_PORTEFEUILLE', 'En portefeuille'),
+        ('REMIS',           'Remis en banque'),
+        ('ENCAISSE',        'Encaissé'),
+        ('IMPAYE',          'Impayé'),
+        ('ANNULE',          'Annulé'),
+    ]
+    exercice        = models.ForeignKey(Exercice, on_delete=models.PROTECT, related_name='cheques')
+    numero          = models.CharField(max_length=40, blank=True, default='')
+    banque          = models.CharField(max_length=80, blank=True, default='')
+    tireur          = models.CharField(max_length=150, blank=True, default='',
+                                       help_text="Titulaire du compte qui émet le chèque")
+    date_emission   = models.DateField(null=True, blank=True)
+    date_reception  = models.DateField(default=timezone.localdate)
+    montant         = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    statut          = models.CharField(max_length=16, choices=STATUT_CHOICES, default='EN_PORTEFEUILLE')
+    # Compte où le chèque est entré à la réception. '521' : chèque reçu avant
+    # le registre, déjà porté en banque — sa remise n'écrit rien.
+    compte_reception = models.CharField(max_length=10, default='513')
+    # Versement groupé d'une famille : rattache les reçus d'un même chèque
+    # saisi sans numéro.
+    reference_groupe = models.UUIDField(null=True, blank=True, db_index=True)
+    recu_par        = models.ForeignKey('users.User', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+')
+    # Remise en banque
+    date_remise     = models.DateField(null=True, blank=True)
+    bordereau       = models.CharField(max_length=40, blank=True, default='')
+    no_piece_remise = models.CharField(max_length=30, blank=True, default='')
+    remis_par       = models.ForeignKey('users.User', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+')
+    # Crédit constaté sur le relevé
+    date_encaissement = models.DateField(null=True, blank=True)
+    encaisse_par    = models.ForeignKey('users.User', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+')
+    # Rejet par la banque
+    date_impaye     = models.DateField(null=True, blank=True)
+    motif_impaye    = models.CharField(max_length=200, blank=True, default='')
+    impaye_par      = models.ForeignKey('users.User', null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name='+')
+    observations    = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'cheques_recus'
+        ordering = ['-date_reception', '-created_at']
+
+    def __str__(self):
+        return f"Chèque {self.numero or '?'} {self.banque} — {self.montant}"
+
+
+class AffectationCheque(TenantModel):
+    """Part d'un chèque qui règle un reçu."""
+    cheque   = models.ForeignKey(ChequeRecu, on_delete=models.CASCADE, related_name='affectations')
+    paiement = models.ForeignKey(Paiement, on_delete=models.CASCADE, related_name='affectations_cheque')
+    montant  = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        db_table = 'affectations_cheque'
+
+
 class Proforma(TenantModel):
     """Facture proforma de scolarité remise à une famille.
 
