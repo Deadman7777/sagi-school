@@ -273,6 +273,18 @@ class EmployeViewSet(viewsets.ModelViewSet):
         reponse['Content-Disposition'] = f'inline; filename="situation_personnel_{nom}.pdf"'
         return reponse
 
+    @action(detail=False, methods=['get'], url_path='cout-annuel')
+    def cout_annuel(self, request):
+        """Coût annuel du personnel (salaires + charges patronales) de
+        l'exercice : réalisé (bulletins validés) + prévu (fiches)."""
+        from apps.paiements.models import Exercice
+        from .cout_personnel import cout_annuel
+        tenant = get_tenant(request)
+        exercice = None
+        if eid := request.query_params.get('exercice'):
+            exercice = get_object_or_404(Exercice, id=eid, tenant=tenant)
+        return Response(cout_annuel(tenant, exercice))
+
     @action(detail=False, methods=['get'], url_path='dettes')
     def dettes(self, request):
         """Une ligne par employé à qui l'école doit quelque chose (ou qui a
@@ -401,7 +413,7 @@ def _kwargs_paie(vd):
     """Paramètres du calcul de paie tirés de BulletinPaieCreateSerializer —
     communs à la création et à la prévisualisation, qui doivent calculer pareil."""
     kwargs_paie = {k: vd.get(k, 0) for k in (
-        'prime_transport', 'indemnite_sujetion', 'indemnite_logement',
+        'sursalaire', 'prime_transport', 'indemnite_sujetion', 'indemnite_logement',
         'primes_diverses', 'avantages_nature', 'opposition_saisie', 'autres_retenues',
         'nb_jours_absence', 'nb_heures_retard')}
     kwargs_paie['retenue_absence']   = vd.get('retenue_absence')
@@ -690,9 +702,9 @@ class RHStatsView(APIView):
     def get(self, request):
         tenant   = get_tenant(request)
         employes = Employe.objects.filter(tenant=tenant)
-        masse    = float(
-            employes.filter(statut='ACTIF').aggregate(t=Sum('salaire_base'))['t'] or 0
-        )
+        agg      = employes.filter(statut='ACTIF').aggregate(
+            b=Sum('salaire_base'), s=Sum('sursalaire'), t=Sum('prime_transport'))
+        masse    = float((agg['b'] or 0) + (agg['s'] or 0) + (agg['t'] or 0))
         return Response({
             'total_employes':  employes.exclude(statut='QUITTE').count(),
             'actifs':          employes.filter(statut='ACTIF').count(),

@@ -100,8 +100,9 @@ def situation_personnel(employe, paiement_exclu=None, versement_exclu=None,
     Le dû de l'année se lit sur le CALENDRIER de l'exercice : un mois de paie
     est dû dès qu'il appartient à l'année, bulletin établi ou non. Son montant
     est le net du bulletin validé du mois s'il existe, sinon le salaire
-    convenu (salaire de base de la fiche). S'y ajoute l'antérieur : le
-    reliquat saisi et le reste des bulletins d'avant l'exercice.
+    convenu (salaire de base + sursalaire + prime de transport de la fiche).
+    S'y ajoute l'antérieur : le reliquat saisi et le reste des bulletins
+    d'avant l'exercice.
 
     `paiement_exclu` / `versement_exclu` : le règlement en cours de réécriture
     ne se compte pas lui-même (modification d'un reçu)."""
@@ -111,7 +112,7 @@ def situation_personnel(employe, paiement_exclu=None, versement_exclu=None,
     today = today or aujourdhui()
     exercice = exercice or exercice_courant(employe.tenant)
     calendrier = mois_de_paie(exercice) if exercice else []
-    salaire = _r(employe.salaire_base)
+    salaire = _r(employe.salaire_base + employe.sursalaire + employe.prime_transport)
 
     bulletins = {(b.annee, b.mois): b for b in
                  BulletinPaie.objects.filter(employe=employe, statut__in=('VALIDE', 'PAYE'))}

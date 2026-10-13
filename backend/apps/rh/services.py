@@ -225,6 +225,7 @@ class PaieCalculateur:
             base, nb_heures_effectuees, employe.niveau_enseignement
         ) if nb_heures_effectuees else Decimal('0')
 
+        sursalaire          = _d(kwargs.get('sursalaire', 0))
         indemnite_sujetion  = _d(kwargs.get('indemnite_sujetion', 0))
         indemnite_logement  = _d(kwargs.get('indemnite_logement', 0))
         primes_diverses     = _d(kwargs.get('primes_diverses', 0))
@@ -264,7 +265,7 @@ class PaieCalculateur:
         prime_transport = _d(kwargs.get('prime_transport', 0))
 
         salaire_brut = (
-            base - retenue_absence + heures_sup + indemnite_sujetion + indemnite_logement
+            base - retenue_absence + heures_sup + sursalaire + indemnite_sujetion + indemnite_logement
             + alloc + prime_transport + primes_diverses + avantages_nature
         )
 
@@ -341,6 +342,7 @@ class PaieCalculateur:
             'salaire_base':                base,
             'nb_heures_sup':               _d(nb_heures_effectuees),
             'heures_sup_montant':          heures_sup,
+            'sursalaire':                  sursalaire,
             'indemnite_sujetion':          indemnite_sujetion,
             'indemnite_logement':          indemnite_logement,
             'allocation_salaire_unique':   alloc,

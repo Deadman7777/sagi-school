@@ -64,6 +64,10 @@ class Employe(TenantModel):
     date_embauche          = models.DateField()
     date_fin_contrat       = models.DateField(null=True, blank=True)
     salaire_base           = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Éléments fixes du salaire convenu, repris d'office sur chaque bulletin
+    # (modifiables bulletin par bulletin).
+    sursalaire             = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    prime_transport        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     telephone              = models.CharField(max_length=20, blank=True)
     email                  = models.EmailField(blank=True)
     statut                 = models.CharField(max_length=20, choices=STATUT_CHOICES, default='ACTIF')
@@ -242,6 +246,7 @@ class BulletinPaie(TenantModel):
     salaire_base              = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     nb_heures_sup             = models.DecimalField(max_digits=6, decimal_places=2, default=0)
     heures_sup_montant        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sursalaire                = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     indemnite_sujetion        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     indemnite_logement        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     allocation_salaire_unique = models.DecimalField(max_digits=12, decimal_places=2, default=0)

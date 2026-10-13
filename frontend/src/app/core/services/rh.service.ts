@@ -22,6 +22,8 @@ export interface Employe {
   date_embauche: string;
   date_fin_contrat?: string;
   salaire_base: number;
+  sursalaire: number;
+  prime_transport: number;
   salaire_net: number;
   telephone: string;
   email: string;
@@ -37,6 +39,20 @@ export interface Employe {
   /** Salaires d'un exercice antérieur que l'école doit encore. */
   reliquat_anterieur?: number;
   reliquat_note?: string;
+}
+
+/** Coût annuel du personnel : réalisé (bulletins validés) + prévu (fiches). */
+export interface LigneCoutPersonnel {
+  id: string; matricule: string; nom_complet: string; poste: string;
+  type_employe: string; statut: string; mensuel_fiche: number;
+  nb_mois: number; nb_mois_realises: number;
+  brut: number; charges_patronales: number; realise: number; prevu: number; cout_total: number;
+}
+export interface CoutPersonnel {
+  exercice: string | null; nb_mois: number; premier_mois?: string; dernier_mois?: string;
+  lignes: LigneCoutPersonnel[];
+  totaux: { brut: number; charges_patronales: number; cout_total: number;
+            realise: number; prevu: number; nb_employes: number };
 }
 
 /** Une dette de l'école envers l'employé : reliquat antérieur ou mois de paie. */
@@ -110,6 +126,7 @@ export interface BulletinPaie {
   salaire_base: number;
   nb_heures_sup: number;
   heures_sup_montant: number;
+  sursalaire: number;
   indemnite_sujetion: number;
   indemnite_logement: number;
   allocation_salaire_unique: number;
@@ -222,6 +239,7 @@ export class RhService {
   situationDette(employeId: string) {
     return this.api.get<SituationDettePersonnel>(`/rh/employes/${employeId}/situation-dette/`);
   }
+  coutAnnuel() { return this.api.get<CoutPersonnel>('/rh/employes/cout-annuel/'); }
   suiviDettes() {
     return this.api.get<{ results: LigneSuiviDette[]; reste_total: number; reste_echu_total: number }>(
       '/rh/employes/dettes/');

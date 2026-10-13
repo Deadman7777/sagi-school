@@ -18,7 +18,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { GouvernanceService } from '../../core/services/gouvernance.service';
 import {
-  Employe, BulletinPaie, AvanceSalaire, ParametresFiscaux,
+  Employe, BulletinPaie, AvanceSalaire, ParametresFiscaux, CoutPersonnel,
   RhService
 } from '../../core/services/rh.service';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
@@ -85,6 +85,14 @@ const MOIS_OPTIONS = [
       <div class="kpi-value" style="color:#f59e0b">{{ stats()!.masse_salariale | number:'1.0-0' }}</div>
       <div class="kpi-sub">{{ 'rh.fcfa_mois' | translate }}</div>
     </div>
+    @if (cout(); as c) {
+      <button type="button" class="kpi-card kpi-clic" style="--acc:#ef4444" (click)="dialogCoutVisible = true">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">{{ 'rh.cout_annuel' | translate }}</div>
+        <div class="kpi-value" style="color:#ef4444">{{ c.totaux.cout_total | number:'1.0-0' }}</div>
+        <div class="kpi-sub">{{ 'rh.cout_annuel_sub' | translate:{ ex: c.exercice || '—' } }}</div>
+      </button>
+    }
   </div>
 }
 
@@ -634,6 +642,14 @@ const MOIS_OPTIONS = [
       <p-inputNumber [(ngModel)]="formEmploye.salaire_base" [min]="0" mode="decimal" styleClass="w-full" />
     </div>
     <div class="form-group">
+      <label>{{ 'rh.sursalaire_fcfa' | translate }}</label>
+      <p-inputNumber [(ngModel)]="formEmploye.sursalaire" [min]="0" mode="decimal" styleClass="w-full" />
+    </div>
+    <div class="form-group">
+      <label>{{ 'rh.prime_transport_fcfa' | translate }}</label>
+      <p-inputNumber [(ngModel)]="formEmploye.prime_transport" [min]="0" mode="decimal" styleClass="w-full" />
+    </div>
+    <div class="form-group">
       <label>{{ 'common.telephone' | translate }}</label>
       <input pInputText [(ngModel)]="formEmploye.telephone" class="w-full" />
     </div>
@@ -722,6 +738,62 @@ const MOIS_OPTIONS = [
 </p-dialog>
 
 <!-- — Dialog Générer Bulletin — -->
+<!-- ══════════════════════ COÛT ANNUEL DU PERSONNEL ══════════════════════ -->
+<p-dialog [header]="'rh.cout_annuel' | translate" [(visible)]="dialogCoutVisible" [modal]="true"
+          [style]="{width:'1000px'}" [draggable]="false">
+  @if (cout(); as c) {
+    @if (c.nb_mois) {
+      <p class="small-txt">{{ 'rh.cout_annuel_intro' | translate:{ n: c.nb_mois, debut: c.premier_mois, fin: c.dernier_mois } }}</p>
+      <div class="cout-resume">
+        <div><span class="small-txt">{{ 'rh.cout_realise' | translate }}</span><b class="mono">{{ c.totaux.realise | number:'1.0-0' }}</b></div>
+        <div><span class="small-txt">{{ 'rh.cout_prevu' | translate }}</span><b class="mono">{{ c.totaux.prevu | number:'1.0-0' }}</b></div>
+        <div><span class="small-txt">{{ 'rh.cout_charges' | translate }}</span><b class="mono">{{ c.totaux.charges_patronales | number:'1.0-0' }}</b></div>
+        <div><span class="small-txt">{{ 'rh.cout_total' | translate }}</span><b class="mono danger-txt">{{ c.totaux.cout_total | number:'1.0-0' }} FCFA</b></div>
+      </div>
+      <p-table [value]="c.lignes" styleClass="p-datatable-sm" [scrollable]="true" scrollHeight="55vh">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>{{ 'rh.nom_complet' | translate }}</th>
+            <th>{{ 'rh.poste' | translate }}</th>
+            <th class="num">{{ 'rh.cout_mensuel_fiche' | translate }}</th>
+            <th class="num">{{ 'rh.cout_mois' | translate }}</th>
+            <th class="num">{{ 'rh.cout_brut' | translate }}</th>
+            <th class="num">{{ 'rh.cout_charges' | translate }}</th>
+            <th class="num">{{ 'rh.cout_realise' | translate }}</th>
+            <th class="num">{{ 'rh.cout_prevu' | translate }}</th>
+            <th class="num">{{ 'rh.cout_total' | translate }}</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-l>
+          <tr>
+            <td class="bold">{{ l.nom_complet }}</td>
+            <td class="small-txt">{{ l.poste }}</td>
+            <td class="mono num">{{ l.mensuel_fiche | number:'1.0-0' }}</td>
+            <td class="mono num">{{ l.nb_mois }}@if (l.nb_mois_realises) { <span class="small-txt"> ({{ l.nb_mois_realises }} ✓)</span> }</td>
+            <td class="mono num">{{ l.brut | number:'1.0-0' }}</td>
+            <td class="mono num">{{ l.charges_patronales | number:'1.0-0' }}</td>
+            <td class="mono num">{{ l.realise | number:'1.0-0' }}</td>
+            <td class="mono num">{{ l.prevu | number:'1.0-0' }}</td>
+            <td class="mono num bold">{{ l.cout_total | number:'1.0-0' }}</td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="footer">
+          <tr>
+            <td colspan="4" class="bold">{{ 'rh.cout_total' | translate }} ({{ c.totaux.nb_employes }})</td>
+            <td class="mono num bold">{{ c.totaux.brut | number:'1.0-0' }}</td>
+            <td class="mono num bold">{{ c.totaux.charges_patronales | number:'1.0-0' }}</td>
+            <td class="mono num bold">{{ c.totaux.realise | number:'1.0-0' }}</td>
+            <td class="mono num bold">{{ c.totaux.prevu | number:'1.0-0' }}</td>
+            <td class="mono num bold">{{ c.totaux.cout_total | number:'1.0-0' }}</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    } @else {
+      <p class="small-txt">{{ 'rh.cout_aucun' | translate }}</p>
+    }
+  }
+</p-dialog>
+
 <p-dialog header="📄 Générer Bulletin de Paie SYSCOHADA"
           [(visible)]="dialogBulletinVisible" [modal]="true"
           [style]="{width: previewBulletin() ? '900px' : '520px'}"
@@ -760,6 +832,10 @@ const MOIS_OPTIONS = [
           <p-inputNumber [(ngModel)]="formBulletin.nb_heures_effectuees" [min]="0" [max]="60"
                          [minFractionDigits]="0" [maxFractionDigits]="1" styleClass="w-full"
                          placeholder="0 = aucune heure sup" />
+        </div>
+        <div class="form-group full">
+          <label>{{ 'rh.sursalaire_label' | translate }}</label>
+          <p-inputNumber [(ngModel)]="formBulletin.sursalaire" [min]="0" mode="decimal" styleClass="w-full" />
         </div>
         <div class="form-group full">
           <label>{{ 'rh.transport_label' | translate }}</label>
@@ -860,6 +936,9 @@ const MOIS_OPTIONS = [
           <div class="pv-row"><span>Salaire de base</span><span class="mono">{{ previewBulletin()!.salaire_base | number:'1.0-0' }}</span></div>
           @if (+previewBulletin()!.retenue_absence > 0) {
             <div class="pv-row danger-txt"><span>{{ 'rh.retenue_absence_ligne' | translate }}</span><span class="mono">-{{ previewBulletin()!.retenue_absence | number:'1.0-0' }}</span></div>
+          }
+          @if (+previewBulletin()!.sursalaire > 0) {
+            <div class="pv-row"><span>Sursalaire</span><span class="mono">{{ previewBulletin()!.sursalaire | number:'1.0-0' }}</span></div>
           }
           @if (+previewBulletin()!.heures_sup_montant > 0) {
             <div class="pv-row"><span>Heures sup. ({{ previewBulletin()!.nb_heures_sup }}h)</span><span class="mono">{{ previewBulletin()!.heures_sup_montant | number:'1.0-0' }}</span></div>
@@ -1022,6 +1101,9 @@ const MOIS_OPTIONS = [
         @if (+b.retenue_absence > 0) {
           <div class="dg-row danger-txt"><span>{{ 'rh.retenue_absence_ligne' | translate }}</span><span>-{{ b.retenue_absence | number:'1.0-0' }}</span></div>
         }
+        @if (+b.sursalaire > 0) {
+          <div class="dg-row"><span>Sursalaire</span><span>{{ b.sursalaire | number:'1.0-0' }}</span></div>
+        }
         @if (+b.heures_sup_montant > 0) {
           <div class="dg-row"><span>Heures sup. ({{ b.nb_heures_sup }}h/sem.)</span><span>{{ b.heures_sup_montant | number:'1.0-0' }}</span></div>
         }
@@ -1124,7 +1206,12 @@ const MOIS_OPTIONS = [
     .page-header  { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
     .page-title   { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub     { font-size:12px; color:var(--text-3); }
-    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px; }
+    th.num, td.num { text-align:right; }
+    .kpi-clic { cursor:pointer; text-align:left; font:inherit; color:inherit; }
+    .kpi-clic:hover { border-color:var(--acc); }
+    .cout-resume { display:flex; gap:24px; margin:10px 0 14px; }
+    .cout-resume b { display:block; font-size:1.15rem; }
     .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; border-top:3px solid var(--acc); }
     .kpi-icon  { font-size:24px; margin-bottom:8px; }
     .kpi-label { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.5px; }
@@ -1372,6 +1459,8 @@ export class RhComponent implements OnInit {
 
   // — Formulaires —
   formEmploye: any = {};
+  cout = signal<CoutPersonnel | null>(null);
+  dialogCoutVisible = false;
   formBulletin: any = {};
   formAvance: any  = {};
   formParams: any  = {};
@@ -1417,6 +1506,7 @@ export class RhComponent implements OnInit {
   chargerDonnees() {
     this.loading.set(true);
     this.rh.getStats().subscribe({ next: r => this.stats.set(r) });
+    this.rh.coutAnnuel().subscribe({ next: r => this.cout.set(r) });
     this.rh.getEmployes().subscribe({
       next:  r => { this.employes.set(Array.isArray(r) ? r : r.results ?? []); this.loading.set(false); },
       error: () => this.loading.set(false),
@@ -1472,7 +1562,7 @@ export class RhComponent implements OnInit {
   ouvrirDialogEmploye(e?: Employe) {
     this.formEmploye = e ? { ...e } : {
       nom_complet: '', type_employe: 'ENSEIGNANT', poste: '', type_contrat: 'CDI',
-      date_embauche: '', salaire_base: 0, telephone: '', email: '',
+      date_embauche: '', salaire_base: 0, sursalaire: 0, prime_transport: 0, telephone: '', email: '',
       niveau_enseignement: '', nb_enfants: 0, situation_matrimoniale: 'CELIBATAIRE',
       est_cadre: false, mode_paiement: 'CAISSE', numero_compte: '',
       autorisation_numero: '', autorisation_date: '', autorisation_autorite: '', autorisation_obs: '',
@@ -1518,7 +1608,9 @@ export class RhComponent implements OnInit {
       mois:                now.getMonth() + 1,
       annee:               now.getFullYear(),
       nb_heures_effectuees: 0,
-      prime_transport:     0,
+      // Sursalaire et transport : repris de la fiche, modifiables pour ce mois
+      sursalaire:          emp?.sursalaire ?? 0,
+      prime_transport:     emp?.prime_transport ?? 0,
       indemnite_sujetion:  0,
       indemnite_logement:  0,
       primes_diverses:     0,
@@ -1549,6 +1641,8 @@ export class RhComponent implements OnInit {
       this.formBulletin.employe_type   = emp.type_employe;
       this.formBulletin.employe_niveau = emp.niveau_enseignement;
       this.formBulletin.salaire_base   = emp.salaire_base;
+      this.formBulletin.sursalaire     = emp.sursalaire ?? 0;
+      this.formBulletin.prime_transport = emp.prime_transport ?? 0;
       this.formBulletin.mode_paiement_effectif = emp.mode_paiement;
     }
   }
@@ -1677,6 +1771,8 @@ export class RhComponent implements OnInit {
       mois:                   this.formBulletin.mois,
       annee:                  this.formBulletin.annee,
       nb_heures_effectuees:   this.formBulletin.nb_heures_effectuees || 0,
+      sursalaire:             this.formBulletin.sursalaire           || 0,
+      prime_transport:        this.formBulletin.prime_transport      || 0,
       indemnite_sujetion:     this.formBulletin.indemnite_sujetion   || 0,
       indemnite_logement:     this.formBulletin.indemnite_logement   || 0,
       primes_diverses:        this.formBulletin.primes_diverses      || 0,

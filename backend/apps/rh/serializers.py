@@ -32,7 +32,7 @@ class EmployeSerializer(TenantModelSerializer):
         # faire échouer l'enregistrement, il vaut 0.
         # Seulement s'il est ENVOYÉ : une modification partielle (reliquat
         # seul) remettait sinon le salaire à 0.
-        for f in ('salaire_base', 'nb_enfants', 'reliquat_anterieur'):
+        for f in ('salaire_base', 'sursalaire', 'prime_transport', 'nb_enfants', 'reliquat_anterieur'):
             if f in data and data.get(f) in ('', None):
                 data[f] = 0
         return super().to_internal_value(data)
@@ -95,6 +95,7 @@ class BulletinPaieCreateSerializer(serializers.Serializer):
     mois                   = serializers.IntegerField(min_value=1, max_value=12)
     annee                  = serializers.IntegerField(min_value=2000, max_value=2100)
     nb_heures_effectuees   = serializers.DecimalField(max_digits=5, decimal_places=2, default=0)
+    sursalaire             = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
     prime_transport        = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
     indemnite_sujetion     = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
     indemnite_logement     = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
