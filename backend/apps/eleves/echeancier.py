@@ -639,6 +639,109 @@ def ventilation_du(eleve, ech=None):
     }
 
 
+def partager_reste_mois(ligne, services_dus, services_payes):
+    """Reste d'un mois partagé entre la scolarité et chaque service.
+
+    Pour l'école qui encaisse la scolarité et le transport sur deux reçus :
+    après le reçu de scolarité, le mois reste ouvert pour le transport, et
+    l'inverse. La somme des parts est TOUJOURS le reste du mois — séparer les
+    reçus change la façon d'encaisser, jamais ce que la famille doit.
+    """
+    reste_mois = float(ligne['reste']) if ligne else 0.0
+    svc = {sid: max(float(du) - services_payes.get(sid, 0.0), 0.0)
+           for sid, du in services_dus.items()}
+    total_svc = sum(svc.values())
+    # La scolarité payée en trop a pu couvrir le service : le reste du mois
+    # fait foi, le service n'en garde que sa part.
+    if total_svc > reste_mois and total_svc > 0:
+        svc = {sid: v * reste_mois / total_svc for sid, v in svc.items()}
+        total_svc = reste_mois
+    return {
+        'reste_services':  {sid: round(v, 2) for sid, v in svc.items()},
+        'reste_scolarite': round(max(reste_mois - total_svc, 0.0), 2),
+    }
+
+
+def _part(du, reste, reste_echu):
+    du, reste = round(du, 2), round(reste, 2)
+    return {'du': du, 'paye': round(du - reste, 2), 'reste': reste,
+            'reste_echu': round(reste_echu, 2)}
+
+
+def partage_scolarite_services(eleve, ech=None, seulement=None):
+    """Le dû, le payé et le reste de l'élève, séparés entre SCOLARITÉ
+    (inscription, mensualités, uniforme, fournitures) et SERVICES (cantine,
+    transport, garderie, activités, adhésions).
+
+    Rien de neuf n'est calculé : chaque mois de l'échéancier est découpé.
+      - dû : composition du mois (services mensuels + suppléments de garde),
+        le reste étant la scolarité ;
+      - reste : partager_reste_mois — un service reste dû tant qu'aucun reçu
+        ne l'a désigné, dans la limite du reste du mois (le reçu qui couvre
+        tout le mois solde aussi ses services).
+    La somme des deux parts est donc toujours celle de l'échéancier.
+
+    Rend {'mois': {m: {'scolarite': part, 'services': part}},
+          'hors_mensualite': {'scolarite': part, 'services': part},
+          'scolarite': part, 'services': part}
+    où part = {du, paye, reste, reste_echu}.
+
+    `seulement` : (annee, mois) — ne découpe que ce mois-là (cahier mensuel,
+    qui parcourt toute l'école pour un seul mois).
+    """
+    from apps.paiements.models import Paiement
+
+    ech = ech or construire_echeancier(eleve)
+    regles = getattr(eleve, PREFETCH_PAIEMENTS, None)
+    if regles is None:
+        regles = list(Paiement.objects.filter(
+            tenant=eleve.tenant, exercice=eleve.exercice_id, eleve=eleve,
+            statut='ACTIF').only('mois_regles', 'services_regles'))
+    svc_payes = services_payes_par_mois(eleve, regles)
+
+    par_mois = {}
+    for l in ech['lignes']:
+        m = l['mois']
+        if seulement and (l['annee'], m) != tuple(seulement):
+            continue
+        services_dus = ({str(ab.service_id): ab.prix for ab in eleve.abonnements_mensuels_du_mois(m)}
+                        if eleve._mois_du_calendrier(m) else {})
+        _du, _scol, _svc, supplements = composition_du_mois(eleve, m)
+        if supplements > 0:
+            services_dus['supplements'] = supplements
+        du_svc = min(sum(services_dus.values()), float(l['du']))
+        reste_svc = sum(partager_reste_mois(l, services_dus, svc_payes.get(m, {}))
+                        ['reste_services'].values())
+        reste_scol = max(float(l['reste']) - reste_svc, 0.0)
+        ratio = (float(l['reste_echu']) / float(l['reste'])) if l['reste'] else 0.0
+        par_mois[m] = {
+            'scolarite': _part(float(l['du']) - du_svc, reste_scol, reste_scol * ratio),
+            'services':  _part(du_svc, reste_svc, reste_svc * ratio),
+        }
+
+    h = ech['hors_mensualite']
+    if h:
+        du_svc = sum(ab.prix for ab in eleve.abonnements.all()
+                     if ab.service.periodicite != 'MENSUEL')
+        du_svc += sum(a['montant'] for a in eleve.adhesions_services())
+        du_svc = min(du_svc, float(h['du']))
+        paye_svc = sum(parts_services(p.services_regles)[1] for p in regles)
+        reste_svc = min(max(du_svc - paye_svc, 0.0), float(h['reste']))
+        reste_scol = max(float(h['reste']) - reste_svc, 0.0)
+        echu = 1.0 if h['echu'] else 0.0
+        hors = {'scolarite': _part(float(h['du']) - du_svc, reste_scol, reste_scol * echu),
+                'services':  _part(du_svc, reste_svc, reste_svc * echu)}
+    else:
+        hors = {'scolarite': _part(0, 0, 0), 'services': _part(0, 0, 0)}
+
+    def total(cle):
+        parts = [v[cle] for v in par_mois.values()] + [hors[cle]]
+        return {k: round(sum(p[k] for p in parts), 2) for k in ('du', 'paye', 'reste', 'reste_echu')}
+
+    return {'mois': par_mois, 'hors_mensualite': hors,
+            'scolarite': total('scolarite'), 'services': total('services')}
+
+
 def lignes_retenues(eleve, lignes):
     """Les mois qu'on attend réellement de cet élève.
 

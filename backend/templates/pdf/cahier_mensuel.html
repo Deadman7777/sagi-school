@@ -48,6 +48,36 @@
   Entrées réelles en caisse pendant le mois, toutes rubriques confondues : {{ c.caisse.entrees|floatformat:"0g" }}.
 </div>
 
+<div class="section-title">Scolarité et services du mois</div>
+<table cellspacing="0" cellpadding="4" class="dense">
+  <thead>
+    <tr>
+      <th>Rubrique</th>
+      <th class="text-right" style="width:80px">Attendu</th>
+      <th class="text-right" style="width:80px">Encaissé</th>
+      <th class="text-right" style="width:80px">Reste</th>
+      <th class="text-right" style="width:55px">Taux</th>
+      <th class="text-right" style="width:70px">Non payés</th>
+      <th class="text-right" style="width:60px">Partiels</th>
+      <th class="text-right" style="width:60px">À jour</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lib, p in parts %}
+    <tr>
+      <td class="bold">{{ lib }}</td>
+      <td class="text-right">{{ p.attendu|floatformat:"0g" }}</td>
+      <td class="text-right green">{{ p.encaisse|floatformat:"0g" }}</td>
+      <td class="text-right {% if p.reste > 0 %}red bold{% endif %}">{{ p.reste|floatformat:"0g" }}</td>
+      <td class="text-right">{{ p.taux }} %</td>
+      <td class="text-right">{{ p.nb_impayes }}</td>
+      <td class="text-right">{{ p.nb_partiels }}</td>
+      <td class="text-right">{{ p.nb_payes }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 <div class="section-title">Élèves n'ayant pas encore payé ({{ t.nb_impayes }}) et paiements partiels ({{ t.nb_partiels }})</div>
 <table cellspacing="0" cellpadding="4" class="dense">
   <thead>
@@ -56,9 +86,11 @@
       <th>Élève</th>
       <th style="width:80px">Classe</th>
       <th style="width:85px">Téléphone</th>
-      <th class="text-right" style="width:70px">Dû</th>
-      <th class="text-right" style="width:70px">Payé</th>
-      <th class="text-right" style="width:70px">Reste</th>
+      <th class="text-right" style="width:65px">Dû</th>
+      <th class="text-right" style="width:65px">Payé</th>
+      <th class="text-right" style="width:65px">Reste</th>
+      <th class="text-right" style="width:65px">dont scol.</th>
+      <th class="text-right" style="width:65px">dont serv.</th>
     </tr>
   </thead>
   <tbody>
@@ -67,10 +99,12 @@
       <td>{{ forloop.counter }}</td>
       <td class="bold">{{ e.nom_complet }}</td>
       <td>{{ e.classe }}</td>
-      <td>{{ e.telephone }}</td>
+      <td>{{ e.telephone|default:"—" }}</td>
       <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
       <td class="text-right">0</td>
       <td class="text-right red bold">{{ e.reste|floatformat:"0g" }}</td>
+      <td class="text-right">{{ e.scolarite.reste|floatformat:"0g" }}</td>
+      <td class="text-right">{{ e.services.reste|floatformat:"0g" }}</td>
     </tr>
     {% endfor %}
     {% for e in c.scolarite.partiels %}
@@ -78,14 +112,16 @@
       <td>{{ forloop.counter|add:t.nb_impayes }}</td>
       <td class="bold">{{ e.nom_complet }} (partiel)</td>
       <td>{{ e.classe }}</td>
-      <td>{{ e.telephone }}</td>
+      <td>{{ e.telephone|default:"—" }}</td>
       <td class="text-right">{{ e.du|floatformat:"0g" }}</td>
       <td class="text-right green">{{ e.paye|floatformat:"0g" }}</td>
       <td class="text-right red bold">{{ e.reste|floatformat:"0g" }}</td>
+      <td class="text-right">{{ e.scolarite.reste|floatformat:"0g" }}</td>
+      <td class="text-right">{{ e.services.reste|floatformat:"0g" }}</td>
     </tr>
     {% endfor %}
     {% if not c.scolarite.impayes and not c.scolarite.partiels %}
-    <tr><td colspan="7" class="text-center">Aucun impayé pour ce mois.</td></tr>
+    <tr><td colspan="9" class="text-center">Aucun impayé pour ce mois.</td></tr>
     {% endif %}
   </tbody>
 </table>

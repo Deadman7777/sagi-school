@@ -160,6 +160,8 @@ export interface LigneEcheance {
   reste: number;
   echu: boolean;
   statut: 'SOLDE' | 'PARTIEL' | 'IMPAYE';
+  scolarite?: PartDu;
+  services?: PartDu;
 }
 
 /** Dû mois par mois d'un élève. `hors_mensualite` porte l'inscription et les
@@ -175,7 +177,13 @@ export interface Echeancier {
     echu: boolean;
   } | null;
   totaux: { du: number; paye: number; reste: number };
+  /** Le même dû, scolarité et services à part (leur somme = totaux). */
+  scolarite?: PartDu;
+  services?: PartDu;
 }
+
+/** Dû, payé, reste — et la part de ce reste déjà échue. */
+export interface PartDu { du: number; paye: number; reste: number; reste_echu: number; }
 
 /** Une ligne de la grille de saisie des impayés antérieurs (migration). */
 export interface LigneImpayeAnterieur {
@@ -339,8 +347,21 @@ export interface SuiviOrganisme {
   couvert: number;
   recu: number;
   reste: number;
-  eleves: { eleve_id: string; matricule: string; nom_complet: string;
-            reference: string; couvert: number; recu: number; reste: number }[];
+  contact_nom?: string;
+  telephone?: string;
+  email?: string;
+  adresse?: string;
+  observations?: string;
+  eleves: BoursierOrganisme[];
+}
+
+/** Un élève dont un organisme prend en charge la scolarité. */
+export interface BoursierOrganisme {
+  eleve_id: string; matricule: string; nom_complet: string; classe: string;
+  statut: string; statut_libelle: string; reference: string;
+  inscription_couverte: number; mensualite_couverte: number; couvre_services: boolean;
+  couvert: number; recu: number; reste: number;
+  versements: { date: string; no_piece: string; mode: string; montant: number }[];
 }
 
 

@@ -24,7 +24,7 @@ from django.utils import timezone
 from apps.comptabilite.budget import MOIS_CHAMPS, realise_par_mois
 from apps.comptabilite.models import BudgetLigne, JournalEntry
 from apps.eleves.echeancier import (NOMS_MOIS, construire_echeancier, lignes_retenues,
-                                    precharger)
+                                    partage_scolarite_services, precharger)
 from apps.eleves.models import Eleve
 from apps.eleves.parcours import eleves_presents
 
@@ -85,6 +85,9 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
         if ligne['du'] < SEUIL:
             nb_exoneres += 1
             continue
+        # Scolarité et services du mois, séparés (leur somme est la ligne) :
+        # l'école les suit et les relance à part.
+        parts = partage_scolarite_services(e, ech, seulement=(annee, mois))['mois'][mois]
         item = {
             'eleve_id':    str(e.id),
             'matricule':   e.matricule or '',
@@ -97,6 +100,8 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
             'reste':       round(ligne['reste'], 2),
             'exigible_le': ligne['exigible_le'],
             'echu':        ligne['echu'],
+            'scolarite':   parts['scolarite'],
+            'services':    parts['services'],
         }
         if ligne['reste'] < SEUIL:
             payes.append(item)
@@ -112,6 +117,23 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
     attendu = round(sum(x['du'] for x in tous), 2)
     encaisse = round(sum(x['paye'] for x in tous), 2)
     reste = round(sum(x['reste'] for x in tous), 2)
+
+    def totaux_part(cle):
+        du = round(sum(x[cle]['du'] for x in tous), 2)
+        paye = round(sum(x[cle]['paye'] for x in tous), 2)
+        concernes = [x for x in tous if x[cle]['du'] >= SEUIL]
+        return {
+            'attendu': du, 'encaisse': paye,
+            'reste': round(sum(x[cle]['reste'] for x in tous), 2),
+            'taux': round(paye / du * 100, 1) if du else 0.0,
+            'nb_eleves': len(concernes),
+            'nb_payes': sum(1 for x in concernes if x[cle]['reste'] < SEUIL),
+            'nb_partiels': sum(1 for x in concernes
+                               if x[cle]['reste'] >= SEUIL and x[cle]['paye'] >= SEUIL),
+            'nb_impayes': sum(1 for x in concernes
+                              if x[cle]['reste'] >= SEUIL and x[cle]['paye'] < SEUIL),
+        }
+
     return {
         'payes':    payes,
         'partiels': partiels,
@@ -126,6 +148,9 @@ def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
             'encaisse':    encaisse,
             'reste':       reste,
             'taux':        round(encaisse / attendu * 100, 1) if attendu else 0.0,
+            # Les mêmes chiffres, scolarité et services à part.
+            'scolarite':   totaux_part('scolarite'),
+            'services':    totaux_part('services'),
         },
     }
 

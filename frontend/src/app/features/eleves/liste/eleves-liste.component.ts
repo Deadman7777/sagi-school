@@ -464,7 +464,8 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                           [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" />
               </td>
               <td class="bold">
-                {{ o.nom }}
+                <button type="button" class="lien-org" (click)="ouvrirDetailOrganisme(o)"
+                        [pTooltip]="'eleves.org_detail' | translate">{{ o.nom }}</button>
                 @if (!o.actif) { <span class="org-inactif">{{ 'eleves.org_inactif' | translate }}</span> }
               </td>
               <td>{{ o.type }}</td>
@@ -476,6 +477,10 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                 {{ o.reste | number:'1.0-0' }}</td>
               <td>
                 <div class="btn-row">
+                  <p-button icon="pi pi-eye" [rounded]="true" [text]="true"
+                            [pTooltip]="'eleves.org_detail' | translate"
+                            [ariaLabel]="'eleves.org_detail' | translate"
+                            (onClick)="ouvrirDetailOrganisme(o)" />
                   <p-button icon="pi pi-wallet" [rounded]="true" [text]="true" severity="success"
                             [pTooltip]="'eleves.org_encaisser' | translate"
                             [disabled]="!o.nb_boursiers || o.reste <= 0"
@@ -504,6 +509,7 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                     <tr>
                       <th>{{ 'eleves.matricule' | translate }}</th>
                       <th>{{ 'eleves.nom_complet' | translate }}</th>
+                      <th>{{ 'eleves.org_classe' | translate }}</th>
                       <th>{{ 'eleves.org_reference' | translate }}</th>
                       <th class="num">{{ 'eleves.org_couvert' | translate }}</th>
                       <th class="num">{{ 'eleves.org_recu' | translate }}</th>
@@ -516,6 +522,7 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                       <tr>
                         <td class="mono" style="font-size:11px">{{ e.matricule || '—' }}</td>
                         <td>{{ e.nom_complet }}</td>
+                        <td>{{ e.classe || '—' }}</td>
                         <td class="mono" style="font-size:11px">{{ e.reference || '—' }}</td>
                         <td class="mono num">{{ e.couvert | number:'1.0-0' }}</td>
                         <td class="mono num success">{{ e.recu | number:'1.0-0' }}</td>
@@ -544,6 +551,118 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
         </p-table>
       </div>
     }
+
+    <!-- Fiche d'un organisme : coordonnées, convention, et chacun de ses
+         bénéficiaires avec ce que la bourse couvre et ce qui a été versé. -->
+    <p-dialog [(visible)]="detailOrgVisible" [modal]="true" [style]="{ width: '1100px', maxWidth: '96vw' }"
+              [header]="orgDetail()?.nom || ''">
+      @if (orgDetail(); as o) {
+        <div class="org-fiche">
+          <div class="org-coord">
+            <div><span class="oc-lbl">{{ 'eleves.org_type' | translate }}</span> {{ o.type }}
+              @if (!o.actif) { <span class="org-inactif">{{ 'eleves.org_inactif' | translate }}</span> }</div>
+            <div><span class="oc-lbl">{{ 'eleves.org_reference' | translate }}</span> {{ o.reference || '—' }}</div>
+            <div><span class="oc-lbl">{{ 'eleves.org_contact' | translate }}</span> {{ o.contact_nom || '—' }}</div>
+            <div><span class="oc-lbl">{{ 'eleves.org_telephone' | translate }}</span> {{ o.telephone || '—' }}</div>
+            <div><span class="oc-lbl">E-mail</span> {{ o.email || '—' }}</div>
+            @if (o.adresse) { <div><span class="oc-lbl">{{ 'eleves.org_adresse' | translate }}</span> {{ o.adresse }}</div> }
+            @if (o.observations) { <div class="oc-obs">{{ o.observations }}</div> }
+          </div>
+          <div class="kpi-row">
+            <div class="kpi-mini info">
+              <span class="km-val">{{ o.nb_boursiers }}</span>
+              <span class="km-label">{{ 'eleves.org_boursiers' | translate }}</span>
+            </div>
+            <div class="kpi-mini">
+              <span class="km-val">{{ o.couvert | number:'1.0-0' }}</span>
+              <span class="km-label">{{ 'eleves.org_couvert' | translate }}</span>
+            </div>
+            <div class="kpi-mini" style="border-color:#10b981">
+              <span class="km-val" style="color:#10b981">{{ o.recu | number:'1.0-0' }}</span>
+              <span class="km-label">{{ 'eleves.org_recu' | translate }}</span>
+            </div>
+            <div class="kpi-mini" [style.border-color]="o.reste > 0 ? '#ef4444' : ''">
+              <span class="km-val" [style.color]="o.reste > 0 ? '#ef4444' : ''">{{ o.reste | number:'1.0-0' }}</span>
+              <span class="km-label">{{ 'eleves.org_reste' | translate }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="org-outils">
+          <input pInputText type="search" [ngModel]="rechercheBoursier()" (ngModelChange)="rechercheBoursier.set($event)"
+                 [placeholder]="'eleves.org_rechercher_boursier' | translate"
+                 [attr.aria-label]="'eleves.org_rechercher_boursier' | translate" />
+          <div class="btn-row">
+            <p-button icon="pi pi-wallet" severity="success" size="small" [label]="'eleves.org_encaisser' | translate"
+                      [disabled]="!o.nb_boursiers || o.reste <= 0"
+                      (onClick)="detailOrgVisible = false; ouvrirEncaissementOrganisme(o)" />
+            <p-button icon="pi pi-file-pdf" severity="info" size="small" [outlined]="true"
+                      [label]="'eleves.org_releve' | translate" [disabled]="!o.nb_boursiers"
+                      (onClick)="telechargerReleveOrganisme(o)" />
+            <app-bouton-imprimer [pdf]="pdfReleveOrganisme" [arg]="o" [disabled]="!o.nb_boursiers" />
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="ech-table org-detail">
+            <thead>
+              <tr>
+                <th>{{ 'eleves.matricule' | translate }}</th>
+                <th>{{ 'eleves.nom_complet' | translate }}</th>
+                <th>{{ 'eleves.org_classe' | translate }}</th>
+                <th>{{ 'eleves.org_reference' | translate }}</th>
+                <th>{{ 'eleves.org_prise_en_charge' | translate }}</th>
+                <th class="num">{{ 'eleves.org_couvert' | translate }}</th>
+                <th class="num">{{ 'eleves.org_recu' | translate }}</th>
+                <th class="num">{{ 'eleves.org_reste' | translate }}</th>
+                <th>{{ 'eleves.org_versements' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of boursiersFiltres(); track e.eleve_id) {
+                <tr>
+                  <td class="mono" style="font-size:11px">{{ e.matricule || '—' }}</td>
+                  <td class="bold">{{ e.nom_complet }}
+                    @if (e.statut && e.statut !== 'INSCRIT') { <span class="org-inactif">{{ e.statut_libelle }}</span> }
+                  </td>
+                  <td>{{ e.classe || '—' }}</td>
+                  <td class="mono" style="font-size:11px">{{ e.reference || '—' }}</td>
+                  <td class="pec-detail">
+                    @if (e.inscription_couverte > 0) { <div>{{ 'eleves.org_pec_inscription' | translate }} : {{ e.inscription_couverte | number:'1.0-0' }}</div> }
+                    @if (e.mensualite_couverte > 0) { <div>{{ 'eleves.org_pec_mensualite' | translate }} : {{ e.mensualite_couverte | number:'1.0-0' }}</div> }
+                    @if (e.couvre_services) { <div>{{ 'eleves.org_pec_services' | translate }}</div> }
+                  </td>
+                  <td class="mono num">{{ e.couvert | number:'1.0-0' }}</td>
+                  <td class="mono num success">{{ e.recu | number:'1.0-0' }}</td>
+                  <td class="mono num" [class.danger]="e.reste > 0">{{ e.reste | number:'1.0-0' }}</td>
+                  <td class="versements">
+                    @for (v of e.versements; track v.no_piece) {
+                      <span class="versement">{{ v.date | date:'dd/MM/yyyy' }} · {{ v.no_piece }} · <b>{{ v.montant | number:'1.0-0' }}</b></span>
+                    } @empty {
+                      <span class="aucun">{{ 'eleves.org_aucun_versement' | translate }}</span>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="9" style="text-align:center;padding:18px;color:var(--text-3)">
+                  {{ 'eleves.org_aucun_boursier' | translate }}</td></tr>
+              }
+            </tbody>
+            @if (boursiersFiltres().length) {
+              <tfoot>
+                <tr>
+                  <td colspan="5" class="bold">{{ 'eleves.org_total' | translate }} ({{ boursiersFiltres().length }})</td>
+                  <td class="mono num bold">{{ totalBoursiers().couvert | number:'1.0-0' }}</td>
+                  <td class="mono num bold success">{{ totalBoursiers().recu | number:'1.0-0' }}</td>
+                  <td class="mono num bold" [class.danger]="totalBoursiers().reste > 0">{{ totalBoursiers().reste | number:'1.0-0' }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      }
+    </p-dialog>
 
     <!-- Encaisser la bourse : le versement de l'organisme, réparti entre ses
          boursiers, comptabilisé en 4112 (créance sur l'organisme). -->
@@ -915,6 +1034,37 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                 {{ e.reste_a_payer | number }} FCFA
               </strong>
             </div>
+            <!-- Scolarité et services suivis à part : un élève à jour de sa
+                 scolarité peut devoir son transport, et inversement. -->
+            @if (echeancier(); as ech) {
+              @if (ech.scolarite && ech.services && ech.services.du > 0) {
+                <table class="ech-table partage-du">
+                  <caption class="sr-only">{{ 'eleves.partage_caption' | translate }}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col"></th>
+                      <th scope="col" class="num">{{ 'eleves.ech_du' | translate }}</th>
+                      <th scope="col" class="num">{{ 'eleves.ech_paye' | translate }}</th>
+                      <th scope="col" class="num">{{ 'eleves.ech_reste' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (p of [{ lib: 'eleves.partage_scolarite', v: ech.scolarite }, { lib: 'eleves.partage_services', v: ech.services }]; track p.lib) {
+                      <tr>
+                        <th scope="row">{{ p.lib | translate }}</th>
+                        <td class="mono num">{{ p.v.du | number:'1.0-0' }}</td>
+                        <td class="mono num success">{{ p.v.paye | number:'1.0-0' }}</td>
+                        <td class="mono num" [class.danger]="p.v.reste > 0">{{ p.v.reste | number:'1.0-0' }}
+                          @if (p.v.reste_echu > 0 && p.v.reste_echu < p.v.reste) {
+                            <div class="partage-echu">{{ 'eleves.partage_dont_echu' | translate:{ montant: (p.v.reste_echu | number:'1.0-0') } }}</div>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            }
             <!-- Détail mois par mois : un total ne dit rien à une famille qui
                  règle au mois. Chargé à l'ouverture de la fiche. -->
             @if (echeancier(); as ech) {
@@ -972,7 +1122,12 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                         } @else {
                           <td class="mono num success">{{ l.paye | number:'1.0-0' }}</td>
                           <td class="mono num" [class.danger]="l.reste > 0">
-                            {{ l.reste | number:'1.0-0' }}</td>
+                            {{ l.reste | number:'1.0-0' }}
+                            @if (l.reste > 0 && l.services; as sv) {
+                              @if (sv.reste > 0) {
+                                <div class="partage-echu">{{ 'eleves.partage_dont_services' | translate:{ montant: (sv.reste | number:'1.0-0') } }}</div>
+                              }
+                            }</td>
                         }
                       </tr>
                     }
@@ -2251,6 +2406,29 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
     .org-boursiers .versement { background:var(--surface-2); border:1px solid var(--border);
       border-radius:10px; padding:1px 7px; white-space:nowrap; }
     .org-boursiers .aucun { color:var(--text-3); }
+    .partage-du { margin:6px 0 10px; }
+    .partage-du tbody th { text-align:left; font-weight:600; color:var(--text-2); }
+    .partage-echu { font-size:9.5px; color:var(--text-3); font-weight:400; }
+    .lien-org { background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--text);
+                cursor:pointer; text-align:left; }
+    .lien-org:hover { color:#00d4aa; text-decoration:underline; }
+    .lien-org:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; }
+    .org-fiche { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:16px; margin-bottom:12px; }
+    @media (max-width: 860px) { .org-fiche { grid-template-columns:1fr; } }
+    .org-coord { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--text-2);
+                 background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+    .oc-lbl { display:inline-block; min-width:110px; color:var(--text-3); font-size:12px; }
+    .oc-obs { margin-top:4px; font-size:12px; color:var(--text-3); white-space:pre-line; }
+    .org-outils { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+    .org-outils input { min-width:260px; }
+    .table-scroll { overflow-x:auto; }
+    .org-detail { font-size:12px; }
+    .org-detail td { padding:6px 6px; vertical-align:top; }
+    .org-detail .versements { display:flex; flex-wrap:wrap; gap:4px; }
+    .org-detail .versement { background:var(--surface-2); border:1px solid var(--border);
+      border-radius:10px; padding:1px 7px; white-space:nowrap; }
+    .org-detail .aucun { color:var(--text-3); }
+    .pec-detail { font-size:11px; color:var(--text-2); white-space:nowrap; }
     .ech-table th { text-align:left; color:var(--text-3); font-weight:600;
                     padding:3px 4px; border-bottom:1px solid var(--border); }
     .ech-table th.text-right { text-align:right; }
@@ -3217,9 +3395,36 @@ export class ElevesListeComponent implements OnInit {
   chargerOrganismes() {
     this.chargementOrg.set(true);
     this.elevesService.getSuiviOrganismes().subscribe({
-      next: r => { this.suiviOrg.set(r); this.chargementOrg.set(false); },
+      next: r => {
+        this.suiviOrg.set(r);
+        this.chargementOrg.set(false);
+        // La fiche ouverte suit les nouveaux chiffres (après un encaissement).
+        const ouvert = this.orgDetail();
+        if (ouvert) this.orgDetail.set(r.lignes.find(l => l.organisme_id === ouvert.organisme_id) ?? null);
+      },
       error: () => this.chargementOrg.set(false),
     });
+  }
+
+  // ── Fiche d'un organisme ─────────────────────────────────────────────
+  detailOrgVisible = false;
+  orgDetail = signal<SuiviOrganisme | null>(null);
+  rechercheBoursier = signal('');
+  boursiersFiltres = computed(() => {
+    const q = this.rechercheBoursier().trim().toLowerCase();
+    const eleves = this.orgDetail()?.eleves ?? [];
+    return q ? eleves.filter(e => `${e.nom_complet} ${e.matricule} ${e.classe} ${e.reference}`
+                                    .toLowerCase().includes(q))
+             : eleves;
+  });
+  totalBoursiers = computed(() => this.boursiersFiltres().reduce(
+    (t, e) => ({ couvert: t.couvert + e.couvert, recu: t.recu + e.recu, reste: t.reste + e.reste }),
+    { couvert: 0, recu: 0, reste: 0 }));
+
+  ouvrirDetailOrganisme(o: SuiviOrganisme) {
+    this.orgDetail.set(o);
+    this.rechercheBoursier.set('');
+    this.detailOrgVisible = true;
   }
 
   // ── Encaisser la bourse d'un organisme ──────────────────────────────

@@ -1092,8 +1092,10 @@ class CahierMensuelPdfView(APIView):
             return erreur
         tenant = get_tenant(request)
         exercice = Exercice.objects.get(id=cahier['exercice_id'])
+        t = cahier['scolarite']['totaux']
         html = render_to_string('pdf/cahier_mensuel.html', {
             'tenant': tenant, 'exercice': exercice, 'c': cahier,
+            'parts': [('Scolarité', t['scolarite']), ('Services', t['services'])],
             'date_edition': timezone.localtime(),
         })
         buf = BytesIO()

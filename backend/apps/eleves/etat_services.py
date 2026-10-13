@@ -210,3 +210,65 @@ def etat_services(tenant, exercice, service_id=None, section_id=None, classe_id=
         'total':    {k: _r(sum(s[k] for s in resultat)) if k not in ('nb_abonnes', 'nb_a_jour', 'nb_en_retard')
                      else sum(s[k] for s in resultat) for k in cles},
     }
+
+
+def liste_services(tenant, exercice, service_id=None, section_id=None, classe_id=None):
+    """Les élèves inscrits à chaque service, SANS aucune donnée financière.
+
+    Document destiné à circuler (chauffeur du car, cantinière, animateur) :
+    y faire figurer ce que chaque famille doit exposerait leur situation. Même
+    population que l'état des services : les abonnés présents.
+    """
+    from .echeancier import mois_factures
+    from .tri import cle_nom
+
+    services = [s for s in Service.objects.filter(tenant=tenant).order_by('nom')
+                if not service_id or str(s.id) == str(service_id)]
+    eleves = (Eleve.objects.filter(tenant=tenant, exercice=exercice, fiche_creance=False,
+                                   abonnements__service__in=services)
+              .exclude(statut__in=STATUTS_SORTIE).distinct()
+              .select_related('section', 'classe', 'famille', 'exercice')
+              .prefetch_related('famille__responsables', 'abonnements__service'))
+    if section_id:
+        eleves = eleves.filter(section_id=section_id)
+    if classe_id:
+        eleves = eleves.filter(classe_id=classe_id)
+
+    par_service = defaultdict(list)
+    for e in eleves:
+        calendrier = [m for m in mois_factures(e) if e._mois_du_calendrier(m)]
+        contact = contact_effectif(e)
+        for ab in e.abonnements.all():
+            s = ab.service
+            if s not in services:
+                continue
+            if s.periodicite == 'MENSUEL':
+                mois = [m for m in calendrier if ab.suivi_le_mois(m)]
+                if not mois:
+                    continue
+                periode = ("Toute l'année" if len(mois) == len(calendrier)
+                           else ', '.join(MOIS_COURTS.get(m, str(m)) for m in mois))
+            else:
+                periode = MOIS_COURTS.get(s.mois_unique, '') if s.mois_unique else ''
+            par_service[s.id].append({
+                'matricule':   e.matricule or '',
+                'nom_complet': e.nom_complet,
+                'classe':      e.classe.nom if e.classe_id else (e.section.nom if e.section_id else ''),
+                'genre':       e.genre or '',
+                'periode':     periode,
+                'contact':     contact.get('nom') or '',
+                'telephone':   contact.get('telephone') or '',
+            })
+
+    resultat = []
+    for s in services:
+        liste = sorted(par_service.get(s.id, []), key=lambda a: (a['classe'], cle_nom(a['nom_complet'])))
+        if not liste:
+            continue
+        resultat.append({
+            'nom': s.nom, 'eleves': liste, 'nb': len(liste),
+            'nb_garcons': sum(1 for a in liste if a['genre'] == 'G'),
+            'nb_filles': sum(1 for a in liste if a['genre'] == 'F'),
+        })
+    return {'exercice': exercice.annee_scolaire, 'services': resultat,
+            'total': sum(s['nb'] for s in resultat)}

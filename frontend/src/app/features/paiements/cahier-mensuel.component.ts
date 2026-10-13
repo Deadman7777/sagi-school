@@ -9,10 +9,22 @@ import { ApiService } from '../../core/services/api.service';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
 /** Une ligne élève du cahier : ce qu'il devait pour le mois, payé, reste. */
+export interface PartCahier { du: number; paye: number; reste: number; reste_echu: number; }
+
 export interface LigneEleveCahier {
   eleve_id: string; matricule: string; nom_complet: string; classe: string;
   telephone: string; du: number; paye: number; reste: number;
+  /** Le mois de l'élève, scolarité et services à part (leur somme = du/paye/reste). */
+  scolarite: PartCahier; services: PartCahier;
 }
+
+export interface TotauxPartCahier {
+  attendu: number; encaisse: number; reste: number; taux: number;
+  nb_eleves: number; nb_payes: number; nb_partiels: number; nb_impayes: number;
+}
+
+/** Ce qu'on suit : tout le mois, la scolarité seule ou les services seuls. */
+type Perimetre = 'TOUT' | 'SCOLARITE' | 'SERVICES';
 
 export interface LigneChargeCahier {
   id: string; no_compte: string; libelle: string; type_charge: string;
@@ -28,7 +40,8 @@ export interface CahierMensuel {
   scolarite: {
     payes: LigneEleveCahier[]; partiels: LigneEleveCahier[]; impayes: LigneEleveCahier[];
     totaux: { nb_eleves: number; nb_payes: number; nb_partiels: number; nb_impayes: number;
-              nb_exoneres: number; attendu: number; encaisse: number; reste: number; taux: number };
+              nb_exoneres: number; attendu: number; encaisse: number; reste: number; taux: number;
+              scolarite: TotauxPartCahier; services: TotauxPartCahier };
   };
   charges: {
     lignes: LigneChargeCahier[];
@@ -146,18 +159,44 @@ const RAFRAICHISSEMENT_MS = 60_000;
       <div class="barre-fill" [style.width.%]="c.scolarite.totaux.taux"></div>
     </div>
 
+    <!-- Scolarité et services, suivis à part : chacun son attendu, son
+         encaissé, son reste et ses retardataires. -->
+    <div class="parts">
+      @for (p of [{ cle: 'scolarite', lib: '🎓 Scolarité' }, { cle: 'services', lib: '🚌 Services' }]; track p.cle) {
+        @let t = p.cle === 'scolarite' ? c.scolarite.totaux.scolarite : c.scolarite.totaux.services;
+        <div class="part">
+          <div class="part-titre">{{ p.lib }} <span class="petit">{{ t.taux }} % recouvré</span></div>
+          <div class="part-chiffres">
+            <span>Attendu <b>{{ t.attendu | number:'1.0-0' }}</b></span>
+            <span>Encaissé <b class="txt-vert">{{ t.encaisse | number:'1.0-0' }}</b></span>
+            <span>Reste <b [class.txt-rouge]="t.reste > 0">{{ t.reste | number:'1.0-0' }}</b></span>
+          </div>
+          <div class="petit">{{ t.nb_impayes }} pas payé · {{ t.nb_partiels }} partiel · {{ t.nb_payes }} payé
+            sur {{ t.nb_eleves }} élève(s)</div>
+        </div>
+      }
+    </div>
+
+    <div class="seg" role="group" aria-label="Ce qu'on suit">
+      <span class="petit">Suivre :</span>
+      @for (p of perimetres; track p.value) {
+        <button type="button" class="seg-btn" [class.active]="perimetre() === p.value"
+                [attr.aria-pressed]="perimetre() === p.value" (click)="perimetre.set(p.value)">{{ p.label }}</button>
+      }
+    </div>
+
     <div class="vues" role="tablist">
       <button type="button" role="tab" class="vue" [class.active]="vue() === 'impayes'"
               [attr.aria-selected]="vue() === 'impayes'" (click)="vue.set('impayes')">
-        🔴 Pas encore payé <span class="nb">{{ c.scolarite.totaux.nb_impayes }}</span>
+        🔴 Pas encore payé <span class="nb">{{ compte('impayes') }}</span>
       </button>
       <button type="button" role="tab" class="vue" [class.active]="vue() === 'partiels'"
               [attr.aria-selected]="vue() === 'partiels'" (click)="vue.set('partiels')">
-        🟠 Partiel <span class="nb">{{ c.scolarite.totaux.nb_partiels }}</span>
+        🟠 Partiel <span class="nb">{{ compte('partiels') }}</span>
       </button>
       <button type="button" role="tab" class="vue" [class.active]="vue() === 'payes'"
               [attr.aria-selected]="vue() === 'payes'" (click)="vue.set('payes')">
-        🟢 Déjà payé <span class="nb">{{ c.scolarite.totaux.nb_payes }}</span>
+        🟢 Déjà payé <span class="nb">{{ compte('payes') }}</span>
       </button>
       <button type="button" role="tab" class="vue" [class.active]="vue() === 'charges'"
               [attr.aria-selected]="vue() === 'charges'" (click)="vue.set('charges')">
@@ -176,8 +215,11 @@ const RAFRAICHISSEMENT_MS = 60_000;
           <thead>
             <tr>
               <th scope="col">N°</th><th scope="col">Élève</th><th scope="col">Classe</th>
-              <th scope="col">Téléphone</th><th scope="col" class="tr">Dû du mois</th>
+              <th scope="col">Téléphone</th><th scope="col" class="tr">{{ libelleDu() }}</th>
               <th scope="col" class="tr">Payé</th><th scope="col" class="tr">Reste</th>
+              @if (perimetre() === 'TOUT') {
+                <th scope="col" class="tr">dont scolarité</th><th scope="col" class="tr">dont services</th>
+              }
             </tr>
           </thead>
           <tbody>
@@ -189,12 +231,17 @@ const RAFRAICHISSEMENT_MS = 60_000;
                 </td>
                 <td>{{ e.classe }}</td>
                 <td>@if (e.telephone) { <a [href]="'tel:' + e.telephone">{{ e.telephone }}</a> }</td>
-                <td class="tr">{{ e.du | number:'1.0-0' }}</td>
-                <td class="tr txt-vert">{{ e.paye | number:'1.0-0' }}</td>
-                <td class="tr" [class.txt-rouge]="e.reste > 0">{{ e.reste | number:'1.0-0' }}</td>
+                @let m = montants(e);
+                <td class="tr">{{ m.du | number:'1.0-0' }}</td>
+                <td class="tr txt-vert">{{ m.paye | number:'1.0-0' }}</td>
+                <td class="tr" [class.txt-rouge]="m.reste > 0">{{ m.reste | number:'1.0-0' }}</td>
+                @if (perimetre() === 'TOUT') {
+                  <td class="tr" [class.txt-rouge]="e.scolarite.reste > 0">{{ e.scolarite.reste | number:'1.0-0' }}</td>
+                  <td class="tr" [class.txt-rouge]="e.services.reste > 0">{{ e.services.reste | number:'1.0-0' }}</td>
+                }
               </tr>
             } @empty {
-              <tr><td colspan="7" class="vide">Aucun élève dans cette liste.</td></tr>
+              <tr><td [attr.colspan]="perimetre() === 'TOUT' ? 9 : 7" class="vide">Aucun élève dans cette liste.</td></tr>
             }
           </tbody>
           <tfoot>
@@ -203,6 +250,10 @@ const RAFRAICHISSEMENT_MS = 60_000;
               <td class="tr">{{ totalListe().du | number:'1.0-0' }}</td>
               <td class="tr">{{ totalListe().paye | number:'1.0-0' }}</td>
               <td class="tr">{{ totalListe().reste | number:'1.0-0' }}</td>
+              @if (perimetre() === 'TOUT') {
+                <td class="tr">{{ totalListe().reste_scolarite | number:'1.0-0' }}</td>
+                <td class="tr">{{ totalListe().reste_services | number:'1.0-0' }}</td>
+              }
             </tr>
           </tfoot>
         </table>
@@ -270,6 +321,15 @@ const RAFRAICHISSEMENT_MS = 60_000;
     .barre { height:8px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
     .barre-fill { height:100%; background:#059669; transition:width .4s; }
 
+    .parts { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px; margin:10px 0; }
+    .part { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .part-titre { font-weight:700; color:var(--text); margin-bottom:4px; display:flex; justify-content:space-between; }
+    .part-chiffres { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--text-2); margin-bottom:3px; }
+    .part-chiffres b { font-variant-numeric:tabular-nums; color:var(--text); }
+    .seg { display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .seg-btn { border:1px solid var(--border); background:var(--surface); color:var(--text-2); border-radius:8px; padding:5px 12px; font-size:12.5px; cursor:pointer; }
+    .seg-btn.active { border-color:#00d4aa; color:var(--text); font-weight:600; background:rgba(0,212,170,.1); }
+    .seg-btn:focus-visible { outline:2px solid #00d4aa; outline-offset:2px; }
     .vues { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
     .vue { border:1px solid var(--border); background:var(--surface); color:var(--text-2); border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; }
     .vue.active { border-color:#00d4aa; color:var(--text); font-weight:600; background:rgba(0,212,170,.1); }
@@ -319,19 +379,60 @@ export class CahierMensuelComponent implements OnInit {
     return c ? `${c.annee}-${c.mois}` : '';
   });
 
+  perimetre = signal<Perimetre>('TOUT');
+  readonly perimetres: { value: Perimetre; label: string }[] = [
+    { value: 'TOUT', label: 'Tout' },
+    { value: 'SCOLARITE', label: 'Scolarité' },
+    { value: 'SERVICES', label: 'Services' },
+  ];
+
+  libelleDu = computed(() => ({ TOUT: 'Dû du mois', SCOLARITE: 'Scolarité due',
+                                SERVICES: 'Services dus' })[this.perimetre()]);
+
+  /** Montants de l'élève pour le périmètre suivi. */
+  montants(e: LigneEleveCahier): { du: number; paye: number; reste: number } {
+    const p = this.perimetre();
+    return p === 'SCOLARITE' ? e.scolarite : p === 'SERVICES' ? e.services : e;
+  }
+
+  /** Les élèves de chaque liste, classés sur le périmètre suivi : un élève
+   *  à jour de sa scolarité peut devoir son transport. */
+  private listes = computed(() => {
+    const c = this.cahier();
+    const vide = { payes: [] as LigneEleveCahier[], partiels: [] as LigneEleveCahier[],
+                   impayes: [] as LigneEleveCahier[] };
+    if (!c) return vide;
+    const p = this.perimetre();
+    if (p === 'TOUT') return { payes: c.scolarite.payes, partiels: c.scolarite.partiels,
+                               impayes: c.scolarite.impayes };
+    const tous = [...c.scolarite.impayes, ...c.scolarite.partiels, ...c.scolarite.payes]
+      .filter(e => this.montants(e).du >= 1)
+      .sort((a, b) => a.classe.localeCompare(b.classe) || a.nom_complet.localeCompare(b.nom_complet));
+    for (const e of tous) {
+      const m = this.montants(e);
+      (m.reste < 1 ? vide.payes : m.paye >= 1 ? vide.partiels : vide.impayes).push(e);
+    }
+    return vide;
+  });
+
+  compte(v: 'impayes' | 'partiels' | 'payes') { return this.listes()[v].length; }
+
   lignesEleves = computed<LigneEleveCahier[]>(() => {
     const c = this.cahier();
     const v = this.vue();
     if (!c || v === 'charges') return [];
     const q = this.normaliser(this.recherche());
-    const liste = c.scolarite[v];
+    const liste = this.listes()[v];
     return q ? liste.filter(e => this.normaliser(`${e.nom_complet} ${e.matricule} ${e.classe} ${e.telephone}`).includes(q))
              : liste;
   });
 
-  totalListe = computed(() => this.lignesEleves().reduce(
-    (t, e) => ({ du: t.du + e.du, paye: t.paye + e.paye, reste: t.reste + e.reste }),
-    { du: 0, paye: 0, reste: 0 }));
+  totalListe = computed(() => this.lignesEleves().reduce((t, e) => {
+    const m = this.montants(e);
+    return { du: t.du + m.du, paye: t.paye + m.paye, reste: t.reste + m.reste,
+             reste_scolarite: t.reste_scolarite + e.scolarite.reste,
+             reste_services: t.reste_services + e.services.reste };
+  }, { du: 0, paye: 0, reste: 0, reste_scolarite: 0, reste_services: 0 }));
 
   /** Rouge : mois passé avec impayés ; orange : fin de mois proche ; jaune : impayés en cours. */
   niveauRappel = computed<'critique' | 'urgent' | 'attention' | 'ok'>(() => {

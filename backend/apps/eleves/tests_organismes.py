@@ -231,6 +231,20 @@ class SuiviFinancierTest(OrganismeBase):
         eleves = self.client.get('/api/eleves/organismes/suivi/').data['lignes'][0]['eleves']
         self.assertEqual(eleves[0]['nom_complet'], 'Awa NDIAYE')
 
+    def test_la_fiche_detaille_la_prise_en_charge_et_l_organisme(self):
+        """Fiche d'un organisme : ce que couvre chaque bourse, et à qui
+        s'adresser."""
+        self.etat.contact_nom = 'M. FALL'
+        self.etat.telephone = '338000000'
+        self.etat.save()
+        self._boursier(inscription=100000, mensualite=30000)
+        ligne = self.client.get('/api/eleves/organismes/suivi/').data['lignes'][0]
+        self.assertEqual((ligne['contact_nom'], ligne['telephone']), ('M. FALL', '338000000'))
+        e = ligne['eleves'][0]
+        self.assertEqual((e['inscription_couverte'], e['mensualite_couverte'], e['couvre_services']),
+                         (100000, 30000, False))
+        self.assertEqual(e['statut'], 'INSCRIT')
+
     def test_les_totaux_somment_les_lignes(self):
         self._boursier(inscription=100000, mensualite=30000)
         self._payer(150000, organisme=self.etat)

@@ -111,3 +111,24 @@ class EtatServicesTest(APITestCase):
         from openpyxl import load_workbook
         wb = load_workbook(BytesIO(xlsx.content))
         self.assertEqual(wb.sheetnames, ['Récapitulatif', 'Cantine', 'Transport'])
+
+
+class ListeServicesSansMontantsTest(APITestCase):
+    """La liste des inscrits par service ne porte AUCUNE donnée financière :
+    elle part chez le chauffeur ou à la cantine."""
+    setUp = EtatServicesTest.setUp
+    _eleve = EtatServicesTest._eleve
+
+    def test_liste_pdf_sans_montant(self):
+        r = self.client.get('/api/eleves/etat-services/', {'export': 'liste'})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+
+    def test_liste_par_service(self):
+        from apps.eleves.etat_services import liste_services
+        liste = liste_services(self.tenant, self.ex)
+        noms = {s['nom']: [e['nom_complet'] for e in s['eleves']] for s in liste['services']}
+        self.assertEqual(noms, {'Cantine': ['Awa NDIAYE'], 'Transport': ['Binta FALL', 'Awa NDIAYE']})
+        for s in liste['services']:
+            for e in s['eleves']:
+                self.assertFalse({'du_annee', 'paye', 'reste_echu', 'tarif'} & set(e))

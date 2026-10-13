@@ -1,0 +1,67 @@
+{% extends "pdf/base.html" %}
+{% block doc_title %}Élèves inscrits aux services — {{ liste.exercice }}{% endblock %}
+{% block content %}
+
+{% comment %}Liste destinée à circuler (chauffeur, cantine, animateur) : AUCUNE
+donnée financière, comme la liste de classe.{% endcomment %}
+
+{% for s in liste.services %}
+{% if not forloop.first %}<pdf:nextpage />{% endif %}
+<table class="kpi-table">
+  <tr>
+    <td>
+      <div class="kb-label">Service</div>
+      <div class="kb-val kb-teal">{{ s.nom }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Élèves inscrits</div>
+      <div class="kb-val kb-blue">{{ s.nb }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Garçons</div>
+      <div class="kb-val">{{ s.nb_garcons }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Filles</div>
+      <div class="kb-val">{{ s.nb_filles }}</div>
+    </td>
+    <td>
+      <div class="kb-label">Année</div>
+      <div class="kb-val">{{ liste.exercice }}</div>
+    </td>
+  </tr>
+</table>
+
+<table class="dense">
+  <thead>
+    <tr>
+      <th style="width:4%">N°</th>
+      <th style="width:12%">Matricule</th>
+      <th style="width:27%">Nom et prénom</th>
+      <th style="width:11%">Classe</th>
+      <th style="width:6%">Genre</th>
+      <th style="width:14%">Période</th>
+      <th style="width:15%">Parent / contact</th>
+      <th style="width:11%">Téléphone</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in s.eleves %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td>{{ e.matricule|default:"—" }}</td>
+      <td>{{ e.nom_complet }}</td>
+      <td>{{ e.classe|default:"—" }}</td>
+      <td>{{ e.genre|default:"—" }}</td>
+      <td>{{ e.periode|default:"—" }}</td>
+      <td>{{ e.contact|default:"—" }}</td>
+      <td>{{ e.telephone|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% empty %}
+<p>Aucun élève inscrit à un service.</p>
+{% endfor %}
+
+{% endblock %}

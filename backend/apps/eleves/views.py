@@ -11,7 +11,7 @@ from core.tenant import get_tenant
 from .models import (BaremeFratrie, ChampFiche, Eleve, Famille, FormuleEleve, FormuleSection,
                      Organisme, PriseEnChargeOrganisme, Section, Service)
 from .parcours import STATUTS_SORTIE
-from .echeancier import parts_services
+from .echeancier import parts_services, partager_reste_mois as _partage_reste
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
 from .serializers import (BaremeFratrieSerializer, ChampFicheSerializer, EleveSerializer,
@@ -272,6 +272,12 @@ class OrganismeViewSet(viewsets.ModelViewSet):
                     'classe':     eleve.classe.nom if eleve.classe_id else (
                                   eleve.section.nom if eleve.section else ''),
                     'reference':  pec.reference,
+                    # Ce que la bourse couvre, tel qu'attribué sur la fiche.
+                    'inscription_couverte': float(pec.montant_inscription),
+                    'mensualite_couverte':  float(pec.montant_mensualite),
+                    'couvre_services':      pec.couvre_services,
+                    'statut':     eleve.statut,
+                    'statut_libelle': eleve.get_statut_display(),
                     'couvert':    part,
                     'recu':       paye,
                     'reste':      round(max(part - paye, 0.0), 2),
@@ -291,6 +297,11 @@ class OrganismeViewSet(viewsets.ModelViewSet):
                 'type':         organisme.get_type_display(),
                 'reference':    organisme.reference,
                 'contact':      organisme.telephone or organisme.email,
+                'contact_nom':  organisme.contact_nom,
+                'telephone':    organisme.telephone,
+                'email':        organisme.email,
+                'adresse':      organisme.adresse,
+                'observations': organisme.observations,
                 'actif':        organisme.actif,
                 'nb_boursiers': len(eleves),
                 'couvert':      round(couvert, 2),
@@ -1185,7 +1196,17 @@ class EleveViewSet(viewsets.ModelViewSet):
                  .prefetch_related('abonnements__service').first())
         if not eleve:
             return Response({'error': 'Élève introuvable.'}, status=404)
-        return Response(construire_echeancier(eleve))
+        ech = construire_echeancier(eleve)
+        # Scolarité et services, séparés : sur chaque mois, sur les frais
+        # d'entrée et au total. Leur somme est toujours la ligne.
+        from .echeancier import partage_scolarite_services
+        partage = partage_scolarite_services(eleve, ech)
+        for ligne in ech['lignes']:
+            ligne.update(partage['mois'].get(ligne['mois'], {}))
+        if ech['hors_mensualite']:
+            ech['hors_mensualite'].update(partage['hors_mensualite'])
+        ech['scolarite'], ech['services'] = partage['scolarite'], partage['services']
+        return Response(ech)
 
     @action(detail=True, methods=['get'], url_path='parcours')
     def parcours(self, request, pk=None):
@@ -2030,29 +2051,6 @@ def repartition_genre(eleves):
 
 def _vrai(valeur):
     return valeur is True or str(valeur).lower() in ('1', 'true', 'oui')
-
-
-def _partage_reste(ligne, services_dus, services_payes):
-    """Reste d'un mois partagé entre la scolarité et chaque service.
-
-    Pour l'école qui encaisse la scolarité et le transport sur deux reçus :
-    après le reçu de scolarité, le mois reste ouvert pour le transport, et
-    l'inverse. La somme des parts est TOUJOURS le reste du mois — séparer les
-    reçus change la façon d'encaisser, jamais ce que la famille doit.
-    """
-    reste_mois = float(ligne['reste']) if ligne else 0.0
-    svc = {sid: max(float(du) - services_payes.get(sid, 0.0), 0.0)
-           for sid, du in services_dus.items()}
-    total_svc = sum(svc.values())
-    # La scolarité payée en trop a pu couvrir le service : le reste du mois
-    # fait foi, le service n'en garde que sa part.
-    if total_svc > reste_mois and total_svc > 0:
-        svc = {sid: v * reste_mois / total_svc for sid, v in svc.items()}
-        total_svc = reste_mois
-    return {
-        'reste_services':  {sid: round(v, 2) for sid, v in svc.items()},
-        'reste_scolarite': round(max(reste_mois - total_svc, 0.0), 2),
-    }
 
 
 def _part_entree_guichet(eleve, mois, ligne):
@@ -3840,6 +3838,8 @@ class EtatServicesView(APIView):
         if not exercice:
             return Response({'error': 'Aucun exercice.'}, status=404)
         q = request.query_params
+        if q.get('export') == 'liste':
+            return self._liste(tenant, exercice, q)
         etat = etat_services(tenant, exercice,
                              service_id=q.get('service') or None,
                              section_id=q.get('section') or None,
@@ -3853,6 +3853,28 @@ class EtatServicesView(APIView):
         if fmt == 'xlsx':
             return self._xlsx(tenant, etat, nom)
         return Response(etat)
+
+    def _liste(self, tenant, exercice, q):
+        """La liste des inscrits par service, sans aucun montant (PDF)."""
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from xhtml2pdf import pisa
+        from .etat_services import liste_services
+        liste = liste_services(tenant, exercice, service_id=q.get('service') or None,
+                               section_id=q.get('section') or None,
+                               classe_id=q.get('classe') or None)
+        html = render_to_string('pdf/liste_services.html', {
+            'tenant': tenant, 'exercice': exercice, 'liste': liste,
+            'date_edition': timezone.localtime(),
+        })
+        buf = BytesIO()
+        if pisa.CreatePDF(html, dest=buf, encoding='utf-8').err:
+            return HttpResponse('Erreur génération PDF.', status=500)
+        resp = HttpResponse(buf.getvalue(), content_type='application/pdf')
+        resp['Content-Disposition'] = (f'attachment; filename="liste_services_'
+                                       f'{exercice.annee_scolaire}.pdf"')
+        return resp
 
     def _pdf(self, tenant, exercice, etat, nom):
         from io import BytesIO

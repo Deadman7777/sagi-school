@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
+import { TooltipModule } from 'primeng/tooltip';
 import { ApiService } from '../../core/services/api.service';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
 
@@ -43,7 +44,7 @@ interface Etat {
 @Component({
   selector: 'app-services-abonnes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DecimalPipe, ButtonModule, SelectModule, BoutonImprimerComponent],
+  imports: [FormsModule, DecimalPipe, ButtonModule, SelectModule, TooltipModule, BoutonImprimerComponent],
   template: `
 <div class="sa">
   <div class="sa-filtres">
@@ -59,6 +60,12 @@ interface Etat {
       <input type="date" [(ngModel)]="au" (change)="charger()" /></label>
     <label class="sa-case"><input type="checkbox" [(ngModel)]="retardSeulement" /> En retard seulement</label>
     <span class="sa-actions">
+      <!-- Liste à remettre au chauffeur, à la cantine… : les inscrits, sans
+           aucun montant. -->
+      <p-button label="Liste des élèves" icon="pi pi-list" size="small" severity="info" [outlined]="true"
+                pTooltip="Élèves inscrits par service, sans données financières"
+                [loading]="telechargement() === 'liste'" (onClick)="telecharger('liste')" />
+      <app-bouton-imprimer [pdf]="pdfListe" />
       <p-button label="PDF" icon="pi pi-file-pdf" size="small" severity="danger" [outlined]="true"
                 [loading]="telechargement() === 'pdf'" (onClick)="telecharger('pdf')" />
       <app-bouton-imprimer [pdf]="pdfEtat" />
@@ -210,7 +217,7 @@ export class ServicesAbonnesComponent implements OnInit {
 
   etat = signal<Etat | null>(null);
   erreur = signal('');
-  telechargement = signal<'' | 'pdf' | 'xlsx'>('');
+  telechargement = signal<'' | 'pdf' | 'xlsx' | 'liste'>('');
   sections = signal<{ id: string; nom: string }[]>([]);
   private ouverts = signal<Set<string>>(new Set());
   /** Liste des services, gardée d'un filtrage à l'autre pour le sélecteur. */
@@ -270,8 +277,9 @@ export class ServicesAbonnesComponent implements OnInit {
 
   /** Requête du PDF pour <app-bouton-imprimer>. */
   readonly pdfEtat = () => this.api.getBlob('/eleves/etat-services/', this.params({ export: 'pdf' }));
+  readonly pdfListe = () => this.api.getBlob('/eleves/etat-services/', this.params({ export: 'liste' }));
 
-  telecharger(format: 'pdf' | 'xlsx') {
+  telecharger(format: 'pdf' | 'xlsx' | 'liste') {
     const e = this.etat();
     this.telechargement.set(format);
     this.api.getBlob('/eleves/etat-services/', this.params({ export: format })).subscribe({
@@ -279,7 +287,9 @@ export class ServicesAbonnesComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         const lien = document.createElement('a');
         lien.href = url;
-        lien.download = `etat_services_${e?.exercice ?? ''}_${e?.date ?? ''}.${format}`;
+        lien.download = format === 'liste'
+          ? `liste_services_${e?.exercice ?? ''}.pdf`
+          : `etat_services_${e?.exercice ?? ''}_${e?.date ?? ''}.${format}`;
         document.body.appendChild(lien);
         lien.click();
         document.body.removeChild(lien);
