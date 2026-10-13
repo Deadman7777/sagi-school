@@ -30,6 +30,18 @@ def plus_tot_accepte(exercice):
     return datetime.date(annee, mois, min(debut.day, calendar.monthrange(annee, mois)[1]))
 
 
+def erreur_date_reglement(exercice, jour):
+    """Message si `jour` ne peut pas dater un règlement de cet exercice, sinon
+    None. Le même contrôle à l'encaissement et à la modification d'un reçu."""
+    if jour > exercice.date_fin:
+        return (f"Le {jour:%d/%m/%Y} est postérieur à la fin de l'exercice "
+                f"{exercice.annee_scolaire} ({exercice.date_fin:%d/%m/%Y}).")
+    if jour < plus_tot_accepte(exercice):
+        return (f"Le {jour:%d/%m/%Y} précède de plus de {AVANCE_MAX_MOIS} mois la rentrée "
+                f"({exercice.date_debut:%d/%m/%Y}) de l'exercice {exercice.annee_scolaire}.")
+    return None
+
+
 def mois_de_rattachement(exercice, jour):
     """(année, mois) où compter un encaissement daté `jour`.
 

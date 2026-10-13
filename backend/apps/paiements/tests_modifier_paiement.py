@@ -91,6 +91,47 @@ class ModifierPaiementTest(APITestCase):
         self.assertEqual(p.statut, 'ACTIF')
 
 
+class ModifierChampsVidesEtDateTest(ModifierPaiementTest):
+    """Signalé le 13/10/2026 : un reçu de 170 000 qu'on tente de corriger ne
+    passe pas. Un montant EFFACÉ dans la fenêtre « Modifier » partait à
+    `null` et faisait une erreur 500 (float(None))."""
+
+    def test_un_champ_vide_vaut_zero(self):
+        p = self._encaisser(montant_mensualite=170000, mois_regles=[10])
+        r = self._modifier(p, montant_inscription=None, montant_mensualite=150000,
+                           montant_uniforme='', montant_divers=None, mode_paiement='ESPECE',
+                           modes_reglement=[{'mode': 'ESPECE', 'montant': 150000}])
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['nouveau_total'], 150000)
+
+    def test_tout_a_zero_renvoie_vers_l_annulation(self):
+        p = self._encaisser(montant_mensualite=170000, mois_regles=[10])
+        r = self._modifier(p, montant_mensualite=None, mode_paiement='ESPECE')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('annulez', r.data['error'])
+        p.refresh_from_db()
+        self.assertEqual(p.statut, 'ACTIF')
+
+    def test_la_date_se_corrige(self):
+        p = self._encaisser(montant_mensualite=12000, mois_regles=[10],
+                            date_paiement='2026-10-05')
+        r = self._modifier(p, date_paiement='2026-10-03', mode_paiement='ESPECE')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        nouveau = Paiement.objects.get(no_piece=r.data['nouveau_no_piece'])
+        self.assertEqual(nouveau.date_paiement, datetime.date(2026, 10, 3))
+        dates = set(JournalEntry.objects.filter(tenant=self.tenant, source='PAIEMENT',
+                                                source_id=nouveau.id)
+                    .values_list('date_ecriture', flat=True))
+        self.assertEqual(dates, {datetime.date(2026, 10, 3)})
+
+    def test_date_hors_exercice_refusee(self):
+        p = self._encaisser(montant_mensualite=12000, mois_regles=[10])
+        r = self._modifier(p, date_paiement='2027-09-01', mode_paiement='ESPECE')
+        self.assertEqual(r.status_code, 400)
+        p.refresh_from_db()
+        self.assertEqual(p.statut, 'ACTIF')
+
+
 class ModifierVentilationTest(ModifierPaiementTest):
     """08/10/2026 : 26 000 saisis en espèces, la famille avait remis 24 000 en
     espèces et 2 000 par Wave."""

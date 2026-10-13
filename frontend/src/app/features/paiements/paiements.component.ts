@@ -382,17 +382,33 @@ import { RegistreChequesComponent } from './registre-cheques.component';
           </div>
         }
 
+        <div class="form-group" style="margin-bottom:10px">
+          <label for="modif-date">Date du paiement</label>
+          <input pInputText id="modif-date" type="date" [(ngModel)]="modifForm.date_paiement" class="w-full" />
+        </div>
+
         <div class="form-group">
           <label>Observations</label>
           <input pInputText [(ngModel)]="modifForm.observations" class="w-full" />
         </div>
+
+        @if (totalModifForm() <= 0) {
+          <small style="color:#f59e0b;display:block;margin-top:8px">
+            Tout est à 0 : le reçu sera annulé, et ce qu'il réglait redeviendra dû.
+          </small>
+        }
       </div>
       <ng-template pTemplate="footer">
         <p-button label="Annuler" severity="secondary" (onClick)="modifVisible=false" />
-        <p-button label="✏️ Enregistrer la modification" severity="warn"
-                  [loading]="savingModif()"
-                  [disabled]="totalModifForm() <= 0 || (modifForm.multi_mode && resteAVentilerModif() !== 0)"
-                  (onClick)="confirmerModificationPaiement()" />
+        @if (totalModifForm() <= 0) {
+          <p-button label="Annuler ce reçu" severity="danger" icon="pi pi-times"
+                    (onClick)="confirmerModificationPaiement()" />
+        } @else {
+          <p-button label="✏️ Enregistrer la modification" severity="warn"
+                    [loading]="savingModif()"
+                    [disabled]="modifForm.multi_mode && resteAVentilerModif() !== 0"
+                    (onClick)="confirmerModificationPaiement()" />
+        }
       </ng-template>
     </p-dialog>
 
@@ -1546,6 +1562,8 @@ export class PaiementsComponent implements OnInit {
     montant_reliquat: 0,
     mode_paiement: '', observations: '',
     receveur: null as string | null,
+    // Date du reçu, corrigeable (AAAA-MM-JJ).
+    date_paiement: '',
     multi_mode: false,
     modes_reglement: [] as { mode: string; montant: number }[],
   };
@@ -2567,6 +2585,7 @@ export class PaiementsComponent implements OnInit {
       mode_paiement:       p.mode_paiement       || '',
       observations:        p.observations        || '',
       receveur:            p.receveur            || null,
+      date_paiement:       (p.date_paiement || '').slice(0, 10),
       // Un reçu déjà ventilé se rouvre ventilé, ligne par ligne.
       multi_mode:          (p.modes_reglement || []).length > 1,
       modes_reglement:     (p.modes_reglement || []).length > 1
@@ -2579,10 +2598,21 @@ export class PaiementsComponent implements OnInit {
 
   confirmerModificationPaiement() {
     if (!this.paiementModifier?.id) return;
+    // Tout ramené à zéro : ce que le reçu réglait doit redevenir dû — c'est
+    // une annulation, pas une modification.
+    if (this.totalModifForm() <= 0) {
+      this.modifVisible = false;
+      this.demanderAnnulationPaiement(this.paiementModifier);
+      return;
+    }
     this.savingModif.set(true);
     // La ventilation est TOUJOURS envoyée : sans elle, le serveur reprenait
     // celle du reçu d'origine (26 000 espèces) au lieu de la correction.
     const { multi_mode, ...corps } = this.modifForm;
+    // Un champ effacé vaut null : on envoie 0.
+    for (const k of Object.keys(corps) as (keyof typeof corps)[]) {
+      if (String(k).startsWith('montant_')) (corps as any)[k] = Number(corps[k]) || 0;
+    }
     const modes = multi_mode
       ? this.modifForm.modes_reglement.filter(m => m.mode && Number(m.montant) > 0)
       : (this.modifForm.mode_paiement

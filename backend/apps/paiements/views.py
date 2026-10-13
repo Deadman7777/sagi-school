@@ -175,15 +175,9 @@ class PaiementViewSet(viewsets.ModelViewSet):
         # l'année, en revanche, il n'appartient plus à cet exercice.
         date_saisie = serializer.validated_data.get('date_paiement')
         if date_saisie:
-            from .dates import AVANCE_MAX_MOIS, plus_tot_accepte
-            if date_saisie > exercice.date_fin:
-                raise ValidationError(
-                    f"Le {date_saisie:%d/%m/%Y} est postérieur à la fin de l'exercice "
-                    f"{exercice.annee_scolaire} ({exercice.date_fin:%d/%m/%Y}).")
-            if date_saisie < plus_tot_accepte(exercice):
-                raise ValidationError(
-                    f"Le {date_saisie:%d/%m/%Y} précède de plus de {AVANCE_MAX_MOIS} mois la rentrée "
-                    f"({exercice.date_debut:%d/%m/%Y}) de l'exercice {exercice.annee_scolaire}.")
+            from .dates import erreur_date_reglement
+            if err := erreur_date_reglement(exercice, date_saisie):
+                raise ValidationError(err)
 
         # Numéro de reçu : séquence NUMÉRIQUE de l'école. Un Max() alphabétique
         # rendait « REP-0005 » supérieur à « REC-0100 » — voir numerotation.py.
@@ -619,13 +613,46 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         # Valider les données de modification
         data = request.data
-        montant_inscription = float(data.get('montant_inscription', paiement.montant_inscription))
-        montant_mensualite  = float(data.get('montant_mensualite',  paiement.montant_mensualite))
-        montant_uniforme    = float(data.get('montant_uniforme',    paiement.montant_uniforme))
-        montant_fournitures = float(data.get('montant_fournitures', paiement.montant_fournitures))
-        montant_cantine     = float(data.get('montant_cantine',     paiement.montant_cantine))
-        montant_divers      = float(data.get('montant_divers',      paiement.montant_divers))
-        montant_reliquat    = float(data.get('montant_reliquat',    paiement.montant_reliquat))
+
+        def montant(champ):
+            # Absent : celui du reçu d'origine. Vide (champ effacé à l'écran,
+            # envoyé `null` ou '') : zéro. float(None) faisait une erreur 500,
+            # et l'écran ne disait que « Erreur lors de la modification ».
+            if champ not in data:
+                return float(getattr(paiement, champ) or 0)
+            v = data.get(champ)
+            if v in (None, ''):
+                return 0.0
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                raise ValueError(f"Montant invalide : {v}")
+
+        try:
+            montant_inscription = montant('montant_inscription')
+            montant_mensualite  = montant('montant_mensualite')
+            montant_uniforme    = montant('montant_uniforme')
+            montant_fournitures = montant('montant_fournitures')
+            montant_cantine     = montant('montant_cantine')
+            montant_divers      = montant('montant_divers')
+            montant_reliquat    = montant('montant_reliquat')
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        if min(montant_inscription, montant_mensualite, montant_uniforme, montant_fournitures,
+               montant_cantine, montant_divers, montant_reliquat) < 0:
+            return Response({'error': 'Un montant ne peut pas être négatif.'}, status=400)
+
+        # Date du règlement : corrigeable (erreur de saisie), dans les mêmes
+        # bornes qu'à l'encaissement.
+        date_paiement = paiement.date_paiement
+        if data.get('date_paiement'):
+            from django.utils.dateparse import parse_date
+            from .dates import erreur_date_reglement
+            date_paiement = parse_date(str(data['date_paiement'])[:10])
+            if date_paiement is None:
+                return Response({'error': 'Date invalide.'}, status=400)
+            if err := erreur_date_reglement(paiement.exercice, date_paiement):
+                return Response({'error': err}, status=400)
         mode_paiement       = data.get('mode_paiement', paiement.mode_paiement)
         modes_reglement_in  = data.get('modes_reglement')
         observations       = data.get('observations',  paiement.observations or '')
@@ -639,7 +666,8 @@ class PaiementViewSet(viewsets.ModelViewSet):
                          montant_fournitures + montant_cantine + montant_divers)
         nouveau_total = part_exercice + montant_reliquat
         if nouveau_total <= 0:
-            return Response({'error': 'Le total du paiement modifié doit être > 0.'}, status=400)
+            return Response({'error': "Le reçu ne peut pas être ramené à 0 : pour que ce qu'il "
+                                      "réglait redevienne dû, annulez-le."}, status=400)
 
         # Le paiement réécrit ne doit pas se compter lui-même dans le
         # déjà-réglé, sinon toute modification à la hausse serait refusée.
@@ -763,7 +791,7 @@ class PaiementViewSet(viewsets.ModelViewSet):
         nouveau = Paiement.objects.create(
             tenant=tenant, exercice=exercice,
             eleve=paiement.eleve, no_piece=no_piece_new,
-            date_paiement=paiement.date_paiement,
+            date_paiement=date_paiement,
             montant_inscription=montant_inscription,
             montant_mensualite=montant_mensualite,
             montant_uniforme=montant_uniforme,
