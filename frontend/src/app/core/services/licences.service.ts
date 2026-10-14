@@ -21,10 +21,10 @@ export interface NouvelleEcole {
 export class LicencesService {
   constructor(private api: ApiService) {}
 
-  getLicences()      { return this.api.get<any>('/licences/'); }
+  getLicences()      { return this.api.lire<any>('/licences/'); }
   /** La grille tarifaire officielle — voir apps/licences/catalogue.py. */
-  getCatalogue()     { return this.api.get<any>('/licences/catalogue/'); }
-  getStatsGlobales() { return this.api.get<any>('/licences/stats_globales/'); }
+  getCatalogue()     { return this.api.lire<any>('/licences/catalogue/'); }
+  getStatsGlobales() { return this.api.lire<any>('/licences/stats_globales/'); }
 
   creerEcole(data: NouvelleEcole) {
     return this.api.post<any>('/licences/creer_ecole/', data);
@@ -35,7 +35,7 @@ export class LicencesService {
   }
 
   /** Toutes les demandes reçues (super admin), y compris celles dont le courriel a échoué. */
-  getDemandesRenouvellement() { return this.api.get<any[]>('/licences/demandes-renouvellement/'); }
+  getDemandesRenouvellement() { return this.api.lire<any[]>('/licences/demandes-renouvellement/'); }
   traiterDemande(id: string)  { return this.api.post<any>(`/licences/demandes-renouvellement/${id}/traiter/`, {}); }
 
   demanderRenouvellement(id: string, message: string) {

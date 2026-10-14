@@ -1,5 +1,5 @@
 import { Injectable, effect, inject } from '@angular/core';
-import { Observable, concat, of, tap } from 'rxjs';
+import { Observable, concat, finalize, of, share, tap } from 'rxjs';
 
 import { AuthService } from './auth.service';
 
@@ -24,6 +24,8 @@ export class MemoireEcransService {
 
   private auth = inject(AuthService);
   private reponses = new Map<string, unknown>();
+  /** Requêtes parties et pas encore revenues, par clé. */
+  private enVol = new Map<string, Observable<unknown>>();
 
   constructor() {
     effect(() => { if (!this.auth.currentUser()) this.reponses.clear(); });
@@ -53,8 +55,28 @@ export class MemoireEcransService {
    * dernière émission et attendrait le serveur.
    */
   avecMemoire<T>(url: string, params: object | undefined, frais$: Observable<T>): Observable<T> {
-    const frais = frais$.pipe(tap(v => this.ecrire(url, params, v)));
     const connu = this.lire<T>(url, params);
+    const frais = this.partage(url, params, frais$);
     return connu === undefined ? frais : concat(of(connu), frais);
+  }
+
+  /**
+   * Deux écrans qui demandent la même chose au même moment se partagent UNE
+   * requête : à l'ouverture du tableau de bord, les conseils fiscaux partaient
+   * deux fois (carte et synthèse des modules), une seconde de calcul serveur
+   * en double sur un poste qui traite une requête à la fois.
+   */
+  private partage<T>(url: string, params: object | undefined, frais$: Observable<T>): Observable<T> {
+    const cle = this.cle(url, params);
+    let vol = this.enVol.get(cle) as Observable<T> | undefined;
+    if (!vol) {
+      vol = frais$.pipe(
+        tap(v => this.ecrire(url, params, v)),
+        finalize(() => this.enVol.delete(cle)),
+        share(),
+      );
+      this.enVol.set(cle, vol);
+    }
+    return vol;
   }
 }

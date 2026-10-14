@@ -96,6 +96,49 @@ class DashboardSuperAdminView(APIView):
         return Response(result)
 
 
+def a_relancer(eleves, today):
+    """Les élèves à relancer, du plus en retard au moins en retard.
+
+    Partagé par la liste des alertes et par les KPI du tableau de bord : les
+    KPI viennent de construire l'échéancier de chaque élève présent pour
+    compter les niveaux, ils rendent la liste avec (14/10/2026) au lieu
+    qu'une seconde requête recharge et recalcule toute l'école.
+    """
+    from apps.eleves.echeancier import (POIDS_ALERTE, alerte_depuis_echeancier,
+                                        construire_echeancier)
+    data = []
+    for e in eleves:
+        ech   = construire_echeancier(e, today=today)
+        etat  = alerte_depuis_echeancier(ech)
+        if etat['niveau'] in ('A_JOUR', 'OK'):
+            continue
+
+        synth = ech['synthese']
+        data.append({
+            'id':               str(e.id),
+            'nom_complet':      e.nom_complet,
+            'section':          e.section.nom if e.section else '',
+            'telephone':        (e.telephone_tuteur or e.telephone_pere
+                                 or e.telephone_mere or ''),
+            # Ce qui est exigible AUJOURD'HUI de la famille : c'est le
+            # montant qu'on lui réclamera au téléphone.
+            'montant_arriere':  etat['montant'],
+            'mois_arrieres':    etat['mois'],
+            'nb_mois_arrieres': etat['nb_mois'],
+            # Le reste de l'année, mois à venir compris — à ne pas
+            # confondre avec ce qui est dû maintenant.
+            'reste_a_payer':    synth['total_restant_du_famille'],
+            'impaye_anterieur': synth['impaye_anterieur'],
+            'niveau_alerte':    etat['niveau'],
+        })
+
+    # Le nom départage les ex aequo : sans lui, l'ordre suivait celui de la
+    # base et changeait d'une ouverture à l'autre.
+    data.sort(key=lambda x: (POIDS_ALERTE.get(x['niveau_alerte'], 9),
+                             -x['montant_arriere'], x['nom_complet']))
+    return data
+
+
 class DashboardKPIView(APIView):
     """Dashboard école — données financières du tenant connecté."""
     permission_classes = [IsAuthenticated]
@@ -176,7 +219,7 @@ class DashboardKPIView(APIView):
                 Sum('paiements__montant_divers',      filter=_pf),
                 Value(0), output_field=DecimalField()
             ),
-        ).select_related('section', 'exercice', 'tenant').prefetch_related('abonnements__service')
+        ).select_related('section', 'classe', 'exercice', 'tenant').prefetch_related('abonnements__service')
 
         # Mêmes niveaux que le module Élèves et que la carte « à relancer » :
         # une seule source, l'échéancier (Eleve.situation_alerte).
@@ -196,10 +239,20 @@ class DashboardKPIView(APIView):
 
         critique = urgent = attention = ok = a_jour = 0
         compteur = {'CRITIQUE': 0, 'URGENT': 0, 'ATTENTION': 0, 'OK': 0, 'A_JOUR': 0}
+        # Pilotage du mois en cours : la synthèse du cahier mensuel, telle
+        # quelle — le tableau de bord n'en recalcule pas une seconde. Le cahier
+        # parcourt les MÊMES élèves présents : il reçoit ceux-ci, déjà chargés,
+        # et relit l'échéancier que l'alerte vient de construire au lieu de tout
+        # recharger et tout recalculer (14/10/2026 : la moitié du temps).
+        from apps.paiements.cahier_mensuel import cahier_mensuel, mois_par_defaut
+        annee_m, mois_m = mois_par_defaut(exercice, today)
         with calculs_memorises(eleves) as relancables:
             for e in relancables:
                 compteur[e.situation_alerte(today)['niveau']] += 1
             _rec = totaux_recouvrement(relancables)
+            cahier = cahier_mensuel(tenant, exercice, annee_m, mois_m, today,
+                                    eleves=relancables)
+            relances = a_relancer(relancables, today)
         critique, urgent, attention, ok, a_jour = (
             compteur['CRITIQUE'], compteur['URGENT'], compteur['ATTENTION'],
             compteur['OK'], compteur['A_JOUR'])
@@ -262,12 +315,6 @@ class DashboardKPIView(APIView):
             2
         )
 
-        # Pilotage du mois en cours : la synthèse du cahier mensuel, telle
-        # quelle. Le tableau de bord n'en recalcule pas une seconde.
-        from apps.paiements.cahier_mensuel import cahier_mensuel, mois_par_defaut
-        annee_m, mois_m = mois_par_defaut(exercice, today)
-        cahier = cahier_mensuel(tenant, exercice, annee_m, mois_m, today)
-
         result = {
             'mis_a_jour': timezone.localtime().isoformat(),
             'pilotage': {
@@ -315,6 +362,8 @@ class DashboardKPIView(APIView):
                 'garcons':    eleves.filter(genre='G').count(),
                 'filles':     eleves.filter(genre='F').count(),
             },
+            # La liste « à relancer » (même contenu que /dashboard/alertes/).
+            'a_relancer': relances,
             'prises_en_charge': {
                 'total':       pec_nb,
                 'categories':  [{'categorie': p['prise_en_charge'], 'nb': p['nb']} for p in pec_categories],
@@ -349,8 +398,7 @@ class DashboardAlerteView(APIView):
         if not exercice:
             return Response([])
 
-        from apps.eleves.echeancier import (POIDS_ALERTE, alerte_depuis_echeancier,
-                                            construire_echeancier, precharger)
+        from apps.eleves.echeancier import precharger
         from apps.eleves.parcours import STATUTS_SORTIE
 
         today = timezone.now().date()
@@ -363,35 +411,7 @@ class DashboardAlerteView(APIView):
                                  fiche_creance=False)
             .exclude(statut__in=STATUTS_SORTIE))
 
-        data = []
-        for e in eleves:
-            ech   = construire_echeancier(e, today=today)
-            etat  = alerte_depuis_echeancier(ech)
-            if etat['niveau'] in ('A_JOUR', 'OK'):
-                continue
-
-            synth = ech['synthese']
-            data.append({
-                'id':               str(e.id),
-                'nom_complet':      e.nom_complet,
-                'section':          e.section.nom if e.section else '',
-                'telephone':        (e.telephone_tuteur or e.telephone_pere
-                                     or e.telephone_mere or ''),
-                # Ce qui est exigible AUJOURD'HUI de la famille : c'est le
-                # montant qu'on lui réclamera au téléphone.
-                'montant_arriere':  etat['montant'],
-                'mois_arrieres':    etat['mois'],
-                'nb_mois_arrieres': etat['nb_mois'],
-                # Le reste de l'année, mois à venir compris — à ne pas
-                # confondre avec ce qui est dû maintenant.
-                'reste_a_payer':    synth['total_restant_du_famille'],
-                'impaye_anterieur': synth['impaye_anterieur'],
-                'niveau_alerte':    etat['niveau'],
-            })
-
-        data.sort(key=lambda x: (POIDS_ALERTE.get(x['niveau_alerte'], 9),
-                                 -x['montant_arriere']))
-        return Response(data)
+        return Response(a_relancer(eleves, today))
 
 
 class DashboardTresorerieCanauView(APIView):

@@ -33,6 +33,8 @@ export interface DashboardKPI {
     garcons: number; filles: number;
   };
   prises_en_charge?: { total: number; categories: { categorie: string; nb: number; }[]; };
+  /** Élèves à relancer — le contenu de /dashboard/alertes/. */
+  a_relancer?: any[];
   modes_paiement: { mode_paiement: string; nb: number; total: number; }[];
   recettes_mensuelles: { mois: string; total: number; }[];
 }
@@ -65,7 +67,6 @@ export class DashboardService {
   private lire<T>(url: string) { return this.memoire.avecMemoire(url, undefined, this.api.get<T>(url)); }
 
   getKPIs()              { return this.lire<DashboardKPI>('/dashboard/kpis/'); }
-  getAlertes()           { return this.lire<any[]>('/dashboard/alertes/'); }
   getSuperAdmin()        { return this.lire<DashboardSuperAdmin>('/dashboard/superadmin/'); }
   getTresorerieCanaux()  { return this.lire<TresorerieCanaux>('/dashboard/tresorerie-canaux/'); }
   getAuditLog()          { return this.lire<any[]>('/dashboard/audit-log/'); }

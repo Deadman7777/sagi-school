@@ -17,15 +17,22 @@ def calculs_memorises(eleves):
 
         with calculs_memorises(qs) as eleves:
             for e in eleves: ...
+
+    L'échéancier lui-même est gardé aussi (par date du jour) : l'alerte puis
+    le cahier du mois le relisent. Ici seulement — pas dans le serializer —
+    parce que ces appelants le LISENT sans le modifier ; certaines vues de la
+    fiche, elles, complètent ses lignes.
     """
     eleves = list(eleves)
     for e in eleves:
         e._memo_calculs = {}
+        e._memo_echeanciers = {}
     try:
         yield eleves
     finally:
         for e in eleves:
             e.__dict__.pop('_memo_calculs', None)
+            e.__dict__.pop('_memo_echeanciers', None)
 
 
 class Section(TenantModel):

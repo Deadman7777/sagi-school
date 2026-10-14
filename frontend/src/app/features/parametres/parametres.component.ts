@@ -2166,7 +2166,7 @@ export class ParametresComponent implements OnInit {
   ) {}
 
   chargerSauvegarde() {
-    this.api.get<any>('/sauvegarde/statut/').subscribe({
+    this.api.lire<any>('/sauvegarde/statut/').subscribe({
       next: res => this.sauvegarde.set(res),
       error: err => console.error(err),
     });
@@ -2219,7 +2219,7 @@ santeLoading = signal(false);
 
 chargerSanteMigration() {
   this.santeLoading.set(true);
-  this.api.get<any>('/eleves/sante-migration/').subscribe({
+  this.api.lire<any>('/eleves/sante-migration/').subscribe({
     next: res => { this.sante.set(res); this.santeLoading.set(false); },
     error: () => {
       this.santeLoading.set(false);
@@ -2366,7 +2366,7 @@ chargerExercice() {
 
   chargerUsers() {
     this.loadingUsers.set(true);
-    this.api.get<any>('/auth/users/').subscribe({
+    this.api.lire<any>('/auth/users/').subscribe({
       next: res => { this.users.set(res.results || res); this.loadingUsers.set(false); },
       error: () => this.loadingUsers.set(false)
     });

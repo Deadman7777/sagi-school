@@ -619,13 +619,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Relit tout ce qui bouge : KPI, pilotage, alertes, trésorerie. */
   rafraichir() {
+    // La liste « à relancer » arrive avec les KPI : le serveur la tire des
+    // échéanciers qu'il vient de construire pour compter les niveaux, au lieu
+    // qu'une seconde requête recalcule toute l'école.
     this.dashService.getKPIs().subscribe({
-      next: res => this.data.set(res.exercice ? res : null),
+      next: res => {
+        this.data.set(res.exercice ? res : null);
+        this.alertes.set(res.a_relancer ?? []);
+      },
       error: err => console.error('KPI error', err)
-    });
-    this.dashService.getAlertes().subscribe({
-      next:  res => this.alertes.set(res),
-      error: err => console.error('Alertes error', err)
     });
     this.dashService.getTresorerieCanaux().subscribe({
       next:  res => this.tresoCanaux.set(res),

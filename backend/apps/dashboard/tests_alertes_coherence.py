@@ -260,6 +260,20 @@ class PerimetreCompteursTest(APITestCase):
         self.assertEqual(en_alerte, len(self._liste()))
         self.assertEqual(en_alerte, 2)
 
+    def test_la_liste_des_kpis_est_celle_des_alertes(self):
+        """Les KPI rendent la liste « à relancer » (le tableau de bord ne fait
+        plus de seconde requête, 14/10/2026) : la même, dans le même ordre, que
+        /dashboard/alertes/. Les ex aequo sont départagés par le nom."""
+        self._eleve('Zoé DIOP')
+        self._eleve('Awa FALL')
+        self._eleve('Parti', statut='ABANDONNE')
+        self._eleve('Créance', fiche_creance=True)
+
+        r = self.client.get('/api/dashboard/kpis/')
+        liste = self._liste()
+        self.assertEqual(r.data['a_relancer'], liste)
+        self.assertEqual([x['nom_complet'] for x in liste], ['Awa FALL', 'Zoé DIOP'])
+
     def test_l_effectif_compte_les_presents_et_les_abandons_a_part(self):
         """Suivi Shoumoul, septembre 2026 : l'effectif comptait les abandons
         alors que le module Élèves les avait déjà retirés. L'effectif est celui

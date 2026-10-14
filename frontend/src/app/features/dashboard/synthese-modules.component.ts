@@ -114,9 +114,11 @@ export class SyntheseModulesComponent implements OnInit, OnDestroy {
   charger() {
     const rien = of(null);
     // Chiffres du passage précédent d'abord, frais ensuite (MemoireEcransService).
+    // L'erreur est rattrapée APRÈS : la requête peut être partagée avec la
+    // carte du tableau de bord (conseils fiscaux), qui ne la rattrape pas.
     const lire = (route: string, url: string, params?: Record<string, any>) =>
       this.ouvert(route)
-        ? this.memoire.avecMemoire(url, params, this.api.get<any>(url, params).pipe(catchError(() => rien)))
+        ? this.memoire.avecMemoire(url, params, this.api.get<any>(url, params)).pipe(catchError(() => rien))
         : rien;
     const mois = this.mois() || new Date().getMonth() + 1;
     const annee = this.annee() || new Date().getFullYear();

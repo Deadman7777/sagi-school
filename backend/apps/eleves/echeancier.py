@@ -348,12 +348,26 @@ def construire_echeancier(eleve, today=None):
 
     `lignes` : une par mois facturé — {mois, nom, annee, du, paye, reste,
     statut, echu}. `statut` vaut SOLDE / PARTIEL / IMPAYE.
+
+    Dans un bloc `calculs_memorises` (tableau de bord, cahier), calculé une
+    fois par élève et par date : le résultat est alors PARTAGÉ, à lire sans
+    le modifier.
     """
     import datetime
 
-    from apps.paiements.models import Paiement
-
     today = today or datetime.date.today()
+    memo = getattr(eleve, '_memo_echeanciers', None)
+    if memo is None:
+        return _construire_echeancier(eleve, today)
+    if today not in memo:
+        memo[today] = _construire_echeancier(eleve, today)
+    return memo[today]
+
+
+def _construire_echeancier(eleve, today):
+    import datetime
+
+    from apps.paiements.models import Paiement
 
     # Une fiche de créance ne doit rien au titre de l'année : pas d'échéancier.
     # La synthèse est rendue quand même, à zéro : une absence de clé ferait

@@ -71,47 +71,55 @@ def _eleves_du_mois(tenant, exercice):
         .select_related('section', 'classe', 'exercice', 'tenant'))
 
 
-def scolarite_du_mois(tenant, exercice, annee, mois, today=None):
-    today = today or timezone.now().date()
-    payes, partiels, impayes = [], [], []
-    nb_exoneres = 0
-
+def scolarite_du_mois(tenant, exercice, annee, mois, today=None, eleves=None):
+    """`eleves` : les élèves présents, déjà chargés et déjà dans un bloc
+    `calculs_memorises` — le tableau de bord vient de les parcourir pour
+    l'alerte et leur échéancier est gardé : ni rechargés, ni recalculés."""
+    if eleves is not None:
+        return _scolarite(eleves, annee, mois, today or timezone.now().date())
     # Échéancier puis partage scolarité/services lisent le dû des mêmes mois :
     # calculé une fois par élève (voir calculs_memorises).
     with calculs_memorises(_eleves_du_mois(tenant, exercice)) as eleves:
-        for e in eleves:
-            ech = construire_echeancier(e, today=today)
-            ligne = next((l for l in lignes_retenues(e, ech['lignes'])
-                          if l['mois'] == mois and l['annee'] == annee), None)
-            if ligne is None:
-                continue
-            if ligne['du'] < SEUIL:
-                nb_exoneres += 1
-                continue
-            # Scolarité et services du mois, séparés (leur somme est la ligne) :
-            # l'école les suit et les relance à part.
-            parts = partage_scolarite_services(e, ech, seulement=(annee, mois))['mois'][mois]
-            item = {
-                'eleve_id':    str(e.id),
-                'matricule':   e.matricule or '',
-                'nom_complet': e.nom_complet,
-                'classe':      (e.classe.nom if e.classe_id else
-                                (e.section.nom if e.section else '')),
-                'telephone':   _telephone(e),
-                'du':          round(ligne['du'], 2),
-                'paye':        round(ligne['paye'], 2),
-                'reste':       round(ligne['reste'], 2),
-                'exigible_le': ligne['exigible_le'],
-                'echu':        ligne['echu'],
-                'scolarite':   parts['scolarite'],
-                'services':    parts['services'],
-            }
-            if ligne['reste'] < SEUIL:
-                payes.append(item)
-            elif ligne['paye'] >= SEUIL:
-                partiels.append(item)
-            else:
-                impayes.append(item)
+        return _scolarite(eleves, annee, mois, today or timezone.now().date())
+
+
+def _scolarite(eleves, annee, mois, today):
+    payes, partiels, impayes = [], [], []
+    nb_exoneres = 0
+
+    for e in eleves:
+        ech = construire_echeancier(e, today=today)
+        ligne = next((l for l in lignes_retenues(e, ech['lignes'])
+                      if l['mois'] == mois and l['annee'] == annee), None)
+        if ligne is None:
+            continue
+        if ligne['du'] < SEUIL:
+            nb_exoneres += 1
+            continue
+        # Scolarité et services du mois, séparés (leur somme est la ligne) :
+        # l'école les suit et les relance à part.
+        parts = partage_scolarite_services(e, ech, seulement=(annee, mois))['mois'][mois]
+        item = {
+            'eleve_id':    str(e.id),
+            'matricule':   e.matricule or '',
+            'nom_complet': e.nom_complet,
+            'classe':      (e.classe.nom if e.classe_id else
+                            (e.section.nom if e.section else '')),
+            'telephone':   _telephone(e),
+            'du':          round(ligne['du'], 2),
+            'paye':        round(ligne['paye'], 2),
+            'reste':       round(ligne['reste'], 2),
+            'exigible_le': ligne['exigible_le'],
+            'echu':        ligne['echu'],
+            'scolarite':   parts['scolarite'],
+            'services':    parts['services'],
+        }
+        if ligne['reste'] < SEUIL:
+            payes.append(item)
+        elif ligne['paye'] >= SEUIL:
+            partiels.append(item)
+        else:
+            impayes.append(item)
 
     for liste in (payes, partiels, impayes):
         liste.sort(key=lambda x: (x['classe'], x['nom_complet']))
@@ -237,9 +245,10 @@ def caisse_du_mois(tenant, exercice, annee, mois):
     }
 
 
-def cahier_mensuel(tenant, exercice, annee, mois, today=None):
+def cahier_mensuel(tenant, exercice, annee, mois, today=None, eleves=None):
+    """`eleves` : voir scolarite_du_mois."""
     today = today or timezone.now().date()
-    scol = scolarite_du_mois(tenant, exercice, annee, mois, today)
+    scol = scolarite_du_mois(tenant, exercice, annee, mois, today, eleves=eleves)
     chg = charges_du_mois(tenant, exercice, mois)
     caisse = caisse_du_mois(tenant, exercice, annee, mois)
 

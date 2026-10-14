@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { Subject, defer, of } from 'rxjs';
 
 import { AuthService } from './auth.service';
 import { MemoireEcransService } from './memoire-ecrans.service';
@@ -21,6 +21,22 @@ describe('MemoireEcransService', () => {
     auth = TestBed.inject(AuthService);
     auth.currentUser.set(user);
     memoire = TestBed.inject(MemoireEcransService);
+  });
+
+  it('deux demandes simultanées partagent une seule requête', () => {
+    let envois = 0;
+    const serveur = new Subject<number>();
+    const requete = defer(() => { envois++; return serveur; });
+    const a: number[] = [], b: number[] = [];
+    memoire.avecMemoire('/conseils/', undefined, requete).subscribe(v => a.push(v));
+    memoire.avecMemoire('/conseils/', undefined, requete).subscribe(v => b.push(v));
+    serveur.next(7); serveur.complete();
+    expect(envois).toBe(1);
+    expect(a).toEqual([7]);
+    expect(b).toEqual([7]);
+    // Revenue : la suivante repart bien au serveur.
+    memoire.avecMemoire('/conseils/', undefined, defer(() => { envois++; return of(8); })).subscribe();
+    expect(envois).toBe(2);
   });
 
   it('premier passage : la réponse fraîche seulement', () => {
