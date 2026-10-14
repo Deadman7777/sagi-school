@@ -146,7 +146,7 @@ export class EtatImpayesComponent {
   charger() {
     this.etat.set(null);
     this.erreur.set('');
-    this.api.get<EtatImpayes>('/eleves/etat-impayes/', this.params()).subscribe({
+    this.api.lire<EtatImpayes>('/eleves/etat-impayes/', this.params()).subscribe({
       next: e => this.etat.set(e),
       error: err => this.erreur.set(err?.error?.error || "Impossible de calculer l'état des impayés."),
     });

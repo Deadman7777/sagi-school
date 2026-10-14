@@ -194,7 +194,7 @@ export class ExercicesComponent implements OnInit {
   }
 
   charger() {
-    this.api.get<any>('/comptabilite/exercices-situation/').subscribe(r => {
+    this.api.lire<any>('/comptabilite/exercices-situation/').subscribe(r => {
       this.exercices.set(r.exercices || []);
       const ouverts = this.exercicesOuverts();
       const defaut = (ouverts.find(e => !e.courant) || ouverts[0])?.id || '';
@@ -204,7 +204,7 @@ export class ExercicesComponent implements OnInit {
     });
   }
   chargerPieces() {
-    this.api.get<any>('/comptabilite/ecritures-diverses/', { exercice: this.od.exercice_id || undefined })
+    this.api.lire<any>('/comptabilite/ecritures-diverses/', { exercice: this.od.exercice_id || undefined })
       .subscribe(r => this.pieces.set(r));
   }
 

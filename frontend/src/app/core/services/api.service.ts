@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { MemoireEcransService } from './memoire-ecrans.service';
 
 /** Un filtre non renseigné est légitime : on l'accepte, puis on l'ignore. */
 export type ParamsRecord = Record<string, string | number | boolean | null | undefined>;
@@ -20,6 +21,8 @@ export class ApiService {
   private base = environment.apiUrl;
   get baseUrl(): string { return this.base; }
 
+  private memoire = inject(MemoireEcransService);
+
   constructor(private http: HttpClient) {}
 
   /**
@@ -32,6 +35,22 @@ export class ApiService {
    */
   get<T>(path: string, params?: ParamsRecord) {
     return this.http.get<T>(`${this.base}${path}`, { params: toHttpParams(params) });
+  }
+
+  /**
+   * Comme `get`, mais émet d'abord la dernière réponse connue de cet écran
+   * (même chemin, mêmes paramètres), PUIS la fraîche : on revient sur un
+   * module, les données sont là tout de suite (voir MemoireEcransService).
+   *
+   * Réservé à l'AFFICHAGE d'une liste, d'un tableau de bord, d'un état. Jamais
+   * pour pré-remplir un formulaire (la fraîche écraserait la saisie), ni
+   * derrière firstValueFrom/take(1) (on n'aurait que la vieille réponse), ni
+   * dans un forkJoin (il attendrait quand même le serveur : combineLatest).
+   */
+  lire<T>(path: string, params?: ParamsRecord) {
+    const cles = toHttpParams(params);
+    const propres = Object.fromEntries(cles.keys().sort().map(k => [k, cles.get(k)]));
+    return this.memoire.avecMemoire<T>(path, propres, this.get<T>(path, params));
   }
 
   post<T>(path: string, body: any) {

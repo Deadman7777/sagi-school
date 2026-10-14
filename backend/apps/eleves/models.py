@@ -1,6 +1,31 @@
 import datetime
+from contextlib import contextmanager
+
 from django.db import models
 from core.models import TenantModel
+
+
+@contextmanager
+def calculs_memorises(eleves):
+    """Le dû de chaque élève calculé UNE fois le temps d'un parcours d'école.
+
+    Le tableau de bord lit, pour les mêmes élèves, le niveau d'alerte (donc
+    l'échéancier), puis le total attendu, puis le cahier du mois : chacun
+    recalculait le dû des douze mois (14/10/2026 : 4 s pour 1 400 élèves).
+    Voir Eleve._memo. À la sortie du bloc le mémo est jeté : rien ne reste
+    figé sur les instances.
+
+        with calculs_memorises(qs) as eleves:
+            for e in eleves: ...
+    """
+    eleves = list(eleves)
+    for e in eleves:
+        e._memo_calculs = {}
+    try:
+        yield eleves
+    finally:
+        for e in eleves:
+            e.__dict__.pop('_memo_calculs', None)
 
 
 class Section(TenantModel):
@@ -678,6 +703,9 @@ class Eleve(TenantModel):
             return cache
         if self.fiche_creance:
             return 0.0
+        return self._memo('total_attendu', self._calculer_total_attendu)
+
+    def _calculer_total_attendu(self):
         total = self.du_hors_mensualite
         for mois in self.mois_factures:
             total += self.du_du_mois(mois)
@@ -751,9 +779,10 @@ class Eleve(TenantModel):
         total_attendu puis l'échéancier (niveau d'alerte) lisent chacun le dû
         des douze mois : sans mémo, chaque mois était calculé deux fois — la
         moitié du temps de la liste élèves (14/10/2026). Le dictionnaire
-        `_memo_calculs` n'existe que pendant EleveSerializer.to_representation,
-        qui le pose et le jette : ailleurs (fiche modifiée puis relue, guichet),
-        tout est recalculé comme avant. Un seul calcul, fait une fois.
+        `_memo_calculs` n'existe que pendant EleveSerializer.to_representation
+        ou un bloc `calculs_memorises` (tableau de bord, cahier), qui le posent
+        et le jettent : ailleurs (fiche modifiée puis relue, guichet), tout est
+        recalculé comme avant. Un seul calcul, fait une fois.
         """
         memo = getattr(self, '_memo_calculs', None)
         if memo is None:

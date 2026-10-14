@@ -21,6 +21,7 @@ import { MessageService } from 'primeng/api';
 import { TooltipModule } from 'primeng/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../core/services/api.service';
+import { MemoireEcransService } from '../../core/services/memoire-ecrans.service';
 import { FORMATS_RECU, ImpressionService } from '../../core/services/impression.service';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { MenuItem } from 'primeng/api';
@@ -1732,7 +1733,9 @@ export class PaiementsComponent implements OnInit {
     const params: Record<string, string> = {};
     if (q) params['q'] = q;
     if (this.filtreReceveur) params['receveur'] = this.filtreReceveur;
-    this.paiementsService.getPaiements(Object.keys(params).length ? params : undefined).subscribe({
+    // Liste du passage précédent d'abord, fraîche ensuite (MemoireEcransService).
+    const p = Object.keys(params).length ? params : undefined;
+    this.memoire.avecMemoire('paiements:liste', p, this.paiementsService.getPaiements(p)).subscribe({
       next: res => { 
           const data = Array.isArray(res) ? res : (res.results || []);
           this.paiements.set(data); 
@@ -1743,7 +1746,7 @@ export class PaiementsComponent implements OnInit {
   }
 
   chargerStats() {
-    this.paiementsService.getStats().subscribe({
+    this.memoire.avecMemoire('paiements:stats', undefined, this.paiementsService.getStats()).subscribe({
       next: res => this.stats.set(res)
     });
   }
@@ -2436,6 +2439,7 @@ export class PaiementsComponent implements OnInit {
   // ── Caisses de l'école (espèces d'un service extra) ──────────────────
   caisses = signal<{ id: string; nom: string }[]>([]);
   private apiCaisses = inject(ApiService);
+  private memoire = inject(MemoireEcransService);
 
   private chargerCaisses() {
     this.apiCaisses.get<any>('/comptabilite/caisses/', { actives: 1 }).subscribe({

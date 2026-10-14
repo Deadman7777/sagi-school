@@ -493,7 +493,7 @@ export class PointTresorerieComponent implements OnInit {
 
   charger(silencieux = false) {
     if (!silencieux) this.loading.set(true);
-    this.api.get<PointTresorerie>('/paiements/point-tresorerie/', this.params()).subscribe({
+    this.api.lire<PointTresorerie>('/paiements/point-tresorerie/', this.params()).subscribe({
       next: p => {
         this.point.set(p);
         if (!this.moisCle()) {

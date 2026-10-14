@@ -8,7 +8,6 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { TranslateModule } from '@ngx-translate/core';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -584,7 +583,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   constructor(
     private dashService: DashboardService,
-    private api: ApiService,
     public auth: AuthService
   ) {}
 
@@ -656,7 +654,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         error: () => {}
       });
       // Conseils fiscal/comptable/financier générés depuis les données du système
-      this.api.get<any>('/fiscal/conseils/').subscribe({
+      this.dashService.getConseils().subscribe({
         next:  res => this.conseilsDash.set(res?.conseils || []),
         error: () => {}
       });

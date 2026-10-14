@@ -201,10 +201,10 @@ export class RhService {
   private api = inject(ApiService);
 
   // — Statistiques —
-  getStats() { return this.api.get<RhStats>('/rh/stats/'); }
+  getStats() { return this.api.lire<RhStats>('/rh/stats/'); }
 
   // — Employés —
-  getEmployes(params?: Record<string, string>) { return this.api.get<any>('/rh/employes/', params); }
+  getEmployes(params?: Record<string, string>) { return this.api.lire<any>('/rh/employes/', params); }
   creerEmploye(data: Partial<Employe>)         { return this.api.post<Employe>('/rh/employes/', data); }
   modifierEmploye(id: string, data: Partial<Employe>) { return this.api.patch<Employe>(`/rh/employes/${id}/`, data); }
   /** Refusée (409) si l'employé a des bulletins ou avances comptabilisés. */
@@ -216,7 +216,7 @@ export class RhService {
   reintegrerEmploye(id: string)                { return this.api.post<Employe>(`/rh/employes/${id}/reintegrer/`, {}); }
 
   // — Bulletins SYSCOHADA —
-  getBulletins(params?: Record<string, string>) { return this.api.get<any>('/rh/bulletins/', params); }
+  getBulletins(params?: Record<string, string>) { return this.api.lire<any>('/rh/bulletins/', params); }
   creerBulletin(data: unknown)                  { return this.api.post<BulletinPaie>('/rh/bulletins/', data); }
   calculerBulletin(data: unknown)               { return this.api.post<any>('/rh/bulletins/calculer/', data); }
   /** `montantVerse` absent = le net entier ; moins = le reste reste dû à l'employé. */
@@ -230,7 +230,7 @@ export class RhService {
   telechargerPdf(id: string)                    { return this.api.getBlob(`/rh/bulletins/${id}/pdf/`); }
 
   // — Avances —
-  getAvances(params?: Record<string, string>)              { return this.api.get<any>('/rh/avances/', params); }
+  getAvances(params?: Record<string, string>)              { return this.api.lire<any>('/rh/avances/', params); }
   getAvancesEmploye(employeId: string)                     { return this.api.get<any>('/rh/avances/', { employe: employeId, statut: 'EN_ATTENTE' }); }
   creerAvance(employeId: string, data: unknown)            { return this.api.post<AvanceSalaire>(`/rh/employes/${employeId}/avance/`, data); }
   annulerAvance(id: string)                                { return this.api.post<AvanceSalaire>(`/rh/avances/${id}/annuler/`, {}); }
@@ -239,9 +239,9 @@ export class RhService {
   situationDette(employeId: string) {
     return this.api.get<SituationDettePersonnel>(`/rh/employes/${employeId}/situation-dette/`);
   }
-  coutAnnuel() { return this.api.get<CoutPersonnel>('/rh/employes/cout-annuel/'); }
+  coutAnnuel() { return this.api.lire<CoutPersonnel>('/rh/employes/cout-annuel/'); }
   suiviDettes() {
-    return this.api.get<{ results: LigneSuiviDette[]; reste_total: number; reste_echu_total: number }>(
+    return this.api.lire<{ results: LigneSuiviDette[]; reste_total: number; reste_echu_total: number }>(
       '/rh/employes/dettes/');
   }
   situationDettePdf(employeId: string) {
@@ -263,6 +263,6 @@ export class RhService {
   }
 
   // — Historique Paie (legacy) —
-  getPaies(params?: Record<string, string>) { return this.api.get<any>('/rh/paies/', params); }
+  getPaies(params?: Record<string, string>) { return this.api.lire<any>('/rh/paies/', params); }
   creerPaie(data: unknown)                  { return this.api.post<any>('/rh/paies/', data); }
 }

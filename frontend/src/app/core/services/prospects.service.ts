@@ -119,9 +119,9 @@ export interface StatsProspects {
 export class ProspectsService {
   private api = inject(ApiService);
 
-  liste(filtres?: ParamsRecord) { return this.api.get<Prospect[]>('/prospects/', filtres); }
+  liste(filtres?: ParamsRecord) { return this.api.lire<Prospect[]>('/prospects/', filtres); }
   fiche(id: string)             { return this.api.get<Prospect>(`/prospects/${id}/`); }
-  stats()                       { return this.api.get<StatsProspects>('/prospects/stats/'); }
+  stats()                       { return this.api.lire<StatsProspects>('/prospects/stats/'); }
   referentiels()                { return this.api.get<any>('/prospects/referentiels/'); }
 
   creer(data: any)              { return this.api.post<Prospect>('/prospects/', data); }

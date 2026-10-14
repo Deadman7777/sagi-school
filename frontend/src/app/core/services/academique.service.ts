@@ -5,10 +5,10 @@ import { ApiService } from './api.service';
 export class AcademiqueService {
   constructor(private api: ApiService) {}
 
-  getNiveaux()          { return this.api.get<any>('/academique/niveaux/'); }
-  getClasses(params?: any) { return this.api.get<any>('/academique/classes/', params); }
-  getMatieres(params?: any){ return this.api.get<any>('/academique/matieres/', params); }
-  getTypesEval()        { return this.api.get<any>('/academique/types-eval/'); }
+  getNiveaux()          { return this.api.lire<any>('/academique/niveaux/'); }
+  getClasses(params?: any) { return this.api.lire<any>('/academique/classes/', params); }
+  getMatieres(params?: any){ return this.api.lire<any>('/academique/matieres/', params); }
+  getTypesEval()        { return this.api.lire<any>('/academique/types-eval/'); }
   getEvaluations(params?: any) { return this.api.get<any>('/academique/evaluations/', params); }
   getNotes(params?: any){ return this.api.get<any>('/academique/notes/', params); }
 
@@ -65,7 +65,7 @@ export class AcademiqueService {
                                    { annee, programme });
   }
   getFichePedagogique(eleveId: string, programme?: string | null, annee?: string) {
-    return this.api.get<any>(`/academique/fiche-pedagogique/${eleveId}/`, { programme, annee });
+    return this.api.lire<any>(`/academique/fiche-pedagogique/${eleveId}/`, { programme, annee });
   }
   getFichePedagogiquePdf(eleveId: string, programme?: string | null, annee?: string) {
     return this.api.getBlob(`/academique/fiche-pedagogique-pdf/${eleveId}/`, { programme, annee });
@@ -75,10 +75,10 @@ export class AcademiqueService {
   }
 
   getAnalysePerformance(programme?: string | null) {
-    return this.api.get<any>('/academique/analyse/', { programme });
+    return this.api.lire<any>('/academique/analyse/', { programme });
   }
 
   getHistoriqueBulletins(params?: any) {
-    return this.api.get<any>('/academique/historique-bulletins/', params);
+    return this.api.lire<any>('/academique/historique-bulletins/', params);
   }
 }

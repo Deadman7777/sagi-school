@@ -490,7 +490,7 @@ export class ProformasComponent implements OnInit {
 
   charger() {
     this.chargement.set(true);
-    this.api.get<ResumeProforma[]>('/paiements/proformas/', { q: this.recherche.trim() }).subscribe({
+    this.api.lire<ResumeProforma[]>('/paiements/proformas/', { q: this.recherche.trim() }).subscribe({
       next: l => { this.liste.set(l); this.chargement.set(false); },
       error: () => this.chargement.set(false),
     });

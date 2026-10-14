@@ -3,9 +3,10 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { catchError, forkJoin, of } from 'rxjs';
+import { catchError, combineLatest, of } from 'rxjs';
 
 import { ApiService } from '../../core/services/api.service';
+import { MemoireEcransService } from '../../core/services/memoire-ecrans.service';
 import { AuthService } from '../../core/services/auth.service';
 
 interface CarteModule {
@@ -77,6 +78,7 @@ interface CarteModule {
 })
 export class SyntheseModulesComponent implements OnInit, OnDestroy {
   private api = inject(ApiService);
+  private memoire = inject(MemoireEcransService);
   private auth = inject(AuthService);
 
   /** Mois de référence : celui du « pilotage du mois » du tableau de bord. */
@@ -111,11 +113,16 @@ export class SyntheseModulesComponent implements OnInit, OnDestroy {
 
   charger() {
     const rien = of(null);
+    // Chiffres du passage précédent d'abord, frais ensuite (MemoireEcransService).
     const lire = (route: string, url: string, params?: Record<string, any>) =>
-      this.ouvert(route) ? this.api.get<any>(url, params).pipe(catchError(() => rien)) : rien;
+      this.ouvert(route)
+        ? this.memoire.avecMemoire(url, params, this.api.get<any>(url, params).pipe(catchError(() => rien)))
+        : rien;
     const mois = this.mois() || new Date().getMonth() + 1;
     const annee = this.annee() || new Date().getFullYear();
-    forkJoin({
+    // combineLatest et non forkJoin : forkJoin ne garde que la dernière
+    // émission, il attendrait le serveur même avec les chiffres en mémoire.
+    combineLatest({
       organismes: lire('/eleves', '/eleves/organismes/suivi/'),
       familles:   lire('/eleves', '/eleves/familles/', { page_size: 1 }),
       garderie:   lire('/eleves', '/eleves/garderie/recap/', { mois }),

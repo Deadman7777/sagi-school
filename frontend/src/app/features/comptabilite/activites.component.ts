@@ -293,7 +293,7 @@ export class ActivitesComponent implements OnInit {
 
   ngOnInit() {
     this.chargerActivites();
-    this.api.get<any[]>('/comptabilite/activites/modeles/').subscribe(r => this.modeles.set(r || []));
+    this.api.lire<any[]>('/comptabilite/activites/modeles/').subscribe(r => this.modeles.set(r || []));
   }
 
   private params() { return { exercice: this.exercice() || undefined }; }
@@ -302,10 +302,10 @@ export class ActivitesComponent implements OnInit {
   }
 
   chargerActivites() {
-    this.api.get<any>('/comptabilite/activites/').subscribe(r => this.activites.set(r.results || r || []));
+    this.api.lire<any>('/comptabilite/activites/').subscribe(r => this.activites.set(r.results || r || []));
   }
   chargerFactures() {
-    this.api.get<any>('/comptabilite/factures-activite/', this.params()).subscribe(r => {
+    this.api.lire<any>('/comptabilite/factures-activite/', this.params()).subscribe(r => {
       const liste = r.results || r || [];
       this.factures.set(liste);
       const sel = this.selection();
@@ -313,7 +313,7 @@ export class ActivitesComponent implements OnInit {
     });
   }
   chargerResultats() {
-    this.api.get<any>('/comptabilite/activites-resultats/', this.params()).subscribe(r => this.resultats.set(r));
+    this.api.lire<any>('/comptabilite/activites-resultats/', this.params()).subscribe(r => this.resultats.set(r));
   }
   private toutRecharger() { this.chargerFactures(); this.chargerResultats(); }
 

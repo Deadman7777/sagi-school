@@ -118,11 +118,11 @@ export class FacturationService {
   private api = inject(ApiService);
 
   documents(filtres?: ParamsRecord) {
-    return this.api.get<DocumentCommercial[]>('/facturation/documents/', filtres);
+    return this.api.lire<DocumentCommercial[]>('/facturation/documents/', filtres);
   }
   document(id: string) { return this.api.get<DocumentCommercial>(`/facturation/documents/${id}/`); }
-  synthese()           { return this.api.get<SyntheseFacturation>('/facturation/documents/synthese/'); }
-  clients()            { return this.api.get<EcoleCliente[]>('/facturation/documents/clients/'); }
+  synthese()           { return this.api.lire<SyntheseFacturation>('/facturation/documents/synthese/'); }
+  clients()            { return this.api.lire<EcoleCliente[]>('/facturation/documents/clients/'); }
 
   creer(data: Record<string, unknown>) {
     return this.api.post<DocumentCommercial>('/facturation/documents/', data);

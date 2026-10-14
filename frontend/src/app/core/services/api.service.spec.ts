@@ -65,3 +65,57 @@ describe('ApiService — paramètres de requête', () => {
     req.flush({});
   });
 });
+
+/**
+ * `lire` : au retour sur un écran, la dernière réponse s'affiche aussitôt,
+ * puis la fraîche la remplace (14/10/2026).
+ */
+describe('ApiService — lire (dernière réponse connue)', () => {
+  let api: ApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [ApiService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    api = TestBed.inject(ApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('premier passage : attend le serveur', () => {
+    const recus: unknown[] = [];
+    api.lire('/rh/stats/').subscribe(v => recus.push(v));
+    expect(recus).toEqual([]);
+    http.expectOne(r => r.url.endsWith('/rh/stats/')).flush({ n: 1 });
+    expect(recus).toEqual([{ n: 1 }]);
+  });
+
+  it('deuxième passage : la connue tout de suite, puis la fraîche', () => {
+    api.lire('/rh/stats/').subscribe();
+    http.expectOne(r => r.url.endsWith('/rh/stats/')).flush({ n: 1 });
+
+    const recus: unknown[] = [];
+    api.lire('/rh/stats/').subscribe(v => recus.push(v));
+    expect(recus).toEqual([{ n: 1 }]);
+    http.expectOne(r => r.url.endsWith('/rh/stats/')).flush({ n: 2 });
+    expect(recus).toEqual([{ n: 1 }, { n: 2 }]);
+  });
+
+  it('des paramètres différents ne se mélangent pas ; les vides sont ignorés', () => {
+    api.lire('/rh/bulletins/', { mois: '3', employe: undefined }).subscribe();
+    http.expectOne(r => r.url.endsWith('/rh/bulletins/')).flush(['mars']);
+
+    const avril: unknown[] = [];
+    api.lire('/rh/bulletins/', { mois: '4' }).subscribe(v => avril.push(v));
+    expect(avril).toEqual([]);
+    http.expectOne(r => r.url.endsWith('/rh/bulletins/')).flush(['avril']);
+
+    const mars: unknown[] = [];
+    api.lire('/rh/bulletins/', { mois: '3' }).subscribe(v => mars.push(v));
+    expect(mars).toEqual([['mars']]);
+    http.expectOne(r => r.url.endsWith('/rh/bulletins/')).flush(['mars']);
+  });
+});

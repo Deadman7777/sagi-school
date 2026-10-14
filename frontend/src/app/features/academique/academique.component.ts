@@ -1185,7 +1185,7 @@ export class AcademiqueComponent implements OnInit {
 
   // ── Domaines de matières ───────────────────────────────────────────────
   chargerDomaines() {
-    this.api.get<any>('/academique/domaines/').subscribe({
+    this.api.lire<any>('/academique/domaines/').subscribe({
       next: r => this.domaines.set(r.results || r || []),
     });
   }
@@ -1238,7 +1238,7 @@ Rien n'est dupliqué ; vos coefficients sont gardés.`)) return;
 
   // ── Paliers d'appréciation / mentions ──────────────────────────────────
   chargerPaliers() {
-    this.api.get<any>('/academique/paliers/').subscribe({
+    this.api.lire<any>('/academique/paliers/').subscribe({
       next: r => { this.paliers.set(r.paliers || []); this.paliersEffectifs.set(r.effectifs || []);
                    this.paliersParDefaut.set(!!r.par_defaut); },
     });

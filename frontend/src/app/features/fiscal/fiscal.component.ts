@@ -466,7 +466,7 @@ export class FiscalComponent implements OnInit {
   constructor(private api: ApiService, private msg: MessageService) {}
 
   ngOnInit() {
-    this.api.get<any>('/fiscal/declarations/').subscribe({
+    this.api.lire<any>('/fiscal/declarations/').subscribe({
       next: res => {
         const data = res.declarations || (Array.isArray(res) ? res : []);
         this.declarations.set(data);
@@ -480,7 +480,7 @@ export class FiscalComponent implements OnInit {
 
   chargerObligations() {
     this.obligationsData.set(null);
-    this.api.get<any>('/fiscal/obligations/').subscribe({
+    this.api.lire<any>('/fiscal/obligations/').subscribe({
       next: res => this.obligationsData.set(res),
       error: () => this.obligationsData.set({ identification: { complet: false },
                                               message: 'Erreur de chargement.', obligations: [] }),
@@ -489,7 +489,7 @@ export class FiscalComponent implements OnInit {
 
   chargerConseils() {
     this.conseils.set(null);
-    this.api.get<any>('/fiscal/conseils/').subscribe({
+    this.api.lire<any>('/fiscal/conseils/').subscribe({
       next: res => this.conseils.set(res.conseils || []),
       error: () => this.conseils.set([]),
     });

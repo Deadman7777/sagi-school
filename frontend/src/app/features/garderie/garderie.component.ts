@@ -693,7 +693,7 @@ export class GarderieComponent implements OnInit {
 
   chargerRecap() {
     this.erreur.set('');
-    this.api.get<{ enfants: LigneRecap[]; totaux: { du: number; paye: number; reste: number } }>(
+    this.api.lire<{ enfants: LigneRecap[]; totaux: { du: number; paye: number; reste: number } }>(
       '/eleves/garderie/recap/', { mois: this.mois(), classe: this.classe() || undefined }).subscribe({
       next: r => { this.recap.set(r.enfants); this.recapTotaux.set(r.totaux); },
       error: err => { this.recap.set([]); this.erreur.set(this.message(err)); },

@@ -648,7 +648,7 @@ export class SuiviMensuelComponent implements OnInit {
 
   chargerTout() {
     this.loading.set(true);
-    this.api.get<any>('/eleves/suivi-mensuel/').subscribe({
+    this.api.lire<any>('/eleves/suivi-mensuel/').subscribe({
       next: res => {
         this.globalData.set(res.global   || []);
         this.sections.set(res.sections   || []);

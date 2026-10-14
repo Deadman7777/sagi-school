@@ -461,7 +461,7 @@ export class CahierMensuelComponent implements OnInit {
 
   charger(silencieux = false) {
     if (!silencieux) this.loading.set(true);
-    this.api.get<CahierMensuel>('/paiements/cahier-mensuel/', this.params()).subscribe({
+    this.api.lire<CahierMensuel>('/paiements/cahier-mensuel/', this.params()).subscribe({
       next: c => { this.cahier.set(c); this.erreur.set(''); this.loading.set(false); },
       error: err => {
         this.loading.set(false);

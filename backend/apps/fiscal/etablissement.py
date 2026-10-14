@@ -335,9 +335,10 @@ class ConseilsView(APIView):
         from apps.paiements.models import Paiement
         paye = sum_paiements(Paiement.objects.filter(tenant=tenant, exercice=exercice, statut='ACTIF'))
         from apps.eleves.models import Eleve
-        eleves = Eleve.objects.filter(tenant=tenant, exercice=exercice) \
-                              .select_related('section', 'exercice') \
-                              .prefetch_related('abonnements__service')
+        # precharger : sans lui, plusieurs requêtes PAR élève (gardes du soir,
+        # formules, renouvellement) — 4,5 s pour 1 400 élèves (14/10/2026).
+        from apps.eleves.echeancier import precharger
+        eleves = precharger(Eleve.objects.filter(tenant=tenant, exercice=exercice))
         attendu = sum(float(e.total_attendu) for e in eleves)
         if attendu > 0:
             taux = 100 * paye / attendu

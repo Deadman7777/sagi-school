@@ -233,7 +233,7 @@ export class ServicesAbonnesComponent implements OnInit {
   readonly libelleStatut: Record<string, string> = { A_JOUR: 'À jour', PARTIEL: 'Partiel', IMPAYE: 'Impayé' };
 
   ngOnInit() {
-    this.api.get<any>('/eleves/sections/').subscribe({
+    this.api.lire<any>('/eleves/sections/').subscribe({
       next: r => this.sections.set((r?.results || r || []) as any[]),
     });
     this.charger();
@@ -250,7 +250,7 @@ export class ServicesAbonnesComponent implements OnInit {
 
   charger() {
     this.erreur.set('');
-    this.api.get<Etat>('/eleves/etat-services/', this.params()).subscribe({
+    this.api.lire<Etat>('/eleves/etat-services/', this.params()).subscribe({
       next: e => {
         this.etat.set(e);
         if (!this.service) this.tousServices.set(e.services.map(s => ({ id: s.id, nom: s.nom })));

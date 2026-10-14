@@ -185,13 +185,21 @@ class DashboardKPIView(APIView):
         # exclus. Un compteur annonçant « 3 CRITIQUE » au-dessus d'une liste
         # qui n'en montre qu'un donne exactement l'impression d'un logiciel
         # qui se trompe.
-        relancables = precharger(eleves_presents(
-            Eleve.objects.filter(tenant=tenant, exercice=exercice)))
+        #
+        # Les MÊMES instances pour l'alerte et le recouvrement (le même périmètre,
+        # chargé une fois au lieu de deux), dans un bloc calculs_memorises :
+        # l'échéancier de l'alerte et le total attendu se partagent le dû de
+        # chaque mois au lieu de le recalculer chacun (14/10/2026).
+        from apps.eleves.models import calculs_memorises
+        # Le calcul du suivi mensuel et de la clôture : un seul recouvrement.
+        from apps.eleves.recouvrement import totaux as totaux_recouvrement
 
         critique = urgent = attention = ok = a_jour = 0
         compteur = {'CRITIQUE': 0, 'URGENT': 0, 'ATTENTION': 0, 'OK': 0, 'A_JOUR': 0}
-        for e in relancables:
-            compteur[e.situation_alerte(today)['niveau']] += 1
+        with calculs_memorises(eleves) as relancables:
+            for e in relancables:
+                compteur[e.situation_alerte(today)['niveau']] += 1
+            _rec = totaux_recouvrement(relancables)
         critique, urgent, attention, ok, a_jour = (
             compteur['CRITIQUE'], compteur['URGENT'], compteur['ATTENTION'],
             compteur['OK'], compteur['A_JOUR'])
@@ -208,10 +216,7 @@ class DashboardKPIView(APIView):
                   Sum('montant_cantine')     + Sum('montant_divers')
         ).order_by('mois')
         
-        # Calcul taux recouvrement et impayés
-        # Le calcul du suivi mensuel et de la clôture : un seul recouvrement.
-        from apps.eleves.recouvrement import totaux as totaux_recouvrement
-        _rec = totaux_recouvrement(list(eleves))
+        # Taux de recouvrement et impayés (calculés plus haut, avec l'alerte).
         total_attendu = _rec['total_attendu']
         total_paye    = _rec['total_paye']
         total_impayes = _rec['reste']

@@ -1,7 +1,7 @@
-import { Injectable, effect, inject } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { AuthService } from './auth.service';
+import { MemoireEcransService } from './memoire-ecrans.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
@@ -45,12 +45,9 @@ export interface RapportImport {
 
 @Injectable({ providedIn: 'root' })
 export class ElevesService {
-  private auth = inject(AuthService);
+  private memoire = inject(MemoireEcransService);
 
-  constructor(private api: ApiService) {
-    // Déconnexion : la liste gardée en mémoire part avec la session.
-    effect(() => { if (!this.auth.currentUser()) this.derniereListe = null; });
-  }
+  constructor(private api: ApiService) {}
 
   getEleves(params?: Record<string, string>) {
     // Toute l'école en une réponse : le serveur ne coupe plus en pages de 500.
@@ -59,24 +56,13 @@ export class ElevesService {
 
   // ── Dernière liste de l'écran Élèves ──────────────────────────────────
   // Revenir dans le module affiche aussitôt la liste du passage précédent,
-  // pendant que la vraie se recharge (14/10/2026 : « tu cliques, tu vois »).
-  // En MÉMOIRE seulement : rien n'est écrit sur le disque d'un poste partagé,
-  // et la clé porte l'utilisateur et l'école — un super admin qui change
-  // d'école ne voit jamais la liste de la précédente.
-  private derniereListe: { cle: string; eleves: Eleve[] } | null = null;
-
-  private cleListe(params: Record<string, string>): string {
-    return [this.auth.currentUser()?.id ?? '', this.auth.effectiveTenantId ?? '',
-            JSON.stringify(params)].join('|');
-  }
-
+  // pendant que la vraie se recharge (voir MemoireEcransService).
   listeEnMemoire(params: Record<string, string>): Eleve[] | null {
-    const d = this.derniereListe;
-    return d && d.cle === this.cleListe(params) ? d.eleves : null;
+    return this.memoire.lire<Eleve[]>('/eleves/liste', params) ?? null;
   }
 
   memoriserListe(params: Record<string, string>, eleves: Eleve[]) {
-    this.derniereListe = { cle: this.cleListe(params), eleves };
+    this.memoire.ecrire('/eleves/liste', params, eleves);
   }
 
   // Liste des exercices (actif + clôturés) pour consulter une année passée.
@@ -156,7 +142,7 @@ export class ElevesService {
   }
 
   getPriseEnChargeStats() {
-    return this.api.get<PriseEnChargeStats>('/eleves/prises-en-charge/stats/');
+    return this.api.lire<PriseEnChargeStats>('/eleves/prises-en-charge/stats/');
   }
 
   exporterListePDF(params?: Record<string, string>) {
@@ -263,7 +249,7 @@ export class ElevesService {
    *  l'écran Paiements crachait à chaque ouverture. Normalisé ICI, une fois :
    *  corriger chaque appelant laisserait le prochain retomber dedans. */
   getOrganismes() {
-    return this.api.get<Organisme[] | PaginatedResponse<Organisme>>('/eleves/organismes/')
+    return this.api.lire<Organisme[] | PaginatedResponse<Organisme>>('/eleves/organismes/')
       .pipe(map(r => (Array.isArray(r) ? r : (r?.results ?? []))));
   }
   creerOrganisme(o: Partial<Organisme>)  { return this.api.post<Organisme>('/eleves/organismes/', o); }
@@ -274,7 +260,7 @@ export class ElevesService {
 
   /** Position financière de chaque organisme : couvert, reçu, dû. */
   getSuiviOrganismes() {
-    return this.api.get<{ exercice: string; lignes: SuiviOrganisme[];
+    return this.api.lire<{ exercice: string; lignes: SuiviOrganisme[];
                           totaux: { nb_organismes: number; nb_boursiers: number;
                                     couvert: number; recu: number; reste: number } }>(
       '/eleves/organismes/suivi/');
@@ -305,14 +291,14 @@ export class ElevesService {
 
   // Base historique des sortis — indépendante de l'exercice actif.
   getAnciens(params?: { q?: string; statut?: string }) {
-    return this.api.get<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;
+    return this.api.lire<{ lignes: AncienEleve[]; nb: number; nb_diplomes: number;
                           total_du: number }>('/eleves/anciens/', params);
   }
 
   // Impayés antérieurs (migration) — saisie en lot d'un montant par élève.
   // Le backend passe l'à-nouveaux 411/890 et refuse ligne par ligne.
   getImpayesAnterieurs() {
-    return this.api.get<{ exercice: string; resume: ResumeImpayesAnterieurs;
+    return this.api.lire<{ exercice: string; resume: ResumeImpayesAnterieurs;
                           lignes: LigneImpayeAnterieur[] }>('/eleves/impayes-anterieurs/');
   }
   enregistrerImpayesAnterieurs(lignes: { eleve_id: string; montant: number; note?: string }[]) {
@@ -449,15 +435,15 @@ export class ElevesService {
   }
 
   getSections() {
-    return this.api.get<PaginatedResponse<Section>>('/eleves/sections/');
+    return this.api.lire<PaginatedResponse<Section>>('/eleves/sections/');
   }
 
   getServices() {
-    return this.api.get<PaginatedResponse<Service>>('/eleves/services/');
+    return this.api.lire<PaginatedResponse<Service>>('/eleves/services/');
   }
 
   getClasses() {
-    return this.api.get<any>('/academique/classes/');
+    return this.api.lire<any>('/academique/classes/');
   }
 }
 

@@ -1,5 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
+import { MemoireEcransService } from './memoire-ecrans.service';
 
 export interface PilotageMois {
   libelle_mois: string; annee: number; mois: number;
@@ -56,10 +57,17 @@ export interface DashboardSuperAdmin {
 
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
+  private memoire = inject(MemoireEcransService);
   constructor(private api: ApiService) {}
-  getKPIs()              { return this.api.get<DashboardKPI>('/dashboard/kpis/'); }
-  getAlertes()           { return this.api.get<any[]>('/dashboard/alertes/'); }
-  getSuperAdmin()        { return this.api.get<DashboardSuperAdmin>('/dashboard/superadmin/'); }
-  getTresorerieCanaux()  { return this.api.get<TresorerieCanaux>('/dashboard/tresorerie-canaux/'); }
-  getAuditLog()          { return this.api.get<any[]>('/dashboard/audit-log/'); }
+
+  // Tableau de bord : chaque lecture rend d'abord les chiffres du passage
+  // précédent, puis les frais (deux émissions — voir MemoireEcransService).
+  private lire<T>(url: string) { return this.memoire.avecMemoire(url, undefined, this.api.get<T>(url)); }
+
+  getKPIs()              { return this.lire<DashboardKPI>('/dashboard/kpis/'); }
+  getAlertes()           { return this.lire<any[]>('/dashboard/alertes/'); }
+  getSuperAdmin()        { return this.lire<DashboardSuperAdmin>('/dashboard/superadmin/'); }
+  getTresorerieCanaux()  { return this.lire<TresorerieCanaux>('/dashboard/tresorerie-canaux/'); }
+  getAuditLog()          { return this.lire<any[]>('/dashboard/audit-log/'); }
+  getConseils()          { return this.lire<any>('/fiscal/conseils/'); }
 }

@@ -90,12 +90,12 @@ export class PaiementsService {
 
   /** « Mon cahier de notes mensuel » ; sans paramètre, le mois en cours. */
   getCahierMensuel(annee?: number, mois?: number) {
-    return this.api.get<any>('/paiements/cahier-mensuel/', annee && mois ? { annee, mois } : {});
+    return this.api.lire<any>('/paiements/cahier-mensuel/', annee && mois ? { annee, mois } : {});
   }
 
   /** Les seuls totaux du mois en cours (bandeau de rappel), sans les lignes. */
   getResumeCahierMensuel() {
-    return this.api.get<any>('/paiements/cahier-mensuel/', { resume: 1 });
+    return this.api.lire<any>('/paiements/cahier-mensuel/', { resume: 1 });
   }
 
   getRecu(id: string) {
@@ -118,7 +118,7 @@ export class PaiementsService {
 
   // — Registre des chèques —
   getCheques(params?: Record<string, string>) {
-    return this.api.get<{ results: ChequeRecu[]; totaux: Record<string, { nb: number; montant: number }> }>(
+    return this.api.lire<{ results: ChequeRecu[]; totaux: Record<string, { nb: number; montant: number }> }>(
       '/paiements/cheques/', params);
   }
   completerCheque(id: string, data: Partial<ChequeRecu>) {

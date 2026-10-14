@@ -112,7 +112,7 @@ export class EtafiDossierComponent {
   private params() { return { exercice: this.exercice() || undefined, systeme: this.systeme() || undefined }; }
 
   charger() {
-    this.api.get<any>('/comptabilite/etafi/', this.params()).subscribe({
+    this.api.lire<any>('/comptabilite/etafi/', this.params()).subscribe({
       next: d => this.dossier.set(d),
       error: e => this.msg.add({ severity: 'error', summary: 'ETAFI', detail: e?.error?.error || 'Chargement impossible' }),
     });
