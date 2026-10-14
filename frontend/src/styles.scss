@@ -123,12 +123,12 @@ body {
 .p-toast .p-toast-message.p-toast-message-info    { background: #0f1e2d !important; border-color: #0099ff !important; color: #0099ff !important; }
 .p-toast .p-toast-message.p-toast-message-warn    { background: #2d1e0f !important; border-color: #f59e0b !important; color: #f59e0b !important; }
 .p-tag { font-size: 10px !important; font-weight: 600 !important; }
-.p-inputnumber-input, .p-inputtext {
+.p-inputnumber-input, .p-inputtext, .p-textarea {
   background: var(--surface-2) !important;
   border-color: var(--border) !important;
   color: var(--text) !important;
 }
-.p-inputnumber-input:focus, .p-inputtext:focus {
+.p-inputnumber-input:focus, .p-inputtext:focus, .p-textarea:focus {
   border-color: #00d4aa !important;
   box-shadow: 0 0 0 2px rgba(0,212,170,0.15) !important;
 }

@@ -16,6 +16,7 @@ import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { RelancesLicencesComponent } from './relances-licences.component';
 
 /** Début + 1 an − 1 jour (2026-10-01 → 2027-09-30), ou '' si la date est illisible. */
 function finExercice(debut: string): string {
@@ -36,7 +37,7 @@ function exerciceParDefaut() {
 @Component({
   selector: 'app-licences',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
+  imports: [RelancesLicencesComponent, CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, SelectModule, InputNumberModule, ToastModule, TooltipModule, TranslateModule],
   providers: [MessageService],
   template: `
@@ -98,6 +99,9 @@ function exerciceParDefaut() {
         <span class="ae-date">{{ a.date_fin }}</span>
       </div>
     </div>
+
+    <!-- Échéances à 7 jours ou moins : relances automatiques J-7, J-3, J-1, J0. -->
+    <app-relances-licences />
 
     <!-- Demandes de renouvellement reçues — enregistrées même quand le
          courriel n'est pas parti : c'est ici qu'on ne les rate plus. -->

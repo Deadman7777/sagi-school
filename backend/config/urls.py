@@ -33,6 +33,8 @@ urlpatterns = [
     path('api/devis/', include('apps.prospects.urls_devis')),
     # Proformas, factures, avoirs et reçus de HADY GESMAN — même raison.
     path('api/facturation/', include('apps.prospects.urls_facturation')),
+    # Propositions commerciales et bibliothèque (brochures, catalogue).
+    path('api/commercial/', include('apps.prospects.urls_proposition')),
 ]
 
 if getattr(settings, 'FRONTEND_DIR', None):

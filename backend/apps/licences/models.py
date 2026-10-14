@@ -128,3 +128,34 @@ class DemandeRenouvellement(TimeStampedModel):
 
     def __str__(self):
         return f"Renouvellement {self.ecole_nom} — {self.created_at:%d/%m/%Y}"
+
+
+class RelanceLicence(TimeStampedModel):
+    """Une relance de fin de licence, envoyée (ou tentée) à un palier.
+
+    Paliers J-7, J-3, J-1 et J0 : jamais deux fois le même pour une même
+    échéance. L'échéance (`date_fin`) fait partie de la clé : après un
+    renouvellement, la date de fin change et un nouveau cycle de relances
+    recommence de lui-même.
+    """
+    PALIERS = (7, 3, 1, 0)
+
+    licence     = models.ForeignKey(Licence, on_delete=models.CASCADE, related_name='relances')
+    date_fin    = models.DateField()
+    palier      = models.PositiveSmallIntegerField()
+    canal       = models.CharField(max_length=20, default='EMAIL')
+    destinataires = models.CharField(max_length=500, blank=True)
+    sujet       = models.CharField(max_length=250, blank=True)
+    message     = models.TextField(blank=True)
+    succes      = models.BooleanField(default=False)
+    simulee     = models.BooleanField(default=False)
+    erreur      = models.TextField(blank=True)
+    declenchee_par = models.CharField(max_length=150, blank=True)   # vide : tâche planifiée
+
+    class Meta:
+        db_table = 'licences_relances'
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['licence', 'date_fin', 'palier'])]
+
+    def __str__(self):
+        return f'{self.licence} — J-{self.palier} ({self.date_fin})'

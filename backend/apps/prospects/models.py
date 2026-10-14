@@ -342,6 +342,20 @@ class ParametresFacturation(TimeStampedModel):
         blank=True, help_text='Banque, IBAN, numéros Wave / Orange Money…')
     conditions             = models.TextField(blank=True)
 
+    # ── Propositions commerciales et relances ────────────────────────────
+    # Le signataire des propositions, et l'image de son cachet + signature.
+    # L'image est DÉPOSÉE depuis l'écran, jamais livrée avec le logiciel : le
+    # dossier backend part chez chaque école installée en local, et le cachet
+    # de HADY GESMAN n'a rien à y faire.
+    signataire_nom      = models.CharField(max_length=150, blank=True, default='Mouhamed GUEYE')
+    signataire_fonction = models.CharField(
+        max_length=150, blank=True,
+        default='Fondateur et Directeur Général (Founder & CEO)')
+    cachet_signature    = models.TextField(blank=True)    # data URI image (PNG transparent)
+    # Relance automatique des licences qui arrivent à échéance (J-7, J-3,
+    # J-1, J0). Coupée ici, la tâche planifiée ne fait plus rien.
+    relances_auto       = models.BooleanField(default=True)
+
     class Meta:
         db_table = 'facturation_parametres'
         verbose_name = 'Paramètres de facturation'
@@ -618,3 +632,147 @@ class JustificatifFacturation(TimeStampedModel):
 
     def __str__(self):
         return f"{self.get_type_piece_display()} — {self.nom}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+#  Propositions commerciales et bibliothèque de documents
+# ═════════════════════════════════════════════════════════════════════════
+
+class DocumentBibliotheque(TimeStampedModel):
+    """Une brochure, le catalogue, une plaquette… joints aux propositions.
+
+    Déposés depuis l'écran plutôt que livrés avec le logiciel : une nouvelle
+    brochure ne doit demander ni nouvelle version ni redéploiement. Stockés en
+    base64 dans la base, comme les justificatifs : ils partent avec les
+    sauvegardes.
+    """
+    CATEGORIE_CHOICES = [
+        ('BROCHURE',  'Brochure'),
+        ('CATALOGUE', 'Catalogue des offres et tarifs'),
+        ('AUTRE',     'Autre document'),
+    ]
+
+    titre        = models.CharField(max_length=200)
+    categorie    = models.CharField(max_length=20, choices=CATEGORIE_CHOICES, default='BROCHURE')
+    description  = models.CharField(max_length=300, blank=True)
+    nom_fichier  = models.CharField(max_length=200)
+    mime_type    = models.CharField(max_length=100, default='application/pdf')
+    taille       = models.PositiveIntegerField(default=0)     # octets décodés
+    contenu      = models.TextField()                         # data URI base64
+    # Coché : proposé d'office en pièce jointe d'une proposition (et d'une
+    # relance de fin d'essai). Décochable proposition par proposition.
+    joindre_par_defaut = models.BooleanField(default=True)
+    actif        = models.BooleanField(default=True)
+    ordre        = models.PositiveIntegerField(default=0)
+    ajoute_par   = models.CharField(max_length=150, blank=True)
+
+    class Meta:
+        db_table = 'commercial_bibliotheque'
+        ordering = ['ordre', 'created_at']
+
+    def __str__(self):
+        return self.titre
+
+
+class PropositionCommerciale(TimeStampedModel):
+    """La proposition commerciale complète, sur le modèle de HG-IDM-2026.
+
+    Plus riche qu'un devis : contexte du client, besoins, les trois formules
+    (mensuelle, semestrielle, annuelle) chiffrées côte à côte, l'option de
+    migration, le paiement annuel en deux tranches, le calendrier et un bloc
+    d'acceptation que le client remplit dans le PDF.
+
+    Mêmes garde-fous que le devis :
+      - montants FIGÉS à l'établissement (une révision tarifaire ne réécrit
+        pas une proposition remise) ;
+      - coordonnées RECOPIÉES de la fiche prospect ;
+      - BROUILLON → VALIDEE → ENVOYEE : rien ne part sans relecture, et une
+        proposition validée ne se modifie plus (on en établit une autre).
+    """
+    STATUT_CHOICES = [
+        ('BROUILLON', 'Brouillon — à relire'),
+        ('VALIDEE',   'Validée — prête à envoyer'),
+        ('ENVOYEE',   'Envoyée au client'),
+        ('ACCEPTEE',  'Acceptée'),
+        ('REFUSEE',   'Refusée'),
+    ]
+    FORMULE_CHOICES = [
+        ('MENSUELLE',        'Mensuelle'),
+        ('SEMESTRIELLE',     'Semestrielle (6 mois)'),
+        ('ANNUELLE',         'Annuelle, en une fois'),
+        ('ANNUELLE_TRANCHES', 'Annuelle, en deux tranches'),
+    ]
+
+    prospect  = models.ForeignKey(Prospect, on_delete=models.SET_NULL, null=True,
+                                  related_name='propositions')
+    reference = models.CharField(max_length=40, unique=True)
+
+    # ── Le client, tel qu'il figure sur la proposition ───────────────────
+    etablissement   = models.CharField(max_length=200)
+    sous_titre      = models.CharField(max_length=250, blank=True)   # « Pour la mémorisation du Coran… »
+    adresse         = models.CharField(max_length=300, blank=True)
+    telephones      = models.CharField(max_length=200, blank=True)
+    email           = models.CharField(max_length=254, blank=True)
+    autres_contacts = models.CharField(max_length=200, blank=True)   # site, YouTube…
+    a_l_attention   = models.CharField(max_length=200, blank=True, default='La Direction')
+    contact_nom     = models.CharField(max_length=200, blank=True)   # pour le courriel et WhatsApp
+
+    # ── L'offre ──────────────────────────────────────────────────────────
+    type_licence = models.CharField(max_length=20)
+    programme    = models.CharField(max_length=150, blank=True)      # « Programme TAXAWU DAARA »
+    edition      = models.CharField(max_length=20, blank=True)       # « 2026–2027 »
+
+    prix_mensuel       = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    taux_semestriel    = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    taux_annuel        = models.DecimalField(max_digits=5, decimal_places=4, default=0)
+    frais_installation = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    frais_migration    = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    migration_proposee = models.BooleanField(default=True)
+
+    # ── Le texte personnalisé ────────────────────────────────────────────
+    contexte  = models.TextField(blank=True)
+    besoins   = models.JSONField(default=list, blank=True)
+    resultats = models.JSONField(default=list, blank=True)
+
+    date_emission  = models.DateField(default=date.today)
+    validite_jours = models.PositiveIntegerField(default=30)
+
+    # Pièces jointes au courriel, en plus de la proposition elle-même.
+    documents_joints = models.ManyToManyField(DocumentBibliotheque, blank=True,
+                                              related_name='propositions')
+
+    statut     = models.CharField(max_length=15, choices=STATUT_CHOICES,
+                                  default='BROUILLON', db_index=True)
+    etablie_par = models.CharField(max_length=150, blank=True)
+    validee_par = models.CharField(max_length=150, blank=True)
+    validee_le  = models.DateTimeField(null=True, blank=True)
+    envoyee_le  = models.DateTimeField(null=True, blank=True)
+    envoyee_a   = models.CharField(max_length=500, blank=True)
+    erreur_envoi = models.TextField(blank=True)
+    # La réponse du client : sa formule et son choix de migration.
+    formule_choisie   = models.CharField(max_length=20, choices=FORMULE_CHOICES, blank=True)
+    migration_choisie = models.BooleanField(null=True, blank=True)
+    repondue_le       = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'commercial_propositions'
+        ordering = ['-date_emission', '-created_at']
+
+    def __str__(self):
+        return f'{self.reference} — {self.etablissement}'
+
+    @property
+    def date_validite(self):
+        from datetime import timedelta
+        # « 30 jours à compter de la date d'émission » : émise le 14 octobre,
+        # valable jusqu'au 13 novembre (HG-IDM-2026).
+        return self.date_emission + timedelta(days=self.validite_jours)
+
+    @property
+    def expiree(self):
+        return (self.statut in ('BROUILLON', 'VALIDEE', 'ENVOYEE')
+                and self.date_validite < date.today())
+
+    @property
+    def modifiable(self):
+        return self.statut == 'BROUILLON'

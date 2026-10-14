@@ -20,6 +20,8 @@ import { Catalogue, Devis, PieceProspect, Prospect, ProspectsService, StatsProsp
 import { FacturationService } from '../../core/services/facturation.service';
 import { Router } from '@angular/router';
 import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component';
+import { PropositionsProspectComponent } from './propositions-prospect.component';
+import { BibliothequeCommercialeComponent } from './bibliotheque-commerciale.component';
 
 /**
  * Le fichier prospects de HADY GESMAN.
@@ -31,7 +33,8 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
  */
 @Component({
   selector: 'app-prospects',
-  imports: [BoutonImprimerComponent, CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
+  imports: [BoutonImprimerComponent, PropositionsProspectComponent, BibliothequeCommercialeComponent,
+            CommonModule, FormsModule, TableModule, ButtonModule, TagModule,
             DialogModule, InputTextModule, TextareaModule, SelectModule,
             DatePickerModule, ToastModule, TooltipModule, ConfirmDialogModule,
             TranslateModule],
@@ -45,9 +48,23 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
         <h2 class="page-title">🎯 {{ 'prospects.title' | translate }}</h2>
         <span class="page-sub">{{ 'prospects.subtitle' | translate }}</span>
       </div>
-      <p-button [label]="'prospects.nouveau' | translate" severity="success"
-                icon="pi pi-plus" (onClick)="ouvrirCreation()" />
+      <div class="entete-actions">
+        <p-button [label]="'commercial.propositions' | translate" icon="pi pi-file-edit"
+                  (onClick)="propositionsVisible.set(true)" />
+        <p-button [label]="'commercial.bibliotheque' | translate" icon="pi pi-folder-open"
+                  [outlined]="true" (onClick)="bibliothequeVisible.set(true)" />
+        <p-button [label]="'prospects.nouveau' | translate" severity="success"
+                  icon="pi pi-plus" (onClick)="ouvrirCreation()" />
+      </div>
     </div>
+    <app-bibliotheque-commerciale [(visible)]="bibliothequeVisible" />
+    <p-dialog [visible]="propositionsVisible()" (visibleChange)="propositionsVisible.set($event)"
+              [modal]="true" [style]="{width:'900px'}" [breakpoints]="{'940px':'96vw'}"
+              [header]="'commercial.propositions' | translate" [draggable]="false">
+      @if (propositionsVisible()) {
+        <app-propositions-prospect (modifie)="charger()" />
+      }
+    </p-dialog>
 
     @if (stats(); as s) {
     <div class="kpi-grid">
@@ -303,6 +320,9 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
                     size="small" [outlined]="true" (onClick)="ouvrirDevis()" />
         </div>
 
+        <!-- ── Proposition commerciale complète (modèle HG-IDM-2026) ── -->
+        <app-propositions-prospect [prospectId]="f.id" (modifie)="rechargerFiche()" />
+
         <!-- ── Facturation : où en sont l'argent et la prestation ──── -->
         @if (f.documents?.length) {
           <div class="separator sep-hist">{{ 'prospects.sec_facturation' | translate }}</div>
@@ -531,6 +551,7 @@ import { BoutonImprimerComponent } from '../../shared/bouton-imprimer.component'
     .source { font-size:11px; color:var(--text-3); }
     .source-sama { color:#a855f7; font-weight:600; }
 
+    .entete-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .fiche-entete { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
 
     /* Jamais de classe .grid ici : les marges négatives de PrimeFlex rognent
@@ -693,6 +714,17 @@ export class ProspectsComponent implements OnInit {
     this.filtreStatut = 'NOUVEAU';
     this.filtreARelancer = false;
     this.recherche = '';
+    this.charger();
+  }
+
+  bibliothequeVisible = signal(false);
+  propositionsVisible = signal(false);
+
+  /** Après une proposition : le statut et l'historique de la fiche ont bougé. */
+  rechargerFiche() {
+    const f = this.fiche();
+    if (!f) return;
+    this.service.fiche(f.id).subscribe({ next: x => { this.fiche.set(x); this.editStatut = x.statut; } });
     this.charger();
   }
 

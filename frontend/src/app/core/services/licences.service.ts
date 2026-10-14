@@ -17,6 +17,16 @@ export interface NouvelleEcole {
   code_etablissement: string;
 }
 
+export interface LigneRelance {
+  licence: string; ecole: string; type: string; date_fin: string; jours: number;
+  palier: number | null; a_envoyer: boolean; destinataires: string[]; telephone: string;
+  whatsapp: string;
+  relances: { palier: number; le: string; succes: boolean; simulee: boolean; erreur: string;
+              destinataires: string; par: string }[];
+}
+
+export interface RelancesLicences { lignes: LigneRelance[]; relances_auto: boolean; smtp: boolean; }
+
 @Injectable({ providedIn: 'root' })
 export class LicencesService {
   constructor(private api: ApiService) {}
@@ -37,6 +47,12 @@ export class LicencesService {
   /** Toutes les demandes reçues (super admin), y compris celles dont le courriel a échoué. */
   getDemandesRenouvellement() { return this.api.lire<any[]>('/licences/demandes-renouvellement/'); }
   traiterDemande(id: string)  { return this.api.post<any>(`/licences/demandes-renouvellement/${id}/traiter/`, {}); }
+
+  /** Échéances dans 7 jours ou moins : relances faites, à faire, lien WhatsApp. */
+  getRelances()              { return this.api.get<RelancesLicences>('/licences/relances/'); }
+  relancer(id: string)       { return this.api.post<{ succes: boolean; destinataires: string }>(`/licences/${id}/relancer/`, {}); }
+  /** Interrupteur des relances automatiques (réglage de facturation HADY GESMAN). */
+  activerRelances(actif: boolean) { return this.api.patch<any>('/facturation/parametres/', { relances_auto: actif }); }
 
   demanderRenouvellement(id: string, message: string) {
     return this.api.post<any>(`/licences/${id}/demander_renouvellement/`, { message });

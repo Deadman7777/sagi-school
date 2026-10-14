@@ -512,6 +512,23 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
         <div class="form-group"><label>{{ 'facturation.taux_acompte_defaut' | translate }}</label><input pInputText type="number" min="0" max="99" [(ngModel)]="params['taux_acompte_defaut']" /></div>
         <div class="form-group full"><label>{{ 'facturation.coordonnees_paiement' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['coordonnees_paiement']"></textarea></div>
         <div class="form-group full"><label>{{ 'facturation.conditions_generales' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['conditions']"></textarea></div>
+        <div class="separator">{{ 'commercial.sec_signataire' | translate }}</div>
+        <div class="form-group"><label>{{ 'commercial.signataire_nom' | translate }}</label><input pInputText [(ngModel)]="params['signataire_nom']" /></div>
+        <div class="form-group"><label>{{ 'commercial.signataire_fonction' | translate }}</label><input pInputText [(ngModel)]="params['signataire_fonction']" /></div>
+        <div class="form-group full">
+          <label>{{ 'commercial.cachet' | translate }}</label>
+          <div class="cachet-zone">
+            @if (cachetApercu()) { <img [src]="cachetApercu()" alt="" class="cachet-apercu" /> }
+            @else { <span class="aide">{{ 'commercial.cachet_absent' | translate }}</span> }
+            <input #champCachet type="file" accept="image/png,image/jpeg" hidden (change)="choisirCachet(champCachet)" />
+            <p-button [label]="'commercial.cachet_choisir' | translate" icon="pi pi-upload" size="small"
+                      [outlined]="true" (onClick)="champCachet.click()" />
+            @if (cachetApercu()) {
+              <p-button icon="pi pi-trash" size="small" [text]="true" severity="danger" (onClick)="retirerCachet()" />
+            }
+          </div>
+          <p class="aide">{{ 'commercial.cachet_aide' | translate }}</p>
+        </div>
       </div>
       <ng-template pTemplate="footer">
         <p-button [label]="'common.annuler' | translate" [text]="true" (onClick)="parametresVisible.set(false)" />
@@ -524,6 +541,8 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
            (change)="fichierChoisi($event)" />
   `,
   styles: [`
+    .cachet-zone { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .cachet-apercu { max-height:80px; max-width:200px; background:#fff; border:1px solid var(--surface-2); border-radius:6px; padding:4px; }
     .page-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
     .page-title { font-size:20px; font-weight:600; color:var(--text); margin:0; }
     .page-sub   { font-size:12px; color:var(--text-3); }
@@ -1063,9 +1082,37 @@ export class FacturationComponent implements OnInit {
   // ── Paramètres ───────────────────────────────────────────────────────
   ouvrirParametres() {
     this.service.parametres().subscribe({
-      next: p => { this.params = { ...p }; this.parametresVisible.set(true); },
+      next: p => {
+        this.params = { ...p };
+        this.cachetApercu.set(p['cachet_signature'] || '');
+        this.parametresVisible.set(true);
+      },
       error: err => this.erreur(err),
     });
+  }
+
+  /** Image du cachet + signature apposée sur les propositions commerciales. */
+  cachetApercu = signal('');
+
+  choisirCachet(champ: HTMLInputElement) {
+    const fichier = champ.files?.[0];
+    champ.value = '';
+    if (!fichier) return;
+    if (fichier.size > 1024 * 1024) {
+      this.erreur({ error: { error: this.translate.instant('commercial.cachet_trop_lourd') } });
+      return;
+    }
+    const lecteur = new FileReader();
+    lecteur.onload = () => {
+      this.params['cachet_signature'] = String(lecteur.result);
+      this.cachetApercu.set(String(lecteur.result));
+    };
+    lecteur.readAsDataURL(fichier);
+  }
+
+  retirerCachet() {
+    this.params['cachet_signature'] = '';
+    this.cachetApercu.set('');
   }
 
   enregistrerParametres() {

@@ -56,6 +56,58 @@ MOYENS_PAIEMENT = ('Virement bancaire', 'Chèque', 'Wave', 'Orange Money',
 REFERENCE_CATALOGUE = 'HG-COM-006-V01'
 
 
+# Brochure 2026-2027 « Remises de prépaiement » : 8 % pour un paiement de six
+# mois. Le forfait de déploiement (installation + paramétrage + formation) est
+# de 100 000 F quelle que soit la licence ; la migration des données part de
+# 50 000 F (« à partir de » : un plancher, que la proposition peut relever).
+REMISE_SEMESTRIELLE_DEFAUT = '0.08'
+FRAIS_INSTALLATION = Decimal('100000')
+FRAIS_MIGRATION_MIN = Decimal('50000')
+
+
+def remise_semestrielle():
+    """La part remisée sur un paiement de six mois (brochure 2026-2027)."""
+    return Decimal(str(getattr(settings, 'REMISE_SEMESTRIELLE', REMISE_SEMESTRIELLE_DEFAUT)))
+
+
+def formules(prix_mensuel, taux_semestriel, taux_annuel, installation, migration):
+    """Les trois formules d'une proposition commerciale, chiffrées côte à côte.
+
+    Mêmes règles que la proposition HG-IDM-2026 : les remises portent sur la
+    LICENCE seule ; le forfait d'installation est dû une fois quelle que soit
+    la formule ; la migration est une option, hors des totaux de base.
+    Tout en francs entiers.
+    """
+    D = lambda x: Decimal(str(x or 0))
+    p, ts, ta = D(prix_mensuel), D(taux_semestriel), D(taux_annuel)
+    inst, migr = D(installation), D(migration)
+    un = Decimal('1')
+
+    brut_s, brut_a = p * 6, p * 12
+    remise_s = (brut_s * ts).quantize(un)
+    remise_a = (brut_a * ta).quantize(un)
+    net_s, net_a = brut_s - remise_s, brut_a - remise_a
+    total_m, total_s, total_a = p + inst, net_s + inst, net_a + inst
+    tranche_1 = (total_a / 2).quantize(un)
+
+    sur_12 = {'MENSUELLE': p * 12 + inst, 'SEMESTRIELLE': net_s * 2 + inst,
+              'ANNUELLE': net_a + inst}
+    i = lambda x: int(x)
+    return {
+        'prix_mensuel': i(p), 'installation': i(inst), 'migration': i(migr),
+        'taux_semestriel': float(ts), 'taux_annuel': float(ta),
+        'mensuelle':    {'licence': i(p), 'remise': 0, 'net': i(p), 'equivalent': i(p),
+                         'total': i(total_m)},
+        'semestrielle': {'licence': i(brut_s), 'remise': i(remise_s), 'net': i(net_s),
+                         'equivalent': i((net_s / 6).quantize(un)), 'total': i(total_s)},
+        'annuelle':     {'licence': i(brut_a), 'remise': i(remise_a), 'net': i(net_a),
+                         'equivalent': i((net_a / 12).quantize(un)), 'total': i(total_a)},
+        'tranches': [i(tranche_1), i(total_a - tranche_1)],
+        'sur_12_mois': [{'formule': f, 'sans_migration': i(v), 'avec_migration': i(v + migr),
+                         'economie': i(sur_12['MENSUELLE'] - v)} for f, v in sur_12.items()],
+    }
+
+
 def remise_annuelle():
     """La part remisée sur un paiement annuel. Voir l'en-tête du module."""
     return Decimal(str(getattr(settings, 'REMISE_ANNUELLE', '0.10')))

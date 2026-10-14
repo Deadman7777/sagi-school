@@ -109,7 +109,8 @@ def _document_dict(d, complet=False):
 class ParametresFacturationView(APIView):
     permission_classes = [IsSuperAdmin]
     CHAMPS = ('raison_sociale', 'forme_juridique', 'adresse', 'ville', 'telephone', 'email',
-              'site_web', 'ninea', 'rccm', 'mention_sans_tva', 'coordonnees_paiement', 'conditions')
+              'site_web', 'ninea', 'rccm', 'mention_sans_tva', 'coordonnees_paiement', 'conditions',
+              'signataire_nom', 'signataire_fonction')
 
     def _dict(self, p):
         d = {c: getattr(p, c) for c in self.CHAMPS}
@@ -117,6 +118,8 @@ class ParametresFacturationView(APIView):
                   'delai_paiement_jours': p.delai_paiement_jours,
                   'validite_proforma_jours': p.validite_proforma_jours,
                   'taux_acompte_defaut': float(p.taux_acompte_defaut),
+                  'relances_auto': p.relances_auto,
+                  'cachet_signature': p.cachet_signature,
                   'types_justificatif': [{'value': c, 'label': l}
                                          for c, l in JustificatifFacturation.TYPE_CHOICES],
                   'modes': [{'value': c, 'label': l} for c, l in MODES_ENCAISSEMENT]})
@@ -132,6 +135,20 @@ class ParametresFacturationView(APIView):
                 setattr(p, champ, str(request.data[champ] or '').strip()[:2000])
         if 'tva_applicable' in request.data:
             p.tva_applicable = bool(request.data['tva_applicable'])
+        if 'relances_auto' in request.data:
+            p.relances_auto = bool(request.data['relances_auto'])
+        if 'cachet_signature' in request.data:
+            # Cachet + signature des propositions : une image PNG ou JPEG, ou
+            # rien (vide = on le retire).
+            from .messagerie import decoder_data_uri
+            image = request.data['cachet_signature'] or ''
+            if image:
+                decode = decoder_data_uri(image)
+                if not decode or decode[0] not in ('image/png', 'image/jpeg'):
+                    return _erreur('Le cachet doit être une image PNG ou JPEG.')
+                if len(decode[1]) > 1024 * 1024:
+                    return _erreur('Image du cachet trop lourde (1 Mo au plus).')
+            p.cachet_signature = image
         try:
             if 'taux_tva' in request.data:
                 taux = float(request.data['taux_tva'])

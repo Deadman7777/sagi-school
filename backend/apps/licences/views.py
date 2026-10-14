@@ -152,6 +152,25 @@ class LicenceViewSet(viewsets.ModelViewSet):
         d.save(update_fields=['traitee', 'traitee_le', 'updated_at'])
         return Response({'traitee': True})
 
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
+    def relances(self, request):
+        """Échéances dans 7 jours ou moins (et expirées en sursis), relances faites."""
+        from apps.prospects.models import ParametresFacturation
+        from apps.prospects.messagerie import smtp_configure
+        from .relances import tableau
+        return Response({'lignes': tableau(),
+                         'relances_auto': ParametresFacturation.actuels().relances_auto,
+                         'smtp': smtp_configure()})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
+    def relancer(self, request, pk=None):
+        """Envoie tout de suite la relance du palier courant (même déjà faite)."""
+        from .relances import relancer
+        r = relancer(self.get_object(), auteur=str(request.user))
+        if not r.succes:
+            return Response({'error': r.erreur}, status=400)
+        return Response({'succes': True, 'destinataires': r.destinataires})
+
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def suspendre(self, request, pk=None):
         licence = self.get_object()
