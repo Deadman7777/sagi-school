@@ -30,6 +30,8 @@ export interface Eleve {
   // Matricule d'avant le rebasage au format promo — les carnets papier de
   // l'école restent exploitables.
   matricule_ancien: string;
+  /** Ligne de la liste allégée (?leger=1) : relire la fiche avant de l'ouvrir. */
+  fiche_partielle?: boolean;
   // Entrée dans l'établissement, figée à vie et recopiée à chaque
   // réinscription (date_inscription, elle, est repositionnée chaque année).
   annee_entree: string;

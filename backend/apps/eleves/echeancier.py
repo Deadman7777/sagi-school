@@ -334,7 +334,7 @@ def services_payes_par_mois(eleve, paiements):
 def _services(eleve):
     """(montant mensuel, [(mois|None, montant)] pour les services uniques)."""
     mensuel, uniques = 0.0, []
-    for ab in eleve.abonnements.all():
+    for ab in eleve._abonnements():
         s = ab.service
         if s.periodicite == 'MENSUEL':
             mensuel += ab.prix

@@ -13,6 +13,7 @@ pour 3 élèves que pour 12.
 import datetime
 
 from django.db import connection
+from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
@@ -102,3 +103,73 @@ class AlleguementsTest(NombreDeRequetesTest):
         self.assertEqual(resume['synthese'], complet['synthese'])
         self.assertEqual(resume['scolarite'], {'totaux': complet['scolarite']['totaux']})
         self.assertEqual(resume['charges'], {'totaux': complet['charges']['totaux']})
+
+
+class ListeEntiereTest(NombreDeRequetesTest):
+    """14/10/2026 : la liste s'arrêtait à la première page de 500 élèves ;
+    l'écran ne demande jamais la suivante, les autres étaient introuvables."""
+
+    @override_settings(REST_FRAMEWORK={
+        'DEFAULT_AUTHENTICATION_CLASSES': (
+            'rest_framework_simplejwt.authentication.JWTAuthentication',),
+        'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+        'PAGE_SIZE': 2})
+    def test_toute_l_ecole_au_dela_d_une_page(self):
+        self._ajouter(5)
+        r = self.client.get('/api/eleves/liste/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(r.data['count'], 5)
+        self.assertEqual(len(r.data['results']), 5)
+        self.assertIsNone(r.data['next'])
+
+
+class ListeLegereTest(NombreDeRequetesTest):
+    """14/10/2026 : la ligne du tableau Élèves (?leger=1) ne porte que ce que
+    l'écran affiche — mêmes valeurs que la fiche, un tiers du poids."""
+
+    def test_memes_valeurs_que_la_liste_complete(self):
+        self._ajouter(4)
+        complet = {e['id']: e for e in self.client.get('/api/eleves/liste/').data['results']}
+        r = self.client.get('/api/eleves/liste/', {'leger': '1'})
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        self.assertEqual(len(r.data['results']), 4)
+        for ligne in r.data['results']:
+            self.assertTrue(ligne.pop('fiche_partielle'))
+            for champ, valeur in ligne.items():
+                self.assertEqual(valeur, complet[ligne['id']][champ], champ)
+            self.assertNotIn('mois_calendrier', ligne)
+
+    def test_beaucoup_plus_leger(self):
+        self._ajouter(4)
+        complet = len(self.client.get('/api/eleves/liste/').content)
+        leger = len(self.client.get('/api/eleves/liste/', {'leger': '1'}).content)
+        self.assertLess(leger * 2, complet)
+
+    def test_requetes_constantes(self):
+        self._constant('/api/eleves/liste/?leger=1')
+
+    def test_la_fiche_reste_complete(self):
+        self._ajouter(1)
+        e = Eleve.objects.get(tenant=self.tenant)
+        fiche = self.client.get(f'/api/eleves/liste/{e.id}/', {'leger': '1'}).data
+        self.assertIn('mois_calendrier', fiche)
+        self.assertNotIn('fiche_partielle', fiche)
+
+
+class MemoSerialisationTest(NombreDeRequetesTest):
+    """14/10/2026 : le dû des mois est mémorisé le temps d'UNE sérialisation
+    (total_attendu et l'échéancier le lisaient chacun). Hors de là, rien ne
+    doit rester figé."""
+
+    def test_le_memo_ne_survit_pas_a_la_serialisation(self):
+        from apps.eleves.serializers import EleveSerializer
+        self._ajouter(1)
+        e = Eleve.objects.get(tenant=self.tenant)
+        EleveSerializer(e).data
+        self.assertFalse(hasattr(e, '_memo_calculs'))
+        # Un tarif changé ensuite se voit aussitôt sur la même instance.
+        avant = e.total_attendu
+        self.section.frais_mensualite = 15000
+        self.section.save()
+        e.section = self.section
+        self.assertGreater(e.total_attendu, avant)

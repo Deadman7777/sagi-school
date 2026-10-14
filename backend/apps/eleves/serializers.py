@@ -281,12 +281,17 @@ class EleveSerializer(TenantModelSerializer):
         # (reste, part famille, part organisme…) : calculé une fois par élève,
         # pas cinq. 300 élèves : 470 → ~200 ms (08/10/2026). La copie est
         # jetée aussitôt, pour qu'aucune relecture ultérieure ne la voie.
+        # Le dû de chaque mois est mémorisé le temps de cette sérialisation :
+        # total_attendu et l'échéancier du niveau d'alerte le lisent tous deux
+        # (voir Eleve._memo). Jeté avec le reste à la sortie.
+        instance._memo_calculs = {}
         instance._total_attendu_cache = None
         instance._total_attendu_cache = instance.total_attendu
         try:
             data = super().to_representation(instance)
         finally:
             del instance._total_attendu_cache
+            del instance._memo_calculs
         # La liste des élèves n'envoie pas les photos (des centaines de Ko par
         # page) : seulement l'indication qu'il y en a une. La fiche détaillée
         # (retrieve) et l'enregistrement les renvoient.
@@ -616,6 +621,39 @@ def services_deja_suivis(eleve):
             continue
         suivis |= {str(ab.service_id) for ab in fiche.abonnements.all()}
     return suivis
+
+
+class EleveListeSerializer(EleveSerializer):
+    """La ligne du tableau Élèves (?leger=1) : ce que l'écran affiche, filtre
+    et trie, rien d'autre.
+
+    La fiche complète faisait 3 Ko par élève — 4 Mo pour 1 400 —, dont le
+    calendrier des mois et le détail des abonnements que seule la fiche
+    ouverte lit. L'écran recharge la fiche entière avant toute action
+    (14/10/2026). Mêmes champs, mêmes calculs que EleveSerializer : on retire
+    des colonnes, on ne recalcule rien à part.
+    """
+
+    CHAMPS = (
+        'id', 'numero', 'matricule', 'matricule_ancien', 'nom_complet', 'nom_tri',
+        'section', 'section_nom', 'classe', 'classe_nom', 'genre', 'statut',
+        'date_inscription',
+        'total_attendu', 'total_paye', 'reste_a_payer', 'reste_a_payer_global',
+        'reliquat_restant', 'reliquat_origine_libelle', 'niveau_alerte',
+        # Onglet Prise en charge.
+        'prise_en_charge', 'type_pec', 'pec_inscription', 'pec_mensualite',
+        'montant_pec_annuel', 'montant_pec_mensualite_mensuel',
+    )
+
+    def get_fields(self):
+        champs = super().get_fields()
+        return {nom: champs[nom] for nom in self.CHAMPS}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # L'écran sait qu'il doit recharger la fiche avant de l'ouvrir.
+        data['fiche_partielle'] = True
+        return data
 
 
 class SectionSerializer(TenantModelSerializer):

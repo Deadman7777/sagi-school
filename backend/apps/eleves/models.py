@@ -596,11 +596,17 @@ class Eleve(TenantModel):
             return 0.0
         return round(max(self.mensualite_brute_du_mois(None) - self.pec_du_mois(None), 0.0), 2)
 
+    def _abonnements(self):
+        """Les abonnements de la fiche. Pendant une sérialisation, la liste est
+        lue une fois (voir _memo) : chaque `.all()` recréait un QuerySet, et le
+        dû mensuel le demande pour chacun des douze mois."""
+        return self._memo('abonnements', lambda: list(self.abonnements.all()))
+
     def abonnements_mensuels_du_mois(self, mois):
         """Abonnements MENSUELS dus le mois `mois` (mois où l'enfant utilise
         le service). Seule source du dû mensuel des services : total annuel,
         échéancier, guichet et proformas la lisent toutes."""
-        return [ab for ab in self.abonnements.all()
+        return [ab for ab in self._abonnements()
                 if ab.service.periodicite == 'MENSUEL' and ab.suivi_le_mois(mois)]
 
     def services_mensuels_du_mois(self, mois):
@@ -616,7 +622,7 @@ class Eleve(TenantModel):
         from .echeancier import mois_de_base
         mois = mois_de_base(self)
         total = 0.0
-        for ab in self.abonnements.all():
+        for ab in self._abonnements():
             if ab.service.periodicite == 'MENSUEL':
                 total += ab.prix * sum(1 for m in mois if ab.suivi_le_mois(m))
             else:
@@ -630,7 +636,7 @@ class Eleve(TenantModel):
         kimono) n'est dû que si l'enfant n'avait pas suivi ce service une année
         précédente (`EleveService.premiere_adhesion`)."""
         dus = []
-        for ab in self.abonnements.all():
+        for ab in self._abonnements():
             s = ab.service
             for el in s.composition_adhesion or []:
                 if el.get('premiere_fois') and not ab.premiere_adhesion:
@@ -650,7 +656,7 @@ class Eleve(TenantModel):
         exigence d'un service choisi (« premier mois payé d'avance »)."""
         if getattr(self.tenant, 'premier_mois_a_inscription', False):
             return True
-        return any(ab.service.premier_mois_a_inscription for ab in self.abonnements.all())
+        return any(ab.service.premier_mois_a_inscription for ab in self._abonnements())
 
     # ── Montants attendus / payés ─────────────────────────────────────────
     @property
@@ -684,15 +690,18 @@ class Eleve(TenantModel):
 
         Les frais d'entrée sont l'inscription pour un nouvel élève, le
         renouvellement pour un ancien quand l'école en pratique un."""
+        return self._memo('du_hors_mensualite', self._calculer_du_hors_mensualite)
+
+    def _calculer_du_hors_mensualite(self):
         adhesions = sum(a['montant'] for a in self.adhesions_services())
         if not self.section:
             return round(sum(ab.prix
-                             for ab in self.abonnements.all()
+                             for ab in self._abonnements()
                              if ab.service.periodicite != 'MENSUEL') + adhesions, 2)
         total = max(self.frais_entree - self.montant_pec_inscription, 0.0)
         total += float(self.section.frais_uniforme)
         total += float(self.section.frais_fournitures)
-        total += sum(ab.prix for ab in self.abonnements.all()
+        total += sum(ab.prix for ab in self._abonnements()
                      if ab.service.periodicite != 'MENSUEL')
         total += adhesions
         return round(total, 2)
@@ -700,7 +709,7 @@ class Eleve(TenantModel):
     @property
     def du_mensuel_standard(self):
         """Ce que coûte un mois ordinaire : mensualité nette + services mensuels."""
-        mensuel = sum(ab.prix for ab in self.abonnements.all()
+        mensuel = sum(ab.prix for ab in self._abonnements()
                       if ab.service.periodicite == 'MENSUEL')
         return round(self.frais_mensualite_effectif + mensuel, 2)
 
@@ -736,12 +745,32 @@ class Eleve(TenantModel):
         from .echeancier import mois_de_base
         return int(mois) in mois_de_base(self)
 
+    def _memo(self, cle, calcul):
+        """Résultat gardé le temps d'UNE sérialisation, sinon recalculé.
+
+        total_attendu puis l'échéancier (niveau d'alerte) lisent chacun le dû
+        des douze mois : sans mémo, chaque mois était calculé deux fois — la
+        moitié du temps de la liste élèves (14/10/2026). Le dictionnaire
+        `_memo_calculs` n'existe que pendant EleveSerializer.to_representation,
+        qui le pose et le jette : ailleurs (fiche modifiée puis relue, guichet),
+        tout est recalculé comme avant. Un seul calcul, fait une fois.
+        """
+        memo = getattr(self, '_memo_calculs', None)
+        if memo is None:
+            return calcul()
+        if cle not in memo:
+            memo[cle] = calcul()
+        return memo[cle]
+
     def du_du_mois(self, mois):
         """Dû d'un mois : la scolarité de ce mois, plus ses suppléments — jours de
         garderie (enfant facturé à la journée) et soirs de garde tardive. Les
         suppléments sont dus même dans un mois hors calendrier ; la scolarité non."""
-        from .garde_soir import du_garde_soir_du_mois
         mois = int(mois)
+        return self._memo(('du_du_mois', mois), lambda: self._calculer_du_du_mois(mois))
+
+    def _calculer_du_du_mois(self, mois):
+        from .garde_soir import du_garde_soir_du_mois
         supplements = du_garde_soir_du_mois(self, mois)
         if self.a_la_journee:
             from .garderie import du_presences_du_mois

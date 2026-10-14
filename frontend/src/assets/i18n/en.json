@@ -381,6 +381,8 @@
     "tri_section": "By section",
     "tri_classe": "By class",
     "tri_matricule": "By registration number only",
+    "mise_a_jour": "updating…",
+    "fiche_chargement": "Could not load the student record.",
     "certificat_titre": "School certificate",
     "certificat_word": "School's Word template",
     "certificat_pdf": "Standard certificate (PDF)",

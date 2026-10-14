@@ -97,6 +97,11 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
       <div>
         <h2 class="page-title">{{ 'eleves.title' | translate }}</h2>
         <span class="page-sub">{{ eleves().length }} élèves</span>
+        <span class="maj-liste" aria-live="polite">
+          @if (actualisation()) {
+            <i class="pi pi-spin pi-sync" aria-hidden="true"></i> {{ 'eleves.mise_a_jour' | translate }}
+          }
+        </span>
       </div>
       <div class="entete-actions">
         <!-- Ligne 1 : les vues du module. Un groupe, pour qu'on voie d'un coup
@@ -2263,6 +2268,7 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                  text-transform:uppercase; letter-spacing:.4px; }
     .page-title  { font-size:20px; font-weight:600; color:var(--text); margin:0 0 4px; }
     .page-sub    { font-size:12px; color:var(--text-3); }
+    .maj-liste   { margin-left:8px; font-size:12px; color:var(--text-2); }
 
     .kpi-row { display:flex; gap:10px; flex-wrap:wrap; }
     .kpi-mini { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px;
@@ -2573,6 +2579,8 @@ export class ElevesListeComponent implements OnInit {
   classes       = signal<any[]>([]);
   statsPEC      = signal<PriseEnChargeStats | null>(null);
   loading       = signal(true);
+  /** Liste du passage précédent affichée, la fraîche est en route. */
+  actualisation = signal(false);
   saving        = signal(false);
   exportant     = signal(false);
   exportantFiche = signal(false);
@@ -2870,15 +2878,22 @@ export class ElevesListeComponent implements OnInit {
   /** Historique de l'élève en cours d'édition (plus d'une ligne : la formule
    *  ne se change plus sur la fiche, mais par un changement daté). */
   historiqueFormule() {
-    const e = this.eleves().find(x => x.id === this.editId);
-    return e?.formules_historique || [];
+    // La fiche ouverte en édition, pas la ligne de la liste : celle-ci ne
+    // porte que les colonnes du tableau (?leger=1).
+    return this.editId && this.eleveEdite?.id === this.editId
+      ? this.eleveEdite.formules_historique || [] : [];
   }
+  private eleveEdite: Eleve | null = null;
 
   dialogFormuleVisible = false;
   eleveFormule: Eleve | null = null;
   formFormule: { formule: string | null; mois_debut: number | null } = { formule: null, mois_debut: null };
 
   ouvrirChangementFormule(eleve: Eleve) {
+    this.avecFiche(eleve, e => this.ouvrirChangementFormuleComplet(e));
+  }
+
+  private ouvrirChangementFormuleComplet(eleve: Eleve) {
     this.eleveFormule = eleve;
     this.formFormule = { formule: null, mois_debut: new Date().getMonth() + 1 };
     this.dialogFormuleVisible = true;
@@ -2921,6 +2936,10 @@ export class ElevesListeComponent implements OnInit {
   }
 
   ouvrirServices(eleve: Eleve) {
+    this.avecFiche(eleve, e => this.ouvrirServicesComplet(e));
+  }
+
+  private ouvrirServicesComplet(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.formServices = [...(eleve.abonnements || [])];
     this.premieresAdhesions = Object.fromEntries(
@@ -3188,17 +3207,43 @@ export class ElevesListeComponent implements OnInit {
     this.chargerEleves();
   }
 
+  /** La liste ne porte que les colonnes du tableau (?leger=1, 3 fois plus
+   *  légère) : avant d'ouvrir une fiche ou un formulaire, on relit l'élève
+   *  complet au serveur. Une fiche déjà complète passe directement. */
+  private avecFiche(eleve: Eleve, suite: (complet: Eleve) => void) {
+    if (!eleve.fiche_partielle) { suite(eleve); return; }
+    this.elevesService.getEleve(eleve.id).subscribe({
+      next: complet => { suite(complet); this.cdr.markForCheck(); },
+      error: () => this.msg.add({ severity: 'error', summary: this.translate.instant('common.erreur'),
+                                  detail: this.translate.instant('eleves.fiche_chargement') }),
+    });
+  }
+
   chargerEleves() {
-    this.loading.set(true);
-    const params = this.exerciceSel ? { exercice: this.exerciceSel } : undefined;
+    const params: Record<string, string> = { leger: '1' };
+    if (this.exerciceSel) params['exercice'] = this.exerciceSel;
+    // La liste du passage précédent s'affiche tout de suite ; la vraie la
+    // remplace dès qu'elle arrive (« mise à jour… » pendant ce temps).
+    const enMemoire = this.elevesService.listeEnMemoire(params);
+    if (enMemoire) {
+      this.eleves.set(enMemoire);
+      this.filtrer();
+      this.actualisation.set(true);
+    } else {
+      this.loading.set(true);
+    }
     this.elevesService.getEleves(params).subscribe({
       next: res => {
         const data = Array.isArray(res) ? res : ((res as any).results || []);
         this.eleves.set(data);
-        this.elevesFiltres.set(this.trier(data));
+        // filtrer() et non trier() : une recherche tapée pendant la mise à
+        // jour doit rester appliquée.
+        this.filtrer();
+        this.elevesService.memoriserListe(params, data);
         this.loading.set(false);
+        this.actualisation.set(false);
       },
-      error: () => this.loading.set(false)
+      error: () => { this.loading.set(false); this.actualisation.set(false); }
     });
   }
 
@@ -3670,6 +3715,10 @@ export class ElevesListeComponent implements OnInit {
   }
 
   voirFiche(eleve: Eleve) {
+    this.avecFiche(eleve, e => this.voirFicheComplet(e));
+  }
+
+  private voirFicheComplet(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     this.dialogFicheVisible = true;
     this.chargerEcheancier(eleve.id);
@@ -3988,6 +4037,10 @@ export class ElevesListeComponent implements OnInit {
   organismesActifs = signal<Organisme[]>([]);
 
   ouvrirPriseEnCharge(eleve: Eleve) {
+    this.avecFiche(eleve, e => this.ouvrirPriseEnChargeComplet(e));
+  }
+
+  private ouvrirPriseEnChargeComplet(eleve: Eleve) {
     this.eleveSelectionne.set(eleve);
     const saisis = eleve.mois_dus || [];
     // Le formulaire est reconstruit AVANT les appels réseau : l'inverse
@@ -4207,7 +4260,11 @@ export class ElevesListeComponent implements OnInit {
   }
 
   ouvrirModifier(eleve: Eleve | null) {
-    if (!eleve) return;
+    if (eleve) this.avecFiche(eleve, e => this.ouvrirModifierComplet(e));
+  }
+
+  private ouvrirModifierComplet(eleve: Eleve) {
+    this.eleveEdite = eleve;
     this.editId = eleve.id;
     this.calendrierEdition = eleve.mois_calendrier || [];
     // Réponses aux champs de l'école : copiées pour l'édition.

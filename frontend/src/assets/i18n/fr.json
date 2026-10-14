@@ -381,6 +381,8 @@
     "tri_section": "Par section",
     "tri_classe": "Par classe",
     "tri_matricule": "Par matricule seul",
+    "mise_a_jour": "mise à jour…",
+    "fiche_chargement": "Impossible de charger la fiche de l'élève.",
     "certificat_titre": "Certificat de scolarité",
     "certificat_word": "Modèle Word de l'établissement",
     "certificat_pdf": "Certificat standard (PDF)",

@@ -1,6 +1,7 @@
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Prefetch, Value, DecimalField, F, Q
@@ -14,7 +15,8 @@ from .parcours import STATUTS_SORTIE
 from .echeancier import parts_services, partager_reste_mois as _partage_reste
 from .tri import cle_nom
 from apps.paiements.models import Exercice, Paiement
-from .serializers import (BaremeFratrieSerializer, ChampFicheSerializer, EleveSerializer,
+from .serializers import (BaremeFratrieSerializer, ChampFicheSerializer, EleveListeSerializer,
+                          EleveSerializer,
                           FamilleSerializer,
                           FormuleSectionSerializer, OrganismeSerializer,
                           PriseEnChargeOrganismeSerializer, SectionSerializer,
@@ -493,12 +495,33 @@ class PriseEnChargeOrganismeViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+class ListeEntiere(PageNumberPagination):
+    """Toute l'école sur une seule page.
+
+    L'écran Élèves charge la liste une fois puis cherche, filtre et trie dans
+    le navigateur ; il ne demande jamais de page suivante. Avec les pages de
+    500 du réglage général, une école de 1 400 élèves n'en voyait que 500 —
+    les autres étaient introuvables, même par la recherche (14/10/2026).
+    La forme de la réponse ({count, results}) reste celle des autres listes.
+    """
+    page_size = 100_000
+
+
 class EleveViewSet(viewsets.ModelViewSet):
     serializer_class   = EleveSerializer
+    pagination_class   = ListeEntiere
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
     search_fields      = ['nom_complet', 'telephone_pere', 'telephone_mere']
     ordering_fields    = ['nom_complet', 'date_inscription', 'numero']
+
+    def get_serializer_class(self):
+        # ?leger=1 : la ligne du tableau Élèves seulement (voir
+        # EleveListeSerializer). Les autres écrans gardent la fiche entière.
+        if (self.action == 'list'
+                and self.request.query_params.get('leger') in ('1', 'true', 'True')):
+            return EleveListeSerializer
+        return EleveSerializer
 
     def get_queryset(self):
         tenant = get_tenant(self.request)
@@ -511,9 +534,13 @@ class EleveViewSet(viewsets.ModelViewSet):
         # — 333 pour 110 élèves, des milliers pour une école de 900.
         from .echeancier import precharger
         actif = Q(paiements__statut='ACTIF')
+        # Pas de prefetch_related('paiements') en plus : precharger() charge
+        # déjà les paiements actifs, allégés. La copie complète (tous les
+        # champs, annulés compris) n'était lue par rien et coûtait 250 ms
+        # pour 500 élèves (14/10/2026).
         qs = precharger(Eleve.objects.filter(tenant=tenant)).select_related(
             'reliquat_exercice_origine',
-        ).prefetch_related('paiements').annotate(
+        ).annotate(
             # Les paiements annulés ne comptent pas dans le payé.
             total_paye_sql=Coalesce(
                 Sum('paiements__montant_inscription', filter=actif) +

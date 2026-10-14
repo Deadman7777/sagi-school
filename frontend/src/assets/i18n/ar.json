@@ -381,6 +381,8 @@
     "tri_section": "حسب القسم",
     "tri_classe": "حسب الفصل",
     "tri_matricule": "حسب رقم التسجيل فقط",
+    "mise_a_jour": "جارٍ التحديث…",
+    "fiche_chargement": "تعذّر تحميل بطاقة التلميذ.",
     "certificat_titre": "شهادة مدرسية",
     "certificat_word": "نموذج Word الخاص بالمؤسسة",
     "certificat_pdf": "الشهادة العادية (PDF)",

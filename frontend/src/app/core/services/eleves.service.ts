@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, effect, inject } from '@angular/core';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { AuthService } from './auth.service';
 import { Eleve, Section, Service, PaginatedResponse, PriseEnChargeStats,
          LigneImpayeAnterieur, ResumeImpayesAnterieurs,
          ParcoursEleve, AncienEleve, Echeancier, Organisme, Bourse,
@@ -44,10 +45,38 @@ export interface RapportImport {
 
 @Injectable({ providedIn: 'root' })
 export class ElevesService {
-  constructor(private api: ApiService) {}
+  private auth = inject(AuthService);
+
+  constructor(private api: ApiService) {
+    // Déconnexion : la liste gardée en mémoire part avec la session.
+    effect(() => { if (!this.auth.currentUser()) this.derniereListe = null; });
+  }
 
   getEleves(params?: Record<string, string>) {
-    return this.api.get<PaginatedResponse<Eleve>>('/eleves/liste', { limit: '500', ...params });
+    // Toute l'école en une réponse : le serveur ne coupe plus en pages de 500.
+    return this.api.get<PaginatedResponse<Eleve>>('/eleves/liste', params);
+  }
+
+  // ── Dernière liste de l'écran Élèves ──────────────────────────────────
+  // Revenir dans le module affiche aussitôt la liste du passage précédent,
+  // pendant que la vraie se recharge (14/10/2026 : « tu cliques, tu vois »).
+  // En MÉMOIRE seulement : rien n'est écrit sur le disque d'un poste partagé,
+  // et la clé porte l'utilisateur et l'école — un super admin qui change
+  // d'école ne voit jamais la liste de la précédente.
+  private derniereListe: { cle: string; eleves: Eleve[] } | null = null;
+
+  private cleListe(params: Record<string, string>): string {
+    return [this.auth.currentUser()?.id ?? '', this.auth.effectiveTenantId ?? '',
+            JSON.stringify(params)].join('|');
+  }
+
+  listeEnMemoire(params: Record<string, string>): Eleve[] | null {
+    const d = this.derniereListe;
+    return d && d.cle === this.cleListe(params) ? d.eleves : null;
+  }
+
+  memoriserListe(params: Record<string, string>, eleves: Eleve[]) {
+    this.derniereListe = { cle: this.cleListe(params), eleves };
   }
 
   // Liste des exercices (actif + clôturés) pour consulter une année passée.
