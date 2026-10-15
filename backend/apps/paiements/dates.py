@@ -12,6 +12,10 @@ n'appartient plus à cette année.
 doit pas apparaître « en septembre » dans le suivi d'une année qui commence en
 octobre : ce mois n'existe pas dans son calendrier, et la somme deviendrait
 invisible. Il compte donc sur le premier mois facturé.
+
+Une école dont l'année de facturation commence avant la rentrée
+(`Exercice.mois_debut_annee`, crèche facturée dès septembre) : ce mois existe,
+et c'est de lui que partent les deux règles (`Exercice.debut_facturation`).
 """
 import datetime
 
@@ -20,7 +24,7 @@ AVANCE_MAX_MOIS = 3
 
 def plus_tot_accepte(exercice):
     """Date la plus ancienne acceptée pour un règlement de cet exercice."""
-    debut = exercice.date_debut
+    debut = exercice.debut_facturation
     mois = debut.month - AVANCE_MAX_MOIS
     annee = debut.year
     while mois <= 0:
@@ -49,10 +53,12 @@ def mois_de_rattachement(exercice, jour):
     """
     if jour is None:
         return None
-    if jour < exercice.date_debut:
-        return (exercice.date_debut.year, exercice.date_debut.month)
+    debut = exercice.debut_facturation
+    if jour < debut:
+        return (debut.year, debut.month)
     return (jour.year, jour.month)
 
 
 def est_premier_mois(exercice, annee, mois):
-    return (annee, mois) == (exercice.date_debut.year, exercice.date_debut.month)
+    debut = exercice.debut_facturation
+    return (annee, mois) == (debut.year, debut.month)

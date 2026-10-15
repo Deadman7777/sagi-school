@@ -478,6 +478,16 @@ import { PassageAnneeComponent } from './passage-annee.component';
                            mode="decimal" [min]="1" [max]="12" [showButtons]="true"
                            styleClass="w-full" />
           </div>
+          <!-- Année de facturation commencée avant la rentrée (crèche dès
+               septembre pour une rentrée d'octobre) : situe les mois hors
+               exercice. Vide : le mois de la rentrée, comme avant. -->
+          <div class="form-group">
+            <label for="ex-mois-debut-annee">{{ 'parametres.mois_debut_annee' | translate }}</label>
+            <p-select appendTo="body" inputId="ex-mois-debut-annee" [options]="optionsMoisDebutAnnee()"
+                      [(ngModel)]="exercice()!.mois_debut_annee" optionLabel="label" optionValue="value"
+                      styleClass="w-full" />
+            <small class="fc-hint">{{ 'parametres.mois_debut_annee_aide' | translate }}</small>
+          </div>
           <div class="form-group">
             <label>{{ 'parametres.solde_caisse' | translate }}</label>
             <p-inputNumber [(ngModel)]="exercice()!.solde_initial_caisse"
@@ -2588,6 +2598,27 @@ chargerExercice() {
     });
   }
 
+  /** Mois de début de l'année de facturation : la rentrée (vide) ou un mois
+   *  qui la précède, du plus proche au plus lointain. */
+  optionsMoisDebutAnnee(): { label: string; value: number | null }[] {
+    const ex = this.exercice();
+    const debut = ex?.date_debut ? Number(String(ex.date_debut).slice(5, 7)) : 9;
+    // Même tableau tant que la rentrée ne change pas : la liste ne se
+    // reconstruit pas à chaque rafraîchissement de l'écran.
+    if (this.moisDebutAnneeCache?.debut === debut) return this.moisDebutAnneeCache.options;
+    const nom = (m: number) => {
+      const n = new Date(2000, m - 1, 1).toLocaleDateString(this.translate.currentLang || 'fr', { month: 'long' });
+      return n.charAt(0).toUpperCase() + n.slice(1);
+    };
+    const avant = Array.from({ length: 11 }, (_, i) => ((debut - 2 - i + 24) % 12) + 1)
+      .map(m => ({ label: nom(m), value: m as number | null }));
+    const options = [{ label: this.translate.instant('parametres.mois_debut_annee_rentree', { mois: nom(debut) }),
+                       value: null }, ...avant];
+    this.moisDebutAnneeCache = { debut, options };
+    return options;
+  }
+  private moisDebutAnneeCache: { debut: number; options: { label: string; value: number | null }[] } | null = null;
+
   sauvegarderExercice() {
     if (!this.exercice()) return;
     this.saving.set(true);
@@ -2601,7 +2632,7 @@ chargerExercice() {
       },
       error: err => {
         const e = err?.error || {};
-        const detail = [e.annee_scolaire, e.date_debut, e.date_fin].flat().filter(Boolean)[0]
+        const detail = [e.annee_scolaire, e.date_debut, e.date_fin, e.mois_debut_annee].flat().filter(Boolean)[0]
           || this.translate.instant('parametres.sauvegarde_echouee');
         this.msg.add({ severity:'error', summary: this.translate.instant('parametres.erreur'), detail, life: 8000 });
         this.saving.set(false);

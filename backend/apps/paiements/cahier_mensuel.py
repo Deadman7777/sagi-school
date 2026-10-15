@@ -35,7 +35,9 @@ SEUIL = 1.0   # sous 1 FCFA, c'est un arrondi, pas une dette
 
 def mois_de_l_exercice(exercice):
     """[(annee, mois)] du premier au dernier mois de l'exercice."""
-    a, m = exercice.date_debut.year, exercice.date_debut.month
+    # Dès l'année de facturation : une crèche facturée avant la rentrée a
+    # son cahier de septembre.
+    a, m = exercice.debut_facturation.year, exercice.debut_facturation.month
     fin = (exercice.date_fin.year, exercice.date_fin.month)
     sortie = []
     while (a, m) <= fin and len(sortie) < 24:

@@ -2955,7 +2955,10 @@ export class ElevesListeComponent implements OnInit {
   /** Les mois de l'année scolaire de la fiche, dans l'ordre. */
   moisExercice(eleve: Eleve): { label: string; value: number }[] {
     const ex = this.exercices().find((x: any) => x.id === (eleve as any).exercice);
-    const debut = ex?.date_debut ? Number(String(ex.date_debut).slice(5, 7)) : 9;
+    // L'année de facturation peut commencer avant la rentrée (crèche dès
+    // septembre) : Exercice.mois_debut_annee, sinon le mois de la rentrée.
+    const debut = ex?.mois_debut_annee
+      || (ex?.date_debut ? Number(String(ex.date_debut).slice(5, 7)) : 9);
     return Array.from({ length: 12 }, (_, i) => {
       const m = ((debut - 1 + i) % 12) + 1;
       const nom = new Date(2000, m - 1, 1).toLocaleDateString(this.translate.currentLang || 'fr', { month: 'long' });

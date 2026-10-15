@@ -121,7 +121,7 @@ def mois_de_base(eleve):
         # un exercice d'octobre mettait janvier en tête — devenu « premier
         # mois », payable à l'inscription, il passait en retard dès octobre
         # (Les Petits Érudits, 15/10/2026).
-        debut = eleve.exercice.date_debut.month if eleve.exercice_id else 1
+        debut = eleve.exercice.mois_ancre if eleve.exercice_id else 1
         mois = sorted({int(m) for m in eleve.mois_dus}, key=lambda m: (m - debut) % 12)
     elif not eleve.exercice_id:
         mois = []
@@ -162,8 +162,7 @@ def mois_factures(eleve, jusqu_a_la_sortie=True):
             from .garderie import mois_avec_presences
             supplementaires |= set(mois_avec_presences(eleve))
         if supplementaires - set(mois):
-            debut_ex = eleve.exercice.date_debut.month
-            mois = sorted(set(mois) | supplementaires, key=lambda m: (m - debut_ex) % 12)
+            mois = sorted(set(mois) | supplementaires, key=eleve.exercice.rang_du_mois)
     if jusqu_a_la_sortie:
         mois = _tronquer_a_la_sortie(eleve, mois)
     return mois
@@ -238,8 +237,7 @@ def _tronquer_a_la_sortie(eleve, mois):
 
 def _annee_du_mois(exercice, num):
     """Année civile d'un mois de l'exercice (une année scolaire est à cheval)."""
-    debut = exercice.date_debut
-    return debut.year if num >= debut.month else debut.year + 1
+    return exercice.annee_du_mois(num)
 
 
 def _mois_precedent(annee, mois):

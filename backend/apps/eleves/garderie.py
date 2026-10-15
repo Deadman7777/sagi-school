@@ -115,10 +115,10 @@ def _verifier_date(exercice, jour):
         raise GarderieErreur("Aucun exercice ouvert : créez l'année scolaire avant l'appel.")
     if jour > datetime.date.today():
         raise GarderieErreur("On ne fait pas l'appel d'un jour à venir.")
-    if not exercice.date_debut <= jour <= exercice.date_fin:
+    if not exercice.debut_facturation <= jour <= exercice.date_fin:
         raise GarderieErreur(
             f"Le {jour:%d/%m/%Y} est hors de l'année scolaire {exercice.annee_scolaire} "
-            f"({exercice.date_debut:%d/%m/%Y} – {exercice.date_fin:%d/%m/%Y}).")
+            f"({exercice.debut_facturation:%d/%m/%Y} – {exercice.date_fin:%d/%m/%Y}).")
 
 
 def appel_du_jour(tenant, jour, classe_id=None):

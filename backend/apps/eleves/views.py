@@ -2185,9 +2185,7 @@ class SuiviMensuelView(APIView):
         #  - inscription / uniforme / fournitures / cantine / divers manuel → par date de paiement
         #  - mensualité + services → par mois concerné (mois_regles), sinon par date de paiement
         from collections import defaultdict
-        debut_year, debut_month = exercice.date_debut.year, exercice.date_debut.month
-        def _annee_du_mois(num):
-            return debut_year if num >= debut_month else debut_year + 1
+        _annee_du_mois = exercice.annee_du_mois
 
         def _cell():
             return {'nb': 0, 'inscription': 0.0, 'uniforme': 0.0, 'fournitures': 0.0,

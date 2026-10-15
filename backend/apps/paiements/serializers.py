@@ -71,7 +71,21 @@ class ExerciceSerializer(TenantModelSerializer):
             libelle = attrs.get('annee_scolaire', getattr(self.instance, 'annee_scolaire', ''))
             if (erreur := erreur_libelle_exercice(libelle, debut)):
                 raise serializers.ValidationError({'annee_scolaire': erreur})
+        self._verifier_annee_facturation(attrs, debut, fin)
         return attrs
+
+    def _verifier_annee_facturation(self, attrs, debut, fin):
+        """L'année de facturation (douze mois) doit contenir tout l'exercice."""
+        mois = attrs.get('mois_debut_annee', getattr(self.instance, 'mois_debut_annee', None))
+        if mois is None or not debut or not fin:
+            return
+        if not 1 <= int(mois) <= 12:
+            raise serializers.ValidationError({'mois_debut_annee': 'Mois invalide (1 à 12).'})
+        annee = debut.year if int(mois) <= debut.month else debut.year - 1
+        if (fin.year * 12 + fin.month) - (annee * 12 + int(mois)) > 11:
+            raise serializers.ValidationError({'mois_debut_annee': (
+                "Commencer l'année de facturation à ce mois laisserait la fin de "
+                "l'exercice hors des douze mois facturables.")})
 
 
 class PaiementSerializer(TenantModelSerializer):

@@ -27,6 +27,14 @@ class Exercice(TenantModel):
     an_source              = models.ForeignKey('self', null=True, blank=True,
                                                on_delete=models.SET_NULL, related_name='+')
     an_genere_le           = models.DateTimeField(null=True, blank=True)
+    # Mois où commence l'année de FACTURATION (1-12), quand il précède la
+    # rentrée. Vide : le mois de début de l'exercice — rien ne change.
+    # Une case de mois ne porte qu'un numéro : pour un exercice d'octobre à
+    # juin, septembre est-il 2026 ou 2027 ? Les Petits Érudits (15/10/2026)
+    # facturent la crèche dès septembre 2026, avant la rentrée du primaire :
+    # réglé sur septembre, septembre = 2026, juillet et août = 2027. Les élèves
+    # ordinaires restent facturés à partir de la rentrée (`date_debut`).
+    mois_debut_annee       = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = 'exercices'
@@ -34,6 +42,31 @@ class Exercice(TenantModel):
 
     def __str__(self):
         return f"{self.tenant} — {self.annee_scolaire}"
+
+    @property
+    def mois_ancre(self):
+        """Premier mois du cycle de douze mois de facturation."""
+        return int(self.mois_debut_annee or self.date_debut.month)
+
+    @property
+    def debut_facturation(self):
+        """Premier jour facturable : la rentrée, ou le 1er du mois de début
+        de l'année de facturation s'il la précède."""
+        import datetime
+        if self.mois_ancre == self.date_debut.month:
+            return self.date_debut
+        return datetime.date(self.annee_du_mois(self.mois_ancre), self.mois_ancre, 1)
+
+    def annee_du_mois(self, num):
+        """Année civile du mois `num` (1-12) de cet exercice. Seule règle de
+        conversion numéro de mois → année : l'année scolaire est à cheval."""
+        ancre, debut = self.mois_ancre, self.date_debut
+        annee_ancre = debut.year if ancre <= debut.month else debut.year - 1
+        return annee_ancre if int(num) >= ancre else annee_ancre + 1
+
+    def rang_du_mois(self, num):
+        """Position du mois `num` dans l'année de facturation (0 = premier)."""
+        return (int(num) - self.mois_ancre) % 12
 
     @property
     def solde_initial_mobile_money(self):

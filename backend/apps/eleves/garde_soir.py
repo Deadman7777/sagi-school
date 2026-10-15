@@ -97,7 +97,7 @@ def _verifier_jour(exercice, jour):
         raise GardeSoirErreur("Aucun exercice ouvert.")
     if jour > datetime.date.today():
         raise GardeSoirErreur("On ne saisit pas un soir à venir.")
-    if not exercice.date_debut <= jour <= exercice.date_fin:
+    if not exercice.debut_facturation <= jour <= exercice.date_fin:
         raise GardeSoirErreur(f"Le {jour:%d/%m/%Y} est hors de l'année scolaire {exercice.annee_scolaire}.")
 
 

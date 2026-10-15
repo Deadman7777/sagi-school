@@ -518,7 +518,7 @@ class Eleve(TenantModel):
             else:
                 lignes = [f for f in self.formules_eleve.all()
                           if f.formule.section_id == self.section_id]
-                debut = self.exercice.date_debut.month if self.exercice_id else 1
+                debut = self.exercice.mois_ancre if self.exercice_id else 1
                 cache = sorted(lignes, key=lambda f: (f.mois_debut - debut) % 12)
             self._formules_cache = cache
         return cache
@@ -528,14 +528,14 @@ class Eleve(TenantModel):
         lignes = self._formules_datees()
         if not lignes:
             return None
-        debut = self.exercice.date_debut.month if self.exercice_id else 1
+        debut = self.exercice.mois_ancre if self.exercice_id else 1
         if mois is None:
             import datetime as _dt
             aujourdhui = _dt.date.today()
             if self.exercice_id and aujourdhui > self.exercice.date_fin:
                 return lignes[-1].formule
             mois = aujourdhui.month
-            if self.exercice_id and aujourdhui < self.exercice.date_debut:
+            if self.exercice_id and aujourdhui < self.exercice.debut_facturation:
                 mois = debut
         rang = (int(mois) - debut) % 12
         choisie = lignes[0]
