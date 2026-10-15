@@ -8,7 +8,7 @@ from django.core.management import call_command
 from rest_framework.test import APITestCase
 
 from apps.licences.models import Licence, RelanceLicence
-from apps.licences.relances import executer, palier_courant
+from apps.licences.relances import destinataires, executer, palier_courant
 from apps.prospects.models import ParametresFacturation
 from apps.tenants.models import Tenant
 from apps.users.models import User
@@ -39,12 +39,18 @@ class RelancesTest(APITestCase):
         with SMTP_OK:
             return executer(jour)
 
+    def test_administrateurs_seulement_sans_email_d_ecole(self):
+        self.assertEqual(destinataires(self.licence), ['ecole@shoumoul.sn'])
+        Tenant.objects.filter(pk=self.tenant.pk).update(email='')
+        self.licence.tenant.refresh_from_db()
+        self.assertEqual(destinataires(self.licence), ['dir@shoumoul.sn'])
+
     def test_un_message_par_palier_jamais_deux_fois(self):
         r = self._executer(AUJOURDHUI)                       # J-7
         self.assertEqual(len(r['envoyees']), 1)
         self.assertEqual(len(mail.outbox), 1)
         m = mail.outbox[0]
-        self.assertEqual(m.to, ['ecole@shoumoul.sn', 'dir@shoumoul.sn'])
+        self.assertEqual(m.to, ['ecole@shoumoul.sn'])
         self.assertIn('expire dans 7 jours', m.subject)
         self.assertIn('Bonjour Madame Awa DIOP', m.body)
         self.assertIn('6 mois : 276 000 FCFA', m.body.replace(' ', ' '))

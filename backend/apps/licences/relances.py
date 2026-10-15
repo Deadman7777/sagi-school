@@ -45,11 +45,16 @@ def _jours(licence, aujourdhui):
 
 
 def destinataires(licence):
-    """L'adresse de l'école, puis celles de ses administrateurs actifs."""
+    """L'adresse de la fiche de l'école ; à défaut, celles de ses administrateurs actifs.
+
+    Les identifiants de connexion des administrateurs sont souvent inventés
+    (admin@ecole.sn) : on ne les sollicite que si la fiche n'a pas d'e-mail.
+    """
     from apps.users.models import User
-    adresses = [licence.tenant.email] if licence.tenant.email else []
-    adresses += list(User.objects.filter(tenant=licence.tenant, actif=True, role='ADMIN_ECOLE')
-                     .exclude(email='').values_list('email', flat=True))
+    if licence.tenant.email:
+        return [licence.tenant.email]
+    adresses = User.objects.filter(tenant=licence.tenant, actif=True, role='ADMIN_ECOLE') \
+        .exclude(email='').values_list('email', flat=True)
     vues, liste = set(), []
     for a in adresses:
         if a and a.lower() not in vues:
