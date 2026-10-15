@@ -454,6 +454,8 @@ class EleveSerializer(TenantModelSerializer):
         l'élève pour ce service (null ou vide : le tarif du service).
         `mois_services` ({service_id: [mois] | null}) : mois où l'enfant
         utilise un service mensuel. null, vide ou toute l'année : tous les mois.
+        `pec_services` ({service_id: {mois: montant}}) : prise en charge du
+        service, mois par mois.
         """
         ids = self.initial_data.get('abonnements', None)
         corrections = self.initial_data.get('premieres_adhesions') or {}
@@ -513,6 +515,27 @@ class EleveSerializer(TenantModelSerializer):
                 if [int(m) for m in ab.mois or []] != mois:
                     ab.mois = mois
                     ab.save(update_fields=['mois', 'updated_at'])
+        # `pec_services` ({service_id: {mois: montant} | null}) : prise en
+        # charge (remise) du service, mois par mois. null ou {} : aucune.
+        for sid, valeur in (self.initial_data.get('pec_services') or {}).items():
+            ab = existing.get(str(sid))
+            if ab is None or ab.service.periodicite != 'MENSUEL':
+                continue
+            pec = {}
+            try:
+                for m, montant in (valeur or {}).items():
+                    m, montant = int(m), Decimal(str(montant or 0))
+                    if m < 1 or m > 12 or montant < 0:
+                        raise ValueError
+                    if montant > 0:
+                        pec[str(m)] = float(montant)
+            except (TypeError, ValueError, AttributeError, ArithmeticError):
+                raise serializers.ValidationError({'pec_services': (
+                    f"Prise en charge invalide pour {ab.service.nom} : un montant "
+                    "positif par mois (1 à 12).")})
+            if (ab.pec_mois or {}) != pec:
+                ab.pec_mois = pec
+                ab.save(update_fields=['pec_mois', 'updated_at'])
 
     def _sync_formule(self, eleve, section_changee):
         """Formule choisie sur la fiche (`formule` : id).
@@ -572,6 +595,8 @@ class EleveSerializer(TenantModelSerializer):
                  'periodicite': ab.service.periodicite,
                  # Mois où l'enfant utilise le service (vide : toute l'année).
                  'mois': [int(m) for m in ab.mois or []],
+                 # Prise en charge du service, mois par mois ({"10": 5000}).
+                 'pec_mois': {str(k): float(v or 0) for k, v in (ab.pec_mois or {}).items()},
                  'a_des_frais_premiere_fois': any(el.get('premiere_fois')
                                                   for el in ab.service.composition_adhesion or [])}
                 for ab in obj.abonnements.all()]

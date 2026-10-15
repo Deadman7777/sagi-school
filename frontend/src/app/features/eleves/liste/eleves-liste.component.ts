@@ -52,6 +52,9 @@ interface PecForm {
   bourse_inscription: number;
   bourse_mensualite: number;
   bourse_reference: string;
+  // Prise en charge (remise) sur les services mensuels, par service puis par
+  // mois : {service_id: {10: 5000, 11: null}}. Vide = tarif plein.
+  pec_services: Record<string, Record<number, number | null>>;
 }
 
 /** Mois de l'année, pour les cases à cocher des mois facturés. */
@@ -1286,6 +1289,48 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
                    [placeholder]="'eleves.pec_observations_ph' | translate" />
           </div>
 
+          <!-- Prise en charge sur les services : une remise sur le service
+               seul (cantine, transport…), qui peut changer d'un mois à
+               l'autre. La scolarité n'est pas touchée. -->
+          @if (servicesMensuelsPEC(e).length) {
+            <div class="form-group full pec-services">
+              <label>{{ 'eleves.pec_services_titre' | translate }}</label>
+              <small class="fc-aide-org">{{ 'eleves.pec_services_aide' | translate }}</small>
+              @for (ab of servicesMensuelsPEC(e); track ab.service) {
+                <div class="pec-service">
+                  <div class="pec-service-tete">
+                    <strong>{{ ab.nom }}</strong>
+                    <span>{{ ab.prix | number:'1.0-0' }} FCFA / {{ 'eleves.pec_services_mois' | translate }}</span>
+                    @if (totalPecService(ab.service) > 0) {
+                      <span class="pec-service-total">− {{ totalPecService(ab.service) | number:'1.0-0' }} FCFA</span>
+                    }
+                  </div>
+                  <div class="pec-service-rapide">
+                    <input pInputText type="number" min="0" step="500" [(ngModel)]="pecServiceUniforme[ab.service]"
+                           [ngModelOptions]="{standalone:true}"
+                           [placeholder]="'eleves.pec_services_montant' | translate"
+                           [attr.aria-label]="('eleves.pec_services_montant' | translate) + ' — ' + ab.nom" />
+                    <p-button size="small" severity="secondary" [outlined]="true"
+                              [label]="'eleves.pec_services_tous' | translate"
+                              (onClick)="appliquerPecServiceTousMois(e, ab)" />
+                  </div>
+                  <div class="mois-grille">
+                    @for (m of moisDuServicePEC(e, ab); track m.num) {
+                      <div class="mois-case" [class.actif]="+(formPEC.pec_services[ab.service] || {})[m.num]! > 0">
+                        <span class="mois-coche"><span>{{ m.nom }}</span></span>
+                        <input type="number" class="mois-montant" min="0" [max]="ab.prix ?? null" placeholder="0"
+                               [attr.aria-label]="('eleves.pec_services_titre' | translate) + ' ' + ab.nom + ' ' + m.nom"
+                               [ngModel]="(formPEC.pec_services[ab.service] || {})[m.num]"
+                               (ngModelChange)="(formPEC.pec_services[ab.service] ||= {})[m.num] = $event"
+                               [ngModelOptions]="{standalone:true}" />
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
           <!-- Bourse / organisme payeur. Placé ici parce que c'est la même
                question — qui paie quoi — mais l'effet est inverse de la prise
                en charge sociale au-dessus : le dû ne baisse pas, il change
@@ -1330,7 +1375,7 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
 
             @if (!formPEC.moisAuto) {
               <div class="mois-grille">
-                @for (m of moisAnnee; track m.num) {
+                @for (m of moisAnneeScolaire(e); track m.num) {
                   <div class="mois-case" [class.actif]="formPEC.mois_dus.includes(m.num)">
                     <label class="mois-coche">
                       <p-checkbox [ngModel]="formPEC.mois_dus.includes(m.num)"
@@ -2484,6 +2529,14 @@ import { BoutonImprimerComponent } from '../../../shared/bouton-imprimer.compone
     .mois-resume { margin-top:8px; font-size:11px; color:var(--text-3); }
     .mois-alerte { color:#f59e0b; font-weight:600; }
     @media (max-width: 640px) { .mois-grille { grid-template-columns:repeat(2, 1fr); } }
+    .pec-services { display:flex; flex-direction:column; gap:8px; }
+    .pec-service { border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+                   display:flex; flex-direction:column; gap:8px; }
+    .pec-service-tete { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; font-size:13px; }
+    .pec-service-tete span { color:var(--text-3); font-size:12px; }
+    .pec-service-tete .pec-service-total { color:#3b82f6; font-weight:600; margin-left:auto; }
+    .pec-service-rapide { display:flex; gap:8px; align-items:center; }
+    .pec-service-rapide input { flex:1; min-width:0; }
 
     /* Formulaires */
     .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -4024,6 +4077,45 @@ export class ElevesListeComponent implements OnInit {
     }
   }
 
+  /** Les mois de l'année dans l'ordre de l'exercice de la fiche (octobre en
+   *  tête pour un exercice d'octobre), pas dans celui du calendrier. */
+  moisAnneeScolaire(e: Eleve): { num: number; nom: string }[] {
+    return this.moisExercice(e).map(m => MOIS_ANNEE.find(x => x.num === m.value)!);
+  }
+
+  // ── Prise en charge sur les services ────────────────────────────────────
+  /** Montant à recopier sur tous les mois d'un service (saisie rapide). */
+  pecServiceUniforme: Record<string, number | null> = {};
+
+  servicesMensuelsPEC(e: Eleve) {
+    return (e.abonnements_detail || []).filter(ab => ab.periodicite === 'MENSUEL');
+  }
+
+  /** Mois où l'enfant suit le service, dans l'ordre scolaire : seuls ceux-là
+   *  ont un dû à réduire. */
+  moisDuServicePEC(e: Eleve, ab: { mois?: number[] }): { num: number; nom: string }[] {
+    const suivis = ab.mois?.length ? ab.mois : (e.mois_calendrier || []).map(m => m.num);
+    return this.moisAnneeScolaire(e).filter(m => suivis.includes(m.num));
+  }
+
+  appliquerPecServiceTousMois(e: Eleve, ab: { service: string; mois?: number[] }) {
+    const montant = this.pecServiceUniforme[ab.service];
+    const pec = this.formPEC.pec_services[ab.service] ||= {};
+    for (const m of this.moisDuServicePEC(e, ab)) pec[m.num] = montant || null;
+  }
+
+  totalPecService(sid: string): number {
+    return Object.values(this.formPEC.pec_services[sid] || {})
+      .reduce((t: number, v) => t + (Number(v) || 0), 0);
+  }
+
+  /** {service: {mois: montant}} ; un service sans PEC part vide (= retirée). */
+  private pecServicesAEnvoyer(e: Eleve): Record<string, Record<string, number>> {
+    return Object.fromEntries(this.servicesMensuelsPEC(e).map(ab => [ab.service,
+      Object.fromEntries(Object.entries(this.formPEC.pec_services[ab.service] || {})
+        .filter(([, v]) => Number(v) > 0).map(([m, v]) => [m, Number(v)]))]));
+  }
+
   /** Tarif ordinaire, affiché en filigrane des champs laissés vides. */
   tarifMensuelStandard(): string {
     const e = this.eleveSelectionne();
@@ -4055,7 +4147,11 @@ export class ElevesListeComponent implements OnInit {
       moisAuto:             saisis.length === 0,
       mois_dus:             [...(saisis.length ? saisis : eleve.mois_dus_effectifs || [])],
       montants_mois:        { ...(eleve.montants_mois || {}) },
+      pec_services:         Object.fromEntries(this.servicesMensuelsPEC(eleve).map(ab => [
+                              ab.service, Object.fromEntries(Object.entries(ab.pec_mois || {})
+                                .map(([m, v]) => [Number(m), v]))])),
     };
+    this.pecServiceUniforme = {};
     this.dialogPECVisible = true;
 
     // La liste des organismes n'est chargée qu'à l'ouverture : la plupart des
@@ -4091,6 +4187,7 @@ export class ElevesListeComponent implements OnInit {
       obs_prise_en_charge:  this.formPEC.obs_prise_en_charge,
       // Liste vide = retour au prorata automatique côté backend.
       mois_dus:             this.formPEC.moisAuto ? [] : this.formPEC.mois_dus,
+      pec_services:         this.pecServicesAEnvoyer(e),
     } as Partial<Eleve>;
     this.elevesService.updateEleve(e.id, payload).subscribe({
       next: () => {
@@ -4426,6 +4523,6 @@ export class ElevesListeComponent implements OnInit {
              obs_prise_en_charge: '', moisAuto: true, mois_dus: [],
              montants_mois: {},
              organisme: null, bourse_id: null, bourse_inscription: 0,
-             bourse_mensualite: 0, bourse_reference: '' };
+             bourse_mensualite: 0, bourse_reference: '', pec_services: {} };
   }
 }

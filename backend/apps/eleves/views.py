@@ -1818,6 +1818,8 @@ class EleveViewSet(viewsets.ModelViewSet):
                 'premier_mois_a_inscription': ab.service.premier_mois_a_inscription,
                 # Mois où l'enfant utilise le service (vide : toute l'année).
                 'mois':        [int(m) for m in ab.mois or []],
+                # Prise en charge du service, mois par mois.
+                'pec_mois':    {str(k): float(v or 0) for k, v in (ab.pec_mois or {}).items()},
             }
             for ab in eleve.abonnements.all() if ab.service.actif
         ]
@@ -1870,8 +1872,9 @@ class EleveViewSet(viewsets.ModelViewSet):
                     # un montant saisi à la main POUR ce mois est le dû final,
                     # il ne se laisse pas réduire une seconde fois.
                     pec   = 0.0 if (ligne is None or ligne['montant_saisi']) else eleve.pec_du_mois(mo)
-                    svc_du = ({str(ab.service_id): ab.prix
-                               for ab in eleve.abonnements_mensuels_du_mois(mo)}
+                    svc_du = ({str(ab.service_id): ab.prix_du_mois(mo)
+                               for ab in eleve.abonnements_mensuels_du_mois(mo)
+                               if ab.prix_du_mois(mo) > 0}
                               if ligne and eleve._mois_du_calendrier(mo) else {})
                     mois_ecole.append({
                         'num':     mo,
@@ -1983,9 +1986,10 @@ class EleveViewSet(viewsets.ModelViewSet):
                 # Le mois ORDINAIRE, services mensuels compris : c'est le
                 # montant que la famille reconnaît, pas la seule mensualité.
                 'mensuel': {
-                    'brut': round(eleve.du_mensuel_standard
-                                  + eleve.montant_pec_mensualite_mensuel, 2),
-                    'pec':  eleve.montant_pec_mensualite_mensuel,
+                    'brut': round(eleve.du_mensuel_standard + eleve.montant_pec_mensualite_mensuel
+                                  + eleve.pec_services_mois_courant, 2),
+                    'pec':  round(eleve.montant_pec_mensualite_mensuel
+                                  + eleve.pec_services_mois_courant, 2),
                     'net':  eleve.du_mensuel_standard,
                 },
                 'annuel': {

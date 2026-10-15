@@ -117,7 +117,12 @@ def mois_de_base(eleve):
     if cache is not None:
         return cache
     if eleve.mois_dus:
-        mois = sorted(int(m) for m in eleve.mois_dus)
+        # Dans l'ordre de l'ANNÉE SCOLAIRE, pas du calendrier : tri numérique,
+        # un exercice d'octobre mettait janvier en tête — devenu « premier
+        # mois », payable à l'inscription, il passait en retard dès octobre
+        # (Les Petits Érudits, 15/10/2026).
+        debut = eleve.exercice.date_debut.month if eleve.exercice_id else 1
+        mois = sorted({int(m) for m in eleve.mois_dus}, key=lambda m: (m - debut) % 12)
     elif not eleve.exercice_id:
         mois = []
     else:
@@ -171,9 +176,9 @@ def composition_du_mois(eleve, mois):
     du = float(eleve.du_du_mois(mois))
     services = []
     if eleve._mois_du_calendrier(mois):
-        services = [{'nom': ab.service.nom, 'montant': ab.prix,
+        services = [{'nom': ab.service.nom, 'montant': ab.prix_du_mois(mois),
                      'premier_mois_a_inscription': bool(ab.service.premier_mois_a_inscription)}
-                    for ab in eleve.abonnements_mensuels_du_mois(mois) if ab.prix > 0]
+                    for ab in eleve.abonnements_mensuels_du_mois(mois) if ab.prix_du_mois(mois) > 0]
     supplements = float(du_garde_soir_du_mois(eleve, mois))
     if eleve.a_la_journee:
         from .garderie import du_presences_du_mois
@@ -718,7 +723,8 @@ def partage_scolarite_services(eleve, ech=None, seulement=None):
         m = l['mois']
         if seulement and (l['annee'], m) != tuple(seulement):
             continue
-        services_dus = ({str(ab.service_id): ab.prix for ab in eleve.abonnements_mensuels_du_mois(m)}
+        services_dus = ({str(ab.service_id): ab.prix_du_mois(m)
+                         for ab in eleve.abonnements_mensuels_du_mois(m) if ab.prix_du_mois(m) > 0}
                         if eleve._mois_du_calendrier(m) else {})
         _du, _scol, _svc, supplements = composition_du_mois(eleve, m)
         if supplements > 0:

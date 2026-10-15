@@ -132,8 +132,8 @@ def etat_services(tenant, exercice, service_id=None, section_id=None, classe_id=
             if s.periodicite == 'MENSUEL':
                 mois = [m for m in factures
                         if e._mois_du_calendrier(m) and ab in e.abonnements_mensuels_du_mois(m)]
-                du_annee = ab.prix * len(mois)
-                du_echu = ab.prix * sum(1 for m in mois if m in echus)
+                du_annee = sum(ab.prix_du_mois(m) for m in mois)
+                du_echu = sum(ab.prix_du_mois(m) for m in mois if m in echus)
             else:
                 mois = [s.mois_unique] if s.mois_unique else []
                 du_annee = ab.prix

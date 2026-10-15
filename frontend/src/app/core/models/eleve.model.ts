@@ -106,9 +106,13 @@ export interface Eleve {
   abonnements_detail?: { service: string; nom: string; premiere_adhesion: boolean; a_des_frais_premiere_fois: boolean;
                          montant?: number | null; tarif_service?: number; prix?: number; periodicite?: string;
                          /** Mois où l'enfant utilise le service (vide : toute l'année). */
-                         mois?: number[] }[];
+                         mois?: number[];
+                         /** Prise en charge du service, mois par mois ({"10": 5000}). */
+                         pec_mois?: Record<string, number> }[];
   /** Mois où l'enfant prend chaque service mensuel. En écriture. */
   mois_services?: Record<string, number[]>;
+  /** Prise en charge de chaque service mensuel, mois par mois. En écriture. */
+  pec_services?: Record<string, Record<string, number>>;
   /** Mois facturés de l'année, dans l'ordre scolaire (lecture). */
   mois_calendrier?: { num: number; label: string }[];
   /** Formule en vigueur ce mois-ci (crèche), et ses changements datés. */

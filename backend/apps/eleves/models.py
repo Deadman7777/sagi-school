@@ -604,10 +604,23 @@ class Eleve(TenantModel):
         """Total annuel pris en charge (inscription + mensualités dues × réduction mensualité).
         Mois par mois quand la formule a changé : la réduction se plafonne au tarif du mois."""
         if self._formules_datees():
-            return round(self.montant_pec_inscription
-                         + sum(self.pec_du_mois(m) for m in self.mois_factures), 2)
-        return round(self.montant_pec_inscription +
-                     self.montant_pec_mensualite_mensuel * self.nb_mensualites_dues, 2)
+            scolarite = (self.montant_pec_inscription
+                         + sum(self.pec_du_mois(m) for m in self.mois_factures))
+        else:
+            scolarite = (self.montant_pec_inscription +
+                         self.montant_pec_mensualite_mensuel * self.nb_mensualites_dues)
+        return round(scolarite + self.montant_pec_services_annuel, 2)
+
+    @property
+    def montant_pec_services_annuel(self):
+        """Prise en charge accordée sur les services mensuels, sur l'année.
+        Mêmes mois que le dû (`montant_services_annuel`) : un mois où l'enfant
+        ne suit pas le service n'a rien à réduire."""
+        from .echeancier import mois_de_base
+        mois = mois_de_base(self)
+        return round(sum(ab.pec_du_mois(m) for ab in self._abonnements()
+                         if ab.service.periodicite == 'MENSUEL'
+                         for m in mois if ab.suivi_le_mois(m)), 2)
 
     @property
     def total_theorique(self):
@@ -643,20 +656,20 @@ class Eleve(TenantModel):
 
     def services_mensuels_du_mois(self, mois):
         """Montant des services mensuels dus le mois `mois`."""
-        return round(sum(ab.prix for ab in self.abonnements_mensuels_du_mois(mois)), 2)
+        return round(sum(ab.prix_du_mois(mois) for ab in self.abonnements_mensuels_du_mois(mois)), 2)
 
     @property
     def montant_services_annuel(self):
         """Total annuel des services optionnels auxquels l'élève est abonné.
         Mensuel → montant pour chaque mois facturé où l'enfant suit le service ;
-        Unique → montant une fois. Les services ne sont PAS soumis à la prise
-        en charge."""
+        Unique → montant une fois. Nets de la prise en charge propre à chaque
+        service (`EleveService.pec_mois`) ; la PEC de scolarité ne les touche pas."""
         from .echeancier import mois_de_base
         mois = mois_de_base(self)
         total = 0.0
         for ab in self._abonnements():
             if ab.service.periodicite == 'MENSUEL':
-                total += ab.prix * sum(1 for m in mois if ab.suivi_le_mois(m))
+                total += sum(ab.prix_du_mois(m) for m in mois if ab.suivi_le_mois(m))
             else:
                 total += ab.prix
         total += sum(a['montant'] for a in self.adhesions_services())
@@ -746,7 +759,16 @@ class Eleve(TenantModel):
         """Ce que coûte un mois ordinaire : mensualité nette + services mensuels."""
         mensuel = sum(ab.prix for ab in self._abonnements()
                       if ab.service.periodicite == 'MENSUEL')
-        return round(self.frais_mensualite_effectif + mensuel, 2)
+        return round(self.frais_mensualite_effectif + mensuel
+                     - self.pec_services_mois_courant, 2)
+
+    @property
+    def pec_services_mois_courant(self):
+        """PEC des services sur le mois en cours (mois « ordinaire » affiché)."""
+        from django.utils import timezone
+        m = timezone.localdate().month
+        return round(sum(ab.pec_du_mois(m) for ab in self._abonnements()
+                         if ab.service.periodicite == 'MENSUEL'), 2)
 
     @property
     def mois_factures(self):
@@ -1175,6 +1197,12 @@ class EleveService(TenantModel):
     # cochés sont dus. Les mois passés restent dans la liste quand on arrête,
     # sinon ce qui a été dû (et payé) disparaîtrait de la fiche.
     mois = models.JSONField(default=list, blank=True)
+    # Prise en charge (REMISE) sur ce service, mois par mois : {"10": 5000,
+    # "11": 0, "12": 10000} — service MENSUEL seulement. L'école renonce à
+    # cette part : le dû de la famille baisse, personne d'autre ne la doit
+    # (≠ bourse d'un organisme). Elle change d'un mois à l'autre, d'où un
+    # montant par mois et non un taux fixe. Plafonnée au tarif du mois.
+    pec_mois = models.JSONField(default=dict, blank=True)
 
     class Meta:
         db_table = 'eleve_services'
@@ -1194,6 +1222,22 @@ class EleveService(TenantModel):
         """L'enfant utilise-t-il ce service le mois `mois` ? Toute question
         « ce service est-il dû ce mois-ci » passe par ici."""
         return not self.mois or int(mois) in {int(m) for m in self.mois}
+
+    def pec_du_mois(self, mois):
+        """Prise en charge de ce service le mois `mois`, plafonnée au tarif."""
+        if self.service.periodicite != 'MENSUEL' or not self.pec_mois:
+            return 0.0
+        try:
+            pec = float(self.pec_mois.get(str(int(mois))) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        return round(min(max(pec, 0.0), self.prix), 2)
+
+    def prix_du_mois(self, mois):
+        """Ce que la famille doit pour ce service le mois `mois` : le tarif,
+        moins la prise en charge du mois. Tout dû mensuel d'un service passe
+        par ici."""
+        return round(self.prix - self.pec_du_mois(mois), 2)
 
 
 class RappelEnvoye(TenantModel):
