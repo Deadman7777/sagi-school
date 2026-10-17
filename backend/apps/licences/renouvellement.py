@@ -56,6 +56,11 @@ def composer(demande):
         f"Clé         : {demande.cle_licence or '—'}",
         f"Expire le   : {demande.date_fin or '—'}",
         "",
+        *([f"Formule     : {demande.type_demande or demande.type_licence} — {demande.mois} mois"
+           + (f" — {demande.montant:,} FCFA".replace(',', ' ') if demande.montant else ''),
+           f"Paiement    : {demande.moyen_paiement or 'non précisé'}"
+           + (f" — réf. {demande.reference_paiement}" if demande.reference_paiement else ''),
+           ""] if demande.mois else []),
         f"Demandeur   : {demande.demandeur or '—'} — {demande.email_demandeur or '—'}",
         f"Origine     : {demande.get_origine_display()}",
         f"Référence   : {demande.id}",
@@ -98,6 +103,9 @@ def relayer_vers_cloud(demande):
         'date_fin': str(demande.date_fin or ''), 'demandeur': demande.demandeur,
         'email_demandeur': demande.email_demandeur, 'telephone': demande.telephone,
         'message': demande.message, 'reference_locale': str(demande.id),
+        'type_demande': demande.type_demande, 'mois': demande.mois,
+        'moyen_paiement': demande.moyen_paiement,
+        'reference_paiement': demande.reference_paiement,
     }).encode('utf-8')
     requete = urllib.request.Request(url, data=corps, method='POST', headers={
         'Content-Type': 'application/json',
@@ -122,7 +130,44 @@ def relayer_vers_cloud(demande):
     return ok, demande.erreur
 
 
-def demander(licence, user, message=''):
+def formule_demandee(licence, data):
+    """La formule choisie par « Renouveler maintenant », validée et chiffrée par le serveur.
+
+    Rend {} quand rien n'est choisi (ancienne demande libre).
+    """
+    from .alertes import montant
+    from .models import Licence
+    try:
+        mois = int(data.get('mois') or 0)
+    except (TypeError, ValueError):
+        mois = 0
+    if mois not in (1, 6, 12):
+        return {}
+    type_ = str(data.get('type') or '').strip() or licence.type
+    if type_ not in dict(Licence.TYPE_CHOICES) or type_ == 'ESSAI':
+        type_ = licence.type if licence.type != 'ESSAI' else 'BASIC'
+    return {
+        'type_demande': type_, 'mois': mois, 'montant': montant(type_, mois),
+        'moyen_paiement': str(data.get('moyen_paiement') or '').strip()[:60],
+        'reference_paiement': str(data.get('reference_paiement') or '').strip()[:120],
+    }
+
+
+def prolonger(licence, mois, type_licence=None):
+    """Renouvelle : max(date de fin, aujourd'hui) + `mois`. Le temps restant n'est pas perdu."""
+    from dateutil.relativedelta import relativedelta
+    from django.utils import timezone
+    base = max(licence.date_fin, timezone.now().date())
+    licence.date_fin = base + relativedelta(months=mois)
+    if type_licence and type_licence != licence.type:
+        licence.type = type_licence
+        licence.date_debut = timezone.now().date()
+    licence.statut = 'ACTIVE'
+    licence.save()
+    return licence
+
+
+def demander(licence, user, message='', formule=None):
     """Enregistre puis achemine une demande. Rend (demande, recue_par_hady_gesman)."""
     t = licence.tenant
     est_cloud = getattr(settings, 'SAGI_EST_CLOUD', False)
@@ -135,6 +180,7 @@ def demander(licence, user, message=''):
         telephone=t.telephone or '',
         message=(message or '').strip()[:2000],
         origine='LOCAL' if local_sans_smtp else 'CLOUD',
+        **(formule or {}),
     )
     if local_sans_smtp:
         ok, _ = relayer_vers_cloud(demande)

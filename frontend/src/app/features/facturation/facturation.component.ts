@@ -512,6 +512,21 @@ type Severite = 'success' | 'warn' | 'danger' | 'info' | 'secondary';
         <div class="form-group"><label>{{ 'facturation.taux_acompte_defaut' | translate }}</label><input pInputText type="number" min="0" max="99" [(ngModel)]="params['taux_acompte_defaut']" /></div>
         <div class="form-group full"><label>{{ 'facturation.coordonnees_paiement' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['coordonnees_paiement']"></textarea></div>
         <div class="form-group full"><label>{{ 'facturation.conditions_generales' | translate }}</label><textarea pTextarea rows="2" [(ngModel)]="params['conditions']"></textarea></div>
+        <div class="separator">Alertes de fin de licence (toutes les écoles)</div>
+        <div class="form-group full">
+          <label class="case"><input type="checkbox" [(ngModel)]="params['alertes_ecoles']" /> Alertes dans l'application des écoles</label>
+          <small class="sous">Badge sur l'icône, rappel à chaque connexion avec « Renouveler maintenant », bandeau prioritaire après expiration.</small>
+        </div>
+        <div class="form-group">
+          <label for="fp-paliers">Paliers (jours avant l'échéance)</label>
+          <input id="fp-paliers" pInputText [(ngModel)]="params['paliers_alerte']" placeholder="7,3,1,0" />
+          <small class="sous">Les mêmes pour les rappels dans l'app et les relances par e-mail.</small>
+        </div>
+        <div class="form-group">
+          <label for="fp-lien">Lien de paiement en ligne</label>
+          <input id="fp-lien" pInputText type="url" [(ngModel)]="params['lien_paiement']" placeholder="https://pay.wave.com/m/…" />
+          <small class="sous">Ouvert par « Renouveler maintenant ». Vide : l'école voit les coordonnées de paiement.</small>
+        </div>
         <div class="separator">{{ 'commercial.sec_signataire' | translate }}</div>
         <div class="form-group"><label>{{ 'commercial.signataire_nom' | translate }}</label><input pInputText [(ngModel)]="params['signataire_nom']" /></div>
         <div class="form-group"><label>{{ 'commercial.signataire_fonction' | translate }}</label><input pInputText [(ngModel)]="params['signataire_fonction']" /></div>

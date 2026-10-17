@@ -110,7 +110,7 @@ class ParametresFacturationView(APIView):
     permission_classes = [IsSuperAdmin]
     CHAMPS = ('raison_sociale', 'forme_juridique', 'adresse', 'ville', 'telephone', 'email',
               'site_web', 'ninea', 'rccm', 'mention_sans_tva', 'coordonnees_paiement', 'conditions',
-              'signataire_nom', 'signataire_fonction')
+              'signataire_nom', 'signataire_fonction', 'lien_paiement')
 
     def _dict(self, p):
         d = {c: getattr(p, c) for c in self.CHAMPS}
@@ -119,6 +119,8 @@ class ParametresFacturationView(APIView):
                   'validite_proforma_jours': p.validite_proforma_jours,
                   'taux_acompte_defaut': float(p.taux_acompte_defaut),
                   'relances_auto': p.relances_auto,
+                  'alertes_ecoles': p.alertes_ecoles,
+                  'paliers_alerte': p.paliers_alerte,
                   'cachet_signature': p.cachet_signature,
                   'types_justificatif': [{'value': c, 'label': l}
                                          for c, l in JustificatifFacturation.TYPE_CHOICES],
@@ -137,6 +139,14 @@ class ParametresFacturationView(APIView):
             p.tva_applicable = bool(request.data['tva_applicable'])
         if 'relances_auto' in request.data:
             p.relances_auto = bool(request.data['relances_auto'])
+        if 'alertes_ecoles' in request.data:
+            p.alertes_ecoles = bool(request.data['alertes_ecoles'])
+        if 'paliers_alerte' in request.data:
+            from apps.licences.alertes import lire_paliers
+            p.paliers_alerte = ','.join(map(str, lire_paliers(request.data['paliers_alerte'])))
+        if p.lien_paiement and (len(p.lien_paiement) > 500
+                                or not p.lien_paiement.startswith(('https://', 'http://'))):
+            return _erreur('Le lien de paiement doit commencer par https://')
         if 'cachet_signature' in request.data:
             # Cachet + signature des propositions : une image PNG ou JPEG, ou
             # rien (vide = on le retire).

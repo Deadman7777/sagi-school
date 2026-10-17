@@ -118,13 +118,26 @@ function exerciceParDefaut() {
                 @if (d.telephone) { · <a [href]="'tel:' + d.telephone">{{ d.telephone }}</a> }
                 · {{ d.origine_libelle }}
               </div>
+              @if (d.mois) {
+                <div class="dem-formule">💳 {{ d.type_demande || d.type_licence }} — {{ d.mois }} mois
+                  @if (d.montant) { — <strong>{{ d.montant | number:'1.0-0' }} FCFA</strong> }
+                  · {{ d.moyen_paiement || 'paiement non précisé' }}
+                  @if (d.reference_paiement) { · réf. <span class="mono">{{ d.reference_paiement }}</span> }
+                </div>
+              }
               @if (d.message) { <div class="dem-msg">« {{ d.message }} »</div> }
               @if (!d.courriel_envoye) {
                 <div class="dem-err">⚠️ Courriel non parti{{ d.erreur ? ' : ' + d.erreur : '' }}</div>
               }
             </div>
-            <p-button label="Traitée" icon="pi pi-check" size="small" severity="success" [outlined]="true"
-                      (onClick)="marquerTraitee(d)" />
+            <div class="dem-actions">
+              @if (d.mois && d.licence) {
+                <p-button [label]="'Paiement reçu : +' + d.mois + ' mois'" icon="pi pi-check-circle" size="small"
+                          severity="success" [loading]="confirmation() === d.id" (onClick)="confirmerPaiement(d)" />
+              }
+              <p-button label="Traitée" icon="pi pi-check" size="small" severity="secondary" [outlined]="true"
+                        (onClick)="marquerTraitee(d)" />
+            </div>
           </div>
         }
       </div>
@@ -460,6 +473,8 @@ function exerciceParDefaut() {
     </p-dialog>
   `,
   styles: [`
+    .dem-formule { font-size:12px; margin-top:4px; color:var(--text); }
+    .dem-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
     .demandes-card { background:rgba(0,153,255,.06); border:1px solid rgba(0,153,255,.35); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
     .dem-row  { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; padding:10px 0; border-top:1px solid var(--border); }
     .dem-main { font-size:13px; color:var(--text); }
@@ -636,6 +651,27 @@ export class LicencesComponent implements OnInit {
 
   demandes = signal<any[]>([]);
   demandesEnAttente = () => this.demandes().filter(d => !d.traitee);
+
+  confirmation = signal<string | null>(null);
+
+  /** Paiement reçu : la licence est prolongée, l'école le voit sous quelques minutes. */
+  confirmerPaiement(d: any) {
+    this.confirmation.set(d.id);
+    this.licencesService.confirmerDemande(d.id).subscribe({
+      next: res => {
+        this.confirmation.set(null);
+        this.demandes.update(l => l.map(x => x.id === d.id ? { ...x, traitee: true, confirmee: true } : x));
+        this.licences.update(l => l.map(x => x.id === res.licence?.id ? res.licence : x));
+        this.msg.add({ severity: 'success', summary: 'Licence prolongée',
+          detail: `${d.ecole_nom} : jusqu'au ${res.licence?.date_fin}` });
+      },
+      error: err => {
+        this.confirmation.set(null);
+        this.msg.add({ severity: 'error', summary: 'Confirmation impossible',
+          detail: err?.error?.error || 'Erreur serveur' });
+      },
+    });
+  }
 
   marquerTraitee(d: any) {
     this.licencesService.traiterDemande(d.id).subscribe({

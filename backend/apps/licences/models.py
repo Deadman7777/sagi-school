@@ -121,6 +121,14 @@ class DemandeRenouvellement(TimeStampedModel):
     erreur        = models.TextField(blank=True, default='')
     traitee       = models.BooleanField(default=False)
     traitee_le    = models.DateTimeField(null=True, blank=True)
+    # « Renouveler maintenant » : la formule choisie et le paiement déclaré.
+    # La licence n'est prolongée qu'à la confirmation par HADY GESMAN.
+    type_demande  = models.CharField(max_length=20, blank=True, default='')
+    mois          = models.PositiveSmallIntegerField(null=True, blank=True)
+    montant       = models.PositiveIntegerField(null=True, blank=True)
+    moyen_paiement = models.CharField(max_length=60, blank=True, default='')
+    reference_paiement = models.CharField(max_length=120, blank=True, default='')
+    confirmee     = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'demandes_renouvellement'

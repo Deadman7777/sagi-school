@@ -355,6 +355,15 @@ class ParametresFacturation(TimeStampedModel):
     # Relance automatique des licences qui arrivent à échéance (J-7, J-3,
     # J-1, J0). Coupée ici, la tâche planifiée ne fait plus rien.
     relances_auto       = models.BooleanField(default=True)
+    # Alertes de fin de licence dans l'application des écoles (badge sur
+    # l'icône, rappel à la connexion, bandeau après expiration). Les paliers
+    # valent pour ces alertes ET pour les relances par e-mail.
+    alertes_ecoles      = models.BooleanField(default=True)
+    paliers_alerte      = models.CharField(max_length=60, default='7,3,1,0',
+                                           help_text='Jours avant échéance, séparés par des virgules')
+    # Lien de paiement en ligne (Wave Business, Orange Money…) ouvert par le
+    # bouton « Renouveler maintenant ». Vide : l'école voit les coordonnées.
+    lien_paiement       = models.URLField(max_length=500, blank=True)
 
     class Meta:
         db_table = 'facturation_parametres'

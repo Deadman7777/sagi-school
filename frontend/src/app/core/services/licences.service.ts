@@ -27,6 +27,33 @@ export interface LigneRelance {
 
 export interface RelancesLicences { lignes: LigneRelance[]; relances_auto: boolean; smtp: boolean; }
 
+export interface FormuleRenouvellement {
+  type: string; mois: number; moyen_paiement?: string; reference_paiement?: string;
+}
+
+export interface OffreRenouvellement {
+  type: string; libelle: string;
+  formules: { mois: number; libelle: string; montant: number; remise: number }[];
+}
+
+/** Voir apps/licences/alertes.py : un seul calcul, côté serveur. */
+export interface AlerteLicence {
+  licence: string | null; type: string; statut: string;
+  date_fin: string; date_fin_longue: string; date_coupure: string;
+  jours: number; grace_jours: number;
+  phase: 'NORMAL' | 'ECHEANCE' | 'EXPIREE' | 'COUPEE' | 'AUCUNE';
+  niveau: 'ok' | 'attention' | 'urgent' | 'critique' | 'expiree';
+  palier: number | 'EXP' | null; paliers: number[];
+  alerte: boolean; prioritaire: boolean; cle_rappel: string;
+  badge: number | '!' | null;
+  titre: string; texte: string;
+  acces_expire: boolean; modules: string[];
+  offres: OffreRenouvellement[];
+  paiement: { lien: string; coordonnees: string; moyens: string[]; telephone: string; email: string };
+  demande_en_attente: { id: string; le: string; mois: number | null; montant: number | null;
+                        type: string; reference_paiement: string } | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class LicencesService {
   constructor(private api: ApiService) {}
@@ -54,8 +81,18 @@ export class LicencesService {
   /** Interrupteur des relances automatiques (réglage de facturation HADY GESMAN). */
   activerRelances(actif: boolean) { return this.api.patch<any>('/facturation/parametres/', { relances_auto: actif }); }
 
-  demanderRenouvellement(id: string, message: string) {
-    return this.api.post<any>(`/licences/${id}/demander_renouvellement/`, { message });
+  demanderRenouvellement(id: string, message: string, formule: FormuleRenouvellement | null = null) {
+    return this.api.post<any>(`/licences/${id}/demander_renouvellement/`, { message, ...(formule || {}) });
+  }
+
+  /** L'alerte de fin de licence de l'école (apps/licences/alertes.py). `actualiser` relit le cloud. */
+  getAlerte(actualiser = false) {
+    return this.api.get<AlerteLicence>('/licences/alerte/', { actualiser: actualiser ? 1 : undefined });
+  }
+
+  /** Paiement reçu : prolonge la licence de la formule demandée (super admin). */
+  confirmerDemande(id: string, mois?: number) {
+    return this.api.post<any>(`/licences/demandes-renouvellement/${id}/confirmer/`, mois ? { mois } : {});
   }
 
   verifierCle(cle: string) {

@@ -1,6 +1,7 @@
 """Relance automatique des licences qui arrivent à échéance.
 
-**Quatre paliers : J-7, J-3, J-1 et J0** (choix de la direction, 14/10/2026).
+**Quatre paliers : J-7, J-3, J-1 et J0** (choix de la direction, 14/10/2026),
+réglables depuis le 17/10 dans Facturation → Paramètres (`paliers_alerte`).
 Un message à chaque palier, jamais deux fois le même pour une même échéance
 (`RelanceLicence`, clé licence + date de fin + palier). Si la tâche planifiée
 n'a pas tourné un jour, on n'envoie pas trois messages d'un coup : seul le
@@ -26,18 +27,24 @@ from apps.prospects.messagerie import (EnvoiErreur, envoyer_courriel, lien_whats
 
 from .models import Licence, RelanceLicence
 
-PALIERS = RelanceLicence.PALIERS          # (7, 3, 1, 0)
+PALIERS = RelanceLicence.PALIERS          # (7, 3, 1, 0) par défaut
 FENETRE = max(PALIERS)
 
 
-def palier_courant(jours):
+def paliers():
+    """Les paliers réglés dans Facturation → Paramètres (les mêmes que les alertes de l'app)."""
+    from apps.prospects.models import ParametresFacturation
+    from .alertes import lire_paliers
+    return lire_paliers(ParametresFacturation.actuels().paliers_alerte)
+
+
+def palier_courant(jours, paliers_=None):
     """Le palier dont relève une licence à `jours` de son échéance, ou None.
 
     7 → 7 ; 5 → 7 ; 3 → 3 ; 2 → 3 ; 1 → 1 ; 0 → 0 ; 8 ou -1 → None.
     """
-    if jours is None or jours < 0 or jours > FENETRE:
-        return None
-    return min(p for p in PALIERS if p >= jours)
+    from .alertes import palier_courant as calcul
+    return calcul(jours, paliers_ or PALIERS)
 
 
 def _jours(licence, aujourdhui):
@@ -141,9 +148,10 @@ def relancer(licence, aujourdhui=None, auteur='', simuler=False):
 
     aujourdhui = aujourdhui or timezone.localdate()
     jours = _jours(licence, aujourdhui)
-    palier = palier_courant(jours)
+    pal = paliers()
+    palier = palier_courant(jours, pal)
     if palier is None:
-        palier = 0 if jours < 0 else FENETRE
+        palier = 0 if jours < 0 else max(pal)
     sujet, corps, _ = composer(licence, aujourdhui)
     adresses = destinataires(licence)
     relance = RelanceLicence(licence=licence, date_fin=licence.date_fin, palier=palier,
@@ -172,12 +180,12 @@ def deja_relancee(licence, palier):
                                          palier=palier, succes=True, simulee=False).exists()
 
 
-def licences_concernees(aujourdhui=None, depuis=0):
-    """Licences dont l'échéance tombe dans [aujourd'hui + depuis, aujourd'hui + 7]."""
+def licences_concernees(aujourdhui=None, depuis=0, fenetre=FENETRE):
+    """Licences dont l'échéance tombe dans [aujourd'hui + depuis, aujourd'hui + fenêtre]."""
     aujourdhui = aujourdhui or timezone.localdate()
     return (Licence.objects.exclude(statut='SUSPENDUE')
             .filter(date_fin__gte=aujourdhui + timedelta(days=depuis),
-                    date_fin__lte=aujourdhui + timedelta(days=FENETRE))
+                    date_fin__lte=aujourdhui + timedelta(days=fenetre))
             .select_related('tenant').order_by('date_fin'))
 
 
@@ -190,8 +198,9 @@ def executer(aujourdhui=None, simuler=False):
         rapport['motif'] = "Relances automatiques désactivées (écran Facturation)."
         return rapport
     aujourdhui = aujourdhui or timezone.localdate()
-    for licence in licences_concernees(aujourdhui):
-        palier = palier_courant(_jours(licence, aujourdhui))
+    pal = paliers()
+    for licence in licences_concernees(aujourdhui, fenetre=max(pal)):
+        palier = palier_courant(_jours(licence, aujourdhui), pal)
         if palier is None:
             continue
         if deja_relancee(licence, palier):
@@ -207,11 +216,12 @@ def tableau(aujourdhui=None):
     """Pour l'écran Licences : les échéances proches (et les expirées en sursis)."""
     aujourdhui = aujourdhui or timezone.localdate()
     lignes = []
-    for licence in licences_concernees(aujourdhui, depuis=-Licence.GRACE_JOURS):
+    pal = paliers()
+    for licence in licences_concernees(aujourdhui, depuis=-Licence.GRACE_JOURS, fenetre=max(pal)):
         jours = _jours(licence, aujourdhui)
         envoyes = list(RelanceLicence.objects.filter(
             licence=licence, date_fin=licence.date_fin).order_by('-created_at')[:10])
-        palier = palier_courant(jours)
+        palier = palier_courant(jours, pal)
         lignes.append({
             'licence': str(licence.id), 'ecole': licence.tenant.nom,
             'type': licence.type, 'date_fin': licence.date_fin, 'jours': jours,

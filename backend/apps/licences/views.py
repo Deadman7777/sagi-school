@@ -20,7 +20,7 @@ class LicenceViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update',
                            'destroy', 'creer_ecole', 'stats_globales',
-                           'renouveler']:
+                           'renouveler', 'confirmer_demande']:
             return [IsSuperAdmin()]
         return [IsAuthenticated()]
 
@@ -89,14 +89,30 @@ class LicenceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def renouveler(self, request, pk=None):
-        licence = self.get_object()
-        mois    = int(request.data.get('mois', 12))
-        from dateutil.relativedelta import relativedelta
-        base             = max(licence.date_fin, timezone.now().date())
-        licence.date_fin = base + relativedelta(months=mois)
-        licence.statut   = 'ACTIVE'
-        licence.save()
+        from .renouvellement import prolonger
+        licence = prolonger(self.get_object(), int(request.data.get('mois', 12)))
         return Response(LicenceSerializer(licence).data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def alerte(self, request):
+        """L'alerte de fin de licence de l'école courante — voir apps/licences/alertes.py.
+
+        `?actualiser=1` relit tout de suite le cloud (installation locale) :
+        c'est le bouton « J'ai renouvelé, actualiser ».
+        """
+        from .alertes import config, etat
+        tenant = get_tenant(request)
+        licence = Licence.objects.filter(tenant=tenant).select_related('tenant').first() if tenant else None
+        if licence is None:
+            return Response({'licence': None, 'alerte': False, 'phase': 'AUCUNE'})
+        from apps.users.serializers import modules_utilisateur
+        cfg = config(licence, forcer=request.query_params.get('actualiser') == '1')
+        donnees = etat(licence, cfg=cfg)
+        # Les modules de CET utilisateur (ceux du jeton) : l'écran les reprend
+        # dès que la licence est renouvelée, sans reconnexion.
+        donnees['modules'] = ([] if request.user.role == 'SUPER_ADMIN'
+                              else modules_utilisateur(request.user, licence)[0])
+        return Response(donnees)
 
     @action(detail=True, methods=['post'])
     def demander_renouvellement(self, request, pk=None):
@@ -107,9 +123,10 @@ class LicenceViewSet(viewsets.ModelViewSet):
         accuse réception) : l'écran ne doit plus jamais dire « envoyé » à tort.
         L'isolation tenant est assurée par get_queryset.
         """
-        from .renouvellement import composer, demander, destinataire
+        from .renouvellement import composer, demander, destinataire, formule_demandee
         licence = self.get_object()
-        demande, recue = demander(licence, request.user, request.data.get('message') or '')
+        demande, recue = demander(licence, request.user, request.data.get('message') or '',
+                                  formule=formule_demandee(licence, request.data))
         sujet, corps = composer(demande)
         return Response({
             'recue':        recue,
@@ -138,7 +155,40 @@ class LicenceViewSet(viewsets.ModelViewSet):
             'origine': d.origine, 'origine_libelle': d.get_origine_display(),
             'courriel_envoye': d.courriel_envoye, 'erreur': d.erreur,
             'traitee': d.traitee, 'traitee_le': d.traitee_le,
+            'licence': str(d.licence_id) if d.licence_id else None,
+            'type_demande': d.type_demande, 'mois': d.mois, 'montant': d.montant,
+            'moyen_paiement': d.moyen_paiement, 'reference_paiement': d.reference_paiement,
+            'confirmee': d.confirmee,
         } for d in qs])
+
+    @action(detail=False, methods=['post'], url_path=r'demandes-renouvellement/(?P<demande_id>[^/.]+)/confirmer',
+            permission_classes=[IsSuperAdmin])
+    def confirmer_demande(self, request, demande_id=None):
+        """Paiement reçu : prolonge la licence de la formule demandée et clôt la demande.
+
+        L'école voit son statut à jour à la consultation suivante (au plus
+        quelques minutes ; en local, via `etat-distant`).
+        """
+        from .models import DemandeRenouvellement
+        from .renouvellement import prolonger
+        d = DemandeRenouvellement.objects.select_related('licence').filter(id=demande_id).first()
+        if d is None:
+            return Response({'error': 'Demande introuvable.'}, status=404)
+        if d.licence is None:
+            return Response({'error': "Cette école n'a pas de licence sur ce serveur : "
+                                      "renouvelez-la depuis son installation."}, status=400)
+        if d.confirmee:
+            return Response({'error': 'Demande déjà confirmée.'}, status=400)
+        try:
+            mois = int(request.data.get('mois') or d.mois or 0)
+        except (TypeError, ValueError):
+            mois = 0
+        if not 1 <= mois <= 36:
+            return Response({'error': 'Durée invalide (1 à 36 mois).'}, status=400)
+        licence = prolonger(d.licence, mois, d.type_demande or None)
+        d.traitee, d.confirmee, d.traitee_le = True, True, timezone.now()
+        d.save(update_fields=['traitee', 'confirmee', 'traitee_le', 'updated_at'])
+        return Response({'confirmee': True, 'licence': LicenceSerializer(licence).data})
 
     @action(detail=False, methods=['post'], url_path=r'demandes-renouvellement/(?P<demande_id>[^/.]+)/traiter',
             permission_classes=[IsSuperAdmin])

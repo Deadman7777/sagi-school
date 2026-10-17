@@ -1,28 +1,20 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, effect, inject, signal, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { LicencesService } from '../../core/services/licences.service';
 import { AuthService } from '../../core/services/auth.service';
 import { LicenceCompteurService } from '../../core/services/licence-compteur.service';
 import { ButtonModule } from 'primeng/button';
-import { DialogModule } from 'primeng/dialog';
-import { ToastModule } from 'primeng/toast';
-import { MessageService } from 'primeng/api';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 
 /** Coordonnées support HADY GESMAN — à modifier ici uniquement. */
 const SUPPORT_EMAIL  = 'hadygesman@gmail.com';
 const SUPPORT_PHONES = ['+221 70 328 61 51', '+221 78 429 78 30'];
-/** Seul numéro associé à un compte WhatsApp. */
-const SUPPORT_WHATSAPP = '221784297830';
 
 @Component({
   selector: 'app-ma-licence',
   standalone: true,
-  imports: [CommonModule, FormsModule, ButtonModule, DialogModule, ToastModule, TranslateModule],
-  providers: [MessageService],
+  imports: [CommonModule, ButtonModule, TranslateModule],
   template: `
-    <p-toast />
     <div class="page-header">
       <div>
         <h2 class="page-title">🔑 {{ 'ma_licence.title' | translate }}</h2>
@@ -63,9 +55,9 @@ const SUPPORT_WHATSAPP = '221784297830';
             @default           { Abonnement à jour — échéance le <strong>{{ licence().date_fin }}</strong>. }
           }
         </div>
-        <p-button [label]="'ma_licence.demander_renouv' | translate" icon="pi pi-refresh"
+        <p-button label="Renouveler maintenant" icon="pi pi-credit-card"
                   [severity]="compteur.niveau() === 'ok' ? 'secondary' : 'warn'"
-                  (onClick)="demanderRenouvellement()" />
+                  (onClick)="compteur.ouvrirRenouvellement()" />
       </div>
 
       <!-- Détails -->
@@ -117,8 +109,8 @@ const SUPPORT_WHATSAPP = '221784297830';
               : ('ma_licence.expiree_alerte'    | translate) }}</strong>
           <div>{{ 'ma_licence.contacter_renouveler' | translate }}</div>
         </div>
-        <p-button [label]="'ma_licence.demander_renouv' | translate"
-                  severity="warn" (onClick)="demanderRenouvellement()" />
+        <p-button label="Renouveler maintenant" severity="warn"
+                  (onClick)="compteur.ouvrirRenouvellement()" />
       </div>
 
       <!-- Contact -->
@@ -147,56 +139,6 @@ const SUPPORT_WHATSAPP = '221784297830';
       </div>
 
     </div>
-
-    <!-- Dialog demande de renouvellement -->
-    <p-dialog [header]="'🔄 ' + ('ma_licence.renouv_dialog_titre' | translate)"
-              [(visible)]="renouvDialogVisible" [modal]="true"
-              [style]="{width:'440px'}" [draggable]="false">
-      <div *ngIf="licence()">
-        <p class="rd-info">{{ 'ma_licence.renouv_dialog_info' | translate }}</p>
-        <div class="renouv-info">
-          <div class="ri-row"><span>{{ 'ma_licence.type_abonnement' | translate }}</span><strong>{{ licence().type }}</strong></div>
-          <div class="ri-row"><span>{{ 'ma_licence.date_expiration' | translate }}</span><span class="mono" [style.color]="joursColor()">{{ licence().date_fin }}</span></div>
-        </div>
-        <div class="rd-field">
-          <label for="renouv-message">{{ 'ma_licence.message_optionnel' | translate }}</label>
-          <textarea id="renouv-message" rows="4" class="rd-textarea" [(ngModel)]="messageRenouv"
-                    [placeholder]="'ma_licence.message_placeholder' | translate"></textarea>
-        </div>
-        <div class="rd-tel">
-          📞
-          <a class="cc-link mono" *ngFor="let tel of supportPhones" [href]="tel.href">{{ tel.label }}</a>
-        </div>
-      </div>
-      <ng-template pTemplate="footer">
-        <p-button [label]="'common.annuler' | translate" severity="secondary"
-                  (onClick)="renouvDialogVisible = false" />
-        <p-button [label]="'ma_licence.envoyer_demande' | translate" severity="warn"
-                  [loading]="envoiEnCours()" (onClick)="envoyerDemande()" />
-      </ng-template>
-    </p-dialog>
-
-    <!-- Résultat d'une demande qui n'a pas pu être transmise automatiquement :
-         on ne prétend jamais « envoyé » ; on donne des moyens qui marchent. -->
-    <p-dialog header="📨 Transmettre votre demande" [(visible)]="secoursVisible" [modal]="true"
-              [style]="{ width: '480px', maxWidth: '95vw' }" [draggable]="false">
-      <p class="rd-info">
-        Votre demande est <strong>enregistrée</strong>, mais elle n'a pas pu être transmise
-        automatiquement à HADY GESMAN (connexion ou messagerie indisponible).
-        Envoyez-la en un clic :
-      </p>
-      <div class="secours">
-        <a class="sec-btn sec-wa" [href]="lienWhatsapp()" target="_blank" rel="noopener">💬 Envoyer par WhatsApp</a>
-        @for (tel of supportPhones; track tel.href) {
-          <a class="sec-btn" [href]="tel.href">📞 Appeler le {{ tel.label }}</a>
-        }
-        <button type="button" class="sec-btn" (click)="copierDemande()">📋 Copier le message</button>
-        <a class="sec-btn" [href]="lienMail()">✉️ Ouvrir ma messagerie</a>
-      </div>
-      @if (erreurEnvoi()) {
-        <details class="sec-detail"><summary>Détail technique</summary>{{ erreurEnvoi() }}</details>
-      }
-    </p-dialog>
 
     <!-- Aucune licence -->
     <div class="empty-state" *ngIf="!licence() && !loading()">
@@ -245,15 +187,6 @@ const SUPPORT_WHATSAPP = '221784297830';
     .cc-link:hover { text-decoration:underline; }
     .cc-phones { display:flex; gap:14px; }
     .empty-state { text-align:center; padding:60px; }
-    .rd-info  { font-size:13px; color:var(--text-2); margin:0 0 14px; }
-    .renouv-info { background:rgba(11,15,26,0.4); border:1px solid var(--border); border-radius:8px; padding:10px 14px; }
-    .ri-row   { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
-    .ri-row span:first-child { color:var(--text-3); }
-    .rd-field { margin-top:14px; display:flex; flex-direction:column; gap:6px; }
-    .rd-field label { font-size:12px; color:var(--text-2); }
-    .rd-textarea { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; }
-    .rd-textarea:focus { outline:none; border-color:#3b82f6; }
-    .rd-tel   { display:flex; align-items:center; gap:14px; font-size:13px; margin-top:14px; }
     .compteur { display:flex; align-items:center; gap:16px; flex-wrap:wrap; border:1px solid; border-radius:12px; padding:14px 18px; margin-bottom:16px; }
     .cpt-jours { min-width:90px; text-align:center; }
     .cpt-val  { font-size:28px; font-weight:800; font-variant-numeric:tabular-nums; }
@@ -266,20 +199,11 @@ const SUPPORT_WHATSAPP = '221784297830';
     .cpt-urgent .cpt-val { color:#c2410c; }
     .cpt-critique, .cpt-expiree { background:rgba(220,38,38,.12); border-color:#dc2626; }
     .cpt-critique .cpt-val, .cpt-expiree .cpt-val { color:#dc2626; }
-    .secours  { display:flex; flex-direction:column; gap:8px; }
-    .sec-btn  { display:block; text-align:left; padding:10px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:14px; text-decoration:none; cursor:pointer; font-family:inherit; }
-    .sec-btn:hover, .sec-btn:focus-visible { border-color:#00d4aa; outline:none; }
-    .sec-wa   { background:#128c3e; border-color:#128c3e; color:#fff; font-weight:600; }
-    .sec-detail { margin-top:12px; font-size:11px; color:var(--text-3); word-break:break-word; }
   `]
 })
 export class MaLicenceComponent implements OnInit {
   licence = signal<any>(null);
   loading = signal(true);
-
-  renouvDialogVisible = false;
-  messageRenouv       = '';
-  envoiEnCours        = signal(false);
 
   compteur = inject(LicenceCompteurService);
   /** Jours restants en temps réel (même calcul que le badge de la barre du haut). */
@@ -288,23 +212,27 @@ export class MaLicenceComponent implements OnInit {
     return j === null ? (this.licence()?.jours_restants || 0) : Math.max(j, 0);
   }
 
-  secoursVisible = false;
-  erreurEnvoi    = signal('');
-  private texteDemande = { sujet: '', corps: '' };
-
   supportEmail  = SUPPORT_EMAIL;
   supportPhones = SUPPORT_PHONES.map(t => ({ label: t, href: 'tel:' + t.replace(/\s/g, '') }));
-
-  private translate = inject(TranslateService);
 
   constructor(
     private licencesService: LicencesService,
     public auth: AuthService,
-    private msg: MessageService
-  ) {}
+  ) {
+    // Renouvellement constaté par le compteur : la fiche se relit.
+    effect(() => {
+      const fin = this.compteur.alerte()?.date_fin;
+      const affichee = untracked(() => this.licence()?.date_fin);
+      if (fin && affichee && fin !== affichee) untracked(() => this.charger());
+    });
+  }
 
   ngOnInit() {
     this.compteur.demarrer();
+    this.charger();
+  }
+
+  private charger() {
     this.licencesService.getLicences().subscribe({
       next: res => {
         const licences = res.results || res;
@@ -330,68 +258,5 @@ export class MaLicenceComponent implements OnInit {
   progressPct(): number {
     const j = this.jours();
     return Math.min(Math.round((j / 365) * 100), 100);
-  }
-
-  demanderRenouvellement() {
-    this.renouvDialogVisible = true;
-  }
-
-  envoyerDemande() {
-    const lic = this.licence();
-    if (!lic) return;
-    this.envoiEnCours.set(true);
-    this.licencesService.demanderRenouvellement(lic.id, this.messageRenouv.trim()).subscribe({
-      next: res => {
-        this.envoiEnCours.set(false);
-        this.renouvDialogVisible = false;
-        if (res.recue ?? res.envoye) {
-          this.msg.add({
-            severity: 'success', life: 7000,
-            summary:  this.translate.instant('ma_licence.demande_envoyee'),
-            detail:   this.translate.instant('ma_licence.contactera_24h'),
-          });
-          this.messageRenouv = '';
-        } else {
-          this.ouvrirSecours(res.sujet, res.corps, res.erreur);
-        }
-      },
-      error: err => {
-        this.envoiEnCours.set(false);
-        this.renouvDialogVisible = false;
-        this.ouvrirSecours(undefined, undefined, err?.message || 'Serveur injoignable');
-      },
-    });
-  }
-
-  /** La demande n'a pas atteint HADY GESMAN : proposer des canaux qui marchent. */
-  private ouvrirSecours(sujet?: string, corps?: string, erreur?: string) {
-    const lic = this.licence();
-    this.texteDemande = {
-      sujet: sujet || `[SAGI SCHOOL] Demande de renouvellement — ${lic?.type || ''}`,
-      corps: corps || [
-        'Demande de renouvellement de licence SAGI SCHOOL',
-        `Licence   : ${lic?.type} — ${lic?.cle_licence}`,
-        `Expire le : ${lic?.date_fin} (${this.jours()} jours restants)`,
-        '', this.messageRenouv.trim(),
-      ].join('\n'),
-    };
-    this.erreurEnvoi.set(erreur || '');
-    this.secoursVisible = true;
-  }
-
-  lienWhatsapp(): string {
-    return `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(this.texteDemande.corps)}`;
-  }
-
-  lienMail(): string {
-    return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(this.texteDemande.sujet)}`
-         + `&body=${encodeURIComponent(this.texteDemande.corps)}`;
-  }
-
-  copierDemande() {
-    navigator.clipboard?.writeText(this.texteDemande.corps).then(
-      () => this.msg.add({ severity: 'info', summary: 'Copié', detail: 'Collez le message dans WhatsApp ou un e-mail.' }),
-      () => this.msg.add({ severity: 'warn', summary: 'Copie impossible', detail: 'Sélectionnez le texte manuellement.' }),
-    );
   }
 }

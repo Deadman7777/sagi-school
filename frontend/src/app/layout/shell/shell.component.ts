@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, effect } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
@@ -8,6 +8,9 @@ import { LangueService } from '../../core/services/langue.service';
 import { InstallationAppService } from '../../core/services/installation-app.service';
 import { AvatarModule } from 'primeng/avatar';
 import { ToastModule } from 'primeng/toast';
+import { DialogModule } from 'primeng/dialog';
+import { ButtonModule } from 'primeng/button';
+import { RenouvelerLicenceComponent } from '../../features/ma-licence/renouveler-licence.component';
 import { MessageService } from 'primeng/api';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -25,10 +28,33 @@ interface NavItem {
   selector: 'app-shell',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule,
-            AvatarModule, ToastModule, TranslateModule],
+            AvatarModule, ToastModule, TranslateModule, DialogModule, ButtonModule,
+            RenouvelerLicenceComponent],
   providers: [MessageService],
   template: `
     <p-toast />
+    <!-- Rappel de fin de licence, à chaque connexion (une fois par palier). -->
+    @if (afficherCompteurLicence() && compteur.alerte(); as a) {
+      <p-dialog [visible]="compteur.rappelVisible()" (visibleChange)="$event || compteur.fermerRappel()"
+                [modal]="true" [draggable]="false" [closeOnEscape]="!a.prioritaire"
+                [header]="a.prioritaire ? '⛔ Alerte licence' : '🔔 Rappel licence'"
+                [style]="{ width: '480px', maxWidth: '95vw' }">
+        <div class="rappel" [class]="'rappel rp-' + a.niveau">
+          <div class="rp-titre">{{ a.titre }}</div>
+          <p class="rp-texte">{{ a.texte }}</p>
+          <p class="rp-date">Date d'expiration : <strong>{{ a.date_fin_longue }}</strong></p>
+          @if (a.demande_en_attente) {
+            <p class="rp-attente">Votre paiement est déclaré : il attend la confirmation de HADY GESMAN.</p>
+          }
+        </div>
+        <ng-template #footer>
+          <p-button label="Plus tard" severity="secondary" [text]="true" (onClick)="compteur.fermerRappel()" />
+          <p-button label="Renouveler maintenant" icon="pi pi-credit-card"
+                    [severity]="a.prioritaire ? 'danger' : 'warn'" (onClick)="compteur.ouvrirRenouvellement()" />
+        </ng-template>
+      </p-dialog>
+    }
+    <app-renouveler-licence />
     <div class="shell">
       <aside class="sidebar" [class.collapsed]="collapsed()">
 
@@ -131,6 +157,15 @@ interface NavItem {
           </button>
         </div>
 
+        <!-- Licence expirée : alerte prioritaire, sur tous les écrans, non masquable. -->
+        @if (afficherCompteurLicence() && compteur.alerte()?.prioritaire) {
+          <div class="licence-prioritaire" role="alert">
+            <span class="lp-icone" aria-hidden="true">⛔</span>
+            <div class="lp-texte"><strong>{{ compteur.alerte()?.titre }}</strong> {{ compteur.alerte()?.texte }}</div>
+            <button type="button" class="lp-btn" (click)="compteur.ouvrirRenouvellement()">Renouveler maintenant</button>
+          </div>
+        }
+
         <main class="content">
           <router-outlet />
         </main>
@@ -145,6 +180,19 @@ interface NavItem {
     .lc-urgent    { background:rgba(234,88,12,.15); border-color:#ea580c; color:var(--text); }
     .lc-critique, .lc-expiree { background:#dc2626; border-color:#dc2626; color:#fff; animation:lc-pulse 2s infinite; }
     .lc-cta { font-weight:700; text-decoration:underline; }
+    .licence-prioritaire { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 20px; background:#b91c1c; color:#fff; font-size:13px; line-height:1.45; }
+    .lp-icone { font-size:20px; }
+    .lp-texte { flex:1 1 300px; }
+    .lp-btn { background:#fff; color:#b91c1c; border:none; border-radius:8px; padding:8px 14px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .lp-btn:hover, .lp-btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+    .rappel { border-left:4px solid; border-radius:6px; padding:10px 14px; }
+    .rp-attention { border-color:#ca8a04; background:rgba(234,179,8,.10); }
+    .rp-urgent    { border-color:#ea580c; background:rgba(234,88,12,.10); }
+    .rp-critique, .rp-expiree { border-color:#dc2626; background:rgba(220,38,38,.10); }
+    .rp-titre { font-size:16px; font-weight:700; color:var(--text); }
+    .rp-texte { font-size:13px; color:var(--text); margin:8px 0; line-height:1.5; }
+    .rp-date  { font-size:13px; color:var(--text-2); margin:0; }
+    .rp-attente { font-size:12px; color:var(--text-2); margin:8px 0 0; }
     @keyframes lc-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(220,38,38,.5); } 50% { box-shadow:0 0 0 6px rgba(220,38,38,0); } }
     .shell { display:flex; height:100vh; overflow:hidden; background:var(--bg); }
     .sidebar { width:240px; min-width:240px; background:var(--surface-2); border-right:1px solid var(--surface); display:flex; flex-direction:column; transition:width 0.2s, min-width 0.2s; overflow:hidden; }
@@ -244,6 +292,13 @@ export class ShellComponent {
 
   constructor(public auth: AuthService, public langue: LangueService) {
     if (this.afficherCompteurLicence()) this.compteur.demarrer();
+    // Renouvellement constaté (confirmé par HADY GESMAN) : on le dit.
+    effect(() => {
+      const texte = this.compteur.renouvellee();
+      if (!texte) return;
+      this.messages.add({ severity: 'success', summary: 'Licence renouvelée', detail: texte, life: 10000 });
+      this.compteur.renouvellee.set(null);
+    });
     if (!this.isSuperAdmin()) {
       this.chargerAnnee();
       window.addEventListener('sagi:exercice-modifie', () => this.chargerAnnee());

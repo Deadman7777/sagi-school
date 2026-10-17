@@ -29,6 +29,7 @@
       "preload.js",
       "lan-proxy.js",
       "impression.js",
+      "badge-licence.js",
       "splash.html",
       "setup.html",
       "setup-preload.js",

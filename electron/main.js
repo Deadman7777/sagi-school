@@ -5,6 +5,7 @@ const http      = require('http');
 const fs        = require('fs');
 const os        = require('os');
 const { installerImpression } = require('./impression');
+const { installerBadgeLicence } = require('./badge-licence');
 
 let mainWindow;
 let djangoProcess;              // processus unique (poste isolé) ou 1er du groupe
@@ -705,6 +706,17 @@ async function createWindow() {
     }
   });
 
+  // Liens externes ouverts en nouvel onglet (paiement en ligne Wave / Orange
+  // Money, WhatsApp) : dans le navigateur de l'OS, pas dans une fenêtre
+  // Electron sans barre d'adresse ni session de paiement.
+  mainWindow.webContents.setWindowOpenHandler(({ url: cible }) => {
+    if (/^https?:\/\//.test(cible) && !/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(cible)) {
+      shell.openExternal(cible);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
   mainWindow.once('ready-to-show', () => {
     splash.destroy();
     mainWindow.show();
@@ -738,6 +750,7 @@ if (!gotTheLock) {
 
     // ── 2. Ouvrir la fenêtre principale ──
     installerImpression(() => mainWindow);
+    installerBadgeLicence(() => mainWindow);
     createWindow();
 
     // Pas de contrôle de licence ici. Il est fait par le serveur, sur la

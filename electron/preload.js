@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reglagesImpression:     ()          => ipcRenderer.invoke('imprimantes-reglages'),
   enregistrerImpression:  (r)         => ipcRenderer.invoke('imprimantes-enregistrer', r),
   imprimerPdf:            (pdf, opts) => ipcRenderer.invoke('imprimer-pdf', pdf, opts),
+  // Badge de fin de licence sur l'icône (voir badge-licence.js)
+  badgeLicence:           (b)         => ipcRenderer.send('licence-badge', b),
   isDesktop:     true
 });

@@ -3,6 +3,19 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User
 
 
+def modules_utilisateur(user, licence):
+    """(modules, personnalisés) d'un utilisateur : ceux de la licence, restreints
+    aux modules choisis par l'école pour lui. La licence reste le plafond.
+
+    Le même calcul sert au jeton de connexion et à l'alerte de licence, qui
+    rend les modules à l'écran sans reconnexion après un renouvellement.
+    """
+    perso = getattr(user, 'modules_autorises', None) or []
+    if perso:
+        toujours = ('/ma-licence', '/parametres')
+        return [m for m in licence.modules if m.lstrip('/') in perso or m in toujours], True
+    return licence.modules, False
+
 class UserSerializer(serializers.ModelSerializer):
     # write_only : reçu à la création/màj, jamais renvoyé. Doit passer par
     # set_password() pour être hashé — sinon le compte est créé sans mot de
@@ -94,16 +107,9 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
             try:
                 licence = user.tenant.licence
                 token['type_licence'] = licence.type
-                # Modules choisis par l'école pour cet utilisateur : ils
-                # restreignent ceux de la licence, qui reste le plafond.
-                perso = getattr(user, 'modules_autorises', None) or []
+                token['modules'], perso = modules_utilisateur(user, licence)
                 if perso:
-                    toujours = ('/ma-licence', '/parametres')
-                    token['modules'] = [m for m in licence.modules
-                                        if m.lstrip('/') in perso or m in toujours]
                     token['modules_perso'] = True
-                else:
-                    token['modules'] = licence.modules
             except Exception:
                 token['type_licence'] = None
                 token['modules']      = []
